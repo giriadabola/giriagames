@@ -16,6 +16,7 @@
             min-height: 100vh;
             background-color: #f0f0f0;
             font-family: Arial, sans-serif;
+            /* overflow: hidden;  REMOVED overflow: hidden; from body style */
         }
 
         .bottom-menu {
@@ -68,6 +69,7 @@
         .content {
             padding: 20px;
             margin-bottom: 80px;
+            display: none; /* Hide content initially */
         }
 
         h1 {
@@ -226,12 +228,45 @@
             color: white;
             cursor: not-allowed;
         }
+
+        /* Loading Screen Styles */
+        #loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #f0f0f0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1001;
+        }
+
+        .loading-spinner {
+            border: 16px solid #f3f3f3;
+            border-top: 16px solid #3498db;
+            border-radius: 50%;
+            width: 120px;
+            height: 120px;
+            animation: spin 2s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body>
+
+    <div id="loading-screen">
+        <div class="loading-spinner"></div>
+    </div>
+
     <div class="content">
         <h1>Mercado</h1>
-        
+
         <div class="market-section" id="guarda-redes-section">
             <h2 class="section-title">GUARDA-REDES</h2>
             <div class="players-grid" id="guarda-redes-grid"></div>
@@ -254,7 +289,7 @@
     </div>
 
     <nav class="bottom-menu">
-        <a href="index.html" class="menu-item active">
+        <a href="1x.html" class="menu-item active">
             <i class="fas fa-home"></i>
         </a>
         <a href="market.html" class="menu-item active">
@@ -279,7 +314,8 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getFirestore, collection, getDocs, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js"; // Import auth methods
 
         const firebaseConfig = {
             apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0",
@@ -293,12 +329,30 @@
 
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
+        const auth = getAuth(app); // Initialize auth
+
+        const loadingScreen = document.getElementById('loading-screen'); // Get loading screen
+        const content = document.querySelector('.content'); // Get content
+
+        let currentUserStatus = null;
+
+        // Function to get user status from Firestore
+        async function getUserStatus(userId) {
+            const userDoc = doc(db, 'users', userId);
+            const docSnap = await getDoc(userDoc);
+            if (docSnap.exists()) {
+                return docSnap.data().estatuto;
+            } else {
+                return null;
+            }
+        }
+
 
         function createPlayerCard(player) {
             const card = document.createElement('div');
             card.className = `player-card ${getTierClass(player.casta)}`;
 
-            const content = `
+            const cardContent = `
                 <img src="${player.imagem}" alt="${player.nome}" class="player-image">
                 <div class="player-info">
                     <div class="player-name">${player.nome}</div>
@@ -319,7 +373,7 @@
                 </div>
             `;
 
-            card.innerHTML = content;
+            card.innerHTML = cardContent;
             return card;
         }
 
@@ -337,7 +391,7 @@
             try {
                 const jogadoresRef = collection(db, 'jogadores');
                 const snapshot = await getDocs(jogadoresRef);
-                
+
                 const players = {};
                 players['Guarda-Redes'] = document.getElementById('guarda-redes-grid');
                 players['Defesa'] = document.getElementById('defesas-grid');
@@ -355,10 +409,29 @@
                 });
             } catch (error) {
                 console.error("Error loading players:", error);
+            } finally {
+                loadingScreen.style.display = 'none'; // Hide loading screen after loading or error
+                content.style.display = 'block'; // Show content
             }
         }
 
-        document.addEventListener('DOMContentLoaded', loadPlayers);
+
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                currentUserStatus = await getUserStatus(user.uid);
+                console.log(`User is logged in on market.html with status: ${currentUserStatus}`);
+                loadPlayers(); // Load players only after auth check and user is logged in
+            } else {
+                console.log('No user is logged in on market.html');
+                loadingScreen.style.display = 'none'; // Hide loading screen even if not logged in
+                window.location.href = 'index.html'; // Redirect to login page if not logged in
+            }
+        });
+
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // loadPlayers is now called inside onAuthStateChanged after auth check
+        });
     </script>
 </body>
 </html>
