@@ -162,7 +162,22 @@
             font-size: 14px;
             margin-left: 10px;
             cursor: pointer;
+            /* Remove default dropdown arrow */
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            padding-right: 25px; /* Make space for custom arrow/icon if needed */
+            background-image: url('data:image/svg+xml;utf8,<svg fill="black" height="24" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><path d="M7 10l5 5 5-5z"/><path d="M0 0h24v24H0z" fill="none"/></svg>');
+            background-repeat: no-repeat;
+            background-position-x: right 10px;
+            background-position-y: center;
         }
+
+        /* Style for the dropdown options (optional, can be further customized) */
+        .chat-header select option {
+            padding: 8px;
+        }
+
 
         .chat-header button#closeChat { /* CSS for close button */
             background-color: #f44336; /* Red color for close button */
@@ -375,6 +390,40 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+
+        .user-online {
+            color: green;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+        }
+
+        .user-online::before {
+            content: '';
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background-color: green;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+
+        .user-offline {
+            color: gray;
+            font-style: italic;
+            display: flex;
+            align-items: center;
+        }
+
+        .user-offline::before {
+            content: '';
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background-color: gray;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
     </style>
 </head>
 <body>
@@ -440,7 +489,7 @@
     <script type="module">
         import { getAuth, signOut, deleteUser, EmailAuthProvider, reauthenticateWithCredential, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-        import { getFirestore, doc, deleteDoc, getDoc, collection, getDocs, query, orderBy, limit, addDoc, serverTimestamp, where, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        import { getFirestore, doc, deleteDoc, getDoc, collection, getDocs, query, orderBy, limit, addDoc, serverTimestamp, where, onSnapshot, updateDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
         const firebaseConfig = {
             apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0",
@@ -468,6 +517,7 @@
 
         let currentUserStatus = null;
         let selectedRecipientId = null;
+        let unsubscribeUsersList = null; // To store the unsubscribe function for user list
 
 
         async function getUserStatus(userId) {
@@ -480,24 +530,51 @@
             }
         }
 
-        async function loadUserList() {
-            try {
-                const usersSnapshot = await getDocs(collection(db, 'users'));
-                userListDropdown.innerHTML = '<option value="">Selecione um utilizador</option>'; // Clear previous options and add default
-                usersSnapshot.forEach(doc => {
-                    const userData = doc.data();
-                    if (auth.currentUser && doc.id !== auth.currentUser.uid) { // Exclude current user from list
-                        const option = document.createElement('option');
-                        option.value = doc.id;
-                        option.textContent = userData.nomeDeUsuario;
-                        userListDropdown.appendChild(option);
-                    }
-                });
-            } catch (error) {
-                console.error("Error loading users:", error);
-                alert("Erro ao carregar lista de utilizadores."); // User-friendly error message
+        async function updateUserLastSeen() {
+            const user = auth.currentUser;
+            if (user) {
+                const userDocRef = doc(db, 'users', user.uid);
+                try {
+                    await updateDoc(userDocRef, {
+                        lastSeen: serverTimestamp() // Uses serverTimestamp() for server time
+                    });
+                    console.log("Última vez visto atualizada para:", new Date()); // Log to verify
+                } catch (error) {
+                    console.error("Erro ao atualizar lastSeen:", error);
+                }
             }
         }
+
+        function setupUsersListListener() {
+            return onSnapshot(collection(db, 'users'), (snapshot) => {
+                userListDropdown.innerHTML = '<option value="">Selecione um utilizador</option>'; // Clear previous options and add default
+                snapshot.docChanges().forEach((change) => {
+                    if (change.type === 'added' || change.type === 'modified' || change.type === 'removed') {
+                        const userData = change.doc.data();
+                        if (auth.currentUser && change.doc.id !== auth.currentUser.uid) { // Exclude current user from list
+                            const option = document.createElement('option');
+                            option.value = change.doc.id;
+                            option.textContent = userData.nomeDeUsuario;
+
+                            const lastSeen = userData.lastSeen ? userData.lastSeen.toDate() : null; // Convert Firestore Timestamp to JavaScript Date
+                            const isOnline = lastSeen && (Date.now() - lastSeen.getTime()) < 300000; // 5 minutes in milliseconds
+
+                            if (isOnline) {
+                                option.classList.add('user-online');
+                            } else {
+                                option.classList.add('user-offline');
+                            }
+
+                            userListDropdown.appendChild(option);
+                        }
+                    }
+                });
+            }, (error) => {
+                console.error("Error loading users:", error);
+                alert("Erro ao carregar lista de utilizadores."); // User-friendly error message
+            });
+        }
+
 
         async function loadMessages(recipientId) {
             if (!recipientId) {
@@ -649,10 +726,16 @@
                 if (user) {
                     currentUserStatus = await getUserStatus(user.uid);
                     console.log(`User is logged in on profile.html with status: ${currentUserStatus}`);
-                    await loadUserList(); // Load user list after auth
+                    unsubscribeUsersList = setupUsersListListener(); // Set up real-time user list listener
+                    updateUserLastSeen(); // Update lastSeen initially
+                    setInterval(updateUserLastSeen, 60000); // Update every 60 seconds (1 minute)
                     loadingScreen.style.display = 'none'; // Hide loading screen after everything is ready
                     content.style.display = 'block';
+
                 } else {
+                    if (unsubscribeUsersList) {
+                        unsubscribeUsersList(); // Unsubscribe from user list changes
+                    }
                     console.log('No user is logged in on profile.html');
                     loadingScreen.style.display = 'none';
                     window.location.href = 'index.html';
