@@ -16,6 +16,7 @@
             min-height: 100vh;
             background-color: #f0f0f0;
             font-family: Arial, sans-serif;
+            /* overflow: hidden; REMOVED overflow: hidden; from body style */
         }
 
         .bottom-menu {
@@ -68,22 +69,56 @@
         .content {
             padding: 20px;
             margin-bottom: 80px;
+            display: none; /* Hide content initially */
         }
 
         h1 {
             color: #333;
             margin-bottom: 20px;
         }
+
+        /* Loading Screen Styles */
+        #loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #f0f0f0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1001;
+        }
+
+        .loading-spinner {
+            border: 16px solid #f3f3f3;
+            border-top: 16px solid #3498db;
+            border-radius: 50%;
+            width: 120px;
+            height: 120px;
+            animation: spin 2s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body>
+
+    <div id="loading-screen">
+        <div class="loading-spinner"></div>
+    </div>
+
     <div class="content">
         <h1>Seu Império</h1>
         <!-- Add empire page specific content here -->
     </div>
 
     <nav class="bottom-menu">
-        <a href="index.html" class="menu-item">
+        <a href="1x.html" class="menu-item">
             <i class="fas fa-home"></i>
         </a>
         <a href="market.html" class="menu-item">
@@ -105,5 +140,52 @@
             <i class="fas fa-user"></i>
         </a>
     </nav>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0",
+            authDomain: "g-games-8a8fc.firebaseapp.com",
+            projectId: "g-games-8a8fc",
+            storageBucket: "g-games-8a8fc.firebasestorage.app",
+            messagingSenderId: "689897349449",
+            appId: "1:689897349449:web:536599794579901beb7a98",
+            measurementId: "G-GTTPJ6G5MD"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+
+        const loadingScreen = document.getElementById('loading-screen');
+        const content = document.querySelector('.content');
+        let currentUserStatus = null;
+
+        async function getUserStatus(userId) {
+            const userDoc = doc(db, 'users', userId);
+            const docSnap = await getDoc(userDoc);
+            if (docSnap.exists()) {
+                return docSnap.data().estatuto;
+            } else {
+                return null;
+            }
+        }
+
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                currentUserStatus = await getUserStatus(user.uid);
+                console.log(`User is logged in on empire.html with status: ${currentUserStatus}`);
+                loadingScreen.style.display = 'none';
+                content.style.display = 'block';
+            } else {
+                console.log('No user is logged in on empire.html');
+                loadingScreen.style.display = 'none';
+                window.location.href = 'index.html';
+            }
+        });
+    </script>
 </body>
 </html>
