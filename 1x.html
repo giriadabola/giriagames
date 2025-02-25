@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Home - G EMPIRE</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <style>
+        /* Estilos existentes ... */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 100vh;
+            background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
+            /* overflow: hidden;  REMOVED overflow: hidden; from body style */
+        }
+
+        .bottom-menu {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background-color: #ffffff;
+            box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+            padding: 12px 0;
+            display: flex;
+            justify-content: center;
+            gap: 48px;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .menu-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-decoration: none;
+            color: #666;
+            transition: color 0.3s ease;
+        }
+
+        .menu-item:hover, .menu-item.active {
+            color: #333;
+        }
+
+        .menu-item i {
+            font-size: 24px;
+            margin-bottom: 4px;
+        }
+
+        .empire-icon {
+            font-size: 42px;
+            color: #2176ff;
+            transform: translateY(-3px);
+            filter: drop-shadow(0 0 8px rgba(33, 118, 255, 0.4));
+            transition: all 0.3s ease;
+        }
+
+        .empire-icon:hover {
+            color: #0056d6;
+            transform: translateY(-8px);
+            filter: drop-shadow(0 0 12px rgba(33, 118, 255, 0.6));
+        }
+
+        .content {
+            padding: 20px;
+            margin-bottom: 80px;
+            display: none; /* Oculta o conteúdo inicialmente */
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        #games-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+            padding: 10px;
+        }
+
+        .game-card {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s ease;
+            position: relative;
+        }
+
+        .round-badge {
+            position: absolute;
+            top: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #2176ff;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 15px;
+            font-size: 0.9em;
+            font-weight: bold;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .game-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .teams-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .team {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            flex: 1;
+        }
+
+        .team-image {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            overflow: hidden;
+            margin-bottom: 10px;
+            border: 2px solid #eee;
+        }
+
+        .team-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .team-name {
+            font-weight: bold;
+            text-align: center;
+            font-size: 0.9em;
+        }
+
+        .vs {
+            margin: 0 15px;
+            font-weight: bold;
+            color: #666;
+        }
+
+        .competition-info {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .competition-image {
+            width: 30px;
+            height: 30px;
+            margin-right: 10px;
+        }
+
+        .competition-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .competition-details {
+            flex: 1;
+        }
+
+        .competition-name {
+            font-weight: bold;
+            font-size: 0.9em;
+            text-align: center;
+        }
+
+        .round {
+            color: #666;
+            font-size: 0.8em;
+        }
+
+        .predict-button {
+            width: 100%;
+            padding: 12px;
+            background: #2176ff;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+
+        .predict-button:hover {
+            background: #0056d6;
+        }
+
+        .game-datetime {
+            text-align: center;
+            color: #666;
+            font-size: 0.9em;
+            margin-bottom: 15px;
+            padding: 8px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .no-games, .error {
+            text-align: center;
+            color: #666;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+
+        .error {
+            color: #dc3545;
+            background: #f8d7da;
+        }
+
+        /* Tela de carregamento */
+        #loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #f0f0f0; /* Cor de fundo da tela de carregamento */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1001; /* Garante que está acima de tudo */
+        }
+
+        .loading-spinner {
+            border: 16px solid #f3f3f3; /* Cinza claro */
+            border-top: 16px solid #3498db; /* Azul */
+            border-radius: 50%;
+            width: 120px;
+            height: 120px;
+            animation: spin 2s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="loading-screen">
+        <div class="loading-spinner"></div>
+    </div>
+
+    <div class="content">
+        <h1>1x WhatIf...</h1>
+        <div id="games-container">
+            <!-- Jogos serão carregados aqui dinamicamente -->
+        </div>
+    </div>
+
+    <nav class="bottom-menu">
+        <a href="1x.html" class="menu-item active">
+            <i class="fas fa-home"></i>
+        </a>
+        <a href="market.html" class="menu-item">
+            <i class="fas fa-shopping-cart"></i>
+        </a>
+        <a href="team.html" class="menu-item">
+            <i class="fas fa-users"></i>
+        </a>
+        <a href="empire.html" class="menu-item">
+            <i class="fas fa-landmark empire-icon"></i>
+        </a>
+        <a href="rankings.html" class="menu-item">
+            <i class="fas fa-list"></i>
+        </a>
+        <a href="bank.html" class="menu-item">
+            <i class="fas fa-dollar-sign"></i>
+        </a>
+        <a href="profile.html" class="menu-item">
+            <i class="fas fa-user"></i>
+        </a>
+    </nav>
+
+    <script type="module">
+        // Importar funções do Firebase
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, collection, getDocs, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+
+        // Configuração do Firebase
+        const firebaseConfig = {
+            apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0",
+            authDomain: "g-games-8a8fc.firebaseapp.com",
+            projectId: "g-games-8a8fc",
+            storageBucket: "g-games-8a8fc.firebasestorage.app",
+            messagingSenderId: "689897349449",
+            appId: "1:689897349449:web:536599794579901beb7a98",
+            measurementId: "G-GTTPJ6G5MD"
+        };
+
+        // Inicializar Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+
+        let currentUserStatus = null;
+        const loadingScreen = document.getElementById('loading-screen');
+        const content = document.querySelector('.content');
+
+        // Função para obter o estatuto do usuário do Firestore
+        async function getUserStatus(userId) {
+            const userDoc = doc(db, 'users', userId);
+            const docSnap = await getDoc(userDoc);
+            if (docSnap.exists()) {
+                return docSnap.data().estatuto;
+            } else {
+                return null;
+            }
+        }
+
+        // Função para carregar jogos ativos
+        async function loadActiveGames() {
+            const gamesContainer = document.getElementById('games-container');
+            const now = new Date();
+
+            try {
+                const gamesRef = collection(db, 'jogos');
+                const querySnapshot = await getDocs(gamesRef);
+                const activeGames = [];
+
+                for (const gameDoc of querySnapshot.docs) {
+                    const game = gameDoc.data();
+                    const inicioPalpites = game.inicioPalpites.toDate();
+                    const fimPalpites = game.fimPalpites.toDate();
+
+                    if (now >= inicioPalpites && now <= fimPalpites) {
+                        // Buscar imagem do time da casa
+                        const equipaCasaRef = doc(db, 'clubes', game.equipaCasaId);
+                        const equipaCasaDoc = await getDoc(equipaCasaRef);
+                        const equipaCasaData = equipaCasaDoc.data();
+                        game.equipaCasaImagem = equipaCasaData?.imagem || 'https://via.placeholder.com/50';
+
+                        // Buscar imagem do time de fora
+                        const equipaForaRef = doc(db, 'clubes', game.equipaForaId);
+                        const equipaForaDoc = await getDoc(equipaForaRef);
+                        const equipaForaData = equipaForaDoc.data();
+                        game.equipaForaImagem = equipaForaData?.imagem || 'https://via.placeholder.com/50';
+
+                        // Buscar imagem da competição
+                        const competicaoRef = doc(db, 'competicoes', game.competicaoId);
+                        const competicaoDoc = await getDoc(competicaoRef);
+                        const competicaoData = competicaoDoc.data();
+                        game.competicaoImagem = competicaoData?.imagem || 'https://via.placeholder.com/30';
+
+                        activeGames.push({ id: gameDoc.id, ...game });
+                    }
+                }
+
+                if (activeGames.length === 0) {
+                    gamesContainer.innerHTML = '<p class="no-games">Não há jogos disponíveis para palpites no momento.</p>';
+                    return;
+                }
+
+                gamesContainer.innerHTML = '';
+                for (const game of activeGames) {
+                    const card = document.createElement('div');
+                    card.className = 'game-card';
+
+                    card.innerHTML = `
+                        <div class="round-badge">Ronda ${game.ronda}</div>
+                        <div class="teams-container">
+                            <div class="team">
+                                <div class="team-image">
+                                    <img src="${game.equipaCasaImagem || 'https://via.placeholder.com/50'}" alt="${game.equipaCasa}">
+                                </div>
+                                <div class="team-name">${game.equipaCasa}</div>
+                            </div>
+                            <div class="vs">VS</div>
+                            <div class="team">
+                                <div class="team-image">
+                                    <img src="${game.equipaForaImagem || 'https://via.placeholder.com/50'}" alt="${game.equipaFora}">
+                                </div>
+                                <div class="team-name">${game.equipaFora}</div>
+                            </div>
+                        </div>
+                        <div class="game-datetime">${game.dataJogo.toDate().toLocaleDateString('pt-PT')} - ${game.dataJogo.toDate().toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}</div>
+                        <div class="competition-info">
+                            <div class="competition-image">
+                                <img src="${game.competicaoImagem || 'https://via.placeholder.com/30'}" alt="${game.competicao}">
+                            </div>
+                            <div class="competition-details">
+                                <div class="competition-name">${game.competicao}</div>
+                            </div>
+                        </div>
+                        <button class="predict-button" onclick="window.location.href='palpitar.html?id=${game.id}'">Palpitar</button>
+                    `;
+
+                    gamesContainer.appendChild(card);
+                }
+            } catch (error) {
+                console.error("Error loading games:", error);
+                gamesContainer.innerHTML = '<p class="error">Erro ao carregar os jogos. Por favor, tente novamente mais tarde.</p>';
+            } finally {
+                loadingScreen.style.display = 'none'; // Esconde a tela de carregamento após carregar os jogos ou em caso de erro
+                content.style.display = 'block'; // Mostra o conteúdo principal
+            }
+        }
+
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                currentUserStatus = await getUserStatus(user.uid);
+                console.log(`User is logged in with status: ${currentUserStatus}`);
+                loadActiveGames(); // Carrega os jogos apenas após a autenticação ser verificada e usuário logado
+            } else {
+                console.log('No user is logged in on 1x.html');
+                loadingScreen.style.display = 'none'; // Esconde a tela de carregamento mesmo se não estiver logado para evitar carregamento infinito
+                window.location.href = 'index.html'; // Redireciona para a página de login se não estiver logado
+            }
+        });
+
+
+        // Carregar jogos quando a página carrega
+        // window.addEventListener('load', loadActiveGames); // Removido para carregar jogos apenas após onAuthStateChanged
+    </script>
+</body>
+</html>
