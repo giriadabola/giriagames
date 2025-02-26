@@ -86,30 +86,54 @@
         }
 
         .game-card {
-            background: white;
-            border-radius: 15px;
-            padding: 20px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            transition: transform 0.2s ease;
+            background: linear-gradient(to bottom right, #ffffff, #f8f9fa);
+            border-radius: 20px;
+            padding: 25px;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.08), 0 6px 6px rgba(0, 0, 0, 0.12);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             position: relative;
+            border: 1px solid rgba(0, 0, 0, 0.05);
+        }
+
+        .game-card.voted {
+            background: linear-gradient(to bottom right, #f0fff4, #dcffe4);
+            border: 1px solid rgba(40, 167, 69, 0.2);
+        }
+
+        .vote-status-icon {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 18px;
+            z-index: 2;
+        }
+
+        .vote-status-icon.voted {
+            color: #28a745;
+        }
+
+        .vote-status-icon.pending {
+            color: #ffc107;
         }
 
         .round-badge {
             position: absolute;
-            top: -10px;
+            top: -12px;
             left: 50%;
             transform: translateX(-50%);
-            background: #2176ff;
+            background: linear-gradient(135deg, #2176ff, #1a5cc4);
             color: white;
-            padding: 5px 15px;
-            border-radius: 15px;
+            padding: 8px 20px;
+            border-radius: 20px;
             font-size: 0.9em;
             font-weight: bold;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 4px 8px rgba(33, 118, 255, 0.3);
+            letter-spacing: 0.5px;
         }
 
         .game-card:hover {
-            transform: translateY(-5px);
+            transform: translateY(-8px);
+            box-shadow: 0 15px 30px rgba(0, 0, 0, 0.12), 0 8px 8px rgba(0, 0, 0, 0.08);
         }
 
         .teams-container {
@@ -127,12 +151,14 @@
         }
 
         .team-image {
-            width: 60px;
-            height: 60px;
+            width: 70px;
+            height: 70px;
             border-radius: 50%;
             overflow: hidden;
-            margin-bottom: 10px;
-            border: 2px solid #eee;
+            margin-bottom: 12px;
+            border: 3px solid #fff;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease;
         }
 
         .team-image img {
@@ -191,18 +217,23 @@
 
         .predict-button {
             width: 100%;
-            padding: 12px;
-            background: #2176ff;
+            padding: 14px;
+            background: linear-gradient(135deg, #2176ff, #1a5cc4);
             color: white;
             border: none;
-            border-radius: 8px;
+            border-radius: 12px;
             font-weight: bold;
             cursor: pointer;
-            transition: background-color 0.2s ease;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            box-shadow: 0 4px 6px rgba(33, 118, 255, 0.2);
         }
 
         .predict-button:hover {
-            background: #0056d6;
+            background: linear-gradient(135deg, #1a5cc4, #0d4cb3);
+            box-shadow: 0 6px 8px rgba(33, 118, 255, 0.3);
+            transform: translateY(-2px);
         }
 
         .game-datetime {
@@ -348,7 +379,16 @@
                     const fimPalpites = game.fimPalpites.toDate();
 
                     if (now >= inicioPalpites && now <= fimPalpites) {
-                        // Buscar imagem do time da casa
+                        // Check if user has voted on this game by comparing game names
+                        const userId = auth.currentUser.uid;
+                        const userPalpitesRef = collection(db, 'users', userId, 'palpites');
+                        const userPalpitesSnapshot = await getDocs(userPalpitesRef);
+                        game.hasVoted = userPalpitesSnapshot.docs.some(palpiteDoc => {
+                            const palpiteData = palpiteDoc.data();
+                            return palpiteData.nomeJogo === game.nomeJogo;
+                        });
+
+                        // Rest of the existing game data fetching
                         const equipaCasaRef = doc(db, 'clubes', game.equipaCasaId);
                         const equipaCasaDoc = await getDoc(equipaCasaRef);
                         const equipaCasaData = equipaCasaDoc.data();
@@ -378,9 +418,10 @@
                 gamesContainer.innerHTML = '';
                 for (const game of activeGames) {
                     const card = document.createElement('div');
-                    card.className = 'game-card';
+                    card.className = `game-card${game.hasVoted ? ' voted' : ''}`;
 
                     card.innerHTML = `
+                        <i class="vote-status-icon fas ${game.hasVoted ? 'fa-check voted' : 'fa-hourglass-half pending'}"></i>
                         <div class="round-badge">Ronda ${game.ronda}</div>
                         <div class="teams-container">
                             <div class="team">
@@ -406,7 +447,7 @@
                                 <div class="competition-name">${game.competicao}</div>
                             </div>
                         </div>
-                        <button class="predict-button" onclick="window.location.href='palpite.html?id=${game.id}'">Palpitar</button>
+                        <button class="predict-button" onclick="window.location.href='palpite.html?id=${game.id}'">${game.hasVoted ? 'Ver Palpite' : 'Palpitar'}</button>
                     `;
 
                     gamesContainer.appendChild(card);
