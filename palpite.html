@@ -18,6 +18,71 @@
             padding: 20px;
             margin: 20px 0;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            text-align: center; /* Center align text in game-info container */
+        }
+
+        .game-header {
+            margin-bottom: 15px; /* Spacing below header section */
+            /* text-align: center; - No need to center text here, centered by game-info */
+        }
+
+        .competition-and-date {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            color: #444;
+            font-size: 1.1em;
+            font-weight: bold;
+        }
+
+
+        .countdown-timer {
+            text-align: center;
+            margin: 15px auto;
+            padding: 10px 15px;
+            background-color: #f9f9f9;
+            border-radius: 8px;
+            color: #555;
+            font-weight: 500;
+            font-size: 0.95em;
+            box-shadow: 0 1px 5px rgba(0, 0, 0, 0.1);
+            border: 1px solid #eee;
+            display: block;
+            width: fit-content;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+
+        .countdown-label {
+            color: #777;
+            font-size: 0.65em;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            font-weight: 600;
+            margin-right: 6px;
+        }
+
+        .countdown-timer span {
+            display: inline-block;
+            margin: 0 3px;
+            padding: 4px 6px;
+            color: #444;
+            border-radius: 5px;
+            min-width: 25px;
+            font-size: 0.85em;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            background-color: transparent;
+            box-shadow: none;
+            border: 1px solid #ddd;
+            text-align: center;
+        }
+
+        .countdown-timer span:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15);
+            background-color: #f0f0f0;
         }
 
         .teams-container {
@@ -275,7 +340,7 @@
     <!-- Add Error Popup -->
     <div id="error-popup" class="popup">
         <div class="popup-content">
-            <span class="close-popup">&times;</span>
+            <span class="close-popup">×</span>
             <div class="popup-message"></div>
         </div>
     </div>
@@ -353,6 +418,17 @@
                     throw new Error('Game data not loaded');
                 }
 
+                // Check if prediction deadline has passed
+                const now = new Date();
+                const fimPalpites = currentGame.fimPalpites.toDate();
+                if (now > fimPalpites) {
+                    showErrorPopup('Tempo esgotado, impossivel palpitar');
+                    setTimeout(() => {
+                        window.location.href = '1x.html';
+                    }, 5000);
+                    return;
+                }
+
                 const predictions = [];
                 for (let i = 0; i < currentGame.numeroPalpites; i++) {
                     const input = document.getElementById(`prediction${i + 1}`);
@@ -372,7 +448,7 @@
 
                 const palpiteData = {
                     userId: auth.currentUser.uid,
-                    nomeDeUsuario: userData.nomeDeUsuario, // Add username to prediction data
+                    nomeDeUsuario: userData.nomeDeUsuario,
                     jogoId: currentGame.id,
                     nomeJogo: currentGame.nomeJogo,
                     equipaCasaId: currentGame.equipaCasaId,
@@ -386,12 +462,11 @@
                     modId: currentGame.modId,
                     temporada: currentGame.temporada,
                     dataPalpite: serverTimestamp(),
-                    PontosPossiveis: 0,  // Initialize possible points
-                    PontosGanhos: 0,     // Initialize earned points
-                    GCoinsGanhos: 0.0,   // Initialize earned GCoins with decimal support
+                    PontosPossiveis: 0,
+                    PontosGanhos: 0,
+                    GCoinsGanhos: 0.0,
                 };
 
-                // Add predictions and points fields dynamically
                 predictions.forEach((palpite, index) => {
                     const predictionNumber = index + 1;
                     palpiteData[`palpite${predictionNumber}`] = palpite;
@@ -399,19 +474,16 @@
                     palpiteData[`Palpite${predictionNumber}PontosQuanto`] = 0;
                 });
 
-                // Save to both main palpites collection and user's subcollection
-                const [mainPalpiteRef, userPalpiteRef] = await Promise.all([
+                await Promise.all([
                     addDoc(collection(db, 'palpites'), palpiteData),
                     addDoc(collection(doc(db, 'users', auth.currentUser.uid), 'palpites'), palpiteData)
                 ]);
 
-                // Show success message
-                // Reload the page
                 window.location.reload();
 
             } catch (error) {
                 console.error('Error submitting predictions:', error);
-                alert(`Erro ao enviar palpites: ${error.message}`);
+                showErrorPopup(`Erro ao enviar palpites: ${error.message}`);
             }
         };
 
@@ -507,12 +579,17 @@
 
                 gameContainer.innerHTML = `
                     <div class="game-info">
-                        <div class="competition-info">
-                            <div class="competition-image">
-                                <img src="${competicaoData?.imagem || 'https://via.placeholder.com/30'}" alt="${game.competicao}">
+                        <div class="game-header" style="text-align: center; margin-bottom: 15px;">
+                            <div class="competition-and-date" style="display: flex; align-items: center; justify-content: center; gap: 5px; color: #444; font-size: 1.1em; font-weight: bold;">
+                                <div class="competition-image">
+                                    <img src="${competicaoData?.imagem || 'https://via.placeholder.com/20'}" alt="${game.competicao}" style="width: 20px; height: 20px; vertical-align: middle;">
+                                </div>
+                                <span>${game.competicao}</span>
+                                <span style="margin: 0 5px;">|</span> <!-- Separator -->
+                                <span>${formattedDate} - ${formattedTime}</span>
                             </div>
-                            <div class="competition-name">${game.competicao}</div>
                         </div>
+
                         <div class="teams-container">
                             <div class="team">
                                 <div class="team-image">
@@ -528,8 +605,10 @@
                                 <div class="team-name">${game.equipaFora}</div>
                             </div>
                         </div>
-                        <div class="game-details">
-                            <div class="game-date">${formattedDate} - ${formattedTime}</div>
+
+                        <div class="countdown-timer">
+                            <span class="countdown-label">Tempo restante para palpitar:</span>
+                            <div id="countdown"></div>
                         </div>
                     </div>
                     <div class="prediction-container">
@@ -542,6 +621,39 @@
                         ${!existingPredictions ? `<button class="submit-button" onclick="submitPredictions()">Enviar Palpites</button>` : ''}
                     </div>
                 `;
+
+                // Start the countdown timer
+                function updateCountdown() {
+                    const now = new Date().getTime();
+                    const endTime = game.fimPalpites.toDate().getTime();
+                    const timeLeft = endTime - now;
+
+                    if (timeLeft <= 0) {
+                        document.getElementById('countdown').innerHTML = 'Tempo esgotado!';
+                        return;
+                    }
+
+                    const days = Math.floor(timeLeft / (1000 * 60 * 60 * 24));
+                    const hours = Math.floor((timeLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                    const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
+                    const seconds = Math.floor((timeLeft % (1000 * 60)) / 1000);
+
+                    document.getElementById('countdown').innerHTML = `
+                        <span>${days}d</span> 
+                        <span>${hours}h</span> 
+                        <span>${minutes}m</span> 
+                        <span>${seconds}s</span>
+                    `;
+                }
+
+                // Update the countdown every second
+                updateCountdown();
+                const countdownInterval = setInterval(updateCountdown, 1000);
+
+                // Clear the interval when the component is unmounted
+                window.addEventListener('beforeunload', () => {
+                    clearInterval(countdownInterval);
+                });
             } catch (error) {
                 console.error('Error loading game details:', error);
                 const gameContainer = document.getElementById('game-container');
