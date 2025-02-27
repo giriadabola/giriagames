@@ -113,6 +113,19 @@
             cursor: pointer;
         }
 
+        .country-flag {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 1px solid #fff;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            z-index: 2;
+        }
+
         .player-card:hover {
             transform: translateY(-5px);
             box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
@@ -415,6 +428,10 @@
                     <div class="popup-stat-value" id="popupPlayerPrice"></div>
                 </div>
                 <div class="popup-stat-row">
+                    <div class="popup-stat-label">Posição</div>
+                    <div class="popup-stat-value" id="popupPlayerPosicao"></div>
+                </div>
+                <div class="popup-stat-row">
                     <div class="popup-stat-label">Casta</div>
                     <div class="popup-stat-value" id="popupPlayerCasta"></div>
                 </div>
@@ -510,11 +527,17 @@
         }
 
 
-        function createPlayerCard(player) {
+        async function createPlayerCard(player) {
             const card = document.createElement('div');
             card.className = `player-card ${getTierClass(player.casta)}`;
 
+            // Fetch country data using paisId
+            const paisDoc = await getDoc(doc(db, 'paises', player.paisId));
+            const paisData = paisDoc.exists() ? paisDoc.data() : null;
+            const paisImagem = paisData ? paisData.imagem : '';
+
             const cardContent = `
+                ${paisImagem ? `<img src="${paisImagem}" alt="Country flag" class="country-flag">` : ''}
                 <img src="${player.imagem}" alt="${player.nome}" class="player-image">
                 <div class="player-info">
                     <div class="player-name">${player.nome}</div>
@@ -529,8 +552,7 @@
                             <div class="stat-label">gCoins</div>
                         </div>
                     </div>
-                    <button class="buy-button ${player.compradopor ? 'purchased' : 'available'}">
-                        ${player.compradopor ? `Comprado por ${player.compradopor}` : 'Comprar'}
+                    <button class="buy-button ${player.compradopor ? 'purchased' : 'available'}">                        ${player.compradopor ? `Comprado por ${player.compradopor}` : 'Comprar'}
                     </button>
                 </div>
             `;
@@ -555,6 +577,7 @@
                 popupClub.textContent = player.clube;
                 popupOverall.textContent = player.overall;
                 popupPrice.textContent = `${player.preco} gCoins`;
+                document.getElementById('popupPlayerPosicao').textContent = player.posicao;
                 popupCasta.textContent = player.casta;
 
                 // Update buy button state
@@ -598,15 +621,16 @@
                 players['Médio'] = document.getElementById('medios-grid');
                 players['Avançado'] = document.getElementById('avancados-grid');
 
-                snapshot.forEach(doc => {
+                for (const doc of snapshot.docs) {
                     const player = doc.data();
                     if (player.noMercado) {
                         const grid = players[player.posicao];
                         if (grid) {
-                            grid.appendChild(createPlayerCard(player));
+                            const card = await createPlayerCard(player);
+                            grid.appendChild(card);
                         }
                     }
-                });
+                }
             } catch (error) {
                 console.error("Error loading players:", error);
             } finally {
