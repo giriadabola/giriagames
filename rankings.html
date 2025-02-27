@@ -77,6 +77,48 @@
             margin-bottom: 20px;
         }
 
+        /* Season Dropdown Styles */
+        .season-select {
+            width: 200px;
+            padding: 10px;
+            margin-bottom: 20px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            background-color: white;
+        }
+
+        /* Rankings Table Styles */
+        .rankings-table {
+            width: 100%;
+            border-collapse: collapse;
+            background-color: white;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .rankings-table th,
+        .rankings-table td {
+            padding: 15px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+
+        .rankings-table th {
+            background-color: #2176ff;
+            color: white;
+            font-weight: bold;
+        }
+
+        .rankings-table tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+
+        .rankings-table tr:hover {
+            background-color: #f0f4ff;
+        }
+
         /* Loading Screen Styles */
         #loading-screen {
             position: fixed;
@@ -114,7 +156,21 @@
 
     <div class="content">
         <h1>Rankings</h1>
-        <!-- Add rankings page specific content here -->
+        <select id="season-select" class="season-select">
+            <!-- Seasons will be populated dynamically -->
+        </select>
+        <table class="rankings-table">
+            <thead>
+                <tr>
+                    <th>Posição</th>
+                    <th>Jogador</th>
+                    <th>Pontos</th>
+                </tr>
+            </thead>
+            <tbody id="rankings-body">
+                <!-- Rankings will be populated dynamically -->
+            </tbody>
+        </table>
     </div>
 
     <nav class="bottom-menu">
@@ -143,7 +199,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getFirestore, doc, getDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
         const firebaseConfig = {
@@ -162,6 +218,8 @@
 
         const loadingScreen = document.getElementById('loading-screen');
         const content = document.querySelector('.content');
+        const seasonSelect = document.getElementById('season-select');
+        const rankingsBody = document.getElementById('rankings-body');
         let currentUserStatus = null;
 
         async function getUserStatus(userId) {
@@ -174,12 +232,70 @@
             }
         }
 
+        async function loadSeasons() {
+            const palpitesRef = collection(db, 'palpites');
+            const palpitesSnap = await getDocs(palpitesRef);
+            const seasons = new Set();
+
+            palpitesSnap.forEach(doc => {
+                const temporada = doc.data().temporada;
+                if (temporada) seasons.add(temporada);
+            });
+
+            const sortedSeasons = Array.from(seasons).sort((a, b) => b.localeCompare(a));
+            seasonSelect.innerHTML = '';
+            sortedSeasons.forEach(season => {
+                const option = document.createElement('option');
+                option.value = season;
+                option.textContent = season;
+                seasonSelect.appendChild(option);
+            });
+
+            if (sortedSeasons.length > 0) {
+                seasonSelect.value = sortedSeasons[0];
+                await loadRankings(sortedSeasons[0]);
+            }
+        }
+
+        async function loadRankings(season) {
+            const usersRef = collection(db, 'users');
+            const usersSnap = await getDocs(usersRef);
+            const rankings = [];
+
+            usersSnap.forEach(userDoc => {
+                const userData = userDoc.data();
+                const seasonPoints = userData[season.replace('/', '') + 'Pontos'] || 0;
+                rankings.push({
+                    username: userData.nomeDeUsuario || 'Unknown User',
+                    points: seasonPoints
+                });
+            });
+
+            rankings.sort((a, b) => b.points - a.points);
+            rankingsBody.innerHTML = '';
+
+            rankings.forEach((rank, index) => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${index + 1}</td>
+                    <td>${rank.username}</td>
+                    <td>${rank.points}</td>
+                `;
+                rankingsBody.appendChild(row);
+            });
+        }
+
+        seasonSelect.addEventListener('change', (e) => {
+            loadRankings(e.target.value);
+        });
+
         onAuthStateChanged(auth, async (user) => {
             if (user) {
                 currentUserStatus = await getUserStatus(user.uid);
                 console.log(`User is logged in on rankings.html with status: ${currentUserStatus}`);
                 loadingScreen.style.display = 'none';
                 content.style.display = 'block';
+                await loadSeasons();
             } else {
                 console.log('No user is logged in on rankings.html');
                 loadingScreen.style.display = 'none';
