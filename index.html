@@ -192,16 +192,44 @@
             <form id="popupForm">
                 <div class="form-group">
                     <label for="gplayerName">Nome de Usuário</label>
-                    <input type="text" id="gplayerName" required>
+                    <input type="text" id="gplayerName" name="gplayerName" required>
                 </div>
-                <div class="form-group">
+
+                <div class="form-group" style="display: none;"> <!-- Campo Estatuto escondido -->
                     <label for="userStatus">Estatuto</label>
-                    <select id="userStatus">
+                    <select id="userStatus" name="userStatus">
+                        <option value="gplayer" selected>gplayer</option> <!-- Predefinido como gplayer -->
                         <option value="Regular">Regular</option>
                         <option value="Admin">Admin</option>
-                        <!-- Adicione mais estatutos conforme necessário -->
+                        <!-- Outros estatutos podem ser adicionados aqui se necessário -->
                     </select>
                 </div>
+
+                <div class="form-group" style="display: none;"> <!-- Campo GCoinsGanhos escondido -->
+                    <label for="gCoinsGanhos">GCoinsGanhos</label>
+                    <input type="number" id="gCoinsGanhos" name="gCoinsGanhos" value="0"> <!-- Simplificado -->
+                </div>
+
+                <div class="form-group" style="display: none;"> <!-- Campo Pontos escondido -->
+                    <label for="pontos">Pontos</label>
+                    <input type="number" id="pontos" name="pontos" value="0"> <!-- Simplificado -->
+                </div>
+
+                <div class="form-group" style="display: none;"> <!-- Campo Tática escondido -->
+                    <label for="tática">Tática</label>
+                    <input type="text" id="tática" name="tática" value="4-4-2">
+                </div>
+
+                <div class="form-group" style="display: none;"> <!-- Campo Ativo? escondido -->
+                    <label for="ativo">Ativo?</label>
+                    <select id="ativo" name="ativo">
+                        <option value="" selected>null</option>
+                        <option value="sim">Sim</option>
+                        <option value="nao">Não</option>
+                    </select>
+                </div>
+
+
                 <button type="submit" class="auth-btn">Salvar Perfil</button>
             </form>
         </div>
@@ -237,8 +265,8 @@
             if (docSnap.exists()) {
                 return docSnap.data().estatuto; // Retorna o estatuto do Firestore
             } else {
-                console.log("No such document!");
-                return null; // Ou defina um estatuto padrão se o documento não existir
+                console.warn(`User document not found for user ID: ${userId}. User status defaulting to null.`); // Alerta em vez de erro
+                return null; // Retorna null explicitamente quando o documento não existe
             }
         }
 
@@ -318,10 +346,18 @@
             document.getElementById('popupForm').addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const gplayerName = document.getElementById('gplayerName').value;
-                const userStatus = document.getElementById('userStatus').value; // Captura o estatuto
+                const userStatus = document.getElementById('userStatus').value; // Vai pegar 'gplayer' que está predefinido
 
-                if (!gplayerName || !userStatus) {
-                    showError('Por favor, preencha todos os campos do perfil.');
+                // Novos campos
+                const gCoinsGanhos = parseFloat(document.getElementById('gCoinsGanhos').value); // Converte para número
+                const pontos = parseFloat(document.getElementById('pontos').value); // Converte para número
+                const tática = document.getElementById('tática').value;
+                const ativoSelect = document.getElementById('ativo');
+                let ativo = ativoSelect.value === "" ? null : ativoSelect.value === "sim"; // Converte para boolean ou null
+
+
+                if (!gplayerName) {
+                    showError('Por favor, preencha o campo Nome de Usuário.');
                     return;
                 }
 
@@ -330,7 +366,11 @@
                     await setDoc(doc(db, 'users', tempUser.uid), {
                         nomeDeUsuario: gplayerName,
                         email: tempUser.email,
-                        estatuto: userStatus // Salva o estatuto do usuário
+                        estatuto: userStatus, // Irá guardar 'gplayer'
+                        gCoinsGanhos: gCoinsGanhos, // Salva GCoinsGanhos
+                        pontos: pontos, // Salva Pontos
+                        tática: tática, // Salva Tática
+                        ativo: ativo // Salva Ativo?
                     });
 
                     signupSuccessPopup.style.display = 'none';
