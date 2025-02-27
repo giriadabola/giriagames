@@ -116,12 +116,11 @@
         }
 
         .info-icon {
-    /* float: right;  <-- REMOVE ESTA LINHA */
-    margin-left: auto;
-    cursor: pointer;
-    color: #2176ff;
-    transition: color 0.3s ease;
-}
+            margin-left: auto;
+            cursor: pointer;
+            color: #2176ff;
+            transition: color 0.3s ease;
+        }
 
         .info-icon:hover {
             color: #0056d6;
@@ -134,6 +133,8 @@
             margin: 10px 0;
             border-radius: 8px;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            width: 100%; /* Full width submenu */
+            box-sizing: border-box; /* Ensure padding is inside width */
         }
 
         .predictions-submenu.active {
@@ -179,6 +180,18 @@
         .rankings-table tr:hover {
             background-color: #f0f4ff;
         }
+
+        /* Style adjustment when submenu is active to move info icon closer to player name */
+        .rankings-table tr.submenu-active td:nth-child(2) {
+            display: flex;
+            justify-content: flex-start; /* Align items to the start */
+            align-items: center; /* Vertically align items in the cell */
+        }
+
+        .rankings-table tr.submenu-active td:nth-child(2) span {
+            margin-right: 10px; /* Add some space between player name and info icon */
+        }
+
 
         /* Loading Screen Styles */
         #loading-screen {
@@ -340,10 +353,10 @@
                 const row = document.createElement('tr');
                 const position = index + 1;
                 const totalUsers = rankings.length;
-                
+
                 // Calculate the position percentage
                 const percentage = position / totalUsers;
-                
+
                 // Determine background color based on position
                 let backgroundColor;
                 if (percentage <= 0.33) {
@@ -359,7 +372,7 @@
                     const redIntensity = Math.floor(255 * ((percentage - 0.67) / 0.33));
                     backgroundColor = `rgba(${200 - redIntensity}, 50, 50, 0.2)`;
                 }
-                
+
                 row.style.backgroundColor = backgroundColor;
                 row.innerHTML = `
                     <td><div class="position-circle">${position}</div></td>
@@ -370,11 +383,11 @@
                     </td>
                     <td>${rank.points}</td>
                 `;
-                
+
                 // Add click event listener to the info icon
                 const infoIcon = row.querySelector('.info-icon');
                 infoIcon.addEventListener('click', () => togglePredictions(rank.userId, season));
-                
+
                 rankingsBody.appendChild(row);
             });
         }
@@ -389,19 +402,22 @@
 
         async function togglePredictions(userId, season) {
             const submenu = document.getElementById(`predictions-${userId}`);
+            const infoIcon = document.querySelector(`.info-icon[data-userid="${userId}"]`); // Seleciona o info-icon correto
+            const row = infoIcon.closest('tr');
             const isActive = submenu.classList.contains('active');
 
             // Close all other open submenus
             document.querySelectorAll('.predictions-submenu.active').forEach(menu => {
                 if (menu !== submenu) {
                     menu.classList.remove('active');
+                    menu.closest('tr').classList.remove('submenu-active');
                 }
             });
 
             if (!isActive) {
                 // Fetch user's predictions for the selected season
                 const palpitesRef = collection(db, 'palpites');
-                const q = query(palpitesRef, 
+                const q = query(palpitesRef,
                     where('userId', '==', userId),
                     where('temporada', '==', season)
                 );
@@ -441,6 +457,9 @@
                 });
 
                 submenu.innerHTML = predictionsHTML || 'No predictions found for this season';
+                row.classList.add('submenu-active');
+            } else {
+                row.classList.remove('submenu-active');
             }
 
             submenu.classList.toggle('active');
