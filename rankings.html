@@ -111,6 +111,67 @@
             font-weight: bold;
         }
 
+        .rankings-table tr:hover {
+            background-color: rgba(255, 255, 255, 0.8) !important;
+        }
+
+        .info-icon {
+    /* float: right;  <-- REMOVE ESTA LINHA */
+    margin-left: auto;
+    cursor: pointer;
+    color: #2176ff;
+    transition: color 0.3s ease;
+}
+
+        .info-icon:hover {
+            color: #0056d6;
+        }
+
+        .predictions-submenu {
+            display: none;
+            background-color: #f8f9fa;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .predictions-submenu.active {
+            display: block;
+        }
+
+        .game-header {
+            font-weight: bold;
+            color: #2176ff;
+            margin: 10px 0;
+            padding-bottom: 5px;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .prediction-item {
+            margin: 5px 0;
+            padding: 5px 0;
+            color: #666;
+        }
+
+        .prediction-points {
+            color: #28a745;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+
+        .position-circle {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background-color: #2176ff;
+            color: white;
+            font-weight: bold;
+        }
+
         .rankings-table tr:nth-child(even) {
             background-color: #f8f9fa;
         }
@@ -199,7 +260,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, doc, getDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getFirestore, doc, getDoc, collection, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
         const firebaseConfig = {
@@ -266,6 +327,7 @@
                 const userData = userDoc.data();
                 const seasonPoints = userData[season.replace('/', '') + 'Pontos'] || 0;
                 rankings.push({
+                    userId: userDoc.id,
                     username: userData.nomeDeUsuario || 'Unknown User',
                     points: seasonPoints
                 });
@@ -276,18 +338,113 @@
 
             rankings.forEach((rank, index) => {
                 const row = document.createElement('tr');
+                const position = index + 1;
+                const totalUsers = rankings.length;
+                
+                // Calculate the position percentage
+                const percentage = position / totalUsers;
+                
+                // Determine background color based on position
+                let backgroundColor;
+                if (percentage <= 0.33) {
+                    // Top third - green gradient
+                    const greenIntensity = Math.floor(255 * (percentage / 0.33));
+                    backgroundColor = `rgba(50, ${200 - greenIntensity}, 50, 0.2)`;
+                } else if (percentage <= 0.67) {
+                    // Middle third - yellow gradient
+                    const yellowIntensity = Math.floor(255 * ((percentage - 0.33) / 0.34));
+                    backgroundColor = `rgba(${200 - yellowIntensity}, ${200 - yellowIntensity}, 50, 0.2)`;
+                } else {
+                    // Bottom third - red gradient
+                    const redIntensity = Math.floor(255 * ((percentage - 0.67) / 0.33));
+                    backgroundColor = `rgba(${200 - redIntensity}, 50, 50, 0.2)`;
+                }
+                
+                row.style.backgroundColor = backgroundColor;
                 row.innerHTML = `
-                    <td>${index + 1}</td>
-                    <td>${rank.username}</td>
+                    <td><div class="position-circle">${position}</div></td>
+                    <td style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                        <span>${rank.username}</span>
+                        <i class="fas fa-info-circle info-icon" data-userid="${rank.userId}" data-season="${season}"></i>
+                        <div id="predictions-${rank.userId}" class="predictions-submenu"></div>
+                    </td>
                     <td>${rank.points}</td>
                 `;
+                
+                // Add click event listener to the info icon
+                const infoIcon = row.querySelector('.info-icon');
+                infoIcon.addEventListener('click', () => togglePredictions(rank.userId, season));
+                
                 rankingsBody.appendChild(row);
             });
         }
 
         seasonSelect.addEventListener('change', (e) => {
             loadRankings(e.target.value);
+            // Close all open prediction submenus when changing season
+            document.querySelectorAll('.predictions-submenu').forEach(submenu => {
+                submenu.classList.remove('active');
+            });
         });
+
+        async function togglePredictions(userId, season) {
+            const submenu = document.getElementById(`predictions-${userId}`);
+            const isActive = submenu.classList.contains('active');
+
+            // Close all other open submenus
+            document.querySelectorAll('.predictions-submenu.active').forEach(menu => {
+                if (menu !== submenu) {
+                    menu.classList.remove('active');
+                }
+            });
+
+            if (!isActive) {
+                // Fetch user's predictions for the selected season
+                const palpitesRef = collection(db, 'palpites');
+                const q = query(palpitesRef, 
+                    where('userId', '==', userId),
+                    where('temporada', '==', season)
+                );
+                const palpitesSnap = await getDocs(q);
+
+                let predictionsHTML = '';
+                const predictions = [];
+
+                palpitesSnap.forEach(doc => {
+                    predictions.push({
+                        ...doc.data(),
+                        timestamp: doc.data().timestamp?.toDate() || new Date(0)
+                    });
+                });
+
+                // Sort predictions by timestamp
+                predictions.sort((a, b) => b.timestamp - a.timestamp);
+
+                predictions.forEach(prediction => {
+                    let palpitesHTML = '';
+                    for (let i = 1; i <= 10; i++) {
+                        if (prediction[`palpite${i}`]) {
+                            const points = prediction[`palpite${i}GCoinsGanhos`] || 0;
+                            palpitesHTML += `
+                                <div class="prediction-item">
+                                    →${prediction[`palpite${i}`]}
+                                    <span class="prediction-points">(${points} points)</span>
+                                </div>`;
+                        }
+                    }
+
+                    if (palpitesHTML) {
+                        predictionsHTML += `
+                            <div class="game-header">${prediction.nomeJogo}</div>
+                            ${palpitesHTML}`;
+                    }
+                });
+
+                submenu.innerHTML = predictionsHTML || 'No predictions found for this season';
+            }
+
+            submenu.classList.toggle('active');
+        }
 
         onAuthStateChanged(auth, async (user) => {
             if (user) {
