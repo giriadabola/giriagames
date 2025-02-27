@@ -175,8 +175,8 @@
 
         .position {
             position: absolute;
-            width: 30px;
-            height: 30px;
+            width: 30px; /* Tamanho original da "bola" */
+            height: 30px; /* Tamanho original da "bola" */
             background-color: rgba(0, 0, 0, 0.5);
             border-radius: 50%;
             display: flex;
@@ -192,6 +192,19 @@
         .position:hover {
             background-color: rgba(0, 0, 0, 0.7);
         }
+
+        .position img {
+            position: absolute; /* Posicionamento absoluto para sobrepor a "bola" */
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%); /* Centraliza a imagem */
+            width: 60px; /* Dobro do tamanho da "bola" */
+            height: 60px; /* Dobro do tamanho da "bola" */
+            border-radius: 50%;
+            object-fit: cover;
+            pointer-events: none; /* Permite cliques na "bola" abaixo da imagem */
+        }
+
 
         .formation-options {
             margin-bottom: 10px;
@@ -417,6 +430,7 @@
         const countryFilterSelect = document.getElementById('country-filter');
         const clubFilterSelect = document.getElementById('club-filter');
 
+        const assignedPlayers = {}; // Objeto para rastrear jogadores atribuídos, key é playerId, value é true
 
         const formations = {
             '4-4-2': [
@@ -505,18 +519,34 @@
                 positionElement.addEventListener('drop', (event) => {
                     event.preventDefault();
                     const playerId = event.dataTransfer.getData('playerId');
+
+                    // Verificar se o jogador já está atribuído
+                    if (assignedPlayers[playerId]) {
+                        alert('Este jogador já foi colocado no relvado!');
+                        return; // Impede a colocação repetida
+                    }
+
                     const player = allPlayers.find(p => p.id === playerId);
                     if (player) {
                         positionElement.innerHTML = '';
                         const playerImg = document.createElement('img');
                         playerImg.src = player.imagem || 'placeholder_image_url.png';
                         playerImg.alt = player.nome;
-                        playerImg.style.width = '100%';
-                        playerImg.style.height = '100%';
-                        playerImg.style.borderRadius = '50%';
-                        playerImg.style.objectFit = 'cover';
                         positionElement.appendChild(playerImg);
                         positionElement.dataset.assignedPlayerId = playerId;
+                        assignedPlayers[playerId] = true; // Marcar jogador como atribuído
+
+                        playerImg.addEventListener('click', function(event) { // Modificação IMPORTANTE: Função nomeada para debug
+                            console.log("LOG 1: Imagem do jogador clicada, antes de removePlayerFromPosition");
+                            try {
+                                removePlayerFromPosition(positionElement, playerId);
+                                console.log("LOG 2: Imagem do jogador clicada, depois de removePlayerFromPosition");
+                            } catch (error) {
+                                console.error("Erro ao remover jogador:", error); // Tratar erros!
+                            }
+                        });
+
+
                         console.log(`Player ${player.nome} dropped on position ${pos.position}`);
                     }
                 });
@@ -526,8 +556,72 @@
             });
         }
 
+        function removePlayerFromPosition(positionElement, playerId) {
+            console.log("LOG 3: removePlayerFromPosition function started for playerId:", playerId);
+            try {
+                positionElement.innerHTML = '+';
+                delete positionElement.dataset.assignedPlayerId;
+                delete assignedPlayers[playerId]; // Remover jogador dos atribuídos
+                positionElement.addEventListener('dragover', (event) => { // Re-enable drop
+                    event.preventDefault();
+                });
+                positionElement.addEventListener('drop', handlePositionDrop); // Re-enable drop
+                console.log(`Player ${playerId} removed from position`);
+                console.log("LOG 4: removePlayerFromPosition function finished for playerId:", playerId);
+            } catch (error) {
+                console.error("Erro interno em removePlayerFromPosition:", error); // Tratar erros!
+            }
+        }
+
+
+        function handlePositionDrop(event) {
+            event.preventDefault();
+            const playerId = event.dataTransfer.getData('playerId');
+
+            // Verificar se o jogador já está atribuído
+            if (assignedPlayers[playerId]) {
+                alert('Este jogador já foi colocado no relvado!');
+                return; // Impede a colocação repetida
+            }
+
+            const positionElement = event.currentTarget; // Usar currentTarget para referenciar o elemento que chamou o evento
+            const player = allPlayers.find(p => p.id === playerId);
+            if (player) {
+                positionElement.innerHTML = '';
+                const playerImg = document.createElement('img');
+                playerImg.src = player.imagem || 'placeholder_image_url.png';
+                playerImg.alt = player.nome;
+                positionElement.appendChild(playerImg);
+                positionElement.dataset.assignedPlayerId = playerId;
+                assignedPlayers[playerId] = true; // Marcar jogador como atribuído
+
+                playerImg.addEventListener('click', function(event) { // Modificação IMPORTANTE: Função nomeada para debug
+                    console.log("LOG 5: Imagem do jogador clicada, antes de removePlayerFromPosition (dentro de handlePositionDrop)");
+                    try {
+                        removePlayerFromPosition(positionElement, playerId);
+                        console.log("LOG 6: Imagem do jogador clicada, depois de removePlayerFromPosition (dentro de handlePositionDrop)");
+                    } catch (error) {
+                        console.error("Erro ao remover jogador (dentro de handlePositionDrop):", error); // Tratar erros!
+                    }
+                });
+
+                // Remover os event listeners de drag and drop para evitar reatribuição acidental
+                positionElement.removeEventListener('dragover', handlePositionDragOver);
+                positionElement.removeEventListener('drop', handlePositionDrop);
+
+
+                console.log(`Player ${player.nome} dropped on position ${positionElement.dataset.position}`);
+            }
+        }
+
+        function handlePositionDragOver(event) {
+            event.preventDefault();
+        }
+
+
         formationSelect.addEventListener('change', (event) => {
             currentFormation = event.target.value;
+            assignedPlayers = {}; // Resetar jogadores atribuídos ao mudar formação
             renderFormation(currentFormation);
         });
 
