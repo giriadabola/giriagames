@@ -614,6 +614,19 @@
             }
         }
     
+        // Function to get username from userId
+        async function getUsername(userId) {
+            if (!userId) return null;
+            const userDoc = doc(db, 'users', userId);
+            const docSnap = await getDoc(userDoc);
+            if (docSnap.exists()) {
+                return docSnap.data().nomeDeUsuario; // Assuming 'nomeDeUsuario' is the field name
+            } else {
+                return userId; // Fallback to userId if username not found
+            }
+        }
+    
+    
         async function createPlayerCard(player) {
             const card = document.createElement('div');
             card.className = `player-card ${getTierClass(player.casta)}`;
@@ -622,6 +635,9 @@
             const paisDoc = await getDoc(doc(db, 'paises', player.paisId));
             const paisData = paisDoc.exists() ? paisDoc.data() : null;
             const paisImagem = paisData ? paisData.imagem : '';
+    
+            // Get username for "Comprado por"
+            const compradorUsernameCard = player.compradopor ? await getUsername(player.compradopor) : null;
     
             const cardContent = `
                 ${paisImagem ? `<img src="${paisImagem}" alt="Country flag" class="country-flag">` : ''}
@@ -640,7 +656,7 @@
                         </div>
                     </div>
                     <button class="buy-button ${player.compradopor ? 'purchased' : 'available'}">
-                        ${player.compradopor ? `Comprado por ${player.compradopor}` : 'Comprar'}
+                        ${player.compradopor ? `Comprado por ${compradorUsernameCard || player.compradopor}` : 'Comprar'}
                     </button>
                 </div>
             `;
@@ -680,9 +696,13 @@
                     popupCountryFlag.style.display = 'none';
                 }
     
+                // Get username for popup "Comprado por"
+                const compradorUsernamePopup = player.compradopor ? await getUsername(player.compradopor) : null;
+    
+    
                 if (player.compradopor) {
                     popupBuyButton.disabled = true;
-                    popupBuyButton.textContent = `Comprado por ${player.compradopor}`;
+                    popupBuyButton.textContent = `Comprado por ${compradorUsernamePopup || player.compradopor}`; // Use username in popup
                     popupBuyButton.style.opacity = '0.7';
                     popupBuyButton.style.cursor = 'not-allowed';
                 } else {
@@ -772,12 +792,15 @@
                         await updateDoc(userRef, updatePayload);
     
                         popupBuyButton.disabled = true;
-                        popupBuyButton.textContent = `Comprado por ${auth.currentUser.uid}`;
+                        // Update button text after purchase to show username (or userId as fallback)
+                        const compradorUsernameAfterPurchase = await getUsername(auth.currentUser.uid);
+                        popupBuyButton.textContent = `Comprado por ${compradorUsernameAfterPurchase || auth.currentUser.uid}`;
                         popupBuyButton.style.opacity = '0.7';
                         popupBuyButton.style.cursor = 'not-allowed';
     
                         const cardBuyButton = card.querySelector('.buy-button');
-                        cardBuyButton.textContent = `Comprado por ${auth.currentUser.uid}`;
+                        // Update card button text after purchase
+                        cardBuyButton.textContent = `Comprado por ${compradorUsernameAfterPurchase || auth.currentUser.uid}`;
                         cardBuyButton.className = 'buy-button purchased';
     
                         displaySuccessMessage(playerPopupContent, "Jogador comprado com sucesso!");
@@ -870,7 +893,6 @@
             let latestSeason = 0;
             let latestGcoinsField = null;
             for (const key in userData) {
-                // Alteração feita aqui: "Gcoins" para "GCoins" (C maiúsculo)
                 if (key.endsWith('GCoins')) {
                     const season = parseInt(key.slice(0, 8));
                     if (!isNaN(season) && season > latestSeason) {
@@ -927,6 +949,8 @@
             });
         });
     </script>
+    </body>
+    </html>
     </body>
     </html>
 </body>
