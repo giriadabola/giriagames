@@ -306,6 +306,12 @@
             transition: all 0.3s ease;
         }
 
+        .popup-button.purchased {
+            background: linear-gradient(135deg, #95a5a6 0%, #7f8c8d 100%);
+            color: white;
+            cursor: not-allowed;
+        }
+
         .popup-overlay.active {
             display: flex;
         }
@@ -582,7 +588,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, collection, getDocs, doc, getDoc, updateDoc, Timestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getFirestore, collection, getDocs, doc, getDoc, updateDoc, Timestamp, addDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
     
         const firebaseConfig = {
@@ -701,17 +707,20 @@
     
     
                 if (player.compradopor) {
-                    popupBuyButton.disabled = true;
-                    popupBuyButton.textContent = `Comprado por ${compradorUsernamePopup || player.compradopor}`; // Use username in popup
-                    popupBuyButton.style.opacity = '0.7';
-                    popupBuyButton.style.cursor = 'not-allowed';
-                } else {
-                    popupBuyButton.disabled = false;
-                    popupBuyButton.textContent = 'Comprar';
-                    popupBuyButton.style.opacity = '1';
-                    popupBuyButton.style.cursor = 'pointer';
-                }
-    
+                popupBuyButton.disabled = true;
+                popupBuyButton.textContent = `Comprado por ${compradorUsernamePopup || player.compradopor}`; // Use username in popup
+                popupBuyButton.classList.add('purchased'); // Adiciona a classe 'purchased'
+                popupBuyButton.classList.remove('buy'); // Remove a classe 'buy' se existir
+                popupBuyButton.style.opacity = '1'; // Mantém a opacidade a 1 para a classe 'purchased' controlar
+                popupBuyButton.style.cursor = 'not-allowed';
+            } else {
+                popupBuyButton.disabled = false;
+                popupBuyButton.textContent = 'Comprar';
+                popupBuyButton.classList.remove('purchased'); // Remove a classe 'purchased'
+                popupBuyButton.classList.add('buy'); // Garante que a classe 'buy' está presente
+                popupBuyButton.style.opacity = '1'; // Garante opacidade total
+                popupBuyButton.style.cursor = 'pointer';
+            }
                 playerPopupContent.querySelectorAll('.error-message').forEach(el => el.remove());
     
                 popupBuyButton.onclick = async () => {
@@ -785,26 +794,42 @@
                         await updateDoc(currentPlayerDocRef, {
                             compradopor: auth.currentUser.uid
                         });
-    
+
                         const updatedGcoins = userGcoins - playerPrice;
                         const updatePayload = {};
                         updatePayload[gCoinsField] = updatedGcoins;
                         await updateDoc(userRef, updatePayload);
-    
+
+                        // Create movement record
+                        const movimentoData = {
+                            userId: auth.currentUser.uid,
+                            jogadorId: playerId,
+                            posicao: currentPlayerData.posicao,
+                            preco: currentPlayerData.preco,
+                            estado: "Comprado",
+                            de: auth.currentUser.uid,
+                            para: null,
+                            mediapontos: null,
+                            movimentoData: new Date(),
+                            temporada: gCoinsField.replace('GCoins', '')
+                        };
+
+                        await addDoc(collection(db, 'movimentos'), movimentoData);
+
                         popupBuyButton.disabled = true;
                         // Update button text after purchase to show username (or userId as fallback)
                         const compradorUsernameAfterPurchase = await getUsername(auth.currentUser.uid);
                         popupBuyButton.textContent = `Comprado por ${compradorUsernameAfterPurchase || auth.currentUser.uid}`;
                         popupBuyButton.style.opacity = '0.7';
                         popupBuyButton.style.cursor = 'not-allowed';
-    
+
                         const cardBuyButton = card.querySelector('.buy-button');
                         // Update card button text after purchase
                         cardBuyButton.textContent = `Comprado por ${compradorUsernameAfterPurchase || auth.currentUser.uid}`;
                         cardBuyButton.className = 'buy-button purchased';
-    
+
                         displaySuccessMessage(playerPopupContent, "Jogador comprado com sucesso!");
-    
+
                     } catch (error) {
                         console.error("Erro ao comprar jogador:", error);
                         displayErrorMessage(playerPopupContent, "Erro ao comprar jogador. Tente novamente.");
