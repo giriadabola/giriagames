@@ -805,126 +805,161 @@
                 const querySnapshot = await getDocs(q);
                 returnPlayersList.innerHTML = '';
 
+                // Create position groups
+                const positionOrder = ['Guarda-Redes', 'Defesa', 'Médio', 'Avançado'];
+                const playersByPosition = {};
+
+                // Initialize position groups
+                positionOrder.forEach(pos => {
+                    playersByPosition[pos] = [];
+                });
+
+                // Group players by position
                 const promises = querySnapshot.docs.map(async playerDoc => {
                     const player = playerDoc.data();
                     const paisRef = doc(db, 'paises', player.paisId);
                     const paisDoc = await getDoc(paisRef);
                     const paisData = paisDoc.exists() ? paisDoc.data() : null;
-
-                    const playerCard = document.createElement('div');
-                    playerCard.className = 'player-card'; // Start with the default class
-
-                    let castaClassName = '';
-                    const castaValue = player.casta; // Get the casta value directly
-
-                    if (castaValue === "Jogador Ouro") {
-                        castaClassName = 'golden';
-                    } else if (castaValue === "Jogador Prata") {
-                        castaClassName = 'silver';
-                    } else if (castaValue === "Jogador Bronze") {
-                        castaClassName = 'bronze';
-                    } else if (castaValue === "Jogador Platina") {
-                        castaClassName = 'platina';
-                    }
-
-                    if (castaClassName) {
-                        playerCard.classList.add(castaClassName); // Add the determined class name
-                    }
-
-                    playerCard.innerHTML = `
-                        <img src="${player.imagem}" alt="${player.nome}" class="player-image">
-                        ${paisData ? `<img src="${paisData.imagem}" alt="${paisData.nome}" class="country-flag">` : ''}
-                        <div class="player-name">${player.nome}</div>
-                        <div class="player-position">${player.posicao}</div>
-                        <div class="player-price">
-                            <i class="fas fa-coins"></i>
-                            ${player.preco}
-                        </div>
-                        <button class="return-button" data-player-id="${playerDoc.id}" data-player-position="${player.posicao}">Devolver</button>
-                    `;
-
-                    const returnButton = playerCard.querySelector('.return-button');
-                    returnButton.addEventListener('click', async () => {
-                        const confirmPopup = document.createElement('div');
-                        confirmPopup.className = 'popup-overlay';
-                        confirmPopup.style.display = 'flex';
-                        confirmPopup.innerHTML = `
-                            <div class="popup-content">
-                                <h2 style="font-size: 1.2rem;">Devolver para o Mercado? (não será reembolsado)</h2>
-                                <div class="popup-buttons">
-                                    <button class="popup-btn confirm-return" style="background-color: #4CAF50;">Sim</button>
-                                    <button class="popup-btn cancel-return" style="background-color: #f44336;">Não</button>
-                                </div>
-                            </div>
-                        `;
-                        document.body.appendChild(confirmPopup);
-
-                        const confirmButton = confirmPopup.querySelector('.confirm-return');
-                        const cancelButton = confirmPopup.querySelector('.cancel-return');
-
-                        cancelButton.addEventListener('click', () => {
-                            confirmPopup.remove();
-                        });
-
-                        confirmButton.addEventListener('click', async () => {
-                            try {
-                                // Get the most recent season
-                                const seasonsQuery = query(collection(db, 'palpites'), orderBy('temporada', 'desc'), limit(1));
-                                const seasonsSnapshot = await getDocs(seasonsQuery);
-                                const latestSeason = seasonsSnapshot.docs[0]?.data()?.temporada || '';
-
-                                // Update player's compradopor field
-                                await updateDoc(doc(db, 'jogadores', playerDoc.id), {
-                                    compradopor: null
-                                });
-
-                                // Create movement record
-                                await addDoc(collection(db, 'movimentos'), {
-                                    de: user.uid,
-                                    estado: 'Devolvido',
-                                    jogadorId: playerDoc.id,
-                                    mediapontos: null,
-                                    movimentoData: serverTimestamp(),
-                                    posicao: player.posicao,
-                                    preco: 0,
-                                    temporada: latestSeason,
-                                    userId: user.uid
-                                });
-
-                                // Show success message
-                                const successMessage = document.createElement('div');
-                                successMessage.className = 'success-message';
-                                successMessage.textContent = 'Jogador Devolvido';
-                                successMessage.style.position = 'fixed';
-                                successMessage.style.top = '50%';
-                                successMessage.style.left = '50%';
-                                successMessage.style.transform = 'translate(-50%, -50%)';
-                                successMessage.style.padding = '20px';
-                                successMessage.style.backgroundColor = '#4CAF50';
-                                successMessage.style.color = 'white';
-                                successMessage.style.borderRadius = '5px';
-                                document.body.appendChild(successMessage);
-
-                                // Remove popups and refresh after 1.5 seconds
-                                setTimeout(() => {
-                                    confirmPopup.remove();
-                                    successMessage.remove();
-                                    location.reload();
-                                }, 1500);
-
-                            } catch (error) {
-                                console.error('Error returning player:', error);
-                                alert('Erro ao devolver jogador. Tente novamente.');
-                                confirmPopup.remove();
-                            }
-                        });
-                    });
-                    
-
-                    returnPlayersList.appendChild(playerCard);
+                    return { playerDoc, player, paisData };
                 });
 
-                await Promise.all(promises);
+                const players = await Promise.all(promises);
+
+                // Sort players into position groups
+                players.forEach(({ playerDoc, player, paisData }) => {
+                    if (positionOrder.includes(player.posicao)) {
+                        playersByPosition[player.posicao].push({ playerDoc, player, paisData });
+                    }
+                });
+
+                // Create sections for each position
+                positionOrder.forEach(position => {
+                    if (playersByPosition[position].length > 0) {
+                        // Add position header
+                        const header = document.createElement('h3');
+                        header.textContent = position;
+                        header.style.color = '#333';
+                        header.style.marginTop = '20px';
+                        header.style.marginBottom = '10px';
+                        header.style.fontSize = '18px';
+                        returnPlayersList.appendChild(header);
+
+                        // Add players in this position
+                        playersByPosition[position].forEach(({ playerDoc, player, paisData }) => {
+                            const playerCard = document.createElement('div');
+                            playerCard.className = 'player-card';
+
+                            let castaClassName = '';
+                            const castaValue = player.casta;
+
+                            if (castaValue === "Jogador Ouro") {
+                                castaClassName = 'golden';
+                            } else if (castaValue === "Jogador Prata") {
+                                castaClassName = 'silver';
+                            } else if (castaValue === "Jogador Bronze") {
+                                castaClassName = 'bronze';
+                            } else if (castaValue === "Jogador Platina") {
+                                castaClassName = 'platina';
+                            }
+
+                            if (castaClassName) {
+                                playerCard.classList.add(castaClassName);
+                            }
+
+                            playerCard.innerHTML = `
+                                <img src="${player.imagem}" alt="${player.nome}" class="player-image">
+                                ${paisData ? `<img src="${paisData.imagem}" alt="${paisData.nome}" class="country-flag">` : ''}
+                                <div class="player-name">${player.nome}</div>
+                                <div class="player-position">${player.posicao}</div>
+                                <div class="player-price">
+                                    <i class="fas fa-coins"></i>
+                                    ${player.preco}
+                                </div>
+                                <button class="return-button" data-player-id="${playerDoc.id}" data-player-position="${player.posicao}">Devolver</button>
+                            `;
+
+                            const returnButton = playerCard.querySelector('.return-button');
+                            returnButton.addEventListener('click', async () => {
+                                const confirmPopup = document.createElement('div');
+                                confirmPopup.className = 'popup-overlay';
+                                confirmPopup.style.display = 'flex';
+                                confirmPopup.innerHTML = `
+                                    <div class="popup-content">
+                                        <h2 style="font-size: 1.2rem;">Devolver para o Mercado? (não será reembolsado)</h2>
+                                        <div class="popup-buttons">
+                                            <button class="popup-btn confirm-return" style="background-color: #4CAF50;">Sim</button>
+                                            <button class="popup-btn cancel-return" style="background-color: #f44336;">Não</button>
+                                        </div>
+                                    </div>
+                                `;
+                                document.body.appendChild(confirmPopup);
+
+                                const confirmButton = confirmPopup.querySelector('.confirm-return');
+                                const cancelButton = confirmPopup.querySelector('.cancel-return');
+
+                                cancelButton.addEventListener('click', () => {
+                                    confirmPopup.remove();
+                                });
+
+                                confirmButton.addEventListener('click', async () => {
+                                    try {
+                                        // Get the most recent season
+                                        const seasonsQuery = query(collection(db, 'palpites'), orderBy('temporada', 'desc'), limit(1));
+                                        const seasonsSnapshot = await getDocs(seasonsQuery);
+                                        const latestSeason = seasonsSnapshot.docs[0]?.data()?.temporada || '';
+
+                                        // Update player's compradopor field
+                                        await updateDoc(doc(db, 'jogadores', playerDoc.id), {
+                                            compradopor: null
+                                        });
+
+                                        // Create movement record
+                                        await addDoc(collection(db, 'movimentos'), {
+                                            de: user.uid,
+                                            estado: 'Devolvido',
+                                            jogadorId: playerDoc.id,
+                                            mediapontos: null,
+                                            movimentoData: serverTimestamp(),
+                                            posicao: player.posicao,
+                                            preco: 0,
+                                            temporada: latestSeason,
+                                            userId: user.uid
+                                        });
+
+                                        // Show success message
+                                        const successMessage = document.createElement('div');
+                                        successMessage.className = 'success-message';
+                                        successMessage.textContent = 'Jogador Devolvido';
+                                        successMessage.style.position = 'fixed';
+                                        successMessage.style.top = '50%';
+                                        successMessage.style.left = '50%';
+                                        successMessage.style.transform = 'translate(-50%, -50%)';
+                                        successMessage.style.padding = '20px';
+                                        successMessage.style.backgroundColor = '#4CAF50';
+                                        successMessage.style.color = 'white';
+                                        successMessage.style.borderRadius = '5px';
+                                        document.body.appendChild(successMessage);
+
+                                        // Remove popups and refresh after 1.5 seconds
+                                        setTimeout(() => {
+                                            confirmPopup.remove();
+                                            successMessage.remove();
+                                            location.reload();
+                                        }, 1500);
+
+                                    } catch (error) {
+                                        console.error('Error returning player:', error);
+                                        alert('Erro ao devolver jogador. Tente novamente.');
+                                        confirmPopup.remove();
+                                    }
+                                });
+                            });
+
+                            returnPlayersList.appendChild(playerCard);
+                        });
+                    }
+                });
+
             } catch (error) {
                 console.error('Error loading return players:', error);
             }
