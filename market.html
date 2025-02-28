@@ -582,9 +582,9 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, collection, getDocs, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js"; // Import auth methods
-
+        import { getFirestore, collection, getDocs, doc, getDoc, updateDoc, Timestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+    
         const firebaseConfig = {
             apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0",
             authDomain: "g-games-8a8fc.firebaseapp.com",
@@ -594,17 +594,16 @@
             appId: "1:689897349449:web:536599794579901beb7a98",
             measurementId: "G-GTTPJ6G5MD"
         };
-
+    
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
-        const auth = getAuth(app); // Initialize auth
-
-        const loadingScreen = document.getElementById('loading-screen'); // Get loading screen
-        const content = document.querySelector('.content'); // Get content
-
+        const auth = getAuth(app);
+    
+        const loadingScreen = document.getElementById('loading-screen');
+        const content = document.querySelector('.content');
+    
         let currentUserStatus = null;
-
-        // Function to get user status from Firestore
+    
         async function getUserStatus(userId) {
             const userDoc = doc(db, 'users', userId);
             const docSnap = await getDoc(userDoc);
@@ -614,17 +613,16 @@
                 return null;
             }
         }
-
-
+    
         async function createPlayerCard(player) {
             const card = document.createElement('div');
             card.className = `player-card ${getTierClass(player.casta)}`;
-
-            // Fetch country data using paisId
+            card.dataset.playerId = player.id;
+    
             const paisDoc = await getDoc(doc(db, 'paises', player.paisId));
             const paisData = paisDoc.exists() ? paisDoc.data() : null;
             const paisImagem = paisData ? paisData.imagem : '';
-
+    
             const cardContent = `
                 ${paisImagem ? `<img src="${paisImagem}" alt="Country flag" class="country-flag">` : ''}
                 <img src="${player.imagem}" alt="${player.nome}" class="player-image">
@@ -641,14 +639,14 @@
                             <div class="stat-label">gCoins</div>
                         </div>
                     </div>
-                    <button class="buy-button ${player.compradopor ? 'purchased' : 'available'}">                        ${player.compradopor ? `Comprado por ${player.compradopor}` : 'Comprar'}
+                    <button class="buy-button ${player.compradopor ? 'purchased' : 'available'}">
+                        ${player.compradopor ? `Comprado por ${player.compradopor}` : 'Comprar'}
                     </button>
                 </div>
             `;
-
+    
             card.innerHTML = cardContent;
-            
-            // Add click event to show popup
+    
             card.addEventListener('click', async () => {
                 const popup = document.getElementById('playerPopup');
                 const popupImage = document.getElementById('popupPlayerImage');
@@ -659,22 +657,21 @@
                 const popupCasta = document.getElementById('popupPlayerCasta');
                 const popupBuyButton = document.getElementById('popupBuyButton');
                 const popupCountryFlag = document.getElementById('popupCountryFlag');
-
-                // Fetch country data using paisId
+                const popupPlayerPosicaoElement = document.getElementById('popupPlayerPosicao');
+                const playerPopupContent = document.querySelector('.popup-content');
+    
                 const paisDoc = await getDoc(doc(db, 'paises', player.paisId));
                 const paisData = paisDoc.exists() ? paisDoc.data() : null;
-
-                // Set popup content
+    
                 popupImage.src = player.imagem;
                 popupImage.alt = player.nome;
                 popupName.textContent = player.nome;
                 popupClub.textContent = player.clube;
                 popupOverall.textContent = player.overall;
                 popupPrice.textContent = `${player.preco} gCoins`;
-                document.getElementById('popupPlayerPosicao').textContent = player.posicao;
+                popupPlayerPosicaoElement.textContent = player.posicao;
                 popupCasta.textContent = player.casta;
-
-                // Set country flag if available
+    
                 if (paisData && paisData.imagem) {
                     popupCountryFlag.src = paisData.imagem;
                     popupCountryFlag.alt = paisData.nome || 'Country flag';
@@ -682,8 +679,7 @@
                 } else {
                     popupCountryFlag.style.display = 'none';
                 }
-
-                // Update buy button state
+    
                 if (player.compradopor) {
                     popupBuyButton.disabled = true;
                     popupBuyButton.textContent = `Comprado por ${player.compradopor}`;
@@ -695,16 +691,111 @@
                     popupBuyButton.style.opacity = '1';
                     popupBuyButton.style.cursor = 'pointer';
                 }
-
-                // Show popup with animation
+    
+                playerPopupContent.querySelectorAll('.error-message').forEach(el => el.remove());
+    
+                popupBuyButton.onclick = async () => {
+                    const playerId = card.dataset.playerId;
+                    const currentPlayerDocRef = doc(db, 'jogadores', playerId);
+                    const currentPlayerSnap = await getDoc(currentPlayerDocRef);
+                    if (!currentPlayerSnap.exists()) {
+                        console.error("Jogador não encontrado no Firestore");
+                        return;
+                    }
+                    const currentPlayerData = currentPlayerSnap.data();
+    
+                    if (currentPlayerData.compradopor) {
+                        displayErrorMessage(playerPopupContent, "Este jogador já foi comprado.");
+                        return;
+                    }
+    
+                    if (currentPlayerData.marketTimes && currentPlayerData.marketTimes.abertura && currentPlayerData.marketTimes.fechamento) {
+                        const aberturaString = currentPlayerData.marketTimes.abertura;
+                        const fechamentoString = currentPlayerData.marketTimes.fechamento;
+    
+                        const aberturaDate = new Date(aberturaString);
+                        const fechamentoDate = new Date(fechamentoString);
+                        const currentDate = new Date();
+    
+                        if (!(currentDate >= aberturaDate && currentDate <= fechamentoDate)) {
+                            displayErrorMessage(playerPopupContent, "O mercado para este jogador está fechado.");
+                            return;
+                        }
+                    } else {
+                        displayErrorMessage(playerPopupContent, "Datas de mercado não definidas para este jogador.");
+                        return;
+                    }
+    
+                    if (currentPlayerData.compradopor) {
+                        displayErrorMessage(playerPopupContent, "Este jogador já foi comprado.");
+                        return;
+                    }
+    
+                    const userRef = doc(db, 'users', auth.currentUser.uid);
+                    const userSnap = await getDoc(userRef);
+                    if (!userSnap.exists()) {
+                        console.error("Utilizador não encontrado");
+                        displayErrorMessage(playerPopupContent, "Erro ao verificar os seus fundos.");
+                        return;
+                    }
+                    const userData = userSnap.data();
+    
+                    const playerPrice = currentPlayerData.preco;
+                    const gCoinsField = findLatestGcoinsField(userData);
+    
+                    console.log('userData:', userData);
+                    console.log('gCoinsField:', gCoinsField);
+                    console.log('userData[gCoinsField]:', userData[gCoinsField]);
+    
+    
+                    let userGcoins = 0;
+                    if (gCoinsField && userData[gCoinsField] !== undefined) {
+                        userGcoins = userData[gCoinsField];
+                    } else {
+                        displayErrorMessage(playerPopupContent, "Não foi possível encontrar os seus fundos.");
+                        return;
+                    }
+    
+                    if (userGcoins < playerPrice) {
+                        displayErrorMessage(playerPopupContent, "Fundos insuficientes.");
+                        return;
+                    }
+    
+                    try {
+                        await updateDoc(currentPlayerDocRef, {
+                            compradopor: auth.currentUser.uid
+                        });
+    
+                        const updatedGcoins = userGcoins - playerPrice;
+                        const updatePayload = {};
+                        updatePayload[gCoinsField] = updatedGcoins;
+                        await updateDoc(userRef, updatePayload);
+    
+                        popupBuyButton.disabled = true;
+                        popupBuyButton.textContent = `Comprado por ${auth.currentUser.uid}`;
+                        popupBuyButton.style.opacity = '0.7';
+                        popupBuyButton.style.cursor = 'not-allowed';
+    
+                        const cardBuyButton = card.querySelector('.buy-button');
+                        cardBuyButton.textContent = `Comprado por ${auth.currentUser.uid}`;
+                        cardBuyButton.className = 'buy-button purchased';
+    
+                        displaySuccessMessage(playerPopupContent, "Jogador comprado com sucesso!");
+    
+                    } catch (error) {
+                        console.error("Erro ao comprar jogador:", error);
+                        displayErrorMessage(playerPopupContent, "Erro ao comprar jogador. Tente novamente.");
+                    }
+                };
+    
                 popup.classList.add('active');
             });
-
+    
             return card;
         }
-
+    
         function getTierClass(casta) {
-            switch(casta) {
+            switch (casta) {
                 case 'Jogador Ouro': return 'gold';
                 case 'Jogador Prata': return 'silver';
                 case 'Jogador Bronze': return 'bronze';
@@ -712,23 +803,22 @@
                 default: return '';
             }
         }
-
+    
         async function loadPlayers() {
             try {
                 const jogadoresRef = collection(db, 'jogadores');
                 const snapshot = await getDocs(jogadoresRef);
-
+    
                 const players = {};
                 players['Guarda-Redes'] = document.getElementById('guarda-redes-grid');
                 players['Defesa'] = document.getElementById('defesas-grid');
                 players['Médio'] = document.getElementById('medios-grid');
                 players['Avançado'] = document.getElementById('avancados-grid');
-
-                // Add click handlers for section titles
+    
                 const toggleButton = document.getElementById('toggleAllSections');
                 const openSpan = toggleButton.querySelector('.toggle-open');
                 const closeSpan = toggleButton.querySelector('.toggle-close');
-
+    
                 function toggleAllSections(collapse) {
                     document.querySelectorAll('.section-title').forEach(title => {
                         const grid = title.parentElement.querySelector('.players-grid');
@@ -741,14 +831,14 @@
                         }
                     });
                 }
-
+    
                 toggleButton.addEventListener('click', () => {
                     const isActive = toggleButton.classList.toggle('active');
                     openSpan.classList.toggle('active', !isActive);
                     closeSpan.classList.toggle('active', isActive);
                     toggleAllSections(isActive);
                 });
-
+    
                 document.querySelectorAll('.section-title').forEach(title => {
                     title.addEventListener('click', () => {
                         const grid = title.parentElement.querySelector('.players-grid');
@@ -756,9 +846,10 @@
                         grid.classList.toggle('collapsed');
                     });
                 });
-
+    
                 for (const doc of snapshot.docs) {
                     const player = doc.data();
+                    player.id = doc.id;
                     if (player.noMercado) {
                         const grid = players[player.posicao];
                         if (grid) {
@@ -770,38 +861,65 @@
             } catch (error) {
                 console.error("Error loading players:", error);
             } finally {
-                loadingScreen.style.display = 'none'; // Hide loading screen after loading or error
-                content.style.display = 'block'; // Show content
+                loadingScreen.style.display = 'none';
+                content.style.display = 'block';
             }
         }
-
-
+    
+        function findLatestGcoinsField(userData) {
+            let latestSeason = 0;
+            let latestGcoinsField = null;
+            for (const key in userData) {
+                // Alteração feita aqui: "Gcoins" para "GCoins" (C maiúsculo)
+                if (key.endsWith('GCoins')) {
+                    const season = parseInt(key.slice(0, 8));
+                    if (!isNaN(season) && season > latestSeason) {
+                        latestSeason = season;
+                        latestGcoinsField = key;
+                    }
+                }
+            }
+            return latestGcoinsField;
+        }
+    
+        function displayErrorMessage(popupContent, message) {
+            const errorElement = document.createElement('div');
+            errorElement.className = 'error-message';
+            errorElement.style.color = 'red';
+            errorElement.style.marginTop = '10px';
+            errorElement.textContent = message;
+            popupContent.appendChild(errorElement);
+        }
+    
+        function displaySuccessMessage(popupContent, message) {
+            const successElement = document.createElement('div');
+            successElement.className = 'success-message';
+            successElement.style.color = 'green';
+            successElement.style.marginTop = '10px';
+            successElement.textContent = message;
+            popupContent.appendChild(successElement);
+        }
+    
         onAuthStateChanged(auth, async (user) => {
             if (user) {
                 currentUserStatus = await getUserStatus(user.uid);
                 console.log(`User is logged in on market.html with status: ${currentUserStatus}`);
-                loadPlayers(); // Load players only after auth check and user is logged in
+                loadPlayers();
             } else {
                 console.log('No user is logged in on market.html');
-                loadingScreen.style.display = 'none'; // Hide loading screen even if not logged in
-                window.location.href = 'index.html'; // Redirect to login page if not logged in
+                loadingScreen.style.display = 'none';
+                window.location.href = 'index.html';
             }
         });
-
-
+    
         document.addEventListener('DOMContentLoaded', () => {
-            // loadPlayers is now called inside onAuthStateChanged after auth check
-
-            // Setup popup close handlers
             const popup = document.getElementById('playerPopup');
             const exitButton = document.getElementById('popupExitButton');
-
-            // Close popup when clicking the exit button
+    
             exitButton.addEventListener('click', () => {
                 popup.classList.remove('active');
             });
-
-            // Close popup when clicking outside
+    
             popup.addEventListener('click', (e) => {
                 if (e.target === popup) {
                     popup.classList.remove('active');
@@ -809,5 +927,7 @@
             });
         });
     </script>
+    </body>
+    </html>
 </body>
 </html>
