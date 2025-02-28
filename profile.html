@@ -45,43 +45,20 @@
             background-color: #b71c1c;
         }
 
-        /* Season Dropdown Styles */
-        .season-select {
-            display: inline-block;
-            padding: 10px;
-            background-color: #ffffff;
-            color: #333;
-            border: 2px solid #ddd;
-            border-radius: 5px;
-            font-size: 16px;
-            cursor: pointer;
-            margin-right: 10px;
-            min-width: 200px;
-            transition: all 0.3s ease;
-        }
 
-        .season-select:hover {
-            border-color: #2176ff;
-        }
-
-        .season-select:focus {
-            outline: none;
-            border-color: #2176ff;
-            box-shadow: 0 0 5px rgba(33, 118, 255, 0.3);
-        }
-
-        /* Style for the dropdown options */
-        .season-select option {
-            padding: 10px;
-            background-color: white;
-            color: #333;
-        }
 
         .button-group {
             display: flex;
             align-items: center;
             gap: 10px;
             margin-bottom: 20px;
+        }
+
+        .logout-btn {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
         }
 
         /* GCoins Display Styles - MODIFICADO PARA MAIS LARGO E TEXTO ACIMA */
@@ -695,9 +672,6 @@
     <div class="content">
         <h1>Perfil</h1>
         <div class="button-group">
-            <select id="season-select" class="season-select">
-                <!-- Seasons will be populated dynamically from Firebase palpites collection -->
-            </select>
             <button class="logout-btn" id="logoutBtn">
                 <i class="fas fa-sign-out-alt"></i> Sair
             </button>
@@ -958,53 +932,40 @@
 
         // Firebase configuration and initialization moved to top of script
 
+        // Function to find the latest GCoins field in user data
+        function findLatestGcoinsField(userData) {
+            let latestSeason = 0;
+            let latestGcoinsField = null;
+            for (const key in userData) {
+                if (key.endsWith('GCoins')) {
+                    const season = parseInt(key.slice(0, 8));
+                    if (!isNaN(season) && season > latestSeason) {
+                        latestSeason = season;
+                        latestGcoinsField = key;
+                    }
+                }
+            }
+            return latestGcoinsField;
+        }
+
         // Function to update GCoins display
         async function updateGCoinsDisplay() {
             const user = auth.currentUser;
-            const seasonSelect = document.getElementById('season-select');
-            const selectedSeason = seasonSelect.value;
             const gcoinsValue = document.getElementById('gcoinsValue');
 
-            if (user && selectedSeason) {
+            if (user) {
                 const userDoc = await getDoc(doc(db, 'users', user.uid));
                 if (userDoc.exists()) {
-                    const formattedSeason = selectedSeason.replace(/\//g, '');
-                    const gcoinsField = `${formattedSeason}GCoins`;
-                    const gcoins = userDoc.data()[gcoinsField] || 0;
+                    const userData = userDoc.data();
+                    const latestGcoinsField = findLatestGcoinsField(userData);
+                    const gcoins = latestGcoinsField ? (userData[latestGcoinsField] || 0) : 0;
                     gcoinsValue.textContent = gcoins;
                 }
             }
         }
 
         // Add event listener for season change
-        document.getElementById('season-select').addEventListener('change', updateGCoinsDisplay);
 
-        // Function to load seasons from Firebase
-        async function loadSeasons() {
-            const palpitesRef = collection(db, 'palpites');
-            const palpitesSnap = await getDocs(palpitesRef);
-            const seasons = new Set();
-
-            palpitesSnap.forEach(doc => {
-                const temporada = doc.data().temporada;
-                if (temporada) seasons.add(temporada);
-            });
-
-            const sortedSeasons = Array.from(seasons).sort((a, b) => b.localeCompare(a));
-            const seasonSelect = document.getElementById('season-select');
-            seasonSelect.innerHTML = '';
-
-            sortedSeasons.forEach(season => {
-                const option = document.createElement('option');
-                option.value = season;
-                option.textContent = season;
-                seasonSelect.appendChild(option);
-            });
-
-            if (sortedSeasons.length > 0) {
-                seasonSelect.value = sortedSeasons[0]; // Select the most recent season
-            }
-        }
 
         const loadingScreen = document.getElementById('loading-screen');
         const content = document.querySelector('.content');
@@ -1247,12 +1208,10 @@
 
             onAuthStateChanged(auth, async (user) => {
                 if (user) {
-                    await loadSeasons(); // Load seasons when user is authenticated
                     currentUserStatus = await getUserStatus(user.uid);
                     console.log(`User is logged in on profile.html with status: ${currentUserStatus}`);
                     loadingScreen.style.display = 'none';
                     content.style.display = 'block';
-                    await loadSeasons();
                     await updateGCoinsDisplay(); // Initial GCoins display update
                 } else {
                     console.log('No user is logged in on profile.html');
