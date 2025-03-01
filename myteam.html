@@ -533,6 +533,7 @@
         let countries = {};
         let clubs = new Set();
         let currentFormation = '4-4-2';
+        let hasUnsavedChanges = false;
         const formationSelect = document.getElementById('formation-select');
         const pitchArea = document.querySelector('.pitch-area');
         const playerResultsContainer = document.querySelector('.player-results');
@@ -613,6 +614,7 @@
 
 
         async function saveFormation() {
+            hasUnsavedChanges = false;
             if (!currentUserUid) {
                 console.log("Utilizador não autenticado.");
                 return;
@@ -680,8 +682,6 @@
             }
         }
 
-
-        let hasUnsavedChanges = false;
 
         function renderFormation(formationName) {
             // Completely reset the formation and assigned players
@@ -930,10 +930,31 @@
         }
 
 
-        formationSelect.addEventListener('change', (e) => {
-            currentFormation = e.target.value;
-            renderFormation(currentFormation);
-            loadFormation(); // Load players for the new formation
+        formationSelect.addEventListener('change', async (e) => {
+            const newFormation = e.target.value;
+            if (hasUnsavedChanges) {
+                showConfirmationModal(
+                    'Quer guardar as alterações feitas?',
+                    async () => {
+                        // User clicked 'Sim'
+                        await saveFormation();
+                        currentFormation = newFormation;
+                        renderFormation(currentFormation);
+                        await loadFormation();
+                    },
+                    () => {
+                        // User clicked 'Não'
+                        hasUnsavedChanges = false;
+                        currentFormation = newFormation;
+                        renderFormation(currentFormation);
+                        loadFormation();
+                    }
+                );
+            } else {
+                currentFormation = newFormation;
+                renderFormation(currentFormation);
+                await loadFormation();
+            }
         });
 
         // Função para mostrar o modal de confirmação personalizado
@@ -950,40 +971,36 @@
             const messageElement = document.createElement('p');
             messageElement.textContent = message;
             modalContent.appendChild(messageElement);
-            
+
             // Criar os botões
             const buttonsContainer = document.createElement('div');
             buttonsContainer.classList.add('modal-buttons');
-            
+
             // Botão Sim
             const confirmButton = document.createElement('button');
             confirmButton.classList.add('btn-confirm');
             confirmButton.textContent = 'Sim';
-            confirmButton.addEventListener('click', () => {
+            confirmButton.onclick = () => {
                 document.body.removeChild(modalOverlay);
                 if (confirmCallback) confirmCallback();
-            });
-            
+            };
+
             // Botão Não
             const cancelButton = document.createElement('button');
             cancelButton.classList.add('btn-cancel');
             cancelButton.textContent = 'Não';
-            cancelButton.addEventListener('click', () => {
+            cancelButton.onclick = () => {
                 document.body.removeChild(modalOverlay);
                 if (cancelCallback) cancelCallback();
-            });
-            
+            };
+
             // Adicionar botões ao container
             buttonsContainer.appendChild(confirmButton);
             buttonsContainer.appendChild(cancelButton);
-            
-            // Adicionar container de botões ao modal
             modalContent.appendChild(buttonsContainer);
-            
-            // Adicionar conteúdo ao overlay
+
+            // Adicionar o conteúdo ao overlay e o overlay ao body
             modalOverlay.appendChild(modalContent);
-            
-            // Adicionar overlay ao body
             document.body.appendChild(modalOverlay);
         }
 
@@ -1215,6 +1232,33 @@
 
         renderFormation(currentFormation);
 
+        // Add event listener for page navigation
+        window.addEventListener('beforeunload', (e) => {
+            if (hasUnsavedChanges) {
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        });
+
+        // Add event listeners for navigation menu items
+        document.querySelectorAll('.menu-item').forEach(item => {
+            item.addEventListener('click', async (e) => {
+                if (hasUnsavedChanges) {
+                    e.preventDefault();
+                    showConfirmationModal(
+                        'Quer guardar as alterações feitas?',
+                        async () => {
+                            await saveFormation();
+                            window.location.href = item.href;
+                        },
+                        () => {
+                            hasUnsavedChanges = false;
+                            window.location.href = item.href;
+                        }
+                    );
+                }
+            });
+        });
     </script>
 </body>
 </html>
