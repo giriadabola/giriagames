@@ -115,6 +115,10 @@
             color: #2176ff;
             transform: translateY(-3px);
             filter: drop-shadow(0 0 8px rgba(33, 118, 255, 0.4));
+            background-color: white;
+            border-radius: 50%;
+            padding: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
             transition: all 0.3s ease;
         }
 
@@ -698,7 +702,19 @@
                 // Reset unsaved changes flag
                 hasUnsavedChanges = false;
                 console.log("Formação guardada com sucesso!");
-                alert("Formação guardada!");
+                
+                // Show confirmation icon
+                const saveBtn = document.getElementById('saveFormationBtn');
+                const confirmIcon = document.createElement('i');
+                confirmIcon.classList.add('fas', 'fa-check');
+                confirmIcon.style.color = '#4CAF50';
+                confirmIcon.style.marginLeft = '10px';
+                saveBtn.parentNode.insertBefore(confirmIcon, saveBtn.nextSibling);
+
+                // Remove confirmation icon after 3 seconds
+                setTimeout(() => {
+                    confirmIcon.remove();
+                }, 3000);
 
             } catch (error) {
                 console.error("Erro ao guardar formação:", error);
@@ -1033,11 +1049,13 @@
 
         async function fetchPlayers() {
             const playersRef = collection(db, 'jogadores');
-            const playersSnap = await getDocs(playersRef);
+            // Create a query to filter players where compradopor equals currentUserUid
+            const playersQuery = query(playersRef, where('compradopor', '==', currentUserUid));
+            const playersSnap = await getDocs(playersQuery);
             const fetchedPlayers = [];
             playersSnap.forEach(doc => {
                 const playerData = doc.data();
-                fetchedPlayers.push({...playerData, id: doc.id, posicao: playerData.posicao}); // Adicionado: obter a posição
+                fetchedPlayers.push({...playerData, id: doc.id, posicao: playerData.posicao});
                 clubs.add(playerData.clube);
             });
             allPlayers = fetchedPlayers;
@@ -1158,8 +1176,9 @@
                 const nameMatch = player.nome.toLowerCase().includes(searchTerm);
                 const countryMatch = selectedCountryId ? player.paisId === selectedCountryId : true;
                 const clubMatch = selectedClub ? player.clube === selectedClub : true;
+                const userMatch = player.compradopor === currentUserUid; // Only show players bought by current user
 
-                return nameMatch && countryMatch && clubMatch;
+                return nameMatch && countryMatch && clubMatch && userMatch;
             });
             renderPlayerResults(filteredPlayers);
         }
