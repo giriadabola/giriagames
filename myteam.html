@@ -34,6 +34,63 @@
             z-index: 1000;
         }
 
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+        }
+
+        .modal-content {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            max-width: 400px;
+            width: 90%;
+            text-align: center;
+        }
+
+        .modal-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .modal-buttons button {
+            padding: 8px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background-color 0.3s;
+        }
+
+        .btn-confirm {
+            background-color: #4CAF50;
+            color: white;
+        }
+
+        .btn-cancel {
+            background-color: #f44336;
+            color: white;
+        }
+
+        .btn-confirm:hover {
+            background-color: #45a049;
+        }
+
+        .btn-cancel:hover {
+            background-color: #d32f2f;
+        }
+
         .menu-item {
             display: flex;
             flex-direction: column;
@@ -432,7 +489,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, doc, getDoc, collection, getDocs, query, orderBy, limit, setDoc, addDoc, FieldValue, where, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getFirestore, doc, getDoc, collection, getDocs, query, orderBy, limit, setDoc, addDoc, FieldValue, where, serverTimestamp, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
 
@@ -563,9 +620,9 @@
 
             try {
                 // Get the latest season from palpites collection
-                const palpitesRef = firebase.firestore.collection(db, 'palpites');
-                const palpitesQuery = firebase.firestore.query(palpitesRef, firebase.firestore.orderBy('temporada', 'desc'), firebase.firestore.limit(1));
-                const palpitesSnapshot = await firebase.firestore.getDocs(palpitesQuery);
+                const palpitesRef = collection(db, 'palpites');
+                const palpitesQuery = query(palpitesRef, orderBy('temporada', 'desc'), limit(1));
+                const palpitesSnapshot = await getDocs(palpitesQuery);
                 let latestSeason = '';
 
                 if (!palpitesSnapshot.empty) {
@@ -576,65 +633,61 @@
                 }
 
                 // Check for existing formation in planteis
-                const planteisRef = firebase.firestore.collection(db, 'planteis');
-                const planteisQuery = firebase.firestore.query(
+                const planteisRef = collection(db, 'planteis');
+                const planteisQuery = query(
                     planteisRef,
-                    firebase.firestore.where('userId', '==', currentUserUid),
-                    firebase.firestore.where('formacao', '==', currentFormation),
-                    firebase.firestore.where('temporada', '==', latestSeason)
+                    where('userId', '==', currentUserUid),
+                    where('formacao', '==', currentFormation),
+                    where('temporada', '==', latestSeason)
                 );
-                const planteisSnapshot = await firebase.firestore.getDocs(planteisQuery);
+                const planteisSnapshot = await getDocs(planteisQuery);
 
                 // Create position data from assignedPlayers
                 const positionData = {};
-                for (const [position, playerId] of Object.entries(assignedPlayers)) {
-                    positionData[position] = playerId || null;
-                }
+                const positions = document.querySelectorAll('.position');
+                positions.forEach(positionElement => {
+                    const positionId = positionElement.dataset.position;
+                    const playerId = positionElement.dataset.assignedPlayerId;
+                    positionData[positionId] = playerId || null;
+                });
 
                 const plantelData = {
                     ...positionData,
-                    dataDeEdicao: serverTimestamp() // Corrected line to use serverTimestamp() directly
+                    userId: currentUserUid,
+                    formacao: currentFormation,
+                    temporada: latestSeason,
+                    estado: 'ativo',
+                    dataDeEdicao: serverTimestamp()
                 };
 
                 if (!planteisSnapshot.empty) {
                     // Update existing formation
                     const docRef = planteisSnapshot.docs[0].ref;
-                    await firebase.firestore.setDoc(docRef, plantelData, { merge: true });
-                    console.log("Formação atualizada com sucesso em 'planteis'!");
-                    alert('Formação atualizada!');
-
+                    await updateDoc(docRef, plantelData);
                 } else {
                     // Create new formation
-                    const newPlantelData = {
-                        ...plantelData,
-                        userId: currentUserUid,
-                        formacao: currentFormation,
-                        temporada: latestSeason,
-                        estado: 'ativo'
-                    };
-                    await firebase.firestore.addDoc(planteisRef, newPlantelData);
-                    console.log("Nova formação guardada com sucesso em 'planteis'!");
-                    alert('Formação guardada!');
+                    await addDoc(planteisRef, plantelData);
                 }
 
+                // Reset unsaved changes flag
+                hasUnsavedChanges = false;
+                console.log("Formação guardada com sucesso!");
+                alert("Formação guardada!");
 
             } catch (error) {
-                console.error("Erro ao guardar/atualizar formação em 'planteis': ", error);
-                alert('Erro ao guardar formação.');
+                console.error("Erro ao guardar formação:", error);
+                alert("Erro ao guardar formação.");
             }
         }
 
 
-        function renderFormation(formationName) {
-            const previousFormation = currentFormation; // Guardar a formação anterior
-            const previousAssignedPlayers = { ...assignedPlayers }; // Guardar os jogadores atribuídos anteriormente
+        let hasUnsavedChanges = false;
 
-            // Clear only player images from positions, keep the position elements
-            pitchArea.querySelectorAll('.position img').forEach(img => img.remove());
-            for (const pos in assignedPlayers) { // Reset assignedPlayers but keep the keys (position IDs)
-                assignedPlayers[pos] = null; // Or delete assignedPlayers = {}; to fully clear and start fresh
-            }
-            assignedPlayers = {}; // Fully clear assignedPlayers for the new formation
+        function renderFormation(formationName) {
+            // Completely reset the formation and assigned players
+            currentFormation = formationName;
+            assignedPlayers = {};
+            pitchArea.querySelectorAll('.position').forEach(pos => pos.remove()); // Remove all position elements
 
             currentFormation = formationName; // Update current formation
 
@@ -674,6 +727,7 @@
                     const assignedPlayerId = positionElement.dataset.assignedPlayerId;
                     if (assignedPlayerId) {
                         removePlayerFromPosition(positionElement, assignedPlayerId, positionElement.dataset.position);
+                        hasUnsavedChanges = true; // Marcar que há alterações não salvas
                     }
                 });
 
@@ -682,10 +736,9 @@
             });
 
 
-            // Tentar reposicionar jogadores da formação anterior
-            if (previousFormation && previousAssignedPlayers) {
-                repositionPlayers(previousFormation, previousAssignedPlayers, formationName);
-            }
+            // Não reposicionar jogadores automaticamente ao mudar de formação
+            // Deixamos a formação limpa para o utilizador adicionar jogadores manualmente
+            // ou carregar a formação guardada do Firebase
         }
 
 
@@ -806,6 +859,7 @@
                         assignedPlayers[originalPositionId] = existingPlayerId; // Reatribuir jogador existente à posição original
 
                         console.log(`Jogadores trocados: ${player.nome} trocado com ${playerExistente.nome}`);
+                        hasUnsavedChanges = true; // Marcar que há alterações não salvas
                         return; // Troca completa, sair da função
                     }
                 } else {
@@ -818,6 +872,7 @@
                     positionElement.dataset.assignedPlayerId = playerId;
                     assignedPlayers[positionId] = playerId;
                     console.log(`Jogador ${player.nome} substituiu o jogador na posição ${positionId}`);
+                    hasUnsavedChanges = true; // Marcar que há alterações não salvas
                 }
 
 
@@ -832,6 +887,7 @@
                 positionElement.dataset.assignedPlayerId = playerId;
                 assignedPlayers[positionId] = playerId;
                 console.log(`Jogador ${player.nome} colocado na posição ${positionId}`);
+                hasUnsavedChanges = true; // Marcar que há alterações não salvas
             }
         }
 
@@ -874,10 +930,62 @@
         }
 
 
-        formationSelect.addEventListener('change', (event) => {
-            const selectedFormation = event.target.value;
-            renderFormation(selectedFormation);
+        formationSelect.addEventListener('change', (e) => {
+            currentFormation = e.target.value;
+            renderFormation(currentFormation);
+            loadFormation(); // Load players for the new formation
         });
+
+        // Função para mostrar o modal de confirmação personalizado
+        function showConfirmationModal(message, confirmCallback, cancelCallback) {
+            // Criar o overlay do modal
+            const modalOverlay = document.createElement('div');
+            modalOverlay.classList.add('modal-overlay');
+            
+            // Criar o conteúdo do modal
+            const modalContent = document.createElement('div');
+            modalContent.classList.add('modal-content');
+            
+            // Adicionar a mensagem
+            const messageElement = document.createElement('p');
+            messageElement.textContent = message;
+            modalContent.appendChild(messageElement);
+            
+            // Criar os botões
+            const buttonsContainer = document.createElement('div');
+            buttonsContainer.classList.add('modal-buttons');
+            
+            // Botão Sim
+            const confirmButton = document.createElement('button');
+            confirmButton.classList.add('btn-confirm');
+            confirmButton.textContent = 'Sim';
+            confirmButton.addEventListener('click', () => {
+                document.body.removeChild(modalOverlay);
+                if (confirmCallback) confirmCallback();
+            });
+            
+            // Botão Não
+            const cancelButton = document.createElement('button');
+            cancelButton.classList.add('btn-cancel');
+            cancelButton.textContent = 'Não';
+            cancelButton.addEventListener('click', () => {
+                document.body.removeChild(modalOverlay);
+                if (cancelCallback) cancelCallback();
+            });
+            
+            // Adicionar botões ao container
+            buttonsContainer.appendChild(confirmButton);
+            buttonsContainer.appendChild(cancelButton);
+            
+            // Adicionar container de botões ao modal
+            modalContent.appendChild(buttonsContainer);
+            
+            // Adicionar conteúdo ao overlay
+            modalOverlay.appendChild(modalContent);
+            
+            // Adicionar overlay ao body
+            document.body.appendChild(modalOverlay);
+        }
 
 
         async function fetchPlayers() {
@@ -1017,6 +1125,75 @@
             }
         }
 
+        async function loadFormation() {
+            if (!currentUserUid) {
+                console.log("currentUserUid não definido ao carregar formação. Aguardando autenticação...");
+                return;
+            }
+            
+            // Clear all positions and assigned players before loading
+            pitchArea.querySelectorAll('.position img').forEach(img => img.remove());
+            const positions = document.querySelectorAll('.position');
+            positions.forEach(positionElement => {
+                positionElement.textContent = '+';
+                positionElement.dataset.assignedPlayerId = null;
+            });
+            assignedPlayers = {};
+
+            try {
+                // Get the latest season from palpites collection
+                const palpitesRef = collection(db, 'palpites');
+                const palpitesQuery = query(palpitesRef, orderBy('temporada', 'desc'), limit(1));
+                const palpitesSnapshot = await getDocs(palpitesQuery);
+                let latestSeason = '';
+
+                if (!palpitesSnapshot.empty) {
+                    latestSeason = palpitesSnapshot.docs[0].data().temporada;
+                } else {
+                    console.error('No seasons found in palpites collection');
+                    return;
+                }
+
+                // Query planteis for the current user's formation
+                const planteisRef = collection(db, 'planteis');
+                const planteisQuery = query(planteisRef, where('userId', '==', currentUserUid), where('formacao', '==', currentFormation), where('temporada', '==', latestSeason));
+                const planteisSnapshot = await getDocs(planteisQuery);
+
+                if (!planteisSnapshot.empty) {
+                    const plantelData = planteisSnapshot.docs[0].data();
+                    
+                    // Clear current formation
+                    pitchArea.querySelectorAll('.position img').forEach(img => img.remove());
+                    assignedPlayers = {};
+
+                    // Load players into positions
+                    const positions = document.querySelectorAll('.position');
+                    positions.forEach(positionElement => {
+                        const positionId = positionElement.dataset.position;
+                        const playerId = plantelData[positionId];
+
+                        if (playerId) {
+                            const player = allPlayers.find(p => p.id === playerId);
+                            if (player) {
+                                positionElement.innerHTML = '';
+                                const playerImg = document.createElement('img');
+                                playerImg.src = player.imagem || 'placeholder_image_url.png';
+                                playerImg.alt = player.nome;
+                                positionElement.appendChild(playerImg);
+                                positionElement.dataset.assignedPlayerId = playerId;
+                                assignedPlayers[positionId] = playerId;
+                            }
+                        }
+                    });
+                    console.log('Formation loaded successfully');
+                } else {
+                    console.log('No saved formation found for current user and formation type');
+                }
+            } catch (error) {
+                console.error("Error loading formation:", error);
+            }
+        }
+
         onAuthStateChanged(auth, async (user) => {
             if (user) {
                 currentUserUid = user.uid;
@@ -1026,6 +1203,7 @@
                 await fetchPlayers();
                 await fetchCountries();
                 renderFormation(currentFormation); // Render initial formation *before* loading
+                await loadFormation(); // Load saved formation after players are fetched
                 loadingScreen.style.display = 'none';
                 content.style.display = 'block';
             } else {
