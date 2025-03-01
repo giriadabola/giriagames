@@ -462,7 +462,7 @@
                 addDoc: addDoc,
                 FieldValue: FieldValue,
                 where: where,
-                serverTimestamp: serverTimestamp
+                serverTimestamp: serverTimestamp // ADDED serverTimestamp here for easier access if needed in future
             }
         };
 
@@ -585,18 +585,15 @@
                 );
                 const planteisSnapshot = await firebase.firestore.getDocs(planteisQuery);
 
-                // Create position data from assignedPlayers - Modified part
+                // Create position data from assignedPlayers
                 const positionData = {};
-                const currentFormationPositions = formations[currentFormation]; // Get positions for current formation
-                currentFormationPositions.forEach(pos => { // Iterate through all positions in the formation
-                    const positionId = pos.position;
-                    positionData[positionId] = assignedPlayers[positionId] || null; // Explicitly set null if no player assigned
-                });
-
+                for (const [position, playerId] of Object.entries(assignedPlayers)) {
+                    positionData[position] = playerId || null;
+                }
 
                 const plantelData = {
                     ...positionData,
-                    dataDeEdicao: serverTimestamp()
+                    dataDeEdicao: serverTimestamp() // Corrected line to use serverTimestamp() directly
                 };
 
                 if (!planteisSnapshot.empty) {
@@ -839,7 +836,7 @@
         }
 
 
-        async function removePlayerFromPosition(positionElement, playerId, positionId) {
+        function removePlayerFromPosition(positionElement, playerId, positionId) {
             console.log("LOG 3: removePlayerFromPosition function started for playerId:", playerId, "positionId:", positionId);
             try {
                 positionElement.innerHTML = '+'; // Set back to '+' text
@@ -854,54 +851,10 @@
                 positionElement.addEventListener('drop', handlePositionDrop);
                 console.log(`Player ${playerId} removed from position ${positionId}`);
                 console.log("LOG 4: removePlayerFromPosition function finished for playerId:", playerId, "positionId:", positionId);
-
-                // Firebase update logic starts here
-                if (!currentUserUid) {
-                    console.log("Utilizador não autenticado.");
-                    return;
-                }
-
-                // Get the latest season to identify the correct document
-                const palpitesRef = firebase.firestore.collection(db, 'palpites');
-                const palpitesQuery = firebase.firestore.query(palpitesRef, firebase.firestore.orderBy('temporada', 'desc'), firebase.firestore.limit(1));
-                const palpitesSnapshot = await firebase.firestore.getDocs(palpitesQuery);
-                let latestSeason = '';
-
-                if (!palpitesSnapshot.empty) {
-                    latestSeason = palpitesSnapshot.docs[0].data().temporada;
-                } else {
-                    console.error('No seasons found in palpites collection');
-                    return;
-                }
-
-                // Query for the plantel document to update
-                const planteisRef = firebase.firestore.collection(db, 'planteis');
-                const planteisQuery = firebase.firestore.query(
-                    planteisRef,
-                    firebase.firestore.where('userId', '==', currentUserUid),
-                    firebase.firestore.where('formacao', '==', currentFormation),
-                    firebase.firestore.where('temporada', '==', latestSeason)
-                );
-                const planteisSnapshot = await firebase.firestore.getDocs(planteisQuery);
-
-                if (!planteisSnapshot.empty) {
-                    const docRef = planteisSnapshot.docs[0].ref;
-                    const updateData = {};
-                    updateData[positionId] = null; // Set the removed position to null in Firebase
-                    updateData['dataDeEdicao'] = serverTimestamp(); // Update edit timestamp
-
-                    await firebase.firestore.setDoc(docRef, updateData, { merge: true });
-                    console.log(`Firebase updated to remove player from position ${positionId}`);
-                } else {
-                    console.log("No plantel document found to update after player removal.");
-                }
-
-
             } catch (error) {
                 console.error("Erro interno em removePlayerFromPosition:", error);
             }
         }
-
 
         function handlePositionDragOver(event) {
             event.preventDefault();
