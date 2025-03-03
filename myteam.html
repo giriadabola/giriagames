@@ -400,6 +400,21 @@
             text-align: center;
         }
 
+        .player-card .competition-logo {
+            width: 20px;
+            height: 15px;
+            object-fit: contain;
+            position: absolute;
+            top: 28px;
+            right: 8px;
+            border: none;
+            border-radius: 0;
+            background-color: transparent;
+            box-shadow: none;
+            padding: 0;
+            z-index: 2;
+        }
+
 
         .formation-options {
             padding: 10px;
@@ -1184,27 +1199,58 @@
                     }
                 }
 
+                // Add country flag to the top right corner of the card
+                if (player.paisId && countries[player.paisId]) {
+                    const flagImg = document.createElement('img');
+                    flagImg.src = countries[player.paisId].imagem || 'placeholder_flag_url.png';
+                    flagImg.alt = countries[player.paisId].nome;
+                    flagImg.classList.add('country-flag');
+                    playerCard.appendChild(flagImg);
+                }
+
                 const img = document.createElement('img');
                 img.src = player.imagem || 'placeholder_image_url.png';
                 img.alt = player.nome;
                 playerCard.appendChild(img);
 
-                const playerName = document.createElement('div');
-                playerName.classList.add('player-info');
-                playerName.innerHTML = `<span class="player-name">${player.nome}</span>`; // Start with player name
+                const playerInfo = document.createElement('div');
+                playerInfo.classList.add('player-info');
 
-                // Add country flag AFTER player name, in the same line
-                if (player.paisId && countries[player.paisId]) {
-                    playerName.innerHTML += ` <img src="${countries[player.paisId].imagem || 'placeholder_flag_url.png'}" alt="${countries[player.paisId].nome}" class="country-flag">`; // Note the space before the flag tag
-                }
+                const playerName = document.createElement('span');
+                playerName.classList.add('player-name');
+                playerName.textContent = player.nome;
+                playerInfo.appendChild(playerName);
 
-                // Create and append player position BELOW name and flag
-                const playerPosition = document.createElement('div');
+                const playerPosition = document.createElement('span');
                 playerPosition.classList.add('player-position');
                 playerPosition.textContent = player.posicao;
-                playerName.appendChild(playerPosition);
+                playerInfo.appendChild(playerPosition);
 
-                playerCard.appendChild(playerName);
+                // Add competition logo using two-step fetch process
+                if (player.clube) {
+                    const clubesRef = collection(db, 'clubes');
+                    const clubQuery = query(clubesRef, where('nome', '==', player.clube));
+                    getDocs(clubQuery).then(clubSnapshot => {
+                        if (!clubSnapshot.empty) {
+                            const clubData = clubSnapshot.docs[0].data();
+                            if (clubData.competicaoId) {
+                                const competicaoRef = doc(db, 'competicoes', clubData.competicaoId);
+                                getDoc(competicaoRef).then(competicaoDoc => {
+                                    if (competicaoDoc.exists()) {
+                                        const competicaoData = competicaoDoc.data();
+                                        const competicaoLogo = document.createElement('img');
+                                        competicaoLogo.src = competicaoData.imagem;
+                                        competicaoLogo.alt = competicaoData.nome;
+                                        competicaoLogo.classList.add('competition-logo');
+                                        playerInfo.appendChild(competicaoLogo);
+                                    }
+                                });
+                            }
+                        }
+                    });
+                }
+
+                playerCard.appendChild(playerInfo);
 
                 playerCard.addEventListener('dragstart', (event) => {
                     event.dataTransfer.setData('playerId', player.id);
