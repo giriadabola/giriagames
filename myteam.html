@@ -427,6 +427,32 @@
             gap: 10px;
         }
 
+        button#saveFormationBtn, button#chooseBtn {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 5px;
+            color: white;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s ease;
+        }
+
+        button#saveFormationBtn {
+            background-color: #4CAF50;
+        }
+
+        button#saveFormationBtn:hover {
+            background-color: #45a049;
+        }
+
+        button#chooseBtn {
+            background-color: #FFB700;
+        }
+
+        button#chooseBtn:hover {
+            background-color: #DAA520;
+        }
+
         .formation-select-container {
             display: flex;
             align-items: center;
@@ -507,6 +533,7 @@
                             </select>
                         </div>
                         <button id="saveFormationBtn">Guardar</button>
+                        <button id="chooseBtn">Escolher</button>
                     </div>
                 </div>
 
@@ -564,7 +591,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, doc, getDoc, collection, getDocs, query, orderBy, limit, setDoc, addDoc, FieldValue, where, serverTimestamp, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getFirestore, doc, getDoc, collection, getDocs, query, orderBy, limit, setDoc, addDoc, FieldValue, where, serverTimestamp, updateDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
 
@@ -594,7 +621,8 @@
                 addDoc: addDoc,
                 FieldValue: FieldValue,
                 where: where,
-                serverTimestamp: serverTimestamp // ADDED serverTimestamp here for easier access if needed in future
+                serverTimestamp: serverTimestamp, // ADDED serverTimestamp here for easier access if needed in future
+                writeBatch: writeBatch
             }
         };
 
@@ -1284,6 +1312,68 @@
 
         const saveFormationButton = document.getElementById('saveFormationBtn');
         saveFormationButton.addEventListener('click', saveFormation);
+
+        const chooseBtn = document.getElementById('chooseBtn');
+
+        chooseBtn.addEventListener('click', async () => {
+            if (!currentUserUid) {
+                console.log("User ID not available");
+                return;
+            }
+
+            try {
+                // Get the latest season from palpites collection
+                const palpitesRef = collection(db, 'palpites');
+                const palpitesQuery = query(palpitesRef, orderBy('temporada', 'desc'), limit(1));
+                const palpitesSnapshot = await getDocs(palpitesQuery);
+
+                if (palpitesSnapshot.empty) {
+                    console.error('No seasons found in palpites collection');
+                    return;
+                }
+
+                const latestSeason = palpitesSnapshot.docs[0].data().temporada;
+
+                // Query all planteis for current user and season
+                const planteisRef = collection(db, 'planteis');
+                const allPlanteisQuery = query(
+                    planteisRef,
+                    where('userId', '==', currentUserUid),
+                    where('temporada', '==', latestSeason)
+                );
+
+                const allPlanteisSnapshot = await getDocs(allPlanteisQuery);
+
+                // Update estado for all formations
+                const batch = firebase.firestore.writeBatch(db);
+                
+                allPlanteisSnapshot.forEach(doc => {
+                    const formation = doc.data().formacao;
+                    // Set estado based on whether it matches current formation
+                    const newEstado = formation === currentFormation ? 'ativo' : 'desativo';
+                    batch.update(doc.ref, { estado: newEstado });
+                });
+
+                // Commit all updates
+                await batch.commit();
+
+                // Show confirmation icon
+                const confirmIcon = document.createElement('i');
+                confirmIcon.classList.add('fas', 'fa-check');
+                confirmIcon.style.color = '#4CAF50';
+                confirmIcon.style.marginLeft = '10px';
+                chooseBtn.parentNode.insertBefore(confirmIcon, chooseBtn.nextSibling);
+
+                // Remove the confirmation icon after 2 seconds
+                setTimeout(() => {
+                    confirmIcon.remove();
+                }, 2000);
+
+                console.log('Formation set as active successfully');
+            } catch (error) {
+                console.error('Error setting active formation:', error);
+            }
+        });
 
 
         async function getUserStatus(userId) {
