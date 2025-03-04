@@ -16,7 +16,6 @@
             min-height: 100vh;
             background-color: #f0f0f0;
             font-family: Arial, sans-serif;
-            /* overflow: hidden; REMOVED overflow: hidden; from body style */
         }
 
         .bottom-menu {
@@ -104,6 +103,154 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+
+        /* Transaction List Styles */
+        .transactions-container {
+            margin-top: 20px;
+            background-color: #fff;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .transactions-header {
+            background-color: #2176ff;
+            color: white;
+            padding: 15px 20px;
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .transactions-list {
+            max-height: 70vh;
+            overflow-y: auto;
+        }
+
+        .transaction-item {
+            padding: 15px 20px;
+            border-bottom: 1px solid #eee;
+            display: grid; /* Enable grid layout */
+            grid-template-columns: 0.8fr 1.5fr 2fr 1fr 1fr 1.2fr; /* Define 6 columns + date column at the end */
+            align-items: center; /* Vertically align items in the center */
+            transition: background-color 0.2s ease;
+            gap: 10px; /* Espaço entre as colunas */
+        }
+
+        .transaction-item:hover {
+            background-color: #f9f9f9;
+        }
+
+        .transaction-item:last-child {
+            border-bottom: none;
+        }
+
+        .transaction-col {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start; /* Alinhar conteúdo das colunas à esquerda */
+            justify-content: center; /* Centralizar verticalmente o conteúdo dentro da célula da grid */
+        }
+
+        .transaction-tipo-col {
+            /* Coluna para Tipo */
+            justify-content: center; /* Centralizar tipo horizontalmente */
+        }
+
+        .transaction-tipo {
+            text-align: center; /* Centralizar texto do tipo */
+        }
+
+
+        .transaction-user-col {
+            /* Coluna para Nome de Usuário */
+        }
+
+        .transaction-user {
+            font-weight: bold; /* Destacar nome de usuário */
+        }
+
+
+        .transaction-item-name-col {
+            /* Coluna para Nome do Item */
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            gap: 8px; /* Espaço entre a imagem e o nome */
+        }
+
+        .transaction-item-image {
+            width: 24px; /* Ajuste o tamanho conforme necessário */
+            height: 24px;
+            border-radius: 50%; /* Para torná-lo circular */
+            object-fit: cover; /* Para cobrir o espaço sem distorcer */
+        }
+
+
+        .transaction-item-name {
+            color: #666; /* Cor mais suave para o nome do item */
+            font-size: 0.9em;
+        }
+
+
+        .transaction-date-col {
+            /* Coluna para Data */
+            justify-content: center; /* Centralizar data horizontalmente */
+            text-align: center; /* Centralizar texto da data */
+        }
+
+        .transaction-date {
+            font-size: 0.8em; /* Fonte menor para a data */
+            color: #999;
+        }
+
+
+        .transaction-estado-col {
+            /* Coluna para Estado */
+            justify-content: center; /* Centralizar estado horizontalmente */
+        }
+
+        .transaction-estado {
+            text-align: center; /* Centralizar texto do estado */
+            font-weight: bold; /* Destacar o estado */
+        }
+
+
+        .transaction-price-col {
+            /* Coluna para Preço - alinhado à direita */
+            justify-content: flex-end;
+            text-align: right;
+        }
+
+        .transaction-price {
+            font-weight: bold;
+            color: #2176ff;
+            margin-left: 0; /* Reset margin left */
+            white-space: nowrap; /* Prevent text wrapping */
+            text-align: right; /* Alinhar texto à direita */
+        }
+
+
+        .transaction-type {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            margin-right: 0; /* Reset margin right */
+        }
+
+        .transaction-type.market {
+            background-color: #e6f7ff;
+            color: #0099ff;
+        }
+
+        .transaction-type.empire {
+            background-color: #fff2e6;
+            color: #ff9933;
+        }
+
+        /* ... restante do CSS ... */
     </style>
 </head>
 <body>
@@ -114,11 +261,20 @@
 
     <div class="content">
         <h1>Banco</h1>
-        <!-- Add bank page specific content here -->
+
+        <div class="transactions-container">
+            <div class="transactions-header">
+                <span>Transações</span>
+            </div>
+            <div class="transactions-list" id="transactions-list">
+                <!-- Transactions will be populated dynamically -->
+                <div class="no-transactions">Carregando transações...</div>
+            </div>
+        </div>
     </div>
 
     <nav class="bottom-menu">
-        <a href="1x.html" class="menu-item active">
+        <a href="1x.html" class="menu-item">
             <i class="fas fa-home"></i>
         </a>
         <a href="market.html" class="menu-item">
@@ -143,7 +299,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getFirestore, doc, getDoc, collection, query, where, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
         const firebaseConfig = {
@@ -162,7 +318,12 @@
 
         const loadingScreen = document.getElementById('loading-screen');
         const content = document.querySelector('.content');
+        const transactionsList = document.getElementById('transactions-list');
+
         let currentUserStatus = null;
+        let userCache = {}; // Cache for user data
+        let playerCache = {}; // Cache for player data
+        let empireItemCache = {}; // Cache for empire items
 
         async function getUserStatus(userId) {
             const userDoc = doc(db, 'users', userId);
@@ -174,16 +335,214 @@
             }
         }
 
+        // Function to get user data (with caching)
+        async function getUserData(userId) {
+            if (userCache[userId]) {
+                return userCache[userId];
+            }
+
+            try {
+                const userDoc = await getDoc(doc(db, 'users', userId));
+                if (userDoc.exists()) {
+                    const userData = userDoc.data();
+                    userCache[userId] = userData;
+                    return userData;
+                }
+            } catch (error) {
+                console.error("Error fetching user data:", error);
+            }
+
+            return null;
+        }
+
+        // Function to get player data (with caching)
+        async function getPlayerData(playerId) {
+            if (playerCache[playerId]) {
+                return playerCache[playerId];
+            }
+
+            try {
+                const playerDoc = await getDoc(doc(db, 'jogadores', playerId));
+                if (playerDoc.exists()) {
+                    const playerData = playerDoc.data();
+                    playerCache[playerId] = playerData;
+                    return playerData;
+                }
+            } catch (error) {
+                console.error("Error fetching player data:", error);
+            }
+
+            return null;
+        }
+
+        // Function to get empire item data (with caching)
+        async function getEmpireItemData(itemId) {
+            if (empireItemCache[itemId]) {
+                return empireItemCache[itemId];
+            }
+
+            try {
+                const itemDoc = await getDoc(doc(db, 'empireitems', itemId));
+                if (itemDoc.exists()) {
+                    const itemData = itemDoc.data();
+                    empireItemCache[itemId] = itemData;
+                    return itemData;
+                }
+            } catch (error) {
+                console.error("Error fetching empire item data:", error);
+                return null; // Ensure there's a return in catch block as well
+            }
+            return null; // Add a return null here if no data is found or error in try block
+        }
+
+        // Function to find the most recent season from 'palpites' collection
+        async function fetchLatestSeason() {
+            try {
+                const palpitesRef = collection(db, 'palpites');
+                const querySnapshot = await getDocs(palpitesRef);
+
+                let seasons = new Set();
+                querySnapshot.forEach(doc => {
+                    const data = doc.data();
+                    if (data.temporada) {
+                        seasons.add(data.temporada);
+                    }
+                });
+
+                if (seasons.size > 0) {
+                    return Array.from(seasons).sort().reverse()[0]; // Return the latest season
+                } else {
+                    return null; // No seasons found
+                }
+            } catch (error) {
+                console.error("Error finding latest season:", error);
+                return null;
+            }
+        }
+
+
+        // Function to format date
+        function formatDate(timestamp) {
+            if (!timestamp) return 'Data desconhecida';
+
+            const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+            return date.toLocaleDateString('pt-BR', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        // Function to load transactions for the latest season
+        async function loadTransactions() {
+            transactionsList.innerHTML = '<div class="no-transactions">Carregando transações...</div>';
+
+            const latestSeason = await fetchLatestSeason();
+
+            if (!latestSeason) {
+                transactionsList.innerHTML = '<div class="no-transactions">Nenhuma temporada encontrada.</div>';
+                return;
+            }
+
+            try {
+                const movimentosRef = collection(db, 'movimentos');
+                const q = query(
+                    movimentosRef,
+                    where('temporada', '==', latestSeason),
+                    where('tipo', 'in', ['Mercado', 'Empire']),
+                    orderBy('movimentoData', 'desc')
+                );
+
+                // Nota: Esta consulta requer um índice composto no Firestore.
+                // Se ocorrer um erro, o link para criar o índice será exibido no console.
+                const querySnapshot = await getDocs(q);
+
+                if (querySnapshot.empty) {
+                    transactionsList.innerHTML = '<div class="no-transactions">Nenhuma transação encontrada</div>';
+                    return;
+                }
+
+                let transactionsHTML = '';
+
+                for (const doc of querySnapshot.docs) {
+                    const data = doc.data();
+                    const userData = await getUserData(data.userId);
+                    let itemData = null;
+
+                    if (data.tipo === 'Mercado' && data.jogadorId) {
+                        itemData = await getPlayerData(data.jogadorId);
+                    } else if (data.tipo === 'Empire' && data.empireitem) {
+                        itemData = await getEmpireItemData(data.empireitem);
+                    }
+
+                    const userName = userData ? userData.nomeDeUsuario : 'Usuário Desconhecido';
+                    const itemName = itemData ? (data.tipo === 'Mercado' ? itemData.nome : itemData.name) : 'Item Desconhecido';
+                    const itemImage = itemData ? (data.tipo === 'Mercado' ? itemData.imagem : '') : ''; // Assuming empire items don't have images
+
+                    transactionsHTML += `
+                        <div class="transaction-item">
+                            <div class="transaction-col transaction-tipo-col">
+                                <div class="transaction-tipo">
+                                    <span class="transaction-type ${data.tipo.toLowerCase()}">${data.tipo}</span>
+                                </div>
+                            </div>
+                            <div class="transaction-col transaction-user-col">
+                                <div class="transaction-user">${userName}</div>
+                            </div>
+                            <div class="transaction-col transaction-item-name-col">
+                                ${itemImage ? `<img src="${itemImage}" alt="${itemName}" class="transaction-item-image">` : ''}
+                                <div class="transaction-item-name">${itemName}</div>
+                            </div>
+                            <div class="transaction-col transaction-estado-col">
+                                <div class="transaction-estado">${data.estado || 'N/A'}</div>
+                            </div>
+                             <div class="transaction-col transaction-price-col">
+                                <div class="transaction-price">${data.preco.toLocaleString('pt-BR') + ' ₲₵'}</div>
+                            </div>
+                            <div class="transaction-col transaction-date-col">
+                                <div class="transaction-date">${formatDate(data.movimentoData)}</div>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                transactionsList.innerHTML = transactionsHTML;
+            } catch (error) {
+                console.error('Error loading transactions:', error);
+
+                // Verificar se o erro é relacionado a índice ausente
+                if (error.code === 'failed-precondition' && error.message.includes('index')) {
+                    // Extrair o link para criar o índice, se disponível
+                    const indexLinkMatch = error.message.match(/https:\/\/console\.firebase\.google\.com[^\s]+/);
+                    const indexLink = indexLinkMatch ? indexLinkMatch[0] : null;
+
+                    console.log('É necessário criar um índice para esta consulta. Link:', indexLink);
+
+                    // Mensagem para o usuário com instruções
+                    transactionsList.innerHTML = `
+                        <div class="no-transactions">
+                            <p>É necessário criar um índice no Firebase para visualizar as transações.</p>
+                            <p>Por favor, contate o administrador do sistema.</p>
+                        </div>
+                    `;
+                } else {
+                    transactionsList.innerHTML = '<div class="no-transactions">Erro ao carregar transações. Tente novamente mais tarde.</div>';
+                }
+            }
+        }
+
+
+        // Initialize the page
         onAuthStateChanged(auth, async (user) => {
             if (user) {
                 currentUserStatus = await getUserStatus(user.uid);
-                console.log(`User is logged in on bank.html with status: ${currentUserStatus}`);
-                loadingScreen.style.display = 'none'; // Hide loading screen after auth check for logged in user
-                content.style.display = 'block'; // Show content for logged in user
+                content.style.display = 'block';
+                loadingScreen.style.display = 'none';
+                await loadTransactions(); // Load transactions for the latest season on page load
             } else {
-                console.log('No user is logged in on bank.html');
-                loadingScreen.style.display = 'none'; // Hide loading screen if no user is logged in
-                window.location.href = 'index.html'; // Redirect to login page if not logged in
+                window.location.href = 'index.html';
             }
         });
     </script>
