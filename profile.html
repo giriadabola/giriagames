@@ -670,13 +670,10 @@
     </div>
 
     <div class="content">
-        <h1>Perfil</h1>
+        <h1>Perfil de <span id="profileUsername"></span></h1>
         <div class="button-group">
             <button class="logout-btn" id="logoutBtn">
                 <i class="fas fa-sign-out-alt"></i> Sair
-            </button>
-            <button class="delete-account-btn" id="deleteAccountBtn">
-                <i class="fas fa-user-times"></i> Eliminar Conta
             </button>
         </div>
 
@@ -736,28 +733,6 @@
         <i class="fas fa-comments"></i> Chat
     </button>
 
-    <div class="popup-overlay" id="deleteConfirmPopup">
-        <div class="popup-content">
-            <h2>Eliminar Conta</h2>
-            <p>Tem certeza que deseja eliminar sua conta? Esta ação não pode ser desfeita.</p>
-            <div class="popup-buttons">
-                <button class="popup-btn popup-btn-confirm" id="confirmDelete">Sim</button>
-                <button class="popup-btn popup-btn-cancel" id="cancelDelete">Não</button>
-            </div>
-        </div>
-    </div>
-
-    <div class="popup-overlay" id="passwordConfirmPopup">
-        <div class="popup-content">
-            <h2>Confirmar Senha</h2>
-            <p>Por favor, insira sua senha para confirmar a exclusão da conta:</p>
-            <input type="password" id="confirmPassword" class="password-input" placeholder="Sua senha">
-            <div class="popup-buttons">
-                <button class="popup-btn popup-btn-confirm" id="confirmPasswordSubmit">Confirmar</button>
-                <button class="popup-btn popup-btn-cancel" id="cancelPasswordSubmit">Cancelar</button>
-            </div>
-        </div>
-    </div>
 
     <script type="module">
         import { getAuth, signOut, deleteUser, EmailAuthProvider, reauthenticateWithCredential, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
@@ -785,6 +760,7 @@
         const returnPlayersPopup = document.getElementById('returnPlayersPopup');
         const returnPlayersList = document.getElementById('returnPlayersList');
         const closeReturnPopup = document.getElementById('closeReturnPopup');
+        const profileUsernameSpan = document.getElementById('profileUsername'); // Get the span for username
 
         // Add click event listeners
         returnDisplay.addEventListener('click', () => {
@@ -1191,56 +1167,6 @@
                 }
             });
 
-            // Delete account functionality
-            const deleteAccountBtn = document.getElementById('deleteAccountBtn');
-            const deleteConfirmPopup = document.getElementById('deleteConfirmPopup');
-            const confirmDeleteBtn = document.getElementById('confirmDelete');
-            const cancelDeleteBtn = document.getElementById('cancelDelete');
-            const passwordConfirmPopup = document.getElementById('passwordConfirmPopup');
-            const confirmPasswordSubmitBtn = document.getElementById('confirmPasswordSubmit');
-            const cancelPasswordSubmitBtn = document.getElementById('cancelPasswordSubmit');
-            const passwordInput = document.getElementById('confirmPassword');
-
-
-            deleteAccountBtn.addEventListener('click', () => {
-                deleteConfirmPopup.style.display = 'flex'; // Show delete confirmation popup
-            });
-
-            cancelDeleteBtn.addEventListener('click', () => {
-                deleteConfirmPopup.style.display = 'none'; // Hide delete confirmation popup
-            });
-
-            confirmDeleteBtn.addEventListener('click', () => {
-                deleteConfirmPopup.style.display = 'none'; // Hide delete confirmation
-                passwordConfirmPopup.style.display = 'flex'; // Show password confirmation popup
-            });
-
-            cancelPasswordSubmitBtn.addEventListener('click', () => {
-                passwordConfirmPopup.style.display = 'none'; // Hide password confirmation popup
-            });
-
-
-            confirmPasswordSubmitBtn.addEventListener('click', async () => {
-                const password = passwordInput.value;
-                const user = auth.currentUser;
-                if (!user) return;
-
-                const credential = EmailAuthProvider.credential(user.email, password);
-
-                try {
-                    await reauthenticateWithCredential(user, credential);
-                    await deleteUser(user);
-                    console.log('User account deleted');
-                    alert('Conta eliminada com sucesso.');
-                    window.location.href = 'index.html'; // Redirect to index page after deletion
-                } catch (error) {
-                    console.error('Error deleting account:', error);
-                    alert('Erro ao eliminar conta: ' + error.message);
-                } finally {
-                    passwordConfirmPopup.style.display = 'none'; // Hide password popup
-                }
-            });
-
 
             onAuthStateChanged(auth, async (user) => {
                 if (user) {
@@ -1249,6 +1175,13 @@
                     loadingScreen.style.display = 'none';
                     content.style.display = 'block';
                     await updateGCoinsDisplay(); // Initial GCoins display update
+
+                    // Fetch and display username
+                    const userDoc = await getDoc(doc(db, 'users', user.uid));
+                    if (userDoc.exists()) {
+                        const userData = userDoc.data();
+                        profileUsernameSpan.textContent = userData.nomeDeUsuario; // Set username in span
+                    }
                 } else {
                     console.log('No user is logged in on profile.html');
                     loadingScreen.style.display = 'none';
