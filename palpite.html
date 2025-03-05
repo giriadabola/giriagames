@@ -84,6 +84,25 @@
             box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15);
             background-color: #f0f0f0;
         }
+        
+        .timer-unit {
+            display: inline-block;
+            padding: 4px 8px;
+            margin: 0 4px;
+            background-color: #f0f0f0;
+            border-radius: 4px;
+            font-weight: bold;
+            color: #333;
+            min-width: 40px;
+            text-align: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .timer-unit:hover {
+            background-color: #e0e0e0;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+        }
 
         .teams-container {
             display: flex;
@@ -166,7 +185,7 @@
             padding: 12px 0;
             display: flex;
             justify-content: center;
-            gap: 48px;
+            gap: 32px;
             align-items: center;
             z-index: 1000;
         }
@@ -368,9 +387,6 @@
         <a href="rankings.html" class="menu-item">
             <i class="fas fa-list"></i>
         </a>
-        <a href="bank.html" class="menu-item">
-            <i class="fas fa-dollar-sign"></i>
-        </a>
         <a href="profile.html" class="menu-item">
             <i class="fas fa-user"></i>
         </a>
@@ -394,6 +410,7 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const auth = getAuth(app);
+        let countdownInterval;
 
         const loadingScreen = document.getElementById('loading-screen');
         const content = document.querySelector('.content');
@@ -622,7 +639,7 @@
 
                         <div class="countdown-timer">
                             <span class="countdown-label">Tempo restante para palpitar:</span>
-                            <div id="countdown"></div>
+                            <span id="countdown" style="display: inline-block; font-weight: bold;"></span>
                         </div>
                     </div>
                     <div class="prediction-container">
@@ -651,6 +668,7 @@
 
                     if (timeLeft <= 0) {
                         document.getElementById('countdown').innerHTML = 'Tempo esgotado!';
+                        clearInterval(countdownInterval); // Stop the interval when time is up
                         return;
                     }
 
@@ -659,17 +677,23 @@
                     const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
                     const seconds = Math.floor((timeLeft % (1000 * 60)) / 1000);
 
+                    // Update with more visible styling
                     document.getElementById('countdown').innerHTML = `
-                        <span>${days}d</span> 
-                        <span>${hours}h</span> 
-                        <span>${minutes}m</span> 
-                        <span>${seconds}s</span>
+                        <span class="timer-unit">${days}d</span> 
+                        <span class="timer-unit">${hours}h</span> 
+                        <span class="timer-unit">${minutes}m</span> 
+                        <span class="timer-unit">${seconds}s</span>
                     `;
+                    
+                    // Force a repaint to ensure the timer updates visually
+                    document.getElementById('countdown').style.display = 'none';
+                    document.getElementById('countdown').offsetHeight; // Trigger reflow
+                    document.getElementById('countdown').style.display = 'inline-block';
                 }
 
-                // Update the countdown every second
-                updateCountdown();
-                const countdownInterval = setInterval(updateCountdown, 1000);
+                // Initialize countdown
+                updateCountdown(); // Call immediately
+                countdownInterval = setInterval(updateCountdown, 1000); // Update every second
 
                 // Clear the interval when the component is unmounted
                 window.addEventListener('beforeunload', () => {
