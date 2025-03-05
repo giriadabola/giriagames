@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tabela Classificativa - G EMPIRE</title>
+    <title>Rankings - G EMPIRE</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
     <style>
         * {
@@ -77,17 +77,6 @@
             margin-bottom: 20px;
         }
 
-        /* Season Dropdown Styles */
-        .season-select {
-            width: 200px;
-            padding: 10px;
-            margin-bottom: 20px;
-            border: 2px solid #ddd;
-            border-radius: 8px;
-            font-size: 16px;
-            background-color: white;
-        }
-
         /* Rankings Table Styles */
         .rankings-table {
             width: 100%;
@@ -133,8 +122,7 @@
             margin: 10px 0;
             border-radius: 8px;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-            width: 100%; /* Full width submenu */
-            box-sizing: border-box; /* Ensure padding is inside width */
+            box-sizing: border-box;
         }
 
         .predictions-submenu.active {
@@ -187,50 +175,51 @@
             background-color: #f0f4ff;
         }
 
-        /* Style adjustment when submenu is active to move info icon to the top */
-        .rankings-table tr.submenu-active td:nth-child(2) {
-            display: flex;
-            flex-direction: column;
-            justify-content: flex-start;
-            align-items: flex-start;
-            padding-top: 8px;
+
+        /* Popup Styles */
+        .predictions-popup {
+            display: none; /* Initially hidden */
+            position: fixed; /* Stay in place */
+            z-index: 1002; /* Sit on top of everything */
+            left: 0;
+            top: 0;
+            width: 100%; /* Full width */
+            height: 100%; /* Full height */
+            overflow: auto; /* Enable scroll if needed */
+            background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
         }
 
-        .rankings-table tr.submenu-active td:nth-child(2) > span {
-            margin-bottom: 5px;
-            margin-right: 0;
-            display: block;
+        .popup-content {
+            background-color: #fefefe;
+            margin: 15% auto; /* 15% from the top and centered */
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%; /* Could be more or less, depending on screen size */
+            border-radius: 8px;
+            box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2);
+            position: relative; /* Needed for close button positioning */
         }
 
-        /* Target any element with classes 'fas' and 'fa-info-circle' and 'info-icon' inside the player cell */
-        .rankings-table tr.submenu-active td:nth-child(2) > .fas.fa-info-circle.info-icon {
-            margin-left: 0;
-            margin-top: 0;
-            align-self: flex-start;
+        .close-button {
+            color: #aaa;
+            position: absolute;
+            top: 0;
+            right: 0;
+            font-size: 28px;
+            font-weight: bold;
+            padding: 10px;
+            cursor: pointer;
         }
 
-        .predictions-submenu {
-            margin-top: 5px;
+        .close-button:hover,
+        .close-button:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
         }
 
-        /* Style adjustment for Points column when submenu is active - align to top */
-        .rankings-table tr.submenu-active td:nth-child(3) {
-            vertical-align: top;
-            padding-top: 15px;
-        }
-
-        /* Style adjustment for Info column when submenu is active - align icon to top */
-        .rankings-table tr.submenu-active td:nth-child(4) {
-            vertical-align: top;
-            padding-top: 15px;
-            text-align: center;
-        }
-
-        /* Style adjustment for Position column when submenu is active - align position-circle to top */
-        .rankings-table tr.submenu-active td:nth-child(1) {
-            vertical-align: top; /* Align content to the top of the cell */
-            padding-top: 15px; /* Adjust padding to align with other top paddings if needed */
-            text-align: center; /* Center the circle horizontally in the Position column if desired */
+        #popup-predictions-body {
+            padding: 10px 0;
         }
 
 
@@ -270,7 +259,7 @@
     </div>
 
     <div class="content">
-        <h1>Tabela Classificativa</h1>
+        <h1>Rankings</h1>
         <table class="rankings-table">
             <thead>
                 <tr>
@@ -284,6 +273,17 @@
                 <!-- Rankings will be populated dynamically -->
             </tbody>
         </table>
+
+        <!-- Popup Container -->
+        <div id="predictions-popup" class="predictions-popup">
+            <div class="popup-content">
+                <span class="close-button" id="close-popup">×</span>
+                <div id="popup-predictions-body">
+                    <!-- Predictions content will be loaded here por JavaScript -->
+                </div>
+            </div>
+        </div>
+
     </div>
 
     <nav class="bottom-menu">
@@ -382,43 +382,42 @@
             rankings.sort((a, b) => b.points - a.points);
             rankingsBody.innerHTML = '';
 
+            const totalUsers = rankings.length; // Get total users here
+
             rankings.forEach((rank, index) => {
                 const row = document.createElement('tr');
+                const position = index + 1;
                 const positionCell = document.createElement('td');
                 const playerCell = document.createElement('td');
                 const pointsCell = document.createElement('td');
                 const infoCell = document.createElement('td');
 
-                positionCell.innerHTML = `<div class="position-circle">${index + 1}</div>`;
+                // Calculate the position percentage
+                const percentage = position / totalUsers;
+
+                // Determine background color based on position
+                let backgroundColor;
+                if (percentage <= 0.33) {
+                    // Top third - green gradient
+                    const greenIntensity = Math.floor(255 * (percentage / 0.33));
+                    backgroundColor = `rgba(50, ${200 - greenIntensity}, 50, 0.2)`;
+                } else if (percentage <= 0.67) {
+                    // Middle third - yellow gradient
+                    const yellowIntensity = Math.floor(255 * ((percentage - 0.33) / 0.34));
+                    backgroundColor = `rgba(${200 - yellowIntensity}, ${200 - yellowIntensity}, 50, 0.2)`;
+                } else {
+                    // Bottom third - red gradient
+                    const redIntensity = Math.floor(255 * ((percentage - 0.67) / 0.33));
+                    backgroundColor = `rgba(${200 - redIntensity}, 50, 50, 0.2)`;
+                }
+
+
+                positionCell.innerHTML = `<div class="position-circle">${position}</div>`;
                 playerCell.innerHTML = `<span>${rank.username}</span>`;
                 pointsCell.textContent = rank.points;
                 infoCell.innerHTML = `<i class="fas fa-info-circle info-icon" data-userid="${rank.userId}" data-season="${season}"></i>`;
 
-                // Criar o div predictions-submenu programaticamente
-                const predictionsSubmenu = document.createElement('div');
-                predictionsSubmenu.id = `predictions-${rank.userId}`;
-                predictionsSubmenu.className = 'predictions-submenu';
-                playerCell.appendChild(predictionsSubmenu); // Adicionar o submenu como filho da célula do jogador
-
-                playerCell.style.display = 'flex';
-                playerCell.style.alignItems = 'flex-start'; /* Alinhar os items ao inicio */
-                playerCell.style.flexDirection = 'column'; /* Colocar em coluna */
-
-
-                // Calculate background color (same logic as before)
-                const percentage = (index + 1) / rankings.length;
-                let backgroundColor;
-                if (percentage <= 0.33) {
-                    const greenIntensity = Math.floor(255 * (percentage / 0.33));
-                    backgroundColor = `rgba(50, ${200 - greenIntensity}, 50, 0.2)`;
-                } else if (percentage <= 0.67) {
-                    const yellowIntensity = Math.floor(255 * ((percentage - 0.33) / 0.34));
-                    backgroundColor = `rgba(${200 - yellowIntensity}, ${200 - yellowIntensity}, 50, 0.2)`;
-                } else {
-                    const redIntensity = Math.floor(255 * ((percentage - 0.67) / 0.33));
-                    backgroundColor = `rgba(${200 - redIntensity}, 50, 50, 0.2)`;
-                }
-                row.style.backgroundColor = backgroundColor;
+                row.style.backgroundColor = backgroundColor; // Apply background color here
 
 
                 row.appendChild(positionCell);
@@ -428,7 +427,7 @@
 
 
                 // Add click event listener to the info icon (same as before)
-                const infoIcon = infoCell.querySelector('.info-icon'); // Alterado para procurar dentro de infoCell
+                const infoIcon = infoCell.querySelector('.info-icon');
                 infoIcon.addEventListener('click', () => togglePredictions(rank.userId, season));
 
                 rankingsBody.appendChild(row);
@@ -437,10 +436,8 @@
 
 
         async function togglePredictions(userId, season) {
-            const submenuId = `predictions-${userId}`; // Store the ID in a variable for logging
-            const submenu = document.getElementById(submenuId);
-            console.log("togglePredictions called for userId:", userId, "submenuId:", submenuId); // Log userId and submenuId
-            console.log("Submenu element:", submenu); // Log the submenu element itself
+            const popup = document.getElementById('predictions-popup');
+            const popupBody = document.getElementById('popup-predictions-body');
             const infoIcon = document.querySelector(`.info-icon[data-userid="${userId}"]`);
             if (!infoIcon) {
                 console.error("Info icon not found for userId:", userId);
@@ -451,67 +448,51 @@
                 console.error("Row not found for info icon with userId:", userId);
                 return;
             }
-            const isActive = submenu?.classList?.contains('active') || false; // Use optional chaining to avoid error if submenu is null
 
-            // Close all other open submenus
-            document.querySelectorAll('.predictions-submenu.active').forEach(menu => {
-                if (menu !== submenu && menu !== null) { // Add null check for menu
-                    menu.classList.remove('active');
-                    menu.closest('tr')?.classList.remove('submenu-active'); // Use optional chaining here as well
+            // Fetch user's predictions for the selected season
+            const palpitesRef = collection(db, 'palpites');
+            const q = query(palpitesRef,
+                where('userId', '==', userId),
+                where('temporada', '==', season)
+            );
+            const palpitesSnap = await getDocs(q);
+
+            let predictionsHTML = '';
+            const predictions = [];
+
+            palpitesSnap.forEach(doc => {
+                predictions.push({
+                    ...doc.data(),
+                    timestamp: doc.data().timestamp?.toDate() || new Date(0)
+                });
+            });
+
+            // Sort predictions by timestamp
+            predictions.sort((a, b) => b.timestamp - a.timestamp);
+
+            predictions.forEach(prediction => {
+                let palpitesHTML = '';
+                for (let i = 1; i <= 10; i++) {
+                    if (prediction[`palpite${i}`]) {
+                        const points = prediction[`Palpite${i}PontosGanhos`] || 0;
+                        const pointsClass = points > 0 ? 'prediction-points' : 'prediction-points-negative';
+                        palpitesHTML += `
+                            <div class="prediction-item">
+                                →${prediction[`palpite${i}`]}
+                                <span class="${pointsClass}">(${points} points)</span>
+                            </div>`;
+                    }
+                }
+
+                if (palpitesHTML) {
+                    predictionsHTML += `
+                        <div class="game-header">${prediction.nomeJogo}</div>
+                        ${palpitesHTML}`;
                 }
             });
 
-            if (!isActive) {
-                // Fetch user's predictions for the selected season
-                const palpitesRef = collection(db, 'palpites');
-                const q = query(palpitesRef,
-                    where('userId', '==', userId),
-                    where('temporada', '==', season)
-                );
-                const palpitesSnap = await getDocs(q);
-
-                let predictionsHTML = '';
-                const predictions = [];
-
-                palpitesSnap.forEach(doc => {
-                    predictions.push({
-                        ...doc.data(),
-                        timestamp: doc.data().timestamp?.toDate() || new Date(0)
-                    });
-                });
-
-                // Sort predictions by timestamp
-                predictions.sort((a, b) => b.timestamp - a.timestamp);
-
-                predictions.forEach(prediction => {
-                    let palpitesHTML = '';
-                    for (let i = 1; i <= 10; i++) {
-                        if (prediction[`palpite${i}`]) {
-                            // Alteração aqui: usar "Palpite${i}PontosGanhos" em vez de "palpite${i}GCoinsGanhos"
-                            const points = prediction[`Palpite${i}PontosGanhos`] || 0;
-                            const pointsClass = points > 0 ? 'prediction-points' : 'prediction-points-negative';
-                            palpitesHTML += `
-                                <div class="prediction-item">
-                                    →${prediction[`palpite${i}`]}
-                                    <span class="${pointsClass}">(${points} points)</span>
-                                </div>`;
-                        }
-                    }
-
-                    if (palpitesHTML) {
-                        predictionsHTML += `
-                            <div class="game-header">${prediction.nomeJogo}</div>
-                            ${palpitesHTML}`;
-                    }
-                });
-
-                submenu.innerHTML = predictionsHTML || 'Ainda sem Palpites esta Temporada';
-                row.classList.add('submenu-active');
-            } else {
-                row.classList.remove('submenu-active');
-            }
-
-            submenu?.classList.toggle('active'); // Use optional chaining here too
+            popupBody.innerHTML = predictionsHTML || 'No predictions found for this season';
+            popup.style.display = "block"; // Show the popup
         }
 
         onAuthStateChanged(auth, async (user) => {
@@ -525,6 +506,22 @@
                 console.log('No user is logged in on rankings.html');
                 loadingScreen.style.display = 'none';
                 window.location.href = 'index.html';
+            }
+        });
+
+        // Get the popup and close button elements
+        const popup = document.getElementById('predictions-popup');
+        const closeButton = document.getElementById('close-popup');
+
+        // Event listener to close the popup when the close button is clicked
+        closeButton.addEventListener('click', () => {
+            popup.style.display = "none";
+        });
+
+        // Event listener to close the popup when clicking outside of it
+        window.addEventListener('click', (event) => {
+            if (event.target == popup) {
+                popup.style.display = "none";
             }
         });
     </script>
