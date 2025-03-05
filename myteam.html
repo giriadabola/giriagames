@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="pt">
 <head>
@@ -42,10 +41,14 @@
             width: 100%;
             height: 100%;
             background-color: rgba(0, 0, 0, 0.5);
-            display: flex;
+            display: none; /* Hidden by default */
             justify-content: center;
             align-items: center;
             z-index: 2000;
+        }
+
+        .modal-overlay.active {
+            display: flex; /* Show when active class is added */
         }
 
         .modal-content {
@@ -90,6 +93,32 @@
 
         .btn-cancel:hover {
             background-color: #d32f2f;
+        }
+
+        .btn-confirm.add-player-btn {
+            background: linear-gradient(135deg, #4CAF50, #45a049);
+            color: white;
+            padding: 6px 12px;
+            border: none;
+            border-radius: 4px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .btn-confirm.add-player-btn:hover {
+            background: linear-gradient(135deg, #45a049, #357a38);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn-confirm.add-player-btn:active {
+            transform: translateY(0);
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
         }
 
         .menu-item {
@@ -185,7 +214,7 @@
             flex: 1;
             min-width: 300px;
         }
-        
+
         .player-selection-side {
             margin-top: 45px; /* Aligns with the top of pitch-area */
         }
@@ -296,17 +325,37 @@
             margin-bottom: 10px;
         }
 
-        .player-results {
+        .player-results, .playerCardList {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-            gap: 12px;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 16px;
             max-height: 500px;
             overflow-y: auto;
-            border: 1px solid #ddd;
-            padding: 12px;
-            border-radius: 5px;
+            border: 1px solid #e0e0e0;
+            padding: 20px;
+            border-radius: 8px;
             background-color: #fff;
             width: 100%;
+            scrollbar-width: thin;
+            scrollbar-color: #888 #f1f1f1;
+        }
+
+        .player-results::-webkit-scrollbar, .playerCardList::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .player-results::-webkit-scrollbar-track, .playerCardList::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+
+        .player-results::-webkit-scrollbar-thumb, .playerCardList::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+
+        .player-results::-webkit-scrollbar-thumb:hover, .playerCardList::-webkit-scrollbar-thumb:hover {
+            background: #555;
         }
 
         /* Add casta-based background gradients */
@@ -589,6 +638,20 @@
         </a>
     </nav>
 
+    <!-- Player List Modal -->
+    <div id="playerListModal" class="modal-overlay">
+        <div class="modal-content">
+            <h3>Escolha um Jogador</h3>
+            <div id="playerCardList" class="player-results">
+                <!-- Player cards will be loaded here by JavaScript -->
+                <p>A carregar jogadores...</p>
+            </div>
+            <div class="modal-buttons">
+                <button class="btn-cancel" id="closePlayerListModal">Fechar</button>
+            </div>
+        </div>
+    </div>
+
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getFirestore, doc, getDoc, collection, getDocs, query, orderBy, limit, setDoc, addDoc, FieldValue, where, serverTimestamp, updateDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
@@ -643,6 +706,10 @@
         const playerSearchInput = document.getElementById('player-search');
         const countryFilterSelect = document.getElementById('country-filter');
         const clubFilterSelect = document.getElementById('club-filter');
+        const playerListModal = document.getElementById('playerListModal'); // Get the player list modal
+        const closePlayerListModalBtn = document.getElementById('closePlayerListModal'); // Get close button for player list modal
+        const playerCardListContainer = document.getElementById('playerCardList'); // Container for player cards in modal
+
 
         let assignedPlayers = {}; // Declare assignedPlayers outside renderFormation scope
 
@@ -777,7 +844,7 @@
                 // Reset unsaved changes flag
                 hasUnsavedChanges = false;
                 console.log("Formação guardada com sucesso!");
-                
+
                 // Show confirmation icon
                 const saveBtn = document.getElementById('saveFormationBtn');
                 const confirmIcon = document.createElement('i');
@@ -824,25 +891,19 @@
                 });
                 positionElement.addEventListener('drop', handlePositionDrop);
 
-                // *** ADICIONAR ESTE EVENT LISTENER dragstart PARA ELEMENTOS .position ***
-                positionElement.addEventListener('dragstart', (event) => {
-                    const imgElement = positionElement.querySelector('img'); // Obter a imagem dentro da posição
-                    if (imgElement) { // Verificar se há uma imagem (jogador) na posição
-                        const assignedPlayerId = positionElement.dataset.assignedPlayerId; // Obter playerId da posição
-                        event.dataTransfer.setData('playerId', assignedPlayerId); // Passar playerId para dataTransfer
-                        event.dataTransfer.setData('originalPositionId', positionElement.dataset.position); // *** Passar TAMBÉM a posição de ORIGEM ***
-                        console.log(`Drag start from position ${positionElement.dataset.position} com jogador ID: ${assignedPlayerId}`);
-                    } else {
-                        event.preventDefault(); // Cancelar o drag se não houver jogador na posição
-                    }
-                });
-
-                // *** ADICIONAR EVENT LISTENER DE CLICK PARA REMOVER JOGADOR ***
+                // *** MODIFIED CLICK EVENT LISTENER - DEBUGGING - CORRECTED NULL CHECK ***
                 positionElement.addEventListener('click', () => {
                     const assignedPlayerId = positionElement.dataset.assignedPlayerId;
-                    if (assignedPlayerId) {
+                    console.log(`Click on position ${positionElement.dataset.position}, assignedPlayerId: ${assignedPlayerId}, typeof assignedPlayerId: ${typeof assignedPlayerId}`); // DEBUG LOG - TYPE OF
+                    if (assignedPlayerId && assignedPlayerId !== "null") { // CORRECTED IF CONDITION
+                        console.log("Player ID found (corrected check), calling removePlayerFromPosition"); // DEBUG LOG - CORRECTED CHECK
+                        // If player is assigned, remove them
                         removePlayerFromPosition(positionElement, assignedPlayerId, positionElement.dataset.position);
                         hasUnsavedChanges = true; // Marcar que há alterações não salvas
+                    } else {
+                        console.log("No Player ID found (corrected check), calling showPlayerListModal"); // DEBUG LOG - CORRECTED CHECK - CHANGED FUNCTION CALL
+                        // If no player is assigned, show player list modal
+                        showPlayerListModal(positionElement.dataset.positionType, positionElement); // PASS positionType and positionElement
                     }
                 });
 
@@ -855,6 +916,154 @@
             // Deixamos a formação limpa para o utilizador adicionar jogadores manualmente
             // ou carregar a formação guardada do Firebase
         }
+
+        function showPlayerListModal(positionType, positionElement) {
+            playerListModal.classList.add('active'); // Show the modal
+            playerCardListContainer.innerHTML = '<p>A carregar jogadores...</p>'; // Reset and show loading message
+            populatePlayerCardList(positionType, positionElement); // Call function to populate player cards
+        }
+
+        async function populatePlayerCardList(positionType, positionElement) {
+            try {
+                // 1. Filter players based on positionType and ownership
+                const filteredPlayers = allPlayers.filter(player => {
+                    const playerPosicaoIngles = { // Mapping Português -> Inglês
+                        "Avançado": "FWD",
+                        "Defesa": "DEF",
+                        "Médio": "MID",
+                        "Guarda-Redes": "GK"
+                    }[player.posicao];
+                    return playerPosicaoIngles === positionType && player.compradopor === currentUserUid;
+                });
+
+                // 2. Exclude already assigned players
+                const availablePlayers = filteredPlayers.filter(player => {
+                    return !isPlayerAssigned(player.id); // Use the isPlayerAssigned function
+                });
+
+                playerCardListContainer.innerHTML = ''; // Clear "Loading..." message
+
+                if (availablePlayers.length === 0) {
+                    playerCardListContainer.innerHTML = '<p>Sem jogadores disponíveis para esta posição.</p>';
+                    return;
+                }
+
+                // 3. Render player cards in the modal
+                availablePlayers.forEach(player => {
+                    const playerCard = document.createElement('div');
+                    playerCard.classList.add('player-card');
+                    playerCard.classList.add('modal-player-card'); // Add a class to distinguish modal cards if needed
+                    // === PASTE YOUR PLAYER CARD CREATION LOGIC FROM renderPlayerResults HERE ===
+                    // Make sure to adapt it if necessary for the modal context
+                    if (player.casta) {
+                        const castaMap = {
+                            'Jogador Ouro': 'golden',
+                            'Jogador Prata': 'silver',
+                            'Jogador Bronze': 'bronze',
+                            'Jogador Platina': 'platina',
+                            'Jogador Diamante': 'diamond'
+                        };
+
+                        const castaClass = castaMap[player.casta];
+                        if (castaClass) {
+                            playerCard.classList.add(castaClass);
+                        }
+                    }
+
+                    // Add country flag to the top right corner of the card
+                    if (player.paisId && countries[player.paisId]) {
+                        const flagImg = document.createElement('img');
+                        flagImg.src = countries[player.paisId].imagem || 'placeholder_flag_url.png';
+                        flagImg.alt = countries[player.paisId].nome;
+                        flagImg.classList.add('country-flag');
+                        playerCard.appendChild(flagImg);
+                    }
+
+                    const img = document.createElement('img');
+                    img.src = player.imagem || 'placeholder_image_url.png';
+                    img.alt = player.nome;
+                    playerCard.appendChild(img);
+
+                    const playerInfo = document.createElement('div');
+                    playerInfo.classList.add('player-info');
+
+                    const playerName = document.createElement('span');
+                    playerName.classList.add('player-name');
+                    playerName.textContent = player.nome;
+                    playerInfo.appendChild(playerName);
+
+                    const playerPosition = document.createElement('span');
+                    playerPosition.classList.add('player-position');
+                    playerPosition.textContent = player.posicao;
+                    playerInfo.appendChild(playerPosition);
+
+                    // Add competition logo using two-step fetch process - adapt if needed for modal
+                    if (player.clube) {
+                        const clubesRef = collection(db, 'clubes');
+                        const clubQuery = query(clubesRef, where('nome', '==', player.clube));
+                        getDocs(clubQuery).then(clubSnapshot => {
+                            if (!clubSnapshot.empty) {
+                                const clubData = clubSnapshot.docs[0].data();
+                                if (clubData.competicaoId) {
+                                    const competicaoRef = doc(db, 'competicoes', clubData.competicaoId);
+                                    getDoc(competicaoRef).then(competicaoDoc => {
+                                        if (competicaoDoc.exists()) {
+                                            const competicaoData = competicaoDoc.data();
+                                            const competicaoLogo = document.createElement('img');
+                                            competicaoLogo.src = competicaoData.imagem;
+                                            competicaoLogo.alt = competicaoData.nome;
+                                            competicaoLogo.classList.add('competition-logo');
+                                            playerInfo.appendChild(competicaoLogo);
+                                        }
+                                    });
+                                }
+                            }
+                        });
+                    }
+
+
+                    // 4. Add "ADICIONAR" button to each card
+                    const addButton = document.createElement('button');
+                    addButton.textContent = 'ADICIONAR';
+                    addButton.classList.add('btn-confirm', 'add-player-btn'); // Style the button
+                    addButton.addEventListener('click', () => {
+                        // Logic to add player to position and close modal
+                        assignPlayerToPosition(player, positionElement);
+                        playerListModal.classList.remove('active'); // Close the modal after adding
+                    });
+                    playerCard.appendChild(addButton);
+
+                    playerCardListContainer.appendChild(playerCard);
+                });
+
+
+            } catch (error) {
+                console.error("Error populating player card list:", error);
+                playerCardListContainer.innerHTML = '<p>Erro ao carregar jogadores.</p>';
+            }
+        }
+
+        function assignPlayerToPosition(player, positionElement) {
+            // Similar logic to handlePositionDrop, but triggered by "ADICIONAR" button
+            const playerId = player.id;
+            const positionId = positionElement.dataset.position;
+
+            // Clear '+' text and add player image to the position
+            positionElement.innerHTML = '';
+            const playerImg = document.createElement('img');
+            playerImg.src = player.imagem || 'placeholder_image_url.png';
+            playerImg.alt = player.nome;
+            positionElement.appendChild(playerImg);
+            positionElement.dataset.assignedPlayerId = playerId;
+            assignedPlayers[positionId] = playerId;
+            hasUnsavedChanges = true; // Mark that there are unsaved changes
+            console.log(`Jogador ${player.nome} adicionado à posição ${positionId} via popup.`);
+        }
+
+
+        closePlayerListModalBtn.addEventListener('click', () => {
+            playerListModal.classList.remove('active'); // Hide the player list modal
+        });
 
 
         function repositionPlayers(previousFormationName, previousAssignedPlayers, currentFormationName) {
@@ -1079,11 +1288,11 @@
             // Criar o overlay do modal
             const modalOverlay = document.createElement('div');
             modalOverlay.classList.add('modal-overlay');
-            
+
             // Criar o conteúdo do modal
             const modalContent = document.createElement('div');
             modalContent.classList.add('modal-content');
-            
+
             // Adicionar a mensagem
             const messageElement = document.createElement('p');
             messageElement.textContent = message;
@@ -1191,14 +1400,14 @@
                 'Médio': 3,
                 'Avançado': 4
             };
-            
+
             // Create a sorted copy of the players array
             const sortedPlayers = [...players].sort((a, b) => {
                 const posA = positionOrder[a.posicao] || 999; // Default high value for unknown positions
                 const posB = positionOrder[b.posicao] || 999;
                 return posA - posB;
             });
-            
+
             playerResultsContainer.innerHTML = '';
             if (sortedPlayers.length === 0) {
                 playerResultsContainer.textContent = 'No data available in table';
@@ -1220,7 +1429,7 @@
                         'Jogador Platina': 'platina',
                         'Jogador Diamante': 'diamond'
                     };
-                    
+
                     const castaClass = castaMap[player.casta];
                     if (castaClass) {
                         playerCard.classList.add(castaClass);
@@ -1346,7 +1555,7 @@
 
                 // Update estado for all formations
                 const batch = firebase.firestore.writeBatch(db);
-                
+
                 allPlanteisSnapshot.forEach(doc => {
                     const formation = doc.data().formacao;
                     // Set estado based on whether it matches current formation
@@ -1391,7 +1600,7 @@
                 console.log("currentUserUid não definido ao carregar formação. Aguardando autenticação...");
                 return;
             }
-            
+
             // Clear all positions and assigned players before loading
             pitchArea.querySelectorAll('.position img').forEach(img => img.remove());
             const positions = document.querySelectorAll('.position');
@@ -1422,7 +1631,7 @@
 
                 if (!planteisSnapshot.empty) {
                     const plantelData = planteisSnapshot.docs[0].data();
-                    
+
                     // Clear current formation
                     pitchArea.querySelectorAll('.position img').forEach(img => img.remove());
                     assignedPlayers = {};
