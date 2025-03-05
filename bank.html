@@ -298,7 +298,7 @@
     </nav>
 
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getFirestore, doc, getDoc, collection, query, where, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
@@ -435,28 +435,54 @@
             });
         }
 
+        // Function to normalize season format (add slash if missing and in YYYYYYYY format for display)
+        function normalizeSeason(season) {
+            console.log("normalizeSeason input:", season);
+            const seasonExists = !!season;
+            const isLength8 = season && season.length === 8;
+            const hasSlash = season && season.includes('/'); // Check for slash presence
+
+            console.log("season exists:", seasonExists);
+            console.log("is length 8:", isLength8);
+            console.log("has slash:", hasSlash); // Log slash presence
+
+
+            if (season && season.length === 8 && !season.includes('/')) { // Condition: 8 digits AND no slash - ADD SLASH
+                const normalized = season.substring(0, 4) + '/' + season.substring(4, 8);
+                console.log("normalized season (added slash):", normalized); // Log when slash is added
+                return normalized;
+            } else if (season && season.includes('/')) { // Condition: Season exists AND HAS a slash - RETURN AS IS
+                console.log("returning season (already has slash):", season); // Log when returning season with slash
+                return season; // Return original season if already has slash
+            }
+
+
+            console.log("returning original season (no normalization):", season); // Log for other cases
+            return season; // Return original season in all other cases (e.g., not 8 digits, null, etc.)
+        }
+
         // Function to load transactions for the latest season
         async function loadTransactions() {
             transactionsList.innerHTML = '<div class="no-transactions">Carregando transações...</div>';
 
-            const latestSeason = await fetchLatestSeason();
+            let latestSeason = await fetchLatestSeason();
+            console.log("Temporada mais recente detetada (original):", latestSeason);
 
             if (!latestSeason) {
                 transactionsList.innerHTML = '<div class="no-transactions">Nenhuma temporada encontrada.</div>';
                 return;
             }
 
+            // No need to normalize latestSeason for query anymore - keep it as is for query
+
             try {
                 const movimentosRef = collection(db, 'movimentos');
                 const q = query(
                     movimentosRef,
-                    where('temporada', '==', latestSeason),
+                    where('temporada', '==', latestSeason), // Use original latestSeason in query
                     where('tipo', 'in', ['Mercado', 'Empire']),
                     orderBy('movimentoData', 'desc')
                 );
-
-                // Nota: Esta consulta requer um índice composto no Firestore.
-                // Se ocorrer um erro, o link para criar o índice será exibido no console.
                 const querySnapshot = await getDocs(q);
 
                 if (querySnapshot.empty) {
@@ -467,9 +493,30 @@
                 let transactionsHTML = '';
 
                 for (const doc of querySnapshot.docs) {
+                    console.log("--- A PROCESSAR DOCUMENTO ---");
+                    console.log("ID do Documento:", doc.id);
+                    console.log("Dados Brutos do Documento:", JSON.stringify(doc.data()));
+
+                    // Normalize document season for DISPLAY in table
+                    const normalizedDocSeason = normalizeSeason(doc.data().temporada);
+                    console.log("  Temporada do Documento (original):", doc.data().temporada);
+                    console.log("  Temporada do Documento (normalizada para display):", normalizedDocSeason);
+                    console.log("  Tipo do Documento:", doc.data().tipo);
+
+
+                    if (doc.id === '5xthzUP0RDtIQSyYr4eH') {
+                        console.log("  *** DOCUMENTO 'COMPRADO' ENCONTRADO! ***");
+                        console.log("  Dados do Documento 'Comprado':", doc.data());
+                    }
+
+
                     const data = doc.data();
                     const userData = await getUserData(data.userId);
                     let itemData = null;
+
+                    let userName = 'Usuário Desconhecido';
+                    let itemName = 'Item Desconhecido';
+
 
                     if (data.tipo === 'Mercado' && data.jogadorId) {
                         itemData = await getPlayerData(data.jogadorId);
@@ -477,9 +524,10 @@
                         itemData = await getEmpireItemData(data.empireitem);
                     }
 
-                    const userName = userData ? userData.nomeDeUsuario : 'Usuário Desconhecido';
-                    const itemName = itemData ? (data.tipo === 'Mercado' ? itemData.nome : itemData.name) : 'Item Desconhecido';
+                    userName = userData ? userData.nomeDeUsuario : userName;
+                    itemName = itemData ? (data.tipo === 'Mercado' ? itemData.nome : itemData.name) : itemName;
                     const itemImage = itemData ? (data.tipo === 'Mercado' ? itemData.imagem : '') : ''; // Assuming empire items don't have images
+
 
                     transactionsHTML += `
                         <div class="transaction-item">
@@ -506,6 +554,7 @@
                             </div>
                         </div>
                     `;
+
                 }
 
                 transactionsList.innerHTML = transactionsHTML;
