@@ -588,7 +588,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, collection, getDocs, doc, getDoc, updateDoc, Timestamp, addDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getFirestore, collection, getDocs, doc, getDoc, updateDoc, Timestamp, addDoc, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
     
         const firebaseConfig = {
@@ -802,11 +802,6 @@
                             compradopor: auth.currentUser.uid
                         });
 
-                        const updatedGcoins = userGcoins - playerPrice;
-                        const updatePayload = {};
-                        updatePayload[gCoinsField] = updatedGcoins;
-                        await updateDoc(userRef, updatePayload);
-
                         // Create movement record
                         const movimentoData = {
                             userId: auth.currentUser.uid,
@@ -819,10 +814,30 @@
                             para: null,
                             mediapontos: null,
                             movimentoData: new Date(),
-                            temporada: gCoinsField.replace('GCoins', '')
+                            temporada: gCoinsField.replace('GCoins', ''),
+                            tipo: "Mercado"
                         };
 
                         await addDoc(collection(db, 'movimentos'), movimentoData);
+
+                        // Calculate new GCoins balance based on all movements
+                        const movimentosRef = collection(db, 'movimentos');
+                        const q = query(movimentosRef, 
+                            where('userId', '==', auth.currentUser.uid),
+                            where('temporada', '==', gCoinsField.replace('GCoins', ''))
+                        );
+                        const movimentosSnap = await getDocs(q);
+                        
+                        let totalValorReal = 0;
+                        movimentosSnap.forEach((doc) => {
+                            const movimento = doc.data();
+                            totalValorReal += movimento.valorreal || 0;
+                        });
+
+                        // Update user's GCoins with the calculated total
+                        const updatePayload = {};
+                        updatePayload[gCoinsField] = totalValorReal;
+                        await updateDoc(userRef, updatePayload);
 
                         popupBuyButton.disabled = true;
                         // Update button text after purchase to show username (or userId as fallback)
