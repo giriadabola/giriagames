@@ -331,7 +331,7 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getFirestore, collection, getDocs, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-
+    
         // Configuração do Firebase
         const firebaseConfig = {
             apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0",
@@ -342,16 +342,16 @@
             appId: "1:689897349449:web:536599794579901beb7a98",
             measurementId: "G-GTTPJ6G5MD"
         };
-
+    
         // Inicializar Firebase
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const auth = getAuth(app);
-
+    
         let currentUserStatus = null;
         const loadingScreen = document.getElementById('loading-screen');
         const content = document.querySelector('.content');
-
+    
         // Função para obter o estatuto do usuário do Firestore
         async function getUserStatus(userId) {
             const userDoc = doc(db, 'users', userId);
@@ -362,64 +362,96 @@
                 return null;
             }
         }
-
+    
         // Função para carregar jogos ativos
         async function loadActiveGames() {
             const gamesContainer = document.getElementById('games-container');
             const now = new Date();
-
+    
             try {
                 const gamesRef = collection(db, 'jogos');
                 const querySnapshot = await getDocs(gamesRef);
                 const activeGames = [];
-
+    
                 for (const gameDoc of querySnapshot.docs) {
                     const game = gameDoc.data();
-                    const inicioPalpites = game.inicioPalpites.toDate();
-                    const fimPalpites = game.fimPalpites.toDate();
-
+                    // Verificar se inicioIntervalo e fimIntervalo existem
+                    if (!game.inicioIntervalo || !game.fimIntervalo) {
+                        console.warn(`Game ${gameDoc.id} has missing interval data`);
+                        continue;
+                    }
+                    const inicioPalpites = game.inicioIntervalo.toDate();
+                    const fimPalpites = game.fimIntervalo.toDate();
+    
                     if (now >= inicioPalpites && now <= fimPalpites) {
                         // Check if user has voted on this game by comparing game names
-                        const userId = auth.currentUser.uid;
-                        const userPalpitesRef = collection(db, 'users', userId, 'palpites');
-                        const userPalpitesSnapshot = await getDocs(userPalpitesRef);
-                        game.hasVoted = userPalpitesSnapshot.docs.some(palpiteDoc => {
-                            const palpiteData = palpiteDoc.data();
-                            return palpiteData.nomeJogo === game.nomeJogo;
-                        });
-
+    
+                        console.log("Objeto Game antes do erro equipaCasaId:", game);
+                        console.log("equipaCasaId:", game.equipaCasaId);
+                        console.log("Type of equipaCasaId:", typeof game.equipaCasaId);
+                        console.log("Firestore db instance:", db);
+    
+                        if (typeof db === 'undefined' || db === null) { // Check db instance
+                            console.error("Firestore db instance is not initialized correctly!");
+                            continue; // Skip this game if db is not valid
+                        }
+    
+                        let equipaCasaIdString = game.equipaCasaId;
+                        if (typeof equipaCasaIdString !== 'string' || !equipaCasaIdString) { // Check equipaCasaId type and value
+                            console.error(`Game ${gameDoc.id} has invalid equipaCasaId:`, equipaCasaIdString);
+                            continue; // Skip this game if equipaCasaId is invalid
+                        }
+    
+                        let equipaForaIdString = game.equipaForaId;
+                        if (typeof equipaForaIdString !== 'string' || !equipaForaIdString) { // Check equipaForaId type and value
+                            console.error(`Game ${gameDoc.id} has invalid equipaForaId:`, equipaForaIdString);
+                            continue; // Skip if invalid
+                        }
+    
+                        let competicaoIdString = game.competicaoId;
+                        if (typeof competicaoIdString !== 'string' || !competicaoIdString) { // Check competicaoId type and value
+                            console.error(`Game ${gameDoc.id} has invalid competicaoId:`, competicaoIdString);
+                            continue; // Skip if invalid
+                        }
+    
+    
+                        console.log("Caminho construído para doc (equipaCasa):", `clubes/${equipaCasaIdString}`); // Registo do caminho
+                        const equipaCasaRef = doc(db, 'clubes', equipaCasaIdString); // Usar a string convertida e template literal
+    
+    
                         // Rest of the existing game data fetching
-                        const equipaCasaRef = doc(db, 'clubes', game.equipaCasaId);
                         const equipaCasaDoc = await getDoc(equipaCasaRef);
                         const equipaCasaData = equipaCasaDoc.data();
                         game.equipaCasaImagem = equipaCasaData?.imagem || 'https://via.placeholder.com/50';
-
+    
                         // Buscar imagem do time de fora
-                        const equipaForaRef = doc(db, 'clubes', game.equipaForaId);
+                        console.log("Caminho construído para doc (equipaFora):", `clubes/${equipaForaIdString}`); // Registo do caminho
+                        const equipaForaRef = doc(db, 'clubes', equipaForaIdString);
                         const equipaForaDoc = await getDoc(equipaForaRef);
                         const equipaForaData = equipaForaDoc.data();
                         game.equipaForaImagem = equipaForaData?.imagem || 'https://via.placeholder.com/50';
-
+    
                         // Buscar imagem da competição
-                        const competicaoRef = doc(db, 'competicoes', game.competicaoId);
+                        console.log("Caminho construído para doc (competicao):", `competicoes/${competicaoIdString}`); // Registo do caminho
+                        const competicaoRef = doc(db, 'competicoes', competicaoIdString);
                         const competicaoDoc = await getDoc(competicaoRef);
                         const competicaoData = competicaoDoc.data();
                         game.competicaoImagem = competicaoData?.imagem || 'https://via.placeholder.com/30';
-
+    
                         activeGames.push({ id: gameDoc.id, ...game });
                     }
                 }
-
+    
                 if (activeGames.length === 0) {
                     gamesContainer.innerHTML = '<p class="no-games">Não há jogos disponíveis para palpites no momento.</p>';
                     return;
                 }
-
+    
                 gamesContainer.innerHTML = '';
                 for (const game of activeGames) {
                     const card = document.createElement('div');
                     card.className = `game-card${game.hasVoted ? ' voted' : ''}`;
-
+    
                     card.innerHTML = `
                         <i class="vote-status-icon fas ${game.hasVoted ? 'fa-check voted' : 'fa-hourglass-half pending'}"></i>
                         <div class="round-badge">Ronda ${game.ronda}</div>
@@ -438,7 +470,7 @@
                                 <div class="team-name">${game.equipaFora}</div>
                             </div>
                         </div>
-                        <div class="game-datetime">${game.dataJogo.toDate().toLocaleDateString('pt-PT')} - ${game.dataJogo.toDate().toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}</div>
+                        <div class="game-datetime">${game.dataJogo?.toDate()?.toLocaleDateString('pt-PT')} - ${game.dataJogo?.toDate()?.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}</div>
                         <div class="competition-info">
                             <div class="competition-image">
                                 <img src="${game.competicaoImagem || 'https://via.placeholder.com/30'}" alt="${game.competicao}">
@@ -449,7 +481,7 @@
                         </div>
                         <button class="predict-button" onclick="window.location.href='palpite.html?id=${game.id}'">${game.hasVoted ? 'Ver Palpite' : 'Palpitar'}</button>
                     `;
-
+    
                     gamesContainer.appendChild(card);
                 }
             } catch (error) {
@@ -460,7 +492,7 @@
                 content.style.display = 'block'; // Mostra o conteúdo principal
             }
         }
-
+    
         onAuthStateChanged(auth, async (user) => {
             if (user) {
                 currentUserStatus = await getUserStatus(user.uid);
@@ -472,8 +504,7 @@
                 window.location.href = 'index.html'; // Redireciona para a página de login se não estiver logado
             }
         });
-
-
+    
         // Carregar jogos quando a página carrega
         // window.addEventListener('load', loadActiveGames); // Removido para carregar jogos apenas após onAuthStateChanged
     </script>
