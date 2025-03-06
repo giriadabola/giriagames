@@ -830,6 +830,7 @@
 
                 const game = gameDoc.data();
                 game.id = gameId; // Add the document ID to the game data
+                game.modId = game.modId || null; // Ensure modId is initialized, even if null
                 currentGame = game; // Store the game data globally
 
                 // Get teams data
@@ -976,8 +977,22 @@
                     const input = document.getElementById(`prediction${i + 1}`);
                     const dropdown = document.getElementById(`categoryDropdown${i + 1}`);
 
-                    input.addEventListener('click', (event) => {
+                    input.addEventListener('click', async (event) => {
                         event.preventDefault(); // Prevent focusing the input and showing keyboard on mobile
+
+                        // Check if user has already submitted predictions for this game
+                        const palpitesRef = collection(db, 'palpites');
+                        const q = query(palpitesRef, 
+                            where('nomeJogo', '==', currentGame.nomeJogo),
+                            where('userId', '==', auth.currentUser.uid)
+                        );
+                        const querySnapshot = await getDocs(q);
+
+                        if (!querySnapshot.empty) {
+                            // User has already submitted predictions for this game
+                            return;
+                        }
+
                         if (currentPredictionInput && currentPredictionInput !== input) {
                             const currentDropdown = document.getElementById(`categoryDropdown${currentPredictionInput.id.replace('prediction', '')}`);
                             if (currentDropdown) {
@@ -1071,7 +1086,7 @@
                                         console.log("Third level categories after fetch:", thirdLevelCategories);
                                         subcategoryDropdown.style.display = 'none'; // Hide subcategory dropdown
 
-                                        if (thirdLevelCategories.length > 0) {
+                                        if (thirdLevelCategories.length > 0 && currentPredictionInput) {
                                             console.log("Third-level categories found, creating dropdown");
                                             // Create and display third-level category dropdown
                                             let thirdLevelDropdown = document.getElementById(`thirdLevelDropdown${currentPredictionInput.id.replace('prediction', '')}`);
