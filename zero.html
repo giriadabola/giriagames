@@ -243,7 +243,7 @@
             display: flex;
             flex-direction: column;
             gap: 15px;
-            position: relative; /* Container for dropdown positioning */
+            position: relative; /* Add position relative for dropdown positioning */
         }
 
         .prediction-input {
@@ -253,8 +253,7 @@
             font-size: 16px;
             width: 100%;
             transition: border-color 0.3s ease;
-            cursor: pointer; /* Indicate input is clickable for dropdown */
-            background-color: white; /* Ensure background for visibility */
+            cursor: pointer; /* Indicate input is clickable */
         }
 
         .prediction-input:focus {
@@ -303,7 +302,7 @@
         .popup-content {
             position: relative;
             padding-right: 20px;
-        }
+            }
 
         .close-popup {
             position: absolute;
@@ -352,66 +351,69 @@
             100% { transform: rotate(360deg); }
         }
 
-        /* Dropdown Styles */
-        .dropdown-content {
-            display: none;
+        /* DROPDOWN MENU STYLES */
+        .category-dropdown, .subcategory-dropdown, .third-category-dropdown {
             position: absolute;
-            background-color: #f9f9f9;
-            min-width: 200px;
-            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
-            z-index: 1;
-            border-radius: 8px;
-            padding: 10px 0;
             top: 100%;
             left: 0;
-            border: 1px solid #ddd;
+            z-index: 1003;
+            display: none;
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            border: 1px solid #e0e0e0;
+            min-width: 200px;
+            max-height: 300px;
+            overflow-y: auto;
+            transition: all 0.3s ease;
         }
 
-        .dropdown-content.show {
-            display: block;
+        .category-dropdown ul, .subcategory-dropdown ul, .third-category-dropdown ul {
+            list-style: none;
+            padding: 8px 0;
+            margin: 0;
         }
 
-        .dropdown-category-container {
-            display: block; /* Initially show categories */
-        }
-
-        .dropdown-category {
-            padding: 8px 16px;
-            text-decoration: none;
-            display: block;
+        .category-dropdown li, .subcategory-dropdown li, .third-category-dropdown li {
+            padding: 10px 16px;
             cursor: pointer;
-            font-weight: bold;
             color: #333;
+            font-size: 14px;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
 
-        .dropdown-category:hover {
-            background-color: #eee;
+        .category-dropdown li:hover, .subcategory-dropdown li:hover, .third-category-dropdown li:hover {
+            background-color: #f5f7fa;
+            color: #2176ff;
         }
 
-        .dropdown-submenu {
-            display: none; /* Initially hide submenus */
-            padding-left: 0px; /* Reset padding for submenu */
+        .category-dropdown li:active, .subcategory-dropdown li:active, .third-category-dropdown li:active {
+            background-color: #e8f0fe;
         }
 
-        .dropdown-submenu.show {
-            display: block;
+        .subcategory-dropdown {
+            margin-left: 4px;
+            border-left: 3px solid #2176ff;
         }
 
-        .dropdown-submenu-item, .dropdown-submenu-back {
-            padding: 8px 16px;
-            text-decoration: none;
-            display: block;
-            cursor: pointer;
-            color: #555;
+        .third-category-dropdown {
+            margin-left: 8px;
+            border-left: 3px solid #2176ff;
         }
 
-        .dropdown-submenu-item:hover, .dropdown-submenu-back:hover {
-            background-color: #e8e8e8;
+        .category-dropdown li.free-prediction {
+            color: #2176ff;
+            font-weight: 500;
+            border-top: 1px solid #e0e0e0;
+            margin-top: 8px;
+            padding-top: 12px;
         }
 
-        .dropdown-submenu-back {
-            font-weight: bold;
-            color: #333; /* Style for "Voltar" option */
+        .category-dropdown li.free-prediction:hover {
+            background-color: #e8f0fe;
         }
     </style>
 </head>
@@ -459,7 +461,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, doc, getDoc, addDoc, collection, serverTimestamp, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getFirestore, doc, getDoc, addDoc, collection, serverTimestamp, getDocs, query, where, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
         const firebaseConfig = {
@@ -480,6 +482,9 @@
         const loadingScreen = document.getElementById('loading-screen');
         const content = document.querySelector('.content');
         let currentUserStatus = null;
+        let currentPredictionInput = null; // Track currently focused input
+        let categoryDropdown = null; // Track the dropdown menu
+        let lastActiveCategoryDropdown = null; // Track the last active category dropdown
 
         async function getUserStatus(userId) {
             const userDoc = doc(db, 'users', userId);
@@ -600,6 +605,99 @@
             }
         }
 
+        async function fetchCategories() {
+            try {
+                const categoriesRef = collection(db, 'oddcategorias');
+                const q = query(categoriesRef, where('categoria_subcategoria_3cat', '==', 'categoria'), orderBy('ordem')); // Add orderBy clause
+                const querySnapshot = await getDocs(q);
+                const categories = [];
+                querySnapshot.forEach(doc => {
+                    categories.push({
+                        id: doc.id,
+                        nomecategoria: doc.data().nomecategoria,
+                        ordem: doc.data().ordem // Include ordem in category object
+                    });
+                });
+                return categories;
+            } catch (error) {
+                console.error('Error fetching categories:', error);
+                showErrorPopup('Erro ao carregar categorias de palpites.');
+                return [];
+            }
+        }
+
+        async function fetchSubcategories(parentCategoryId) {
+            console.log("Fetching subcategories for category ID:", parentCategoryId);
+            try {
+                const subcategoriesRef = collection(db, 'oddcategorias');
+                const q = query(subcategoriesRef,
+                    where('categoriapai', '==', parentCategoryId),
+                    where('categoria_subcategoria_3cat', '==', 'subcategoria'),
+                    orderBy('ordem')
+                );
+                const querySnapshot = await getDocs(q);
+                const subcategories = [];
+                querySnapshot.forEach(doc => {
+                    subcategories.push({
+                        id: doc.id,
+                        nomesubcategoria: doc.data().nomesubcategoria,
+                        ordem: doc.data().ordem
+                    });
+                });
+
+                // Adicionar opção "Voltar Atrás" como primeiro item
+                const subcategoriesWithBackButton = [
+                    { id: 'go-back-category', nomesubcategoria: '<--Voltar Atrás' }, // ID especial para identificar "Voltar Atrás"
+                    ...subcategories // Adicionar subcategorias normais depois
+                ];
+
+                console.log("Subcategories fetched:", subcategoriesWithBackButton); // Alterado para subcategoriesWithBackButton
+                return subcategoriesWithBackButton; // Retornar a lista com "Voltar Atrás"
+
+            } catch (error) {
+                console.error('Error fetching subcategories:', error);
+                showErrorPopup('Erro ao carregar subcategorias de palpites.');
+                return [];
+            }
+        }
+
+        async function fetchThirdLevelCategories(parentCategoryId, parentSubcategoryId) {
+            console.log("Fetching third-level categories for parent Category ID:", parentCategoryId, "and parent Subcategory ID:", parentSubcategoryId);
+            try {
+                const thirdLevelCategoriesRef = collection(db, 'oddcategorias');
+                const q = query(thirdLevelCategoriesRef,
+                    where('subcategoriapai', '==', parentSubcategoryId), // **SUBCATEGORIA é agora 'subcategoriapai'**
+                    where('categoriapai', '==', parentCategoryId),     // **CATEGORIA é agora 'categoriapai'**
+                    where('categoria_subcategoria_3cat', '==', 'terceiracategoria'),
+                    orderBy('ordem')
+                );
+                const querySnapshot = await getDocs(q);
+                const thirdLevelCategories = [];
+                querySnapshot.forEach(doc => {
+                    thirdLevelCategories.push({
+                        id: doc.id,
+                        nome3categoria: doc.data().nome3categoria,
+                        ordem: doc.data().ordem
+                    });
+                });
+
+                // Adicionar opção "Voltar Atrás" como primeiro item
+                const thirdLevelCategoriesWithBackButton = [
+                    { id: 'go-back-subcategory', nome3categoria: '<--Voltar Atrás' }, // ID especial para identificar "Voltar Atrás"
+                    ...thirdLevelCategories // Adicionar categorias de terceiro nível normais depois
+                ];
+
+                console.log("Third-level categories fetched:", thirdLevelCategoriesWithBackButton); // Alterado para thirdLevelCategoriesWithBackButton
+                return thirdLevelCategoriesWithBackButton; // Retornar a lista com "Voltar Atrás"
+
+            } catch (error) {
+                console.error('Error fetching third-level categories:', error);
+                showErrorPopup('Erro ao carregar opções de palpites de terceiro nível.');
+                return [];
+            }
+        }
+
+
         async function loadGameDetails() {
             try {
                 // Get game ID from URL parameters
@@ -650,29 +748,14 @@
                 // Check for existing predictions
                 const existingPredictions = await checkExistingPredictions(gameId);
 
+                // Fetch categories for dropdown
+                const categories = await fetchCategories();
+
                 // Update UI
                 const gameContainer = document.getElementById('game-container');
                 let predictionsHtml = '';
 
-                // Prediction options data
-                const predictionOptions = [
-                    {
-                        category: 'Resultado',
-                        options: ['Empate', 'Vitória ' + game.equipaCasa, 'Vitória ' + game.equipaFora]
-                    },
-                    {
-                        category: 'Golos',
-                        options: ['Mais de 0.5 golos', 'Mais de 1.5 golos', 'Mais de 2.5 golos', 'Menos de 2.5 golos', 'Menos de 1.5 golos', 'Menos de 0.5 golos']
-                    },
-                    {
-                        category: 'Ambas Marcam',
-                        options: ['Sim', 'Não']
-                    }
-                    // Add more categories and options as needed
-                ];
-
-
-                // Generate prediction input fields with dropdowns
+                // Generate prediction input fields
                 for (let i = 0; i < game.numeroPalpites; i++) {
                     const predictionNumber = i + 1;
                     const existingValue = existingPredictions ? existingPredictions[`palpite${predictionNumber}`] : '';
@@ -686,15 +769,18 @@
                                 class="prediction-input"
                                 value="${existingValue}"
                                 ${isReadOnly}
-                                placeholder="Selecione o seu palpite ${predictionNumber}"
-                                readonly>
-                            <div id="predictionDropdown${predictionNumber}" class="dropdown-content">
-                                <!-- Dropdown content will be dynamically added here -->
+                                placeholder="Escolhe o teu palpite ${predictionNumber}">
+                            <div id="categoryDropdown${predictionNumber}" class="category-dropdown">
+                                <ul>
+                                    ${categories.map(category => `
+                                        <li data-category-id="${category.id}" data-category-name="${category.nomecategoria}">${category.nomecategoria}</li>
+                                    `).join('')}
+                                    <li data-category-name="Palpite Livre" class="free-prediction">Palpite Livre</li>
+                                </ul>
                             </div>
                         </div>
                     `;
                 }
-
 
                 gameContainer.innerHTML = `
                     <div class="game-info">
@@ -730,157 +816,27 @@
                             <span id="countdown" style="display: inline-block; font-weight: bold;"></span>
                         </div>
                     </div>
-                    <div class="prediction-container-wrapper">
+                    <div class="prediction-inputs-container">
                         ${predictionsHtml}
                         ${!existingPredictions ? `<button class="submit-button" onclick="submitPredictions()">Enviar Palpites</button>` : ''}
                     </div>
                 `;
 
-                // Function to populate dropdown options
-                function populateDropdown(dropdownId, optionsData, inputField) {
-                    const dropdown = document.getElementById(dropdownId);
-                    dropdown.innerHTML = ''; // Clear existing options
-
-                    optionsData.forEach(optionCategory => {
-                        const categoryContainer = document.createElement('div');
-                        categoryContainer.classList.add('dropdown-category-container');
-
-                        const categoryElement = document.createElement('div');
-                        categoryElement.classList.add('dropdown-category');
-                        categoryElement.textContent = optionCategory.category;
-
-                        const submenuElement = document.createElement('div');
-                        submenuElement.classList.add('dropdown-submenu');
-
-                        // Add "Voltar" option at the beginning of each submenu
-                        const backItem = document.createElement('a');
-                        backItem.classList.add('dropdown-submenu-back');
-                        backItem.textContent = '<- Voltar';
-                        backItem.addEventListener('click', function(e) {
-                            e.stopPropagation();
-                            hideSubmenus(dropdownId); // Hide current submenu
-                            showCategories(dropdownId); // Show main categories
-                        });
-                        submenuElement.appendChild(backItem);
-
-
-                        optionCategory.options.forEach(option => {
-                            const optionItem = document.createElement('a');
-                            optionItem.classList.add('dropdown-submenu-item');
-                            optionItem.textContent = option;
-                            optionItem.addEventListener('click', function() {
-                                inputField.value = option;
-                                hideAllDropdowns(); // Hide dropdown after selection
-                            });
-                            submenuElement.appendChild(optionItem);
-                        });
-
-                        categoryElement.addEventListener('click', function(e) {
-                            e.stopPropagation();
-                            hideCategories(); // Hide all main categories
-                            showSubmenu(dropdownId, optionCategory.category); // Show clicked submenu
-                        });
-
-                        categoryContainer.appendChild(categoryElement);
-                        categoryContainer.appendChild(submenuElement);
-                        dropdown.appendChild(categoryContainer);
-                    });
-                }
-
-
-                // Function to handle dropdown display
-                function setupDropdowns() {
-                    const predictionInputs = document.querySelectorAll('.prediction-input');
-                    predictionInputs.forEach((input, index) => {
-                        const dropdownId = `predictionDropdown${index + 1}`;
-                        const dropdownElement = document.getElementById(dropdownId);
-
-                        // Populate dropdown with options for each input
-                        populateDropdown(dropdownId, predictionOptions, input);
-
-
-                        input.addEventListener('click', function(event) {
-                            event.stopPropagation(); // Prevent document click from immediately closing dropdown
-                            hideAllDropdowns(); // Hide any other open dropdowns
-                            dropdownElement.classList.toggle('show');
-                            showCategories(dropdownId); // Initially show categories
-                            hideSubmenus(dropdownId); // Initially hide submenus
-                        });
-                    });
-                }
-
-                function hideAllDropdowns() {
-                    document.querySelectorAll('.dropdown-content.show').forEach(dropdown => {
-                        dropdown.classList.remove('show');
-                    });
-                }
-
-                function hideCategories() {
-                    document.querySelectorAll('.dropdown-category-container').forEach(container => {
-                        container.classList.add('dropdown-category-container-hidden'); // Add class to hide categories
-                        container.classList.remove('dropdown-category-container'); // Remove original class
-                    });
-                }
-
-                function showCategories(dropdownId) {
-                    const dropdownContent = document.getElementById(dropdownId);
-                    if (dropdownContent) {
-                        dropdownContent.querySelectorAll('.dropdown-category-container-hidden').forEach(container => {
-                            container.classList.add('dropdown-category-container'); // Restore original class to show categories
-                            container.classList.remove('dropdown-category-container-hidden'); // Remove hidden class
-                        });
-                    }
-                }
-
-
-                function hideSubmenus(dropdownId) {
-                    const dropdownContent = document.getElementById(dropdownId);
-                    if (dropdownContent) {
-                        dropdownContent.querySelectorAll('.dropdown-submenu.show').forEach(submenu => {
-                            submenu.classList.remove('show');
-                        });
-                    }
-                }
-
-
-                function showSubmenu(dropdownId, categoryName) {
-                    const dropdownContent = document.getElementById(dropdownId);
-                    if (dropdownContent) {
-                        dropdownContent.querySelectorAll('.dropdown-category-container').forEach(container => {
-                            const catElement = container.querySelector('.dropdown-category');
-                            const subMenu = container.querySelector('.dropdown-submenu');
-                            if (catElement.textContent === categoryName) {
-                                subMenu.classList.add('show'); // Show the submenu for the clicked category
-                            } else {
-                                subMenu.classList.remove('show'); // Ensure other submenus are hidden
-                            }
-                        });
-                    }
-                }
-
-
-                // Close dropdown when clicking outside
-                document.addEventListener('click', hideAllDropdowns);
-
-                setupDropdowns();
-
-
-                // Start the countdown timer
+                // Start the countdown timer (same as before)
                 function updateCountdown() {
                     const now = new Date().getTime();
 
-                    // Check if game.fimIntervalo exists before calling toDate()
-                    if (!currentGame.fimIntervalo) { // Changed to fimIntervalo
+                    if (!currentGame.fimIntervalo) {
                         document.getElementById('countdown').innerHTML = 'Informação de data indisponível';
                         return;
                     }
 
-                    const endTime = currentGame.fimIntervalo.toDate().getTime(); // Changed to fimIntervalo
+                    const endTime = currentGame.fimIntervalo.toDate().getTime();
                     const timeLeft = endTime - now;
 
                     if (timeLeft <= 0) {
                         document.getElementById('countdown').innerHTML = 'Tempo esgotado!';
-                        clearInterval(countdownInterval); // Stop the interval when time is up
+                        clearInterval(countdownInterval);
                         return;
                     }
 
@@ -889,7 +845,6 @@
                     const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
                     const seconds = Math.floor((timeLeft % (1000 * 60)) / 1000);
 
-                    // Update with more visible styling
                     document.getElementById('countdown').innerHTML = `
                         <span class="timer-unit">${days}d</span>
                         <span class="timer-unit">${hours}h</span>
@@ -897,20 +852,198 @@
                         <span class="timer-unit">${seconds}s</span>
                     `;
 
-                    // Force a repaint to ensure the timer updates visually
                     document.getElementById('countdown').style.display = 'none';
-                    document.getElementById('countdown').offsetHeight; // Trigger reflow
+                    document.getElementById('countdown').offsetHeight;
                     document.getElementById('countdown').style.display = 'inline-block';
                 }
-
-                // Initialize countdown
-                updateCountdown(); // Call immediately
-                countdownInterval = setInterval(updateCountdown, 1000); // Update every second
-
-                // Clear the interval when the component is unmounted
+                updateCountdown();
+                countdownInterval = setInterval(updateCountdown, 1000);
                 window.addEventListener('beforeunload', () => {
                     clearInterval(countdownInterval);
                 });
+
+
+                // Add event listeners to prediction inputs and category items after they are rendered
+                for (let i = 0; i < game.numeroPalpites; i++) {
+                    const input = document.getElementById(`prediction${i + 1}`);
+                    const dropdown = document.getElementById(`categoryDropdown${i + 1}`);
+
+                    input.addEventListener('click', (event) => {
+                        event.preventDefault(); // Prevent focusing the input and showing keyboard on mobile
+                        if (currentPredictionInput && currentPredictionInput !== input) {
+                            const currentDropdown = document.getElementById(`categoryDropdown${currentPredictionInput.id.replace('prediction', '')}`);
+                            if (currentDropdown) {
+                                currentDropdown.style.display = 'none'; // Hide previously open dropdown
+                            }
+                        }
+
+                        currentPredictionInput = input;
+                        categoryDropdown = dropdown; // Set the global dropdown
+                        dropdown.style.display = 'block';
+                    });
+
+                    const categoryItems = dropdown.querySelectorAll('li');
+                    categoryItems.forEach(item => {
+                        item.addEventListener('click', async () => {
+                            const selectedCategoryName = item.dataset.categoryName;
+                            
+                            if (item.classList.contains('free-prediction')) {
+                                // Handle 'Palpite Livre' selection
+                                currentPredictionInput.value = '';
+                                currentPredictionInput.readOnly = false;
+                                currentPredictionInput.placeholder = 'Digite seu palpite...';
+                                currentPredictionInput.focus(); // Add focus to the input
+                                dropdown.style.display = 'none';
+                                currentPredictionInput = null;
+                                categoryDropdown = null;
+                                return;
+                            }
+                            
+                            // Regular category handling
+                            const selectedCategoryId = item.dataset.categoryId;
+                            console.log("Category clicked:", selectedCategoryName, "ID:", selectedCategoryId);
+                            const subcategories = await fetchSubcategories(selectedCategoryId);
+                            console.log("Subcategories after fetch:", subcategories);
+                            currentPredictionInput.readOnly = true;
+                            dropdown.style.display = 'none'; // Hide category dropdown
+
+                            if (subcategories.length > 0) {
+                                console.log("Subcategories found, creating dropdown");
+                                // Create and display subcategory dropdown
+                                let subcategoryDropdown = document.getElementById(`subcategoryDropdown${currentPredictionInput.id.replace('prediction', '')}`);
+
+                                if (!subcategoryDropdown) {
+                                    // Create subcategory dropdown if it doesn't exist
+                                    subcategoryDropdown = document.createElement('div');
+                                    subcategoryDropdown.className = 'category-dropdown subcategory-dropdown'; // Add subcategory-dropdown class for styling
+                                    subcategoryDropdown.id = `subcategoryDropdown${currentPredictionInput.id.replace('prediction', '')}`;
+                                    subcategoryDropdown.innerHTML = '<ul></ul>'; // Add ul for list items
+                                    currentPredictionInput.parentNode.appendChild(subcategoryDropdown); // Append after input
+                                } else {
+                                    subcategoryDropdown.style.display = 'block'; // Show existing dropdown
+                                    subcategoryDropdown.querySelector('ul').innerHTML = ''; // Clear previous subcategories
+                                }
+
+
+                                const subcategoryList = subcategoryDropdown.querySelector('ul');
+                                subcategories.forEach(subcategory => {
+                                    const subcategoryItem = document.createElement('li');
+                                    subcategoryItem.dataset.subcategoryName = subcategory.nomesubcategoria; // Use nomesubcategoria
+                                    subcategoryItem.dataset.subcategoryId = subcategory.id; // Add subcategory ID here
+                                    subcategoryItem.textContent = subcategory.nomesubcategoria; // Display nomesubcategoria
+                                    subcategoryItem.addEventListener('click', async () => {
+                                        const selectedSubcategoryName = subcategoryItem.dataset.subcategoryName;
+                                        const selectedSubcategoryId = subcategoryItem.dataset.subcategoryId; // Assuming you add this data attribute
+
+                                        // **NOVO: Lógica para "Voltar Atrás" na Subcategoria**
+                                        if (subcategoryItem.dataset.subcategoryId === 'go-back-category') {
+                                            console.log("Clicked 'Voltar Atrás' na Subcategoria");
+                                            subcategoryDropdown.style.display = 'none'; // Hide subcategory dropdown
+                                            
+                                            // Show the category dropdown that was stored
+                                            const predictionNumber = currentPredictionInput.id.replace('prediction', '');
+                                            const categoryDropdownToShow = document.getElementById(`categoryDropdown${predictionNumber}`);
+                                            if (categoryDropdownToShow) {
+                                                categoryDropdownToShow.style.display = 'block';
+                                                categoryDropdown = categoryDropdownToShow; // Update the global reference
+                                            } else {
+                                                console.warn("WARNING: Could not find category dropdown to show!");
+                                            }
+                                            return;
+                                        }
+
+
+                                        console.log("Subcategory clicked:", selectedSubcategoryName, "ID:", selectedSubcategoryId);
+                                        console.log("Category ID (parent for 3rd level):", item.dataset.categoryId);
+                                        console.log("Subcategory ID (parent for 3rd level):", selectedSubcategoryId);
+                                        console.log("Types of IDs:", typeof item.dataset.categoryId, typeof selectedSubcategoryId);
+
+
+                                        const thirdLevelCategories = await fetchThirdLevelCategories(item.dataset.categoryId, selectedSubcategoryId);
+                                        console.log("Third level categories after fetch:", thirdLevelCategories);
+                                        subcategoryDropdown.style.display = 'none'; // Hide subcategory dropdown
+
+                                        if (thirdLevelCategories.length > 0) {
+                                            console.log("Third-level categories found, creating dropdown");
+                                            // Create and display third-level category dropdown
+                                            let thirdLevelDropdown = document.getElementById(`thirdLevelDropdown${currentPredictionInput.id.replace('prediction', '')}`);
+
+                                            if (!thirdLevelDropdown) {
+                                                // Create third-level dropdown if it doesn't exist
+                                                thirdLevelDropdown = document.createElement('div');
+                                                thirdLevelDropdown.className = 'category-dropdown subcategory-dropdown'; // Reuse styles, consider renaming class for clarity
+                                                thirdLevelDropdown.id = `thirdLevelDropdown${currentPredictionInput.id.replace('prediction', '')}`;
+                                                thirdLevelDropdown.innerHTML = '<ul></ul>';
+                                                currentPredictionInput.parentNode.appendChild(thirdLevelDropdown);
+                                            } else {
+                                                thirdLevelDropdown.style.display = 'block'; // Show existing dropdown
+                                                thirdLevelDropdown.querySelector('ul').innerHTML = ''; // Clear previous third-level categories
+                                            }
+
+                                            const thirdLevelList = thirdLevelDropdown.querySelector('ul');
+                                            thirdLevelCategories.forEach(thirdLevelCategory => {
+                                                const thirdLevelItem = document.createElement('li');
+                                                thirdLevelItem.dataset.thirdLevelCategoryName = thirdLevelCategory.nome3categoria; // Use nome3categoria
+                                                thirdLevelItem.textContent = thirdLevelCategory.nome3categoria; // Display nome3categoria
+                                                thirdLevelItem.addEventListener('click', () => {
+                                                    const selectedThirdLevelCategoryName = thirdLevelItem.dataset.thirdLevelCategoryName;
+
+                                                    // **NOVO: Lógica para "Voltar Atrás" na 3ª Categoria**
+                                                    if (thirdLevelItem.dataset.thirdLevelCategoryName === '<--Voltar Atrás') { // **ATENÇÃO: Comparar com o NOME, não ID aqui, pois o ID não foi definido para "Voltar Atrás" no 3º nível**
+                                                        console.log("Clicked 'Voltar Atrás' na 3ª Categoria");
+                                                        thirdLevelDropdown.style.display = 'none'; // Esconder dropdown de 3ª categorias
+                                                        subcategoryDropdown.style.display = 'block'; // Mostrar dropdown de subcategorias novamente
+                                                        return; // Sair da função para não continuar a processar como uma 3ª categoria normal
+                                                    }
+
+
+                                                    currentPredictionInput.value = selectedThirdLevelCategoryName; // Set input value to third-level category name
+                                                    thirdLevelDropdown.style.display = 'none'; // Hide third-level dropdown
+                                                    currentPredictionInput = null;
+                                                    categoryDropdown = null;
+                                                });
+                                                thirdLevelList.appendChild(thirdLevelItem);
+                                            });
+
+                                            // Position third-level dropdown
+                                            thirdLevelDropdown.style.top = `${currentPredictionInput.offsetTop + currentPredictionInput.offsetHeight}px`;
+                                            thirdLevelDropdown.style.left = `${currentPredictionInput.offsetLeft}px`;
+                                            thirdLevelDropdown.style.display = 'block';
+
+
+                                        } else {
+                                            console.log("No third-level categories found for subcategory:", selectedSubcategoryName);
+                                            console.log("Current Prediction Input before setting value (in else block):", currentPredictionInput); // ADDED LOG
+                                            if (currentPredictionInput) { // ADDED NULL CHECK HERE
+                                                currentPredictionInput.value = selectedSubcategoryName;
+                                            } else {
+                                                console.warn("currentPredictionInput is null when trying to set value in else block!"); // Warn if null
+                                            }
+                                            currentPredictionInput = null;
+                                            categoryDropdown = null;
+                                        }
+                                    });
+                                    subcategoryList.appendChild(subcategoryItem);
+                                });
+
+                                // Position subcategory dropdown - you might need to adjust this based on your layout
+                                subcategoryDropdown.style.top = `${currentPredictionInput.offsetTop + currentPredictionInput.offsetHeight}px`;
+                                subcategoryDropdown.style.left = `${currentPredictionInput.offsetLeft}px`;
+                                subcategoryDropdown.style.display = 'block';
+
+
+                            } else {
+                                console.log("No subcategories found for category:", selectedCategoryName);
+                                // No subcategories, just set the category as the prediction
+                                currentPredictionInput.value = selectedCategoryName;
+                                currentPredictionInput = null;
+                                categoryDropdown = null;
+                            }
+                        });
+                    });
+                }
+
+
             } catch (error) {
                 console.error('Error loading game details:', error);
                 const gameContainer = document.getElementById('game-container');
@@ -918,7 +1051,39 @@
             }
         }
 
-        // Add popup functionality
+
+        // Add global click listener to close dropdown when clicking outside
+       /* document.addEventListener('click', function(event) {
+            const isClickInsideDropdown = (dropdown) => dropdown && dropdown.contains(event.target);
+            const isClickInsideInput = currentPredictionInput && currentPredictionInput.contains(event.target);
+
+            if (categoryDropdown && !isClickInsideDropdown(categoryDropdown) && !isClickInsideInput &&
+                !(document.getElementById(`subcategoryDropdown${currentPredictionInput?.id?.replace('prediction', '')}`) && isClickInsideDropdown(document.getElementById(`subcategoryDropdown${currentPredictionInput?.id?.replace('prediction', '')}`))) &&
+                !(document.getElementById(`thirdLevelDropdown${currentPredictionInput?.id?.replace('prediction', '')}`) && isClickInsideDropdown(document.getElementById(`thirdLevelDropdown${currentPredictionInput?.id?.replace('prediction', '')}`)))
+               ) {
+                categoryDropdown.style.display = 'none';
+                currentPredictionInput = null;
+                categoryDropdown = null;
+            }
+            // Close subcategory dropdown as well if it's open (simplified condition)
+            const subcategoryDropdowns = document.querySelectorAll('.subcategory-dropdown');
+            subcategoryDropdowns.forEach(dropdown => {
+                if (dropdown.style.display === 'block' && !isClickInsideDropdown(dropdown) && !isClickInsideInput) {
+                    dropdown.style.display = 'none';
+                }
+            });
+            // Close third level dropdowns (simplified condition)
+            const thirdLevelDropdowns = document.querySelectorAll('#thirdLevelDropdown');
+            thirdLevelDropdowns.forEach(dropdown => {
+                if (dropdown.style.display === 'block' && !isClickInsideDropdown(dropdown) && !isClickInsideInput) {
+                    dropdown.style.display = 'none';
+                }
+            });
+        });
+        */
+
+
+        // Add popup functionality and auth state changes (same as before)
         function showErrorPopup(message) {
             const popup = document.getElementById('error-popup');
             const popupMessage = popup.querySelector('.popup-message');
@@ -926,7 +1091,6 @@
             popup.style.display = 'block';
         }
 
-        // Close popup when clicking the X
         document.querySelector('.close-popup').addEventListener('click', function() {
             document.getElementById('error-popup').style.display = 'none';
         });
@@ -935,7 +1099,7 @@
             if (user) {
                 currentUserStatus = await getUserStatus(user.uid);
                 console.log(`User is logged in on palpite.html with status: ${currentUserStatus}`);
-                await loadGameDetails(); // Load game details after authentication
+                await loadGameDetails();
                 loadingScreen.style.display = 'none';
                 content.style.display = 'block';
             } else {
