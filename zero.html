@@ -1089,31 +1089,47 @@
                                             }
 
                                             const thirdLevelList = thirdLevelDropdown.querySelector('ul');
-                                            thirdLevelCategories.forEach(thirdLevelCategory => {
+                                            thirdLevelCategories.forEach(async thirdLevelCategory => {
                                                 const thirdLevelItem = document.createElement('li');
-                                                thirdLevelItem.dataset.thirdLevelCategoryName = thirdLevelCategory.nome3categoria; // Use nome3categoria
-                                                thirdLevelItem.textContent = thirdLevelCategory.nome3categoria; // Display nome3categoria
-                                                thirdLevelItem.addEventListener('click', async () => {
-                                                    const selectedThirdLevelCategoryName = thirdLevelItem.dataset.thirdLevelCategoryName;
+                                                thirdLevelItem.dataset.thirdLevelCategoryName = thirdLevelCategory.nome3categoria;
+                                                
+                                                // Get the display name and check if it contains team placeholders
+                                                let displayName = thirdLevelCategory.nome3categoria;
+                                                
+                                                if (displayName.includes('Equipa A')) {
+                                                    // Get team name from Firebase using equipaCasaId
+                                                    const equipaCasaRef = doc(db, 'clubes', currentGame.equipaCasaId);
+                                                    const equipaCasaDoc = await getDoc(equipaCasaRef);
+                                                    if (equipaCasaDoc.exists()) {
+                                                        const equipaCasaNome = equipaCasaDoc.data().nome;
+                                                        displayName = displayName.replace('Equipa A', equipaCasaNome);
+                                                    }
+                                                }
+                                                
+                                                if (displayName.includes('Equipa B')) {
+                                                    // Get team name from Firebase using equipaForaId
+                                                    const equipaForaRef = doc(db, 'clubes', currentGame.equipaForaId);
+                                                    const equipaForaDoc = await getDoc(equipaForaRef);
+                                                    if (equipaForaDoc.exists()) {
+                                                        const equipaForaNome = equipaForaDoc.data().nome;
+                                                        displayName = displayName.replace('Equipa B', equipaForaNome);
+                                                    }
+                                                }
+                                                
+                                                thirdLevelItem.textContent = displayName;
+                                                
+                                                thirdLevelItem.addEventListener('click', () => {
+                                                    const selectedThirdLevelCategoryName = thirdLevelItem.textContent;
 
-                                                    if (thirdLevelItem.dataset.thirdLevelCategoryName === '<--Voltar Atrás') {
+                                                    if (selectedThirdLevelCategoryName === '<--Voltar Atrás') {
                                                         console.log("Clicked 'Voltar Atrás' na 3ª Categoria");
                                                         thirdLevelDropdown.style.display = 'none';
                                                         subcategoryDropdown.style.display = 'block';
                                                         return;
                                                     }
 
-                                                    // Replace team placeholders with actual team names
-                                                    let displayName = selectedThirdLevelCategoryName;
-                                                    if (displayName.includes('Equipa A')) {
-                                                        displayName = displayName.replace('Equipa A', currentGame.equipaCasa);
-                                                    }
-                                                    if (displayName.includes('Equipa B')) {
-                                                        displayName = displayName.replace('Equipa B', currentGame.equipaFora);
-                                                    }
-
                                                     // Set input value to show full category hierarchy with team names
-                                                    const fullCategoryPath = `${selectedCategoryName}: ${selectedSubcategoryName} - ${displayName}`;
+                                                    const fullCategoryPath = `${selectedCategoryName}: ${selectedSubcategoryName} - ${selectedThirdLevelCategoryName}`;
                                                     currentPredictionInput.value = fullCategoryPath;
                                                     thirdLevelDropdown.style.display = 'none';
                                                     currentPredictionInput = null;
