@@ -14,11 +14,90 @@
 
         .game-info {
             background: white;
-            border-radius: 12px;
-            padding: 20px;
-            margin: 20px 0;
+            border-radius: 8px;
+            padding: 10px;
+            margin: 10px 0;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-            text-align: center; /* Center align text in game-info container */
+            text-align: center;
+        }
+
+        .game-header {
+            margin-bottom: 8px;
+        }
+
+        .competition-and-date {
+            gap: 3px;
+        }
+
+        .countdown-timer {
+            margin: 8px auto;
+            padding: 6px 10px;
+        }
+
+        .teams-container {
+            margin-bottom: 10px;
+        }
+
+        .team-image {
+            width: 60px;
+            height: 60px;
+            margin-bottom: 5px;
+        }
+
+        .vs {
+            margin: 0 10px;
+        }
+
+        .game-date {
+            margin-bottom: 5px;
+        }
+
+        .competition-info {
+            gap: 5px;
+        }
+
+        .bottom-menu {
+            padding: 8px 0;
+            gap: 20px;
+        }
+
+        .menu-item i {
+            margin-bottom: 2px;
+        }
+
+        .content {
+            padding: 10px;
+            margin-bottom: 120px;
+        }
+
+        .prediction-container {
+            margin-top: 10px;
+            gap: 3px;
+        }
+
+        .prediction-input {
+            padding: 8px;
+        }
+
+        .prediction-label {
+            margin-bottom: 3px;
+        }
+
+        .submit-button {
+            margin-top: 10px;
+            padding: 10px;
+        }
+
+        .popup {
+            padding: 15px;
+        }
+
+        .popup-content {
+            padding-right: 15px;
+        }
+
+        .popup-message {
+            margin-top: 8px;
         }
 
         .game-header {
@@ -668,7 +747,7 @@
                 const q = query(thirdLevelCategoriesRef,
                     where('subcategoriapai', '==', parentSubcategoryId), // **SUBCATEGORIA é agora 'subcategoriapai'**
                     where('categoriapai', '==', parentCategoryId),     // **CATEGORIA é agora 'categoriapai'**
-                    where('categoria_subcategoria_3cat', '==', 'terceiracategoria'),
+                    where('categoria_subcategoria_3cat', '==', '3cat'),
                     orderBy('ordem')
                 );
                 const querySnapshot = await getDocs(q);
@@ -694,6 +773,35 @@
                 console.error('Error fetching third-level categories:', error);
                 showErrorPopup('Erro ao carregar opções de palpites de terceiro nível.');
                 return [];
+            }
+        }
+
+
+        async function loadGameData(gameId) {
+            try {
+                const gameDoc = await getDoc(doc(db, 'jogos', gameId));
+                if (!gameDoc.exists()) {
+                    throw new Error('Jogo não encontrado');
+                }
+            
+                const game = gameDoc.data();
+                
+                // Fetch team names
+                const [equipaCasaDoc, equipaForaDoc] = await Promise.all([
+                    getDoc(doc(db, 'clubes', game.equipaCasaId)),
+                    getDoc(doc(db, 'clubes', game.equipaForaId))
+                ]);
+            
+                // Add team names to game object
+                game.equipaCasa = equipaCasaDoc.exists() ? equipaCasaDoc.data().nome : 'Equipa Desconhecida';
+                game.equipaFora = equipaForaDoc.exists() ? equipaForaDoc.data().nome : 'Equipa Desconhecida';
+            
+                currentGame = game;
+                return game;
+            } catch (error) {
+                console.error('Error loading game data:', error);
+                showErrorPopup('Erro ao carregar dados do jogo.');
+                return null;
             }
         }
 
@@ -985,20 +1093,29 @@
                                                 const thirdLevelItem = document.createElement('li');
                                                 thirdLevelItem.dataset.thirdLevelCategoryName = thirdLevelCategory.nome3categoria; // Use nome3categoria
                                                 thirdLevelItem.textContent = thirdLevelCategory.nome3categoria; // Display nome3categoria
-                                                thirdLevelItem.addEventListener('click', () => {
+                                                thirdLevelItem.addEventListener('click', async () => {
                                                     const selectedThirdLevelCategoryName = thirdLevelItem.dataset.thirdLevelCategoryName;
 
-                                                    // **NOVO: Lógica para "Voltar Atrás" na 3ª Categoria**
-                                                    if (thirdLevelItem.dataset.thirdLevelCategoryName === '<--Voltar Atrás') { // **ATENÇÃO: Comparar com o NOME, não ID aqui, pois o ID não foi definido para "Voltar Atrás" no 3º nível**
+                                                    if (thirdLevelItem.dataset.thirdLevelCategoryName === '<--Voltar Atrás') {
                                                         console.log("Clicked 'Voltar Atrás' na 3ª Categoria");
-                                                        thirdLevelDropdown.style.display = 'none'; // Esconder dropdown de 3ª categorias
-                                                        subcategoryDropdown.style.display = 'block'; // Mostrar dropdown de subcategorias novamente
-                                                        return; // Sair da função para não continuar a processar como uma 3ª categoria normal
+                                                        thirdLevelDropdown.style.display = 'none';
+                                                        subcategoryDropdown.style.display = 'block';
+                                                        return;
                                                     }
 
+                                                    // Replace team placeholders with actual team names
+                                                    let displayName = selectedThirdLevelCategoryName;
+                                                    if (displayName.includes('Equipa A')) {
+                                                        displayName = displayName.replace('Equipa A', currentGame.equipaCasa);
+                                                    }
+                                                    if (displayName.includes('Equipa B')) {
+                                                        displayName = displayName.replace('Equipa B', currentGame.equipaFora);
+                                                    }
 
-                                                    currentPredictionInput.value = selectedThirdLevelCategoryName; // Set input value to third-level category name
-                                                    thirdLevelDropdown.style.display = 'none'; // Hide third-level dropdown
+                                                    // Set input value to show full category hierarchy with team names
+                                                    const fullCategoryPath = `${selectedCategoryName}: ${selectedSubcategoryName} - ${displayName}`;
+                                                    currentPredictionInput.value = fullCategoryPath;
+                                                    thirdLevelDropdown.style.display = 'none';
                                                     currentPredictionInput = null;
                                                     categoryDropdown = null;
                                                 });
