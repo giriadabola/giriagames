@@ -295,302 +295,343 @@
     </nav>
 
     <script type="module">
-      import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, doc, getDoc, collection, query, where, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-
-        const firebaseConfig = {
-            apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0",
-            authDomain: "g-games-8a8fc.firebaseapp.com",
-            projectId: "g-games-8a8fc",
-            storageBucket: "g-games-8a8fc.firebasestorage.app",
-            messagingSenderId: "689897349449",
-            appId: "1:689897349449:web:536599794579901beb7a98",
-            measurementId: "G-GTTPJ6G5MD"
-        };
-
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-        const auth = getAuth(app);
-
-        const loadingScreen = document.getElementById('loading-screen');
-        const content = document.querySelector('.content');
-        const transactionsList = document.getElementById('transactions-list');
-
-        let currentUserStatus = null;
-        let userCache = {}; // Cache for user data
-        let playerCache = {}; // Cache for player data
-        let empireItemCache = {}; // Cache for empire items
-
-        async function getUserStatus(userId) {
-            const userDoc = doc(db, 'users', userId);
-            const docSnap = await getDoc(userDoc);
-            if (docSnap.exists()) {
-                return docSnap.data().estatuto;
-            } else {
-                return null;
-            }
-        }
-
-        // Function to get user data (with caching)
-        async function getUserData(userId) {
-            if (userCache[userId]) {
-                return userCache[userId];
-            }
-
-            try {
-                const userDoc = await getDoc(doc(db, 'users', userId));
-                if (userDoc.exists()) {
-                    const userData = userDoc.data();
-                    userCache[userId] = userData;
-                    return userData;
-                }
-            } catch (error) {
-                console.error("Error fetching user data:", error);
-            }
-
-            return null;
-        }
-
-        // Function to get player data (with caching)
-        async function getPlayerData(playerId) {
-            if (playerCache[playerId]) {
-                return playerCache[playerId];
-            }
-
-            try {
-                const playerDoc = await getDoc(doc(db, 'jogadores', playerId));
-                if (playerDoc.exists()) {
-                    const playerData = playerDoc.data();
-                    playerCache[playerId] = playerData;
-                    return playerData;
-                }
-            } catch (error) {
-                console.error("Error fetching player data:", error);
-            }
-
-            return null;
-        }
-
-        // Function to get empire item data (with caching)
-        async function getEmpireItemData(itemId) {
-            if (empireItemCache[itemId]) {
-                return empireItemCache[itemId];
-            }
-
-            try {
-                const itemDoc = await getDoc(doc(db, 'empireitems', itemId));
-                if (itemDoc.exists()) {
-                    const itemData = itemDoc.data();
-                    empireItemCache[itemId] = itemData;
-                    return itemData;
-                }
-            } catch (error) {
-                console.error("Error fetching empire item data:", error);
-                return null; // Ensure there's a return in catch block as well
-            }
-            return null; // Add a return null here if no data is found or error in try block
-        }
-
-        // Function to find the most recent season from 'palpites' collection
-        async function fetchLatestSeason() {
-            try {
-                const palpitesRef = collection(db, 'palpites');
-                const querySnapshot = await getDocs(palpitesRef);
-
-                let seasons = new Set();
-                querySnapshot.forEach(doc => {
-                    const data = doc.data();
-                    if (data.temporada) {
-                        seasons.add(data.temporada);
-                    }
-                });
-
-                if (seasons.size > 0) {
-                    return Array.from(seasons).sort().reverse()[0]; // Return the latest season
-                } else {
-                    return null; // No seasons found
-                }
-            } catch (error) {
-                console.error("Error finding latest season:", error);
-                return null;
-            }
-        }
-
-
-        // Function to format date
-        function formatDate(timestamp) {
-            if (!timestamp) return 'Data desconhecida';
-
-            const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-            return date.toLocaleDateString('pt-BR', {
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
-            });
-        }
-
-        // Function to normalize season format (add slash if missing and in YYYYYYYY format for display)
-        function normalizeSeason(season) {
-            console.log("normalizeSeason input:", season);
-            const seasonExists = !!season;
-            const isLength8 = season && season.length === 8;
-            const hasSlash = season && season.includes('/'); // Check for slash presence
-
-            console.log("season exists:", seasonExists);
-            console.log("is length 8:", isLength8);
-            console.log("has slash:", hasSlash); // Log slash presence
-
-
-            if (season && season.length === 8 && !season.includes('/')) { // Condition: 8 digits AND no slash - ADD SLASH
-                const normalized = season.substring(0, 4) + '/' + season.substring(4, 8);
-                console.log("normalized season (added slash):", normalized); // Log when slash is added
-                return normalized;
-            } else if (season && season.includes('/')) { // Condition: Season exists AND HAS a slash - RETURN AS IS
-                console.log("returning season (already has slash):", season); // Log when returning season with slash
-                return season; // Return original season if already has slash
-            }
-
-
-            console.log("returning original season (no normalization):", season); // Log for other cases
-            return season; // Return original season in all other cases (e.g., not 8 digits, null, etc.)
-        }
-
-        // Function to load transactions for the latest season
-        async function loadTransactions() {
-            transactionsList.innerHTML = '<div class="no-transactions">Carregando transações...</div>';
-
-            let latestSeason = await fetchLatestSeason();
-            console.log("Temporada mais recente detetada (original):", latestSeason);
-
-            if (!latestSeason) {
-                transactionsList.innerHTML = '<div class="no-transactions">Nenhuma temporada encontrada.</div>';
-                return;
-            }
-
-            // No need to normalize latestSeason for query anymore - keep it as is for query
-
-            try {
-                const movimentosRef = collection(db, 'movimentos');
-                const q = query(
-                    movimentosRef,
-                    where('temporada', '==', latestSeason), // Use original latestSeason in query
-                    where('tipo', 'in', ['Mercado', 'Empire']),
-                    orderBy('movimentoData', 'desc')
-                );
-                const querySnapshot = await getDocs(q);
-
-                if (querySnapshot.empty) {
-                    transactionsList.innerHTML = '<div class="no-transactions">Nenhuma transação encontrada</div>';
-                    return;
-                }
-
-                let transactionsHTML = '';
-
-                for (const doc of querySnapshot.docs) {
-                    console.log("--- A PROCESSAR DOCUMENTO ---");
-                    console.log("ID do Documento:", doc.id);
-                    console.log("Dados Brutos do Documento:", JSON.stringify(doc.data()));
-
-                    // Normalize document season for DISPLAY in table
-                    const normalizedDocSeason = normalizeSeason(doc.data().temporada);
-                    console.log("  Temporada do Documento (original):", doc.data().temporada);
-                    console.log("  Temporada do Documento (normalizada para display):", normalizedDocSeason);
-                    console.log("  Tipo do Documento:", doc.data().tipo);
-
-
-                    if (doc.id === '5xthzUP0RDtIQSyYr4eH') {
-                        console.log("  *** DOCUMENTO 'COMPRADO' ENCONTRADO! ***");
-                        console.log("  Dados do Documento 'Comprado':", doc.data());
-                    }
-
-
-                    const data = doc.data();
-                    const userData = await getUserData(data.userId);
-                    let itemData = null;
-
-                    let userName = 'Usuário Desconhecido';
-                    let itemName = 'Item Desconhecido';
-
-
-                    if (data.tipo === 'Mercado' && data.jogadorId) {
-                        itemData = await getPlayerData(data.jogadorId);
-                    } else if (data.tipo === 'Empire' && data.empireitem) {
-                        itemData = await getEmpireItemData(data.empireitem);
-                    }
-
-                    userName = userData ? userData.nomeDeUsuario : userName;
-                    itemName = itemData ? (data.tipo === 'Mercado' ? itemData.nome : itemData.name) : itemName;
-                    const itemImage = itemData ? (data.tipo === 'Mercado' ? itemData.imagem : '') : ''; // Assuming empire items don't have images
-
-
-                    transactionsHTML += `
-                        <div class="transaction-item">
-                            <div class="transaction-col transaction-tipo-col">
-                                <div class="transaction-tipo">
-                                    <span class="transaction-type ${data.tipo.toLowerCase()}">${data.tipo}</span>
-                                </div>
-                            </div>
-                            <div class="transaction-col transaction-user-col">
-                                <div class="transaction-user">${userName}</div>
-                            </div>
-                            <div class="transaction-col transaction-item-name-col">
-                                ${itemImage ? `<img src="${itemImage}" alt="${itemName}" class="transaction-item-image">` : ''}
-                                <div class="transaction-item-name">${itemName}</div>
-                            </div>
-                            <div class="transaction-col transaction-estado-col">
-                                <div class="transaction-estado">${data.estado || 'N/A'}</div>
-                            </div>
-                             <div class="transaction-col transaction-price-col">
-                                <div class="transaction-price">${data.preco.toLocaleString('pt-BR') + ' ₲₵'}</div>
-                            </div>
-                            <div class="transaction-col transaction-date-col">
-                                <div class="transaction-date">${formatDate(data.movimentoData)}</div>
-                            </div>
-                        </div>
-                    `;
-
-                }
-
-                transactionsList.innerHTML = transactionsHTML;
-            } catch (error) {
-                console.error('Error loading transactions:', error);
-
-                // Verificar se o erro é relacionado a índice ausente
-                if (error.code === 'failed-precondition' && error.message.includes('index')) {
-                    // Extrair o link para criar o índice, se disponível
-                    const indexLinkMatch = error.message.match(/https:\/\/console\.firebase\.google\.com[^\s]+/);
-                    const indexLink = indexLinkMatch ? indexLinkMatch[0] : null;
-
-                    console.log('É necessário criar um índice para esta consulta. Link:', indexLink);
-
-                    // Mensagem para o usuário com instruções
-                    transactionsList.innerHTML = `
-                        <div class="no-transactions">
-                            <p>É necessário criar um índice no Firebase para visualizar as transações.</p>
-                            <p>Por favor, contate o administrador do sistema.</p>
-                        </div>
-                    `;
-                } else {
-                    transactionsList.innerHTML = '<div class="no-transactions">Erro ao carregar transações. Tente novamente mais tarde.</div>';
-                }
-            }
-        }
-
-
-        // Initialize the page
-        onAuthStateChanged(auth, async (user) => {
-            if (user) {
-                currentUserStatus = await getUserStatus(user.uid);
-                content.style.display = 'block';
-                loadingScreen.style.display = 'none';
-                await loadTransactions(); // Load transactions for the latest season on page load
-            } else {
-                window.location.href = 'index.html';
-            }
-        });
-    </script>
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+          import { getFirestore, doc, getDoc, collection, query, where, getDocs, orderBy, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+          import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+  
+          const firebaseConfig = {
+              apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0",
+              authDomain: "g-games-8a8fc.firebaseapp.com",
+              projectId: "g-games-8a8fc",
+              storageBucket: "g-games-8a8fc.firebasestorage.app",
+              messagingSenderId: "689897349449",
+              appId: "1:689897349449:web:536599794579901beb7a98",
+              measurementId: "G-GTTPJ6G5MD"
+          };
+  
+          const app = initializeApp(firebaseConfig);
+          const db = getFirestore(app);
+          const auth = getAuth(app);
+  
+          const loadingScreen = document.getElementById('loading-screen');
+          const content = document.querySelector('.content');
+          const transactionsList = document.getElementById('transactions-list');
+  
+          let currentUserStatus = null;
+          let userCache = {}; // Cache for user data
+          let playerCache = {}; // Cache for player data
+          let empireItemCache = {}; // Cache for empire items
+  
+          async function getUserStatus(userId) {
+              const userDoc = doc(db, 'users', userId);
+              const docSnap = await getDoc(userDoc);
+              if (docSnap.exists()) {
+                  return docSnap.data().estatuto;
+              } else {
+                  return null;
+              }
+          }
+  
+          // Function to get user data (with caching)
+          async function getUserData(userId) {
+              if (userCache[userId]) {
+                  return userCache[userId];
+              }
+  
+              try {
+                  const userDoc = await getDoc(doc(db, 'users', userId));
+                  if (userDoc.exists()) {
+                      const userData = userDoc.data();
+                      userCache[userId] = userData;
+                      return userData;
+                  }
+              } catch (error) {
+                  console.error("Error fetching user data:", error);
+              }
+  
+              return null;
+          }
+  
+          // Function to get player data (with caching)
+          async function getPlayerData(playerId) {
+              if (playerCache[playerId]) {
+                  return playerCache[playerId];
+              }
+  
+              try {
+                  const playerDoc = await getDoc(doc(db, 'jogadores', playerId));
+                  if (playerDoc.exists()) {
+                      const playerData = playerDoc.data();
+                      playerCache[playerId] = playerData;
+                      return playerData;
+                  }
+              } catch (error) {
+                  console.error("Error fetching player data:", error);
+              }
+  
+              return null;
+          }
+  
+          // Function to get empire item data (with caching)
+          async function getEmpireItemData(itemId) {
+              if (empireItemCache[itemId]) {
+                  return empireItemCache[itemId];
+              }
+  
+              try {
+                  const itemDoc = await getDoc(doc(db, 'empireitems', itemId));
+                  if (itemDoc.exists()) {
+                      const itemData = itemDoc.data();
+                      empireItemCache[itemId] = itemData;
+                      return itemData;
+                  }
+              } catch (error) {
+                  console.error("Error fetching empire item data:", error);
+                  return null; // Ensure there's a return in catch block as well
+              }
+              return null; // Add a return null here if no data is found or error in try block
+          }
+  
+          // Function to find the most recent season from 'palpites' collection - returns YYYYYYYY format
+          async function fetchLatestSeason() {
+              try {
+                  const palpitesRef = collection(db, 'palpites');
+                  const querySnapshot = await getDocs(palpitesRef);
+  
+                  let seasons = new Set();
+                  querySnapshot.forEach(doc => {
+                      const data = doc.data();
+                      if (data.temporada) {
+                          seasons.add(data.temporada);
+                      }
+                  });
+  
+                  if (seasons.size > 0) {
+                      let latestSeasonWithSlash = Array.from(seasons).sort().reverse()[0]; // Get latest season WITH slash
+                      console.log("Temporada mais recente (com barra):", latestSeasonWithSlash); // Log temporada com barra
+  
+                      // Remover a barra "/" para formatar como YYYYYYYY
+                      let latestSeasonNoSlash = latestSeasonWithSlash.replace('/', '');
+                      console.log("Temporada mais recente (sem barra - para query):", latestSeasonNoSlash); // Log temporada sem barra
+  
+                      return latestSeasonNoSlash; // Return the latest season in YYYYYYYY format
+                  } else {
+                      return null; // No seasons found
+                  }
+              } catch (error) {
+                  console.error("Error finding latest season:", error);
+                  return null;
+              }
+          }
+  
+  
+          // Function to format date
+          function formatDate(timestamp) {
+              if (!timestamp) return 'Data desconhecida';
+  
+              const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+              return date.toLocaleDateString('pt-BR', {
+                  day: '2-digit',
+                  month: '2-digit',
+                  year: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit'
+              });
+          }
+  
+          // Função normalizeSeason MODIFICADA para retornar YYYYYYYY
+          function normalizeSeason(season) {
+              if (!season) {
+                  return season; // Retorna null ou undefined como está
+              }
+  
+              // Remove qualquer caractere que não seja dígito
+              const digitsOnly = season.replace(/[^0-9]/g, '');
+  
+              // Se após remover caracteres não numéricos, tivermos 8 dígitos, retornamos esse formato
+              if (digitsOnly.length === 8) {
+                  return digitsOnly; // Retorna no formato YYYYYYYY
+              } else if (digitsOnly.length === 4) {
+                  return digitsOnly + digitsOnly; // Assumindo que YYYY significa YYYY + YYYY (e.g., 2023 vira 20232023)
+              } else {
+                  return digitsOnly.substring(0, 8); // Se não tiver 8 dígitos após limpeza, trunca para no máximo 8 dígitos ou retorna o que sobrou
+              }
+          }
+  
+          // Function to populate the transaction table
+          async function populateTransactionTable(latestSeason) {
+              console.log("populateTransactionTable() iniciada para temporada:", latestSeason);
+              transactionsList.innerHTML = '<div class="no-transactions">Carregando transações...</div>';
+              try {
+                  const movimentosRef = collection(db, 'movimentos');
+                  const q = query(
+                      movimentosRef,
+                      where('temporada', '==', latestSeason),
+                      where('tipo', 'in', ['Mercado', 'Empire']),
+                      orderBy('movimentoData', 'desc')
+                  );
+                  const querySnapshot = await getDocs(q);
+  
+                  if (querySnapshot.empty) {
+                      console.log("Nenhuma transação encontrada para a temporada:", latestSeason);
+                      transactionsList.innerHTML = '<div class="no-transactions">Nenhuma transação encontrada</div>';
+                      return;
+                  }
+  
+                  let transactionsHTML = '';
+  
+                  for (const doc of querySnapshot.docs) {
+                      const data = doc.data();
+                      const normalizedDocSeason = normalizeSeason(data.temporada);
+                      const userData = await getUserData(data.userId);
+                      let itemData = null;
+                      let userName = 'Usuário Desconhecido';
+                      let itemName = 'Item Desconhecido';
+  
+                      if (data.tipo === 'Mercado' && data.jogadorId) {
+                          itemData = await getPlayerData(data.jogadorId);
+                      } else if (data.tipo === 'Empire' && data.empireitem) {
+                          itemData = await getEmpireItemData(data.empireitem);
+                      }
+  
+                      userName = userData ? userData.nomeDeUsuario : userName;
+                      itemName = itemData ? (data.tipo === 'Mercado' ? itemData.nome : itemData.name) : itemName;
+                      const itemImage = itemData ? (data.tipo === 'Mercado' ? itemData.imagem : '') : '';
+  
+                      transactionsHTML += `
+                          <div class="transaction-item">
+                              <div class="transaction-col transaction-tipo-col">
+                                  <div class="transaction-tipo">
+                                      <span class="transaction-type ${data.tipo.toLowerCase()}">${data.tipo}</span>
+                                  </div>
+                              </div>
+                              <div class="transaction-col transaction-user-col">
+                                  <div class="transaction-user">${userName}</div>
+                              </div>
+                              <div class="transaction-col transaction-item-name-col">
+                                  ${itemImage ? `<img src="${itemImage}" alt="${itemName}" class="transaction-item-image">` : ''}
+                                  <div class="transaction-item-name">${itemName}</div>
+                              </div>
+                              <div class="transaction-col transaction-estado-col">
+                                  <div class="transaction-estado">${data.estado || 'N/A'}</div>
+                              </div>
+                               <div class="transaction-col transaction-price-col">
+                                  <div class="transaction-price">${data.preco.toLocaleString('pt-BR') + ' ₲₵'}</div>
+                              </div>
+                              <div class="transaction-col transaction-date-col">
+                                  <div class="transaction-date">${formatDate(data.movimentoData)}</div>
+                              </div>
+                          </div>
+                      `;
+                  }
+  
+                  transactionsList.innerHTML = transactionsHTML;
+                  console.log("Tabela de transações populada.");
+  
+              } catch (error) {
+                  console.error('Erro ao popular tabela de transações:', error);
+                  transactionsList.innerHTML = '<div class="no-transactions">Erro ao carregar transações. Tente novamente mais tarde.</div>';
+              } finally {
+                  console.log("populateTransactionTable() finalizada.");
+              }
+          }
+  
+  
+          // Function to load transactions for the latest season with real-time updates and forced page refresh
+          async function loadTransactions() {
+              console.log("loadTransactions() iniciada");
+  
+              transactionsList.innerHTML = '<div class="no-transactions">Carregando transações...</div>';
+  
+              let latestSeason = await fetchLatestSeason();
+              console.log("Temporada mais recente obtida:", latestSeason);
+  
+              if (!latestSeason) {
+                  console.log("Nenhuma temporada encontrada.");
+                  transactionsList.innerHTML = '<div class="no-transactions">Nenhuma temporada encontrada.</div>';
+                  return;
+              }
+  
+              // First, populate the table with initial data
+              await populateTransactionTable(latestSeason);
+  
+              let initialLoadComplete = false; // Flag to track initial load
+  
+              try {
+                  console.log("Iniciando listener onSnapshot para detetar ALTERAÇÕES (após carregamento inicial) na temporada:", latestSeason);
+                  const movimentosRef = collection(db, 'movimentos');
+                  const q = query(
+                      movimentosRef,
+                      where('temporada', '==', latestSeason),
+                      where('tipo', 'in', ['Mercado', 'Empire']),
+                      orderBy('movimentoData', 'desc')
+                  );
+  
+                  // Usar onSnapshot para detetar alterações e forçar refresh da página - ONLY FOR SUBSEQUENT CHANGES
+                  const unsubscribe = onSnapshot(q, (snapshot) => { // Callback simplificado - não precisa ser async
+                      console.log("Snapshot de ALTERAÇÕES recebido (após carregamento inicial):", snapshot); // Log do snapshot
+  
+                      if (!initialLoadComplete) {
+                          console.log("Primeiro snapshot recebido após carregamento inicial - IGNORANDO para evitar refresh imediato.");
+                          initialLoadComplete = true; // Set flag to true after first snapshot
+                          return; // Ignore this first snapshot and do not refresh
+                      }
+  
+  
+                      if (snapshot.empty) {
+                          console.log("Nenhuma transação encontrada no snapshot.");
+                          return; // No need to refresh if no transactions in snapshot (though unlikely in a change event)
+                      }
+  
+                      let hasChanges = false; // Flag para verificar se houve alterações
+  
+                      for (const docChange of snapshot.docChanges()) { // Iterar sobre as mudanças nos documentos
+                          if (docChange.type === "added" || docChange.type === "modified" || docChange.type === "removed") { // Detetar qualquer tipo de alteração
+                              console.log(`Alteração detetada (${docChange.type}): Documento ID:`, docChange.doc.id);
+                              hasChanges = true; // Sinalizar que houve alteração
+                              break; // No need to check further, refresh is needed
+                          }
+                      }
+  
+                      if (hasChanges) {
+                          console.log("Alterações detetadas. Forçando refresh da página.");
+                          window.location.reload(); // Forçar o refresh da página
+                      } else {
+                          console.log("Snapshot recebido, mas SEM alterações relevantes para refresh da página.");
+                      }
+  
+  
+                  }, (error) => { // Segundo argumento para lidar com erros no listener
+                      console.error("Erro no listener onSnapshot:", error);
+                      transactionsList.innerHTML = '<div class="no-transactions">Erro ao carregar transações em tempo real.</div>';
+                  });
+  
+                  // **Importante:** Manter o 'unsubscribe' para poder cancelar o listener quando não for mais necessário.
+  
+  
+              } catch (error) {
+                  console.error('Erro ao iniciar o listener de transações:', error);
+                  transactionsList.innerHTML = '<div class="no-transactions">Erro ao carregar transações. Tente novamente mais tarde.</div>';
+              } finally {
+                  console.log("loadTransactions() finalizada (listener onSnapshot ativo - com refresh da página para alterações REAIS).");
+              }
+          }
+  
+  
+          // Initialize the page
+          onAuthStateChanged(auth, async (user) => {
+              console.log("onAuthStateChanged chamado:", user);
+              if (user) {
+                  console.log("Usuário autenticado:", user.uid);
+                  currentUserStatus = await getUserStatus(user.uid);
+                  content.style.display = 'block';
+                  loadingScreen.style.display = 'none';
+                  await loadTransactions(); // Load transactions for the latest season on page load and set up real-time updates with forced page refresh
+              } else {
+                  console.log("Usuário não autenticado. Redirecionando para index.html");
+                  window.location.href = 'index.html';
+              }
+          });
+      </script>
 </body>
 </html>
