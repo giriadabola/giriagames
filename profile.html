@@ -497,6 +497,7 @@
             top: 10px;        /* Distance from the top */
             right: 10px;       /* Distance from the right */
             transition: color 0.3s; /* Transition for hover effect */
+            z-index: 10;
         }
 
         .popup-btn-icon:hover {
@@ -838,8 +839,10 @@
             <div class="popup-overlay" id="returnPlayersPopup">
                 <div class="popup-content">
                     <h2 style="color: #9c27b0; font-size: 20px;">Jogadores para Devolver</h2>
+                    <button class="popup-btn-icon" id="closeReturnPopupIcon">
+                        <i class="fas fa-times"></i>
+                    </button>
                     <div id="returnPlayersList" class="players-grid"></div>
-                    <button class="popup-btn popup-btn-cancel" id="closeReturnPopup">Fechar</button>
                 </div>
             </div>
 
@@ -876,7 +879,7 @@
     <script type="module">
         import { getAuth, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-        import { getFirestore, doc, getDoc, collection, getDocs, query, orderBy, limit, where } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        import { getFirestore, doc, getDoc, collection, getDocs, query, orderBy, limit, where, updateDoc, addDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
         // Firebase configuration
         const firebaseConfig = {
@@ -898,7 +901,7 @@
         const returnDisplay = document.getElementById('returnDisplay');
         const returnPlayersPopup = document.getElementById('returnPlayersPopup');
         const returnPlayersList = document.getElementById('returnPlayersList');
-        const closeReturnPopup = document.getElementById('closeReturnPopup');
+        const closeReturnPopupIcon = document.getElementById('closeReturnPopupIcon');
         const profileUsernameSpan = document.getElementById('profileUsername');
         const loadingScreen = document.getElementById('loading-screen');
         const content = document.querySelector('.content');
@@ -921,7 +924,8 @@
             returnPlayersPopup.style.display = 'flex';
         });
 
-        closeReturnPopup.addEventListener('click', () => {
+
+        closeReturnPopupIcon.addEventListener('click', () => {
             returnPlayersPopup.style.display = 'none';
         });
 
@@ -972,8 +976,10 @@
                 });
 
                 // Create sections for each position
+                let hasPlayers = false;
                 positionOrder.forEach(position => {
                     if (playersByPosition[position].length > 0) {
+                        hasPlayers = true;
                         // Add position header
                         const header = document.createElement('h3');
                         header.textContent = position;
@@ -1101,6 +1107,16 @@
                         });
                     }
                 });
+
+                if (!hasPlayers) {
+                    const noPlayersMessage = document.createElement('p');
+                    noPlayersMessage.textContent = "Sem jogadores para trocar.";
+                    noPlayersMessage.style.textAlign = 'center';
+                    noPlayersMessage.style.color = '#777';
+                    noPlayersMessage.style.padding = '20px';
+                    returnPlayersList.appendChild(noPlayersMessage);
+                }
+
 
             } catch (error) {
                 console.error('Error loading return players:', error);
