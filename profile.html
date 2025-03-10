@@ -75,6 +75,7 @@
             align-items: center; /* Centralizar horizontalmente */
             position: relative; /* Para posicionar o ícone */
             overflow: hidden; /* Para esconder overflow do ícone */
+            cursor: pointer; /* Add cursor pointer to indicate it's clickable */
         }
 
         .gcoins-display .display-value {
@@ -436,6 +437,7 @@
             max-width: 400px;
             width: 90%;
             text-align: center;
+            position: relative; /* Make popup-content positioned for absolute positioning of close button */
         }
 
         .popup-content h2 {
@@ -473,6 +475,34 @@
         .popup-btn-confirm:hover {
             background-color: #b71c1c;
         }
+
+        .popup-btn-cancel {
+            background-color: #666;
+            color: white;
+        }
+
+        .popup-btn-cancel:hover {
+            background-color: #555;
+        }
+
+        /* Style for icon-based popup buttons (like the close button) */
+        .popup-btn-icon {
+            background: none; /* No background */
+            color: #666;     /* Grey color for the icon */
+            border: none;    /* No border */
+            padding: 5px;     /* Adjust padding as needed */
+            font-size: 20px;   /* Size of the icon */
+            cursor: pointer;
+            position: absolute; /* Position it absolutely within popup-content */
+            top: 10px;        /* Distance from the top */
+            right: 10px;       /* Distance from the right */
+            transition: color 0.3s; /* Transition for hover effect */
+        }
+
+        .popup-btn-icon:hover {
+            color: #333;     /* Darker grey on hover */
+        }
+
 
         .return-button {
             background: linear-gradient(135deg, #9c27b0, #673ab7);
@@ -557,15 +587,6 @@
             display: flex;
             align-items: center;
             gap: 4px;
-        }
-
-        .popup-btn-cancel {
-            background-color: #666;
-            color: white;
-        }
-
-        .popup-btn-cancel:hover {
-            background-color: #555;
         }
 
         .password-input {
@@ -711,6 +732,61 @@
         }
         /* FIM DO MENU INFERIOR SUBSTITUIDO */
 
+        /* New styles for transaction list */
+        #gcoinsTransactions {
+            max-height: 300px; /* Fixed height for scrollable area */
+            overflow-y: auto; /* Enable vertical scrollbar when content overflows */
+            padding-right: 10px; /* Add some padding for scrollbar */
+            font-size: 0.8em; /* Smaller font size */
+        }
+
+        #gcoinsTransactions ul {
+            padding: 0;
+            list-style: none;
+        }
+
+        #gcoinsTransactions li {
+            display: grid; /* Use grid layout for inline fields */
+            grid-template-columns: 1fr 2fr 1fr 1fr; /* Define 4 columns */
+            gap: 10px; /* Spacing between columns */
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+            margin-bottom: 5px;
+            font-size: 0.9em; /* Slightly smaller font size in list items */
+            align-items: center; /* Vertically align items in the grid row */
+        }
+
+        #gcoinsTransactions li:last-child {
+            border-bottom: none; /* Remove border from last item */
+        }
+
+        #gcoinsTransactions li p {
+            margin: 0; /* Remove paragraph margins */
+            white-space: nowrap; /* Prevent text wrapping */
+            overflow: hidden;      /* Hide overflowing text */
+            text-overflow: ellipsis; /* Add ellipsis for overflow */
+        }
+
+        #gcoinsTransactions li p:nth-child(1) { /* Estado */
+            font-weight: bold;
+            white-space: normal; /* Allow Estado text to wrap */
+            overflow: visible; /* Show full Estado text */
+            text-overflow: clip; /* Remove ellipsis for Estado */
+        }
+        #gcoinsTransactions li p:nth-child(2) { /* Item */
+        }
+        #gcoinsTransactions li p:nth-child(3) { /* Valor */
+            text-align: right;
+        }
+        #gcoinsTransactions li p:nth-child(4) { /* Data */
+            text-align: right;
+            font-size: 0.85em;
+            color: #777;
+            white-space: nowrap; /* Keep Data in one line */
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
 
     </style>
 </head>
@@ -728,10 +804,22 @@
             </button>
         </div>
 
-        <div class="gcoins-display">
+        <div class="gcoins-display" id="gcoinsDisplay">
             <div class="display-icon"></div>
             <div class="display-label">GCoins</div>
             <div class="display-value" id="gcoinsValue">0</div>
+        </div>
+
+        <div class="popup-overlay" id="gcoinsPopup">
+            <div class="popup-content">
+                <h2>Transações</h2>
+                <div id="gcoinsTransactions">
+                    <p>A carregar transações...</p>
+                </div>
+                <button class="popup-btn popup-btn-icon" id="closeGcoinsPopupIcon">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
         </div>
 
         <div class="stats-displays-container">
@@ -786,9 +874,9 @@
 
 
     <script type="module">
-        import { getAuth, signOut, deleteUser, EmailAuthProvider, reauthenticateWithCredential, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+        import { getAuth, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-        import { getFirestore, doc, deleteDoc, getDoc, collection, getDocs, query, orderBy, limit, addDoc, serverTimestamp, where, onSnapshot, updateDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        import { getFirestore, doc, getDoc, collection, getDocs, query, orderBy, limit, where } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
         // Firebase configuration
         const firebaseConfig = {
@@ -811,7 +899,21 @@
         const returnPlayersPopup = document.getElementById('returnPlayersPopup');
         const returnPlayersList = document.getElementById('returnPlayersList');
         const closeReturnPopup = document.getElementById('closeReturnPopup');
-        const profileUsernameSpan = document.getElementById('profileUsername'); // Get the span for username
+        const profileUsernameSpan = document.getElementById('profileUsername');
+        const loadingScreen = document.getElementById('loading-screen');
+        const content = document.querySelector('.content');
+        const userListDropdown = document.getElementById('userListDropdown');
+        const chatMessages = document.getElementById('chatMessages');
+        const chatContainer = document.getElementById('chatContainer');
+        const chatBtn = document.getElementById('chatBtn');
+        const closeChatBtn = document.getElementById('closeChat');
+        const sendMessageBtn = document.getElementById('sendMessage');
+        const messageInput = document.getElementById('messageInput');
+        const gcoinsDisplay = document.getElementById('gcoinsDisplay');
+        const gcoinsPopup = document.getElementById('gcoinsPopup');
+        const closeGcoinsPopupButton = document.getElementById('closeGcoinsPopupIcon');
+        const gcoinsTransactionsList = document.getElementById('gcoinsTransactions');
+
 
         // Add click event listeners
         returnDisplay.addEventListener('click', () => {
@@ -822,6 +924,16 @@
         closeReturnPopup.addEventListener('click', () => {
             returnPlayersPopup.style.display = 'none';
         });
+
+        gcoinsDisplay.addEventListener('click', () => {
+            gcoinsPopup.style.display = 'flex';
+            loadTransactions();
+        });
+
+        closeGcoinsPopupButton.addEventListener('click', () => {
+            gcoinsPopup.style.display = 'none';
+        });
+
 
         async function loadReturnPlayers() {
             const user = auth.currentUser;
@@ -995,8 +1107,6 @@
             }
         }
 
-        // Firebase configuration and initialization moved to top of script
-
         // Function to find the latest GCoins field in user data
         function findLatestGcoinsField(userData) {
             let latestSeason = 0;
@@ -1029,22 +1139,91 @@
             }
         }
 
-        // Add event listener for season change
+
+        async function loadTransactions() {
+            gcoinsTransactionsList.innerHTML = '<p>A carregar transações...</p>';
+            const user = auth.currentUser;
+            if (!user) return;
+
+            try {
+                // 1. Get latest season
+                const seasonsQuery = query(collection(db, 'palpites'), orderBy('temporada', 'desc'), limit(1));
+                const seasonsSnapshot = await getDocs(seasonsQuery);
+                let latestSeason = seasonsSnapshot.docs[0]?.data()?.temporada || '';
+                latestSeason = latestSeason.replace('/', ''); // Format season to 'YYYYYYYY'
+
+                // 2. Query movimentos collection with filters
+                const movementsQuery = query(
+                    collection(db, 'movimentos'),
+                    where('userId', '==', user.uid),
+                    where('temporada', '==', latestSeason),
+                    where('estado', '!=', 'Dívida'),
+                    orderBy('movimentoData', 'desc') // Already ordered by date, newest first
+                );
+
+                const movementsSnapshot = await getDocs(movementsQuery);
+                gcoinsTransactionsList.innerHTML = '';
+
+                if (movementsSnapshot.empty) {
+                    gcoinsTransactionsList.innerHTML = '<p>Sem transações registadas.</p>';
+                    return;
+                }
+
+                const transactionsHTML = document.createElement('ul');
+                transactionsHTML.style.listStyleType = 'none';
+                transactionsHTML.style.padding = '0';
+
+                for (const docSnapshot of movementsSnapshot.docs) {
+                    const transaction = docSnapshot.data();
+                    const listItem = document.createElement('li');
 
 
-        const loadingScreen = document.getElementById('loading-screen');
-        const content = document.querySelector('.content');
-        const userListDropdown = document.getElementById('userListDropdown');
-        const chatMessages = document.getElementById('chatMessages');
-        const chatContainer = document.getElementById('chatContainer');
-        const chatBtn = document.getElementById('chatBtn');
-        const closeChatBtn = document.getElementById('closeChat');
-        const sendMessageBtn = document.getElementById('sendMessage');
-        const messageInput = document.getElementById('messageInput');
+                    let itemName = '';
+                    if (transaction.nomeJogo) {
+                        itemName = transaction.nomeJogo;
+                    } else if (transaction.jogadorId) {
+                        try {
+                            const playerDoc = await getDoc(doc(db, 'jogadores', transaction.jogadorId));
+                            if (playerDoc.exists()) {
+                                itemName = playerDoc.data().nome;
+                            } else {
+                                itemName = 'Jogador Indisponível';
+                            }
+                        } catch (playerError) {
+                            console.error('Error fetching player name:', playerError);
+                            itemName = 'Erro ao carregar nome';
+                        }
+                    } else {
+                        itemName = 'N/A';
+                    }
 
-        let currentUserStatus = null;
-        let selectedRecipientId = null;
-        let unsubscribeUsersList = null; // To store the unsubscribe function for user list
+                    // Format date to dd/mm/yy
+                    const date = transaction.movimentoData ? transaction.movimentoData.toDate().toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: '2-digit' }) : 'Data Indisponível';
+                    // Handle undefined valorreal and default to 0
+                    let valorReal = transaction.valorreal !== undefined ? transaction.valorreal : 0;
+                    let valorRealColor = 'black';
+                    if (valorReal > 0) {
+                        valorRealColor = 'green';
+                    } else if (valorReal < 0) {
+                        valorRealColor = 'red';
+                    }
+
+                    listItem.innerHTML = `
+                        <p>${transaction.estado}</p>
+                        <p>${itemName}</p>
+                        <p><span style="color: ${valorRealColor}">${valorReal}</span></p>
+                        <p>${date}</p>
+                    `;
+                    transactionsHTML.appendChild(listItem);
+                }
+                gcoinsTransactionsList.appendChild(transactionsHTML);
+
+
+            } catch (error) {
+                console.error('Error loading transactions:', error);
+                gcoinsTransactionsList.innerHTML = '<p>Erro ao carregar transações.</p>';
+            }
+        }
 
 
         async function getUserStatus(userId) {
@@ -1057,116 +1236,9 @@
             }
         }
 
-        async function updateUserLastSeen() {
-            const user = auth.currentUser;
-            if (user) {
-                const userDocRef = doc(db, 'users', user.uid);
-                try {
-                    await updateDoc(userDocRef, {
-                        lastSeen: serverTimestamp() // Uses serverTimestamp() for server time
-                    });
-                    console.log("Última vez visto atualizada para:", new Date()); // Log to verify
-                } catch (error) {
-                    console.error("Erro ao atualizar lastSeen:", error);
-                }
-            }
-        }
-
-        function setupUsersListListener() {
-            return onSnapshot(collection(db, 'users'), (snapshot) => {
-                userListDropdown.innerHTML = '<option value="">Selecione um utilizador</option>'; // Clear previous options and add default
-                snapshot.docChanges().forEach((change) => {
-                    if (change.type === 'added' || change.type === 'modified' || change.type === 'removed') {
-                        const userData = change.doc.data();
-                        const docId = change.doc.id;
-                        const currentUserId = auth.currentUser ? auth.currentUser.uid : 'NoCurrentUser'; // Get current user ID or 'NoCurrentUser' if not logged in
-
-                        console.log("--- User Doc Change ---");
-                        console.log("Change Type:", change.type);
-                        console.log("Document ID:", docId);
-                        console.log("Current User ID:", currentUserId);
-                        console.log("Condition (docId !== currentUserId):", (docId !== currentUserId));
-
-
-                        if (auth.currentUser && docId !== currentUserId) { // Exclude current user from list
-                            console.log("Adding user to dropdown:", userData.nomeDeUsuario); // Log when user is added
-                            const option = document.createElement('option');
-                            option.value = docId;
-                            option.textContent = userData.nomeDeUsuario;
-
-                            const lastSeen = userData.lastSeen ? userData.lastSeen.toDate() : null; // Convert Firestore Timestamp to JavaScript Date
-                            const isOnline = lastSeen && (Date.now() - lastSeen.getTime()) < 300000; // 5 minutes in milliseconds
-
-                            if (isOnline) {
-                                option.classList.add('user-online');
-                            } else {
-                                option.classList.add('user-offline');
-                            }
-
-                            userListDropdown.appendChild(option);
-                        } else {
-                            console.log("Skipping user (current user or condition not met):", userData.nomeDeUsuario); // Log when user is skipped
-                        }
-                    }
-                });
-            }, (error) => {
-                console.error("Error loading users:", error);
-                alert("Erro ao carregar lista de utilizadores."); // User-friendly error message
-            });
-        }
-
-
-        async function loadMessages(recipientId) {
-            console.log("loadMessages function called - recipientId:", recipientId); // ADD THIS LINE - DEBUGGING
-            if (!recipientId) {
-                chatMessages.innerHTML = '<p>Selecione um utilizador para iniciar o chat.</p>';
-                return;
-            }
-
-            const currentUser = auth.currentUser;
-            if (!currentUser) { // Add check for currentUser being null
-                console.error("currentUser is null in loadMessages!"); // Log if currentUser is unexpectedly null
-                return; // Exit if currentUser is null
-            }
-
-            console.log("Inside loadMessages - currentUser.uid:", currentUser.uid); // ADD THIS LINE - DEBUGGING
-            console.log("Inside loadMessages - recipientId:", recipientId);      // ADD THIS LINE - DEBUGGING
-
-
-            chatMessages.innerHTML = '<p>A carregar mensagens...</p>'; // Loading message
-
-            const messagesQuery = query(collection(db, 'messages'),
-                where('OR', [
-                    where('senderId', '==', currentUser.uid),
-                    where('receiverId', '==', recipientId),
-                    where('senderId', '==', recipientId),
-                    where('receiverId', '==', currentUser.uid)
-                ]),
-                orderBy('timestamp') // Order by timestamp ascending
-            );
-
-            onSnapshot(messagesQuery, (snapshot) => {
-                chatMessages.innerHTML = ''; // Clear existing messages
-                snapshot.docChanges().forEach((change) => {
-                    if (change.type === 'added') {
-                        const message = change.doc.data();
-                        const messageElement = document.createElement('div');
-                        messageElement.classList.add('message');
-                        messageElement.classList.add(message.senderId === currentUser.uid ? 'sent' : 'received');
-                        messageElement.textContent = message.text;
-                        chatMessages.appendChild(messageElement); // Append to bottom to show latest messages at bottom
-                        chatMessages.scrollTop = chatMessages.scrollHeight; // Scroll to bottom on new message
-                    }
-                });
-                if (chatMessages.innerHTML === '') {
-                    chatMessages.innerHTML = '<p>Sem mensagens nesta conversa ainda.</p>'; // No messages yet message
-                }
-            });
-        }
-
 
         document.addEventListener('DOMContentLoaded', async () => {
-            loadingScreen.style.display = 'block'; // Show loading screen initially
+            loadingScreen.style.display = 'block';
 
             chatBtn.addEventListener('click', () => {
                 chatContainer.style.display = 'flex';
@@ -1176,36 +1248,6 @@
                 chatContainer.style.display = 'none';
             });
 
-            userListDropdown.addEventListener('change', function() {
-                selectedRecipientId = this.value;
-                console.log("Dropdown Change Event - selectedRecipientId:", selectedRecipientId); // ADD THIS LINE - DEBUGGING
-                chatMessages.innerHTML = '';
-                loadMessages(selectedRecipientId);
-            });
-
-            sendMessageBtn.addEventListener('click', async () => {
-                const message = messageInput.value.trim();
-                if (!message || !selectedRecipientId) {
-                    alert("Selecione um utilizador e escreva uma mensagem."); // Alert if no recipient or message
-                    return;
-                }
-
-                const user = auth.currentUser;
-                if (!user) return;
-
-                try {
-                    await addDoc(collection(db, 'messages'), {
-                        senderId: user.uid,
-                        receiverId: selectedRecipientId,
-                        text: message,
-                        timestamp: serverTimestamp()
-                    });
-                    messageInput.value = ''; // Clear input after sending
-                } catch (error) {
-                    console.error('Error sending message:', error);
-                    alert("Erro ao enviar mensagem."); // User-friendly error message
-                }
-            });
 
             // Logout button functionality
             const logoutBtn = document.getElementById('logoutBtn');
@@ -1213,7 +1255,7 @@
                 try {
                     await signOut(auth);
                     console.log('User signed out');
-                    window.location.href = 'index.html'; // Redirect to login page after logout
+                    window.location.href = 'index.html';
                 } catch (error) {
                     console.error('Logout error:', error);
                     alert('Erro ao fazer logout.');
@@ -1223,17 +1265,15 @@
 
             onAuthStateChanged(auth, async (user) => {
                 if (user) {
-                    currentUserStatus = await getUserStatus(user.uid);
-                    console.log(`User is logged in on profile.html with status: ${currentUserStatus}`);
                     loadingScreen.style.display = 'none';
                     content.style.display = 'block';
-                    await updateGCoinsDisplay(); // Initial GCoins display update
+                    await updateGCoinsDisplay();
 
                     // Fetch and display username
                     const userDoc = await getDoc(doc(db, 'users', user.uid));
                     if (userDoc.exists()) {
                         const userData = userDoc.data();
-                        profileUsernameSpan.textContent = userData.nomeDeUsuario; // Set username in span
+                        profileUsernameSpan.textContent = userData.nomeDeUsuario;
                     }
                 } else {
                     console.log('No user is logged in on profile.html');
