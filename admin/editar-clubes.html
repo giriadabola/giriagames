@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Editar Clubes - G EMPIRE</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <script type="module">
+        // Import Firebase functions
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, collection, getDocs, query, where, doc, updateDoc, deleteDoc, setDoc, arrayRemove, arrayUnion, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0",
+            authDomain: "g-games-8a8fc.firebaseapp.com",
+            projectId: "g-games-8a8fc",
+            storageBucket: "g-games-8a8fc.firebasestorage.app",
+            messagingSenderId: "689897349449",
+            appId: "1:689897349449:web:536599794579901beb7a98",
+            measurementId: "G-GTTPJ6G5MD"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // Function to search clubs
+        async function searchClubs(searchTerm) {
+            const clubesRef = collection(db, 'clubes');
+            const searchTermLower = searchTerm.toLowerCase();
+            const querySnapshot = await getDocs(collection(db, 'clubes'));
+            const results = querySnapshot.docs
+                .map(doc => ({ id: doc.id, ...doc.data() }))
+                .filter(club => club.nome.toLowerCase().includes(searchTermLower));
+            return results;
+        }
+
+        // Function to search countries
+        async function searchCountries(searchTerm) {
+            const paisesRef = collection(db, 'paises');
+            const searchTermLower = searchTerm.toLowerCase();
+            const querySnapshot = await getDocs(collection(db, 'paises'));
+            const results = querySnapshot.docs
+                .map(doc => ({ id: doc.id, ...doc.data() }))
+                .filter(country => country.nome.toLowerCase().includes(searchTermLower))
+                .sort((a, b) => a.nome.localeCompare(b.nome)); // Sort alphabetically
+            return results;
+        }
+
+        // Function to search competitions
+        async function searchCompetitions(searchTerm) {
+            const competicoesRef = collection(db, 'competicoes');
+            const searchTermLower = searchTerm.toLowerCase();
+            const querySnapshot = await getDocs(collection(db, 'competicoes'));
+            const results = querySnapshot.docs
+                .map(doc => ({ id: doc.id, ...doc.data() }))
+                .filter(competition => competition.nome.toLowerCase().includes(searchTermLower));
+            return results;
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const searchInput = document.getElementById('search-clube');
+            const searchResults = document.getElementById('search-results');
+            const editForm = document.getElementById('edit-clube-form');
+            const nomeInput = document.getElementById('nome-clube');
+            const imagemInput = document.getElementById('imagem-clube');
+            const imagemPreview = document.getElementById('imagem-preview');
+            const paisInput = document.getElementById('pais-clube');
+            const paisList = document.getElementById('pais-list');
+            const competicaoInput = document.getElementById('competicao-clube');
+            const competicaoList = document.getElementById('competicao-list');
+            let selectedClubId = null;
+            let selectedPaisId = null;
+            let selectedCompeticaoId = null;
+            let originalPaisId = null;
+
+            // Handle form submission
+            editForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                if (!selectedClubId) {
+                    alert('Por favor, selecione um clube para editar.');
+                    return;
+                }
+
+                try {
+                    // Get the club document reference
+                    const clubRef = doc(db, 'clubes', selectedClubId);
+                    const clubDoc = await getDoc(clubRef);
+
+                    if (clubDoc.exists()) {
+                        const clubData = clubDoc.data();
+                        // Get the original country and competition IDs
+                        originalPaisId = clubData.paisId;
+                        const originalCompeticaoId = clubData.competicaoId;
+
+                        // If the country has changed
+                        if (originalPaisId !== selectedPaisId) {
+                            // Remove club from old country
+                            if (originalPaisId) {
+                                const oldPaisRef = doc(db, 'paises', originalPaisId);
+                                await updateDoc(oldPaisRef, {
+                                    clubes: arrayRemove(selectedClubId)
+                                });
+                            }
+
+                            // Add club to new country
+                            const newPaisRef = doc(db, 'paises', selectedPaisId);
+                            await updateDoc(newPaisRef, {
+                                clubes: arrayUnion(selectedClubId)
+                            });
+                        }
+
+                        // If the competition has changed
+                        if (originalCompeticaoId !== selectedCompeticaoId) {
+                            // Remove club from old competition
+                            if (originalCompeticaoId) {
+                                const oldCompeticaoRef = doc(db, 'competicoes', originalCompeticaoId);
+                                await updateDoc(oldCompeticaoRef, {
+                                    clubes: arrayRemove(selectedClubId)
+                                });
+                            }
+
+                            // Add club to new competition
+                            const newCompeticaoRef = doc(db, 'competicoes', selectedCompeticaoId);
+                            await updateDoc(newCompeticaoRef, {
+                                clubes: arrayUnion(selectedClubId)
+                            });
+                        }
+
+                        // Update the club document
+                        await updateDoc(clubRef, {
+                            nome: nomeInput.value,
+                            imagem: imagemInput.value,
+                            pais: paisInput.value,
+                            paisId: selectedPaisId,
+                            competicao: competicaoInput.value,
+                            competicaoId: selectedCompeticaoId
+                        });
+
+                        alert('Clube atualizado com sucesso!');
+                        // Refresh the page after successful update
+                        window.location.reload();
+                    }
+                } catch (error) {
+                    console.error('Erro ao atualizar clube:', error);
+                    alert('Erro ao atualizar clube. Por favor, tente novamente.');
+                }
+            });
+
+            // Handle club search
+            searchInput.addEventListener('input', async (e) => {
+                const searchTerm = e.target.value.trim();
+                if (searchTerm.length < 2) {
+                    searchResults.innerHTML = '';
+                    return;
+                }
+
+                try {
+                    const clubs = await searchClubs(searchTerm);
+                    searchResults.innerHTML = '';
+                    clubs.forEach(club => {
+                        const div = document.createElement('div');
+                        div.className = 'club-result';
+                        div.innerHTML = `
+                            <img src="${club.imagem}" alt="${club.nome}" class="club-image">
+                            <div class="club-info">
+                                <span class="club-name">${club.nome}</span>
+                                <span class="club-country">(${club.pais})</span>
+                            </div>
+                        `;
+                        div.addEventListener('click', () => {
+                            selectedClubId = club.id;
+                            nomeInput.value = club.nome;
+                            imagemInput.value = club.imagem;
+                            imagemPreview.src = club.imagem;
+                            paisInput.value = club.pais;
+                            selectedPaisId = club.paisId;
+                            competicaoInput.value = club.competicao;
+                            selectedCompeticaoId = club.competicaoId;
+                        });
+                        searchResults.appendChild(div);
+                    });
+                } catch (error) {
+                    console.error('Erro ao buscar clubes:', error);
+                }
+            });
+
+            // Handle image preview
+            imagemInput.addEventListener('input', (e) => {
+                imagemPreview.src = e.target.value;
+            });
+
+            // Handle country search
+            paisInput.addEventListener('input', async (e) => {
+                const searchTerm = e.target.value.trim();
+                if (searchTerm.length < 2) {
+                    paisList.innerHTML = '';
+                    return;
+                }
+
+                try {
+                    const countries = await searchCountries(searchTerm);
+                    paisList.innerHTML = '';
+                    countries.forEach(country => {
+                        const div = document.createElement('div');
+                        div.className = 'search-option';
+                        div.textContent = country.nome;
+                        div.addEventListener('click', () => {
+                            paisInput.value = country.nome;
+                            selectedPaisId = country.id;
+                            paisList.innerHTML = '';
+                        });
+                        paisList.appendChild(div);
+                    });
+                } catch (error) {
+                    console.error('Erro ao buscar países:', error);
+                }
+            });
+
+            // Handle competition search
+            competicaoInput.addEventListener('input', async (e) => {
+                const searchTerm = e.target.value.trim();
+                if (searchTerm.length < 2) {
+                    competicaoList.innerHTML = '';
+                    return;
+                }
+
+                try {
+                    const competitions = await searchCompetitions(searchTerm);
+                    competicaoList.innerHTML = '';
+                    competitions.forEach(competition => {
+                        const div = document.createElement('div');
+                        div.className = 'search-option';
+                        div.textContent = competition.nome;
+                        div.addEventListener('click', () => {
+                            competicaoInput.value = competition.nome;
+                            selectedCompeticaoId = competition.id;
+                            competicaoList.innerHTML = '';
+                        });
+                        competicaoList.appendChild(div);
+                    });
+                } catch (error) {
+                    console.error('Erro ao buscar competições:', error);
+                }
+            });
+
+        
+        });
+    </script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 100vh;
+            background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
+        }
+
+        .top-menu {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            background-color: #ffffff;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            padding: 12px 0;
+            display: flex;
+            justify-content: center;
+            gap: 24px;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .menu-item {
+            text-decoration: none;
+            color: #666;
+            transition: color 0.3s ease;
+            font-weight: 500;
+            padding: 8px 16px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+
+        .menu-item i {
+            font-size: 16px;
+        }
+
+        .menu-item:hover, .menu-item.active {
+            color: #2176ff;
+            background-color: rgba(33, 118, 255, 0.1);
+        }
+
+        .content {
+            padding: 80px 20px 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        .search-container {
+            max-width: 600px;
+            margin: 0 auto 30px;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+            margin-bottom: 20px;
+        }
+
+        .search-results {
+            background-color: #ffffff;
+            border-radius: 4px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .club-result {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        .club-result:last-child {
+            border-bottom: none;
+        }
+
+        .club-result:hover {
+            background-color: #f5f5f5;
+        }
+
+        .club-image {
+            width: 1px;
+            height: 1px;
+            object-fit: none;
+            margin-right: 12px;
+        }
+
+        .club-info {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .club-name {
+            font-weight: 500;
+            color: #333;
+        }
+
+        .club-country {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .form-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+            position: relative;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 500;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #2176ff;
+        }
+
+        .image-preview {
+            width: 100px;
+            height: 100px;
+            object-fit: contain;
+            margin-top: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        #pais-list,
+        #competicao-list {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background-color: #ffffff;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 1000;
+        }
+
+        .search-option {
+            padding: 10px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        .search-option:hover {
+            background-color: #f5f5f5;
+        }
+
+        .submit-btn {
+            background-color: #4CAF50;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            width: 100%;
+            transition: background-color 0.3s ease;
+        }
+
+        .submit-btn:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <nav class="top-menu">
+        <a href="engrenagem.html" class="menu-item"><i class="fas fa-home"></i></a>
+        <a href="criar-gplayer.html" class="menu-item">
+            <i class="fas fa-user"></i>
+            CRIAR GPLAYER
+        </a>
+        <a href="criar-jogo.html" class="menu-item">
+            <i class="fas fa-gamepad"></i>
+            CRIAR JOGO
+        </a>
+        <a href="criar-jogadores.html" class="menu-item">
+            <i class="fas fa-users"></i>
+            CRIAR JOGADORES
+        </a>
+        <a href="criar-clubes.html" class="menu-item">
+            <i class="fas fa-shield-alt"></i>
+            CRIAR CLUBES
+        </a>
+        <a href="criar-competicoes.html" class="menu-item">
+            <i class="fas fa-trophy"></i>
+            CRIAR COMPETIÇÕES
+        </a>
+        <a href="criar-pais.html" class="menu-item">
+            <i class="fas fa-globe"></i>
+            CRIAR PAÍS
+        </a>
+        <a href="criar-mods.html" class="menu-item">
+            <i class="fas fa-puzzle-piece"></i>
+            CRIAR MODS
+        </a>
+    </nav>
+
+    <div class="content">
+        <h1>Editar Clubes</h1>
+        <div class="search-container">
+            <input type="text" id="search-clube" class="search-input" placeholder="Pesquisar clube...">
+            <div id="search-results" class="search-results"></div>
+        </div>
+        <div class="form-container">
+            <form id="edit-clube-form">
+                <div class="form-group">
+                    <label for="nome-clube">Nome do Clube</label>
+                    <input type="text" id="nome-clube" name="nome-clube" required>
+                </div>
+                <div class="form-group">
+                    <label for="imagem-clube">Imagem do Clube (URL)</label>
+                    <input type="url" id="imagem-clube" name="imagem-clube" required>
+                    <img id="imagem-preview" class="image-preview" src="" alt="Preview">
+                </div>
+                <div class="form-group">
+                    <label for="pais-clube">País do Clube</label>
+                    <input type="text" id="pais-clube" name="pais-clube" placeholder="Digite para pesquisar..." required>
+                    <div id="pais-list"></div>
+                </div>
+                <div class="form-group">
+                    <label for="competicao-clube">Competição do Clube</label>
+                    <input type="text" id="competicao-clube" name="competicao-clube" placeholder="Digite para pesquisar..." required>
+                    <div id="competicao-list"></div>
+                </div>
+                <button type="submit" class="submit-btn">Atualizar Clube</button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>
