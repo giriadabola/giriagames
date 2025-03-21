@@ -528,26 +528,26 @@
         .popup-btn-icon:hover {
             color: #333;     /* Darker grey on hover */
         }
-        
+
         /* GCoins Change Notification Popup Styles */
         #gcoinsChangePopup .popup-content h2 {
             color: #000000; /* Changed to black as requested */
             margin-bottom: 1rem;
             font-size: 1.2rem; /* Reduced font size as requested */
         }
-        
+
         #gcoinsChangePopup .popup-content p {
             font-size: 1.2rem;
             font-weight: bold;
             margin-bottom: 1.5rem;
         }
-        
+
         #closeGcoinsChangePopupBtn {
             background-color: #2ecc71;
             color: white;
             transition: background-color 0.3s;
         }
-        
+
         #closeGcoinsChangePopupBtn:hover {
             background-color: #27ae60;
         }
@@ -930,6 +930,15 @@
         </div>
     </div>
 
+    <button class="chat-btn" id="fusiveisBtn" style="bottom: 150px; display: none;">
+        <i class="fas fa-cogs"></i> Fusiveis
+    </button>
+
+    <button class="chat-btn" id="chatBtn">
+        <i class="fas fa-comments"></i> Chat
+    </button>
+
+
     <div class="chat-container" id="chatContainer">
         <div class="chat-header">
             Chat
@@ -947,16 +956,11 @@
         </div>
     </div>
 
-    <button class="chat-btn" id="chatBtn">
-        <i class="fas fa-comments"></i> Chat
-    </button>
-
-
     <script type="module">
         import { getAuth, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
         import { getFirestore, doc, getDoc, collection, getDocs, query, orderBy, limit, where, updateDoc, addDoc, serverTimestamp, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
-    
+
         // Firebase configuration
         const firebaseConfig = {
             apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0",
@@ -967,12 +971,12 @@
             appId: "1:689897349449:web:536599794579901beb7a98",
             measurementId: "G-GTTPJ6G5MD"
         };
-    
+
         // Initialize Firebase
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
-    
+
         // Get DOM elements
         const returnDisplay = document.getElementById('returnDisplay');
         const returnPlayersPopup = document.getElementById('returnPlayersPopup');
@@ -992,47 +996,49 @@
         const gcoinsPopup = document.getElementById('gcoinsPopup');
         const closeGcoinsPopupButton = document.getElementById('closeGcoinsPopupIcon');
         const gcoinsTransactionsList = document.getElementById('gcoinsTransactions');
-    
-    
+        // Get DOM element for Fusiveis button
+        const fusiveisBtn = document.getElementById('fusiveisBtn');
+
+
         // Add click event listeners
         returnDisplay.addEventListener('click', () => {
             loadReturnPlayers();
             returnPlayersPopup.style.display = 'flex';
         });
-    
-    
+
+
         closeReturnPopupIcon.addEventListener('click', () => {
             returnPlayersPopup.style.display = 'none';
         });
-    
+
         gcoinsDisplay.addEventListener('click', () => {
             gcoinsPopup.style.display = 'flex';
             loadTransactions();
         });
-    
+
         closeGcoinsPopupButton.addEventListener('click', () => {
             gcoinsPopup.style.display = 'none';
         });
-    
-    
+
+
         async function loadReturnPlayers() {
             const user = auth.currentUser;
             if (!user) return;
-    
+
             try {
                 const q = query(collection(db, 'jogadores'), where('compradopor', '==', user.uid));
                 const querySnapshot = await getDocs(q);
                 returnPlayersList.innerHTML = '';
-    
+
                 // Create position groups
                 const positionOrder = ['Guarda-Redes', 'Defesa', 'Médio', 'Avançado'];
                 const playersByPosition = {};
-    
+
                 // Initialize position groups
                 positionOrder.forEach(pos => {
                     playersByPosition[pos] = [];
                 });
-    
+
                 // Group players by position
                 const promises = querySnapshot.docs.map(async playerDoc => {
                     const player = playerDoc.data();
@@ -1041,16 +1047,16 @@
                     const paisData = paisDoc.exists() ? paisDoc.data() : null;
                     return { playerDoc, player, paisData };
                 });
-    
+
                 const players = await Promise.all(promises);
-    
+
                 // Sort players into position groups
                 players.forEach(({ playerDoc, player, paisData }) => {
                     if (positionOrder.includes(player.posicao)) {
                         playersByPosition[player.posicao].push({ playerDoc, player, paisData });
                     }
                 });
-    
+
                 // Create sections for each position
                 let hasPlayers = false;
                 positionOrder.forEach(position => {
@@ -1064,15 +1070,15 @@
                         header.style.marginBottom = '10px';
                         header.style.fontSize = '18px';
                         returnPlayersList.appendChild(header);
-    
+
                         // Add players in this position
                         playersByPosition[position].forEach(({ playerDoc, player, paisData }) => {
                             const playerCard = document.createElement('div');
                             playerCard.className = 'player-card';
-    
+
                             let castaClassName = '';
                             const castaValue = player.casta;
-    
+
                             if (castaValue === "Jogador Ouro") {
                                 castaClassName = 'golden';
                             } else if (castaValue === "Jogador Prata") {
@@ -1082,11 +1088,11 @@
                             } else if (castaValue === "Jogador Platina") {
                                 castaClassName = 'platina';
                             }
-    
+
                             if (castaClassName) {
                                 playerCard.classList.add(castaClassName);
                             }
-    
+
                             playerCard.innerHTML = `
                                 <img src="${player.imagem}" alt="${player.nome}" class="player-image">
                                 ${paisData ? `<img src="${paisData.imagem}" alt="${paisData.nome}" class="country-flag">` : ''}
@@ -1098,7 +1104,7 @@
                                 </div>
                                 <button class="return-button" data-player-id="${playerDoc.id}" data-player-position="${player.posicao}">Devolver</button>
                             `;
-    
+
                             const returnButton = playerCard.querySelector('.return-button');
                             returnButton.addEventListener('click', async () => {
                                 const confirmPopup = document.createElement('div');
@@ -1114,14 +1120,14 @@
                                     </div>
                                 `;
                                 document.body.appendChild(confirmPopup);
-    
+
                                 const confirmButton = confirmPopup.querySelector('.confirm-return');
                                 const cancelButton = confirmPopup.querySelector('.cancel-return');
-    
+
                                 cancelButton.addEventListener('click', () => {
                                     confirmPopup.remove();
                                 });
-    
+
                                 confirmButton.addEventListener('click', async () => {
                                     try {
                                         // Get the most recent season
@@ -1130,12 +1136,12 @@
                                         let latestSeason = seasonsSnapshot.docs[0]?.data()?.temporada || '';
                                         // Convert season format from '2025/2026' to '20252026'
                                         latestSeason = latestSeason.replace('/', '');
-    
+
                                         // Update player's compradopor field
                                         await updateDoc(doc(db, 'jogadores', playerDoc.id), {
                                             compradopor: null
                                         });
-    
+
                                         // Create movement record
                                         await addDoc(collection(db, 'movimentos'), {
                                             de: user.uid,
@@ -1149,7 +1155,7 @@
                                             userId: user.uid,
                                             tipo: 'Mercado'
                                         });
-    
+
                                         // Show success message
                                         const successMessage = document.createElement('div');
                                         successMessage.className = 'success-message';
@@ -1163,14 +1169,14 @@
                                         successMessage.style.color = 'white';
                                         successMessage.style.borderRadius = '5px';
                                         document.body.appendChild(successMessage);
-    
+
                                         // Remove popups and refresh after 1.5 seconds
                                         setTimeout(() => {
                                             confirmPopup.remove();
                                             successMessage.remove();
                                             location.reload();
                                         }, 1500);
-    
+
                                     } catch (error) {
                                         console.error('Error returning player:', error);
                                         alert('Erro ao devolver jogador. Tente novamente.');
@@ -1178,12 +1184,12 @@
                                     }
                                 });
                             });
-    
+
                             returnPlayersList.appendChild(playerCard);
                         });
                     }
                 });
-    
+
                 if (!hasPlayers) {
                     const noPlayersMessage = document.createElement('p');
                     noPlayersMessage.textContent = "Sem jogadores para devolver.";
@@ -1192,13 +1198,13 @@
                     noPlayersMessage.style.padding = '20px';
                     returnPlayersList.appendChild(noPlayersMessage);
                 }
-    
-    
+
+
             } catch (error) {
                 console.error('Error loading return players:', error);
             }
         }
-    
+
         // Function to find the latest GCoins field in user data
         function findLatestGcoinsField(userData) {
             let latestSeason = 0;
@@ -1214,12 +1220,12 @@
             }
             return latestGcoinsField;
         }
-    
+
         // Function to update GCoins display
         async function updateGCoinsDisplay() {
             const user = auth.currentUser;
             const gcoinsValue = document.getElementById('gcoinsValue');
-    
+
             if (user) {
                 const userDoc = await getDoc(doc(db, 'users', user.uid));
                 if (userDoc.exists()) {
@@ -1232,31 +1238,31 @@
             }
             return null;
         }
-    
-    
+
+
         async function loadTransactions() {
             // Show loading spinner and text
             const loadingSpinner = document.getElementById('transactionsLoadingSpinner');
             const loadingText = document.getElementById('transactionsLoadingText');
-    
+
             // Clear previous content and show loading indicators
             gcoinsTransactionsList.innerHTML = '';
             gcoinsTransactionsList.appendChild(loadingSpinner);
             gcoinsTransactionsList.appendChild(loadingText);
-    
+
             loadingSpinner.style.display = 'block';
             loadingText.style.display = 'block';
-    
+
             const user = auth.currentUser;
             if (!user) return;
-    
+
             try {
                 // 1. Get latest season
                 const seasonsQuery = query(collection(db, 'palpites'), orderBy('temporada', 'desc'), limit(1));
                 const seasonsSnapshot = await getDocs(seasonsQuery);
                 let latestSeason = seasonsSnapshot.docs[0]?.data()?.temporada || '';
                 latestSeason = latestSeason.replace('/', ''); // Format season to 'YYYYYYYY'
-    
+
                 // 2. Query movimentos collection with filters
                 const movementsQuery = query(
                     collection(db, 'movimentos'),
@@ -1265,13 +1271,13 @@
                     where('estado', '!=', 'Dívida'),
                     orderBy('movimentoData', 'desc') // Already ordered by date, newest first
                 );
-    
+
                 const movementsSnapshot = await getDocs(movementsQuery);
-    
-    
+
+
                 // Clear the transactions list (Removed redundant clear here)
                 // gcoinsTransactionsList.innerHTML = '';
-    
+
                 if (movementsSnapshot.empty) {
                     gcoinsTransactionsList.innerHTML = '<p>Sem transações registadas.</p>';
                      // Hide loading indicators if no transactions
@@ -1279,16 +1285,16 @@
                     loadingText.style.display = 'none';
                     return;
                 }
-    
+
                 const transactionsHTML = document.createElement('ul');
                 transactionsHTML.style.listStyleType = 'none';
                 transactionsHTML.style.padding = '0';
-    
+
                 for (const docSnapshot of movementsSnapshot.docs) {
                     const transaction = docSnapshot.data();
                     const listItem = document.createElement('li');
-    
-    
+
+
                     let itemName = '';
                     if (transaction.nomeJogo) {
                         itemName = transaction.nomeJogo;
@@ -1307,7 +1313,7 @@
                     } else {
                         itemName = 'N/A';
                     }
-    
+
                     // Format date to dd/mm/yy
                     const date = transaction.movimentoData ? transaction.movimentoData.toDate().toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: '2-digit' }) : 'Data Indisponível';
                     // Handle undefined valorreal and default to 0
@@ -1318,7 +1324,7 @@
                     } else if (valorReal < 0) {
                         valorRealColor = 'red';
                     }
-    
+
                     listItem.innerHTML = `
                         <p>${transaction.estado}</p>
                         <p>${itemName}</p>
@@ -1328,12 +1334,12 @@
                     transactionsHTML.appendChild(listItem);
                 }
                 gcoinsTransactionsList.appendChild(transactionsHTML);
-    
+
                 // Hide loading indicators AFTER populating the list
                 loadingSpinner.style.display = 'none';
                 loadingText.style.display = 'none';
-    
-    
+
+
             } catch (error) {
                 console.error('Error loading transactions:', error);
                 // Hide loading indicators and show error message in case of error
@@ -1342,8 +1348,8 @@
                 gcoinsTransactionsList.innerHTML = '<p>Erro ao carregar transações. Tente novamente.</p>';
             }
         }
-    
-    
+
+
         async function getUserStatus(userId) {
             const userDoc = doc(db, 'users', userId);
             const docSnap = await getDoc(userDoc);
@@ -1353,20 +1359,20 @@
                 return null;
             }
         }
-    
-    
+
+
         document.addEventListener('DOMContentLoaded', async () => {
             loadingScreen.style.display = 'block';
-    
+
             chatBtn.addEventListener('click', () => {
                 chatContainer.style.display = 'flex';
             });
-    
+
             closeChatBtn.addEventListener('click', () => {
                 chatContainer.style.display = 'none';
             });
-    
-    
+
+
             // Logout button functionality
             const logoutBtn = document.getElementById('logoutBtn');
             logoutBtn.addEventListener('click', async () => {
@@ -1379,18 +1385,18 @@
                     alert('Erro ao fazer logout.');
                 }
             });
-    
-    
+
+
             // Get GCoins change notification elements
             const gcoinsChangePopup = document.getElementById('gcoinsChangePopup');
             const gcoinsChangeMessage = document.getElementById('gcoinsChangeMessage');
             const closeGcoinsChangePopupBtn = document.getElementById('closeGcoinsChangePopupBtn');
-    
+
             // Add event listener to close GCoins change notification popup
             closeGcoinsChangePopupBtn.addEventListener('click', () => {
                 gcoinsChangePopup.style.display = 'none';
             });
-    
+
             // Function to setup GCoins change listener
             async function setupGCoinsChangeListener(userId) {
                 try {
@@ -1398,68 +1404,73 @@
                     const palpitesRef = collection(db, 'palpites');
                     const palpitesQuery = query(palpitesRef, orderBy('temporada', 'desc'), limit(1));
                     const palpitesSnapshot = await getDocs(palpitesQuery);
-    
+
                     if (palpitesSnapshot.empty) {
                         console.error('No seasons found in palpites collection');
                         return;
                     }
-    
+
                     const latestSeason = palpitesSnapshot.docs[0].data().temporada;
                     // Convert season format from '2025/2026' to '20252026'
                     const formattedSeason = latestSeason.replace('/', '');
                     const gcoinsField = formattedSeason + 'GCoins';
-    
+
                     // Initial GCoins value
                     let previousGCoins = null;
-    
+
                     // Set up real-time listener for user document
                     const userDocRef = doc(db, 'users', userId);
                     const unsubscribe = onSnapshot(userDocRef, (docSnapshot) => {
                         if (docSnapshot.exists()) {
                             const userData = docSnapshot.data();
                             const currentGCoins = userData[gcoinsField] || 0;
-    
+
                             // If we have a previous value and it's different from the current value
                             if (previousGCoins !== null && previousGCoins !== currentGCoins) {
                                 // Calculate the difference
                                 const difference = currentGCoins - previousGCoins;
                                 const differenceText = difference > 0 ? `(+${difference})` : `(${difference})`;
                                 const differenceColor = difference > 0 ? 'green' : 'red';
-    
+
                                 // Show notification with previous and current values plus the difference
                                 gcoinsChangeMessage.innerHTML = `${previousGCoins} > ${currentGCoins} <span style="color: ${differenceColor}">${differenceText}</span>`;
                                 gcoinsChangePopup.style.display = 'flex';
-    
+
                                 // Update the display
                                 document.getElementById('gcoinsValue').textContent = currentGCoins;
                             }
-    
+
                             // Update previous value for next change
                             previousGCoins = currentGCoins;
                         }
                     });
-    
+
                     // Return unsubscribe function to clean up listener when needed
                     return unsubscribe;
                 } catch (error) {
                     console.error('Error setting up GCoins change listener:', error);
                 }
             }
-    
+
             onAuthStateChanged(auth, async (user) => {
                 if (user) {
                     loadingScreen.style.display = 'none';
                     content.style.display = 'block';
                     await updateGCoinsDisplay();
-    
-                    // Set up GCoins change listener
                     setupGCoinsChangeListener(user.uid);
-    
-                    // Fetch and display username
+
+                    // Fetch and display username AND check user status for "Fusiveis" button
                     const userDoc = await getDoc(doc(db, 'users', user.uid));
                     if (userDoc.exists()) {
                         const userData = userDoc.data();
                         profileUsernameSpan.textContent = userData.nomeDeUsuario;
+
+                        // Check user status and show/hide "Fusiveis" button
+                        if (userData.estatuto === 'ruler') {
+                            fusiveisBtn.style.display = 'flex'; // Show the button
+                        } else {
+                            fusiveisBtn.style.display = 'none'; // Ensure it's hidden
+                        }
                     }
                 } else {
                     console.log('No user is logged in on profile.html');
@@ -1468,8 +1479,8 @@
                 }
             });
         });
-    
-    
+
+
     </script>
 
     <!-- MENU INFERIOR SUBSTITUIDO -->
