@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Criar Jogadores - G EMPIRE</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <script type="module">
+        // Import Firebase functions
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, collection, addDoc, query, where, getDocs, doc, updateDoc, arrayUnion, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0",
+            authDomain: "g-games-8a8fc.firebaseapp.com",
+            projectId: "g-games-8a8fc",
+            storageBucket: "g-games-8a8fc.firebasestorage.app",
+            messagingSenderId: "689897349449",
+            appId: "1:689897349449:web:536599794579901beb7a98",
+            measurementId: "G-GTTPJ6G5MD"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // Function to search countries
+        async function searchCountries(searchTerm) {
+            const paisesRef = collection(db, 'paises');
+            const searchTermLower = searchTerm.toLowerCase();
+            const querySnapshot = await getDocs(collection(db, 'paises'));
+            const results = querySnapshot.docs
+                .map(doc => ({ id: doc.id, ...doc.data() }))
+                .filter(country => country.nome.toLowerCase().includes(searchTermLower));
+            return results;
+        }
+
+        // Function to search clubs
+        async function searchClubs(searchTerm) {
+            const clubesRef = collection(db, 'clubes');
+            const searchTermLower = searchTerm.toLowerCase();
+            const querySnapshot = await getDocs(collection(db, 'clubes'));
+            const results = querySnapshot.docs
+                .map(doc => ({ id: doc.id, ...doc.data() }))
+                .filter(club => club.nome.toLowerCase().includes(searchTermLower));
+            return results;
+        }
+
+        // Function to fetch Users from 'users' collection for the dropdown
+        async function fetchUsers() {
+            const usersRef = collection(db, 'users'); // Assuming your collection is named 'users'
+            const querySnapshot = await getDocs(usersRef);
+            return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        }
+
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            const form = document.getElementById('criar-jogador-form');
+            const nomeInput = document.getElementById('nome-jogador');
+            const paisInput = document.getElementById('pais-jogador');
+            const paisList = document.getElementById('pais-list');
+            const clubeInput = document.getElementById('clube-jogador');
+            const clubeList = document.getElementById('clube-list');
+            const compradorJogadorSelect = document.getElementById('comprador-jogador');
+            let selectedPaisId = null;
+            let selectedClubeId = null;
+
+            // Populate Users dropdown
+            try {
+                const users = await fetchUsers();
+                users.forEach(user => {
+                    const option = document.createElement('option');
+                    option.value = user.id; // Store user ID as value
+                    option.textContent = user.nomeDeUsuario; // Display nomeDeUsuario
+                    compradorJogadorSelect.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Erro ao buscar Users:', error);
+            }
+
+
+            // Create validation message element
+            const validationMessage = document.createElement('div');
+            validationMessage.style.color = '#ff0000';
+            validationMessage.style.marginTop = '5px';
+            validationMessage.style.fontSize = '14px';
+            nomeInput.parentNode.appendChild(validationMessage);
+
+            // Handle player name validation
+            nomeInput.addEventListener('input', async (e) => {
+                const searchTerm = e.target.value.trim();
+                if (searchTerm.length < 2) {
+                    validationMessage.textContent = '';
+                    return;
+                }
+
+                try {
+                    const jogadoresRef = collection(db, 'jogadores');
+                    const querySnapshot = await getDocs(jogadoresRef);
+                    const exists = querySnapshot.docs.some(doc =>
+                        doc.data().nome.toLowerCase() === searchTerm.toLowerCase()
+                    );
+
+                    validationMessage.textContent = exists ? 'Jogador Já Criado!' : '';
+                } catch (error) {
+                    console.error('Erro ao verificar nome do jogador:', error);
+                }
+            });
+
+            // Handle country search
+            paisInput.addEventListener('input', async (e) => {
+                const searchTerm = e.target.value.trim();
+                if (searchTerm.length < 2) {
+                    paisList.innerHTML = '';
+                    return;
+                }
+
+                try {
+                    const countries = await searchCountries(searchTerm);
+                    paisList.innerHTML = '';
+                    countries.forEach(country => {
+                        const div = document.createElement('div');
+                        div.className = 'search-option';
+                        div.textContent = country.nome;
+                        div.addEventListener('click', () => {
+                            paisInput.value = country.nome;
+                            selectedPaisId = country.id;
+                            paisList.innerHTML = '';
+                        });
+                        paisList.appendChild(div);
+                    });
+                } catch (error) {
+                    console.error('Erro ao buscar países:', error);
+                }
+            });
+
+            // Handle club search
+            clubeInput.addEventListener('input', async (e) => {
+                const searchTerm = e.target.value.trim();
+                if (searchTerm.length < 2) {
+                    clubeList.innerHTML = '';
+                    return;
+                }
+
+                try {
+                    const clubs = await searchClubs(searchTerm);
+                    clubeList.innerHTML = '';
+                    clubs.forEach(club => {
+                        const div = document.createElement('div');
+                        div.className = 'search-option';
+                        div.textContent = `${club.nome} (${club.pais})`;
+                        // When selected, only store the club name without the country
+                        clubeInput.value = club.nome;
+                        div.addEventListener('click', () => {
+                            clubeInput.value = club.nome;
+                            selectedClubeId = club.id;
+                            clubeList.innerHTML = '';
+                        });
+                        clubeList.appendChild(div);
+                    });
+                } catch (error) {
+                    console.error('Erro ao buscar clubes:', error);
+                }
+            });
+
+            // Form submission handler
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+
+                const nomeJogador = document.getElementById('nome-jogador').value;
+                const imagemJogador = document.getElementById('imagem-jogador').value;
+                const posicaoJogador = document.getElementById('posicao-jogador').value;
+                const overallJogador = document.getElementById('overall-jogador').value;
+                const castaJogador = document.getElementById('casta-jogador').value;
+                const mercadoJogador = document.getElementById('mercado-jogador').value === 'true';
+                const precoJogador = parseInt(document.getElementById('preco-jogador').value) || null; // Get price value
+                const compradorJogadorId = document.getElementById('comprador-jogador').value || null; // Get selected user id, will be null if "Ninguém" is selected
+
+                if (!selectedPaisId) {
+                    alert('Por favor, selecione um país válido da lista.');
+                    return;
+                }
+
+                if (!selectedClubeId) {
+                    alert('Por favor, selecione um clube válido da lista.');
+                    return;
+                }
+
+                try {
+                    // Add new player to 'jogadores' collection
+                    const jogadorData = {
+                        nome: nomeJogador,
+                        imagem: imagemJogador,
+                        paisId: selectedPaisId,
+                        pais: paisInput.value,
+                        clube: clubeInput.value, // Store just the club name string
+                        posicao: posicaoJogador,
+                        overall: parseInt(overallJogador) || null,
+                        casta: castaJogador || null,
+                        noMercado: mercadoJogador,
+                        preco: precoJogador, // Include price as "preco"
+                        compradopor: compradorJogadorId, // Include userId as "compradopor"
+                        dataCriacao: new Date()
+                    };
+                    const jogadorRef = await addDoc(collection(db, 'jogadores'), jogadorData);
+                    const jogadorId = jogadorRef.id;
+
+
+                    // Add player document to the 'jogadores' subcollection of the club
+                    const clubeJogadoresRef = doc(db, 'clubes', selectedClubeId, 'jogadores', jogadorId);
+                    await setDoc(clubeJogadoresRef, jogadorData); // Alteração aqui: passar jogadorData completo
+
+
+                    alert('Jogador criado com sucesso!');
+                    form.reset();
+                    selectedPaisId = null;
+                    selectedClubeId = null;
+                } catch (error) {
+                    console.error('Erro ao criar jogador:', error);
+                    alert('Erro ao criar jogador. Por favor, tente novamente.');
+                }
+            });
+        });
+    </script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 100vh;
+            background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
+        }
+
+        .top-menu {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            background-color: #ffffff;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            padding: 12px 0;
+            display: flex;
+            justify-content: center;
+            gap: 24px;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .menu-item {
+            text-decoration: none;
+            color: #666;
+            transition: color 0.3s ease;
+            font-weight: 500;
+            padding: 8px 16px;
+            border-radius: 4px;
+            font-size: 14px;
+            line-height: 1.4;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .menu-item:hover, .menu-item.active {
+            color: #2176ff;
+            background-color: rgba(33, 118, 255, 0.1);
+        }
+
+        .content {
+            padding: 80px 20px 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        .form-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+            position: relative;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 500;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #2176ff;
+        }
+
+        #pais-list,
+        #competicao-list {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background-color: #ffffff;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 1000;
+        }
+
+        .search-option {
+            padding: 10px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        .search-option:hover {
+            background-color: #f5f5f5;
+        }
+
+        .submit-btn {
+            background-color: #2176ff;
+            color: #ffffff;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 4px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        .submit-btn:hover {
+            background-color: #1a5cc4;
+        }
+    </style>
+</head>
+<body>
+    <nav class="top-menu">
+        <a href="engrenagem.html" class="menu-item">
+            <i class="fas fa-home"></i>
+        </a>
+        <a href="criar-gplayer.html" class="menu-item">
+            <i class="fas fa-user"></i>
+            CRIAR GPLAYER
+        </a>
+        <a href="criar-jogo.html" class="menu-item">
+            <i class="fas fa-gamepad"></i>
+            CRIAR JOGO
+        </a>
+        <a href="criar-jogadores.html" class="menu-item active">
+            <i class="fas fa-users"></i>
+            CRIAR JOGADORES
+        </a>
+        <a href="criar-clubes.html" class="menu-item">
+            <i class="fas fa-shield-alt"></i>
+            CRIAR CLUBES
+        </a>
+        <a href="criar-competicoes.html" class="menu-item">
+            <i class="fas fa-trophy"></i>
+            CRIAR COMPETIÇÕES
+        </a>
+        <a href="criar-pais.html" class="menu-item">
+            <i class="fas fa-globe"></i>
+            CRIAR PAÍS
+        </a>
+        <a href="criar-mods.html" class="menu-item">
+            <i class="fas fa-puzzle-piece"></i>
+            CRIAR MODS
+        </a>
+        <a href="criar-odds.html" class="menu-item">
+            <i class="fas fa-percentage"></i>
+            CRIAR ODDS
+        </a>
+    </nav>
+
+    <div class="content">
+        <h1>Criar Jogadores</h1>
+        <div class="form-container">
+            <form id="criar-jogador-form">
+                <div class="form-group">
+                    <label for="nome-jogador">Nome do Jogador</label>
+                    <input type="text" id="nome-jogador" name="nome-jogador" required>
+                </div>
+                <div class="form-group">
+                    <label for="imagem-jogador">Imagem do Jogador (URL)</label>
+                    <input type="url" id="imagem-jogador" name="imagem-jogador" required>
+                </div>
+                <div class="form-group">
+                    <label for="pais-jogador">País do Jogador</label>
+                    <input type="text" id="pais-jogador" name="pais-jogador" placeholder="Digite para pesquisar..." required>
+                    <div id="pais-list"></div>
+                </div>
+                <div class="form-group">
+                    <label for="clube-jogador">Clube do Jogador</label>
+                    <input type="text" id="clube-jogador" name="clube-jogador" placeholder="Digite para pesquisar..." required>
+                    <div id="clube-list"></div>
+                </div>
+                <div class="form-group">
+                    <label for="posicao-jogador">Posição do Jogador</label>
+                    <select id="posicao-jogador" name="posicao-jogador" required>
+                        <option value="">Selecione uma posição</option>
+                        <option value="Guarda-Redes">Guarda-Redes</option>
+                        <option value="Defesa">Defesa</option>
+                        <option value="Médio">Médio</option>
+                        <option value="Avançado">Avançado</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="overall-jogador">Overall do Jogador (Opcional)</label>
+                    <input type="number" id="overall-jogador" name="overall-jogador" min="0" max="1000">
+                </div>
+                <div class="form-group">
+                    <label for="casta-jogador">Casta do Jogador (Opcional)</label>
+                    <select id="casta-jogador" name="casta-jogador">
+                        <option value="">Selecione uma casta</option>
+                        <option value="Jogador Ouro">Jogador Ouro</option>
+                        <option value="Jogador Prata">Jogador Prata</option>
+                        <option value="Jogador Bronze">Jogador Bronze</option>
+                        <option value="Jogador Platina">Jogador Platina</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="mercado-jogador">No Mercado?</label>
+                    <select id="mercado-jogador" name="mercado-jogador">
+                        <option value="false" selected>Não</option>
+                        <option value="true">Sim</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="preco-jogador">Preço</label>
+                    <input type="number" id="preco-jogador" name="preco-jogador" min="0" max="1000">
+                </div>
+                <div class="form-group">
+                    <label for="comprador-jogador">Comprado por (Opcional)</label>
+                    <select id="comprador-jogador" name="comprador-jogador">
+                        <option value="">Ninguém</option>
+                    </select>
+                </div>
+                <button type="submit" class="submit-btn">Criar Jogador</button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>
