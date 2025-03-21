@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerenciar Jogadores - G EMPIRE</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 100vh;
+            background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
+        }
+
+        .top-menu {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            background-color: #ffffff;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            padding: 12px 0;
+            display: flex;
+            justify-content: center;
+            gap: 24px;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .menu-item {
+            text-decoration: none;
+            color: #666;
+            transition: color 0.3s ease;
+            font-weight: 500;
+            padding: 8px 16px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .menu-item:hover, .menu-item.active {
+            color: #2176ff;
+            background-color: rgba(33, 118, 255, 0.1);
+        }
+
+        .menu-item i {
+            font-size: 16px;
+        }
+
+        .content {
+            padding: 80px 20px 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 24px;
+            font-size: 28px;
+        }
+
+        .players-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            margin-bottom: 32px;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .player-card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .player-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        .player-image {
+            width: 100px;
+            height: 100px;
+            object-fit: cover;
+            border-radius: 4px;
+            flex-shrink: 0;
+        }
+
+        .player-info-container {
+            flex-grow: 1;
+        }
+
+        .player-name {
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 8px;
+        }
+
+        .player-info {
+            color: #666;
+            font-size: 14px;
+            line-height: 1.4;
+            margin-bottom: 4px;
+        }
+
+        .gold { color: #FFD700; }
+        .silver { color: #C0C0C0; }
+        .bronze { color: #CD7F32; }
+        .platinum { color: #E5E4E2; }
+
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 34px;
+            margin-left: auto;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ff4444;
+            transition: .4s;
+            border-radius: 34px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 26px;
+            width: 26px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: #4CAF50;
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+
+        .save-button {
+            background-color: #2176ff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-bottom: 20px;
+            margin-left: auto;
+            display: block;
+        }
+
+        .save-button:hover {
+            background-color: #1a5cc4;
+        }
+
+        .market-time-button {
+            background-color: #2176ff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-bottom: 20px;
+            margin-right: 10px;
+        }
+
+        .market-time-button:hover {
+            background-color: #1a5cc4;
+        }
+
+        .market-time-menu {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 24px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            z-index: 1001;
+            width: 90%;
+            max-width: 500px;
+        }
+
+        .market-time-menu.active {
+            display: block;
+        }
+
+        .market-time-menu h2 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .market-time-field {
+            margin-bottom: 16px;
+        }
+
+        .market-time-field label {
+            display: block;
+            margin-bottom: 8px;
+            color: #666;
+            font-weight: 500;
+        }
+
+        .market-time-field input[type="datetime-local"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .market-time-field input[type="checkbox"] {
+            margin-right: 8px;
+        }
+
+        .player-search {
+            margin-top: 20px;
+        }
+
+        .player-search input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            margin-bottom: 12px;
+        }
+
+        .selected-players {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .selected-player {
+            background: #e9ecef;
+            padding: 4px 8px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+        }
+
+        .selected-player button {
+            background: none;
+            border: none;
+            color: #666;
+            cursor: pointer;
+            padding: 0;
+            font-size: 14px;
+        }
+
+        .search-results {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-top: 8px;
+        }
+
+        .search-result-item {
+            padding: 8px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .search-result-item:hover {
+            background-color: #f8f9fa;
+        }
+
+        .overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+        }
+
+        .overlay.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <nav class="top-menu">
+        <a href="engrenagem.html" class="menu-item">
+            <i class="fas fa-home"></i>
+            Home
+        </a>
+        <a href="criar-jogadores.html" class="menu-item">
+            <i class="fas fa-plus"></i>
+            Criar Jogador
+        </a>
+        <a href="editar-jogadores.html" class="menu-item">
+            <i class="fas fa-edit"></i>
+            Editar Jogador
+        </a>
+    </nav>
+
+    <main class="content">
+        <h1>Gerenciar Jogadores</h1>
+        <div style="display: flex; justify-content: flex-end; margin-bottom: 20px;">
+            <button id="marketTimeButton" class="market-time-button">Hora Mercado</button>
+            <button id="saveChanges" class="save-button">Salvar</button>
+        </div>
+        <div class="players-grid" id="players-grid">
+            <!-- Players will be dynamically added here -->
+        </div>
+    </main>
+
+    <div class="overlay" id="overlay"></div>
+    <div class="market-time-menu" id="marketTimeMenu">
+        <h2>Configurar Hora do Mercado</h2>
+        <div class="market-time-field">
+            <label for="marketOpenTime">Abertura</label>
+            <input type="datetime-local" id="marketOpenTime">
+        </div>
+        <div class="market-time-field">
+            <label for="marketCloseTime">Fechamento</label>
+            <input type="datetime-local" id="marketCloseTime">
+        </div>
+        <div class="market-time-field">
+            <label>
+                <input type="checkbox" id="applyToAll">
+                Aplicar para todos os jogadores
+            </label>
+        </div>
+        <div class="player-search">
+            <input type="text" id="playerSearch" placeholder="Pesquisar jogadores...">
+            <div class="selected-players" id="selectedPlayers"></div>
+            <div class="search-results" id="searchResults"></div>
+        </div>
+        <button class="save-button" style="margin-top: 20px;" id="saveMarketTime">Salvar</button>
+    </div>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, collection, getDocs, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0",
+            authDomain: "g-games-8a8fc.firebaseapp.com",
+            projectId: "g-games-8a8fc",
+            storageBucket: "g-games-8a8fc.firebasestorage.app",
+            messagingSenderId: "689897349449",
+            appId: "1:689897349449:web:536599794579901beb7a98",
+            measurementId: "G-GTTPJ6G5MD"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        let changedPlayers = new Map();
+
+        function getTierClass(casta) {
+            switch(casta) {
+                case 'Jogador Ouro': return 'gold';
+                case 'Jogador Prata': return 'silver';
+                case 'Jogador Bronze': return 'bronze';
+                case 'Jogador Platina': return 'platinum';
+                default: return '';
+            }
+        }
+
+        function createPlayerCard(player, docId) {
+            const card = document.createElement('div');
+            card.className = 'player-card';
+
+            const tierClass = getTierClass(player.casta);
+            
+            card.innerHTML = `
+                <img src="${player.imagem || 'https://via.placeholder.com/200'}" alt="${player.nome}" class="player-image">
+                <div class="player-info-container">
+                    <div class="player-name">${player.nome}</div>
+                    <div class="player-info">Posição: ${player.posicao}</div>
+                    <div class="player-info ${tierClass}">Casta: ${player.casta}</div>
+                    <div class="player-info">Comprado por: ${player.compradopor || 'Não comprado'}</div>
+                    <div class="player-info">Abertura: ${player.marketTimes?.abertura ? new Date(player.marketTimes.abertura).toLocaleString() : 'Não definido'}</div>
+                    <div class="player-info">Fechamento: ${player.marketTimes?.fechamento ? new Date(player.marketTimes.fechamento).toLocaleString() : 'Não definido'}</div>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" ${player.noMercado ? 'checked' : ''} data-player-id="${docId}">
+                    <span class="slider"></span>
+                </label>
+            `;
+
+            const toggleSwitch = card.querySelector('input[type="checkbox"]');
+            toggleSwitch.addEventListener('change', (e) => {
+                changedPlayers.set(docId, e.target.checked);
+            });
+
+            return card;
+        }
+
+        async function loadPlayers() {
+            try {
+                const playersGrid = document.getElementById('players-grid');
+                const jogadoresRef = collection(db, 'jogadores');
+                const snapshot = await getDocs(jogadoresRef);
+
+                // Create position groups
+                const positionOrder = ['Guarda-Redes', 'Defesa', 'Médio', 'Avançado'];
+                const playersByPosition = {};
+
+                // Initialize position groups
+                positionOrder.forEach(pos => {
+                    playersByPosition[pos] = [];
+                });
+
+                // Group players by position
+                snapshot.forEach(doc => {
+                    const player = doc.data();
+                    if (positionOrder.includes(player.posicao)) {
+                        playersByPosition[player.posicao].push({ ...player, id: doc.id });
+                    }
+                });
+
+                // Clear existing content
+                playersGrid.innerHTML = '';
+
+                // Create sections for each position
+                positionOrder.forEach(position => {
+                    if (playersByPosition[position].length > 0) {
+                        // Add position header
+                        const header = document.createElement('h2');
+                        header.textContent = position;
+                        header.style.color = '#333';
+                        header.style.marginTop = '32px';
+                        header.style.marginBottom = '16px';
+                        header.style.fontSize = '24px';
+                        playersGrid.appendChild(header);
+
+                        // Add players in this position
+                        playersByPosition[position].forEach(player => {
+                            const playerCard = createPlayerCard(player, player.id);
+                            playersGrid.appendChild(playerCard);
+                        });
+                    }
+                });
+            } catch (error) {
+                console.error('Error loading players:', error);
+            }
+        }
+
+        async function saveChanges() {
+            try {
+                for (const [playerId, noMercado] of changedPlayers) {
+                    const playerRef = doc(db, 'jogadores', playerId);
+                    await updateDoc(playerRef, { noMercado });
+                }
+                changedPlayers.clear();
+                alert('Alterações salvas com sucesso!');
+            } catch (error) {
+                console.error('Error saving changes:', error);
+                alert('Erro ao salvar alterações. Por favor, tente novamente.');
+            }
+        }
+
+        // Load players when the page loads
+        loadPlayers();
+
+        // Add save button event listener
+        document.getElementById('saveChanges').addEventListener('click', saveChanges);
+
+        // Market Time Menu Functionality
+        const marketTimeButton = document.getElementById('marketTimeButton');
+        const marketTimeMenu = document.getElementById('marketTimeMenu');
+        const overlay = document.getElementById('overlay');
+        const playerSearch = document.getElementById('playerSearch');
+        const searchResults = document.getElementById('searchResults');
+        const selectedPlayers = document.getElementById('selectedPlayers');
+        const applyToAll = document.getElementById('applyToAll');
+        const saveMarketTime = document.getElementById('saveMarketTime');
+
+        let selectedPlayersList = new Set();
+
+        marketTimeButton.addEventListener('click', () => {
+            marketTimeMenu.classList.add('active');
+            overlay.classList.add('active');
+        });
+
+        overlay.addEventListener('click', () => {
+            marketTimeMenu.classList.remove('active');
+            overlay.classList.remove('active');
+        });
+
+        playerSearch.addEventListener('input', async (e) => {
+            const searchTerm = e.target.value.toLowerCase();
+            if (searchTerm.length < 2) {
+                searchResults.innerHTML = '';
+                return;
+            }
+
+            try {
+                const jogadoresRef = collection(db, 'jogadores');
+                const snapshot = await getDocs(jogadoresRef);
+                const results = [];
+
+                snapshot.forEach(doc => {
+                    const player = doc.data();
+                    if (player.nome.toLowerCase().includes(searchTerm)) {
+                        results.push({ id: doc.id, ...player });
+                    }
+                });
+
+                searchResults.innerHTML = results
+                    .map(player => `
+                        <div class="search-result-item" data-id="${player.id}" data-name="${player.nome}">
+                            ${player.nome}
+                        </div>
+                    `)
+                    .join('');
+
+                searchResults.querySelectorAll('.search-result-item').forEach(item => {
+                    item.addEventListener('click', () => {
+                        const playerId = item.dataset.id;
+                        const playerName = item.dataset.name;
+                        if (!selectedPlayersList.has(playerId)) {
+                            selectedPlayersList.add(playerId);
+                            const playerTag = document.createElement('div');
+                            playerTag.className = 'selected-player';
+                            playerTag.innerHTML = `
+                                ${playerName}
+                                <button data-id="${playerId}">×</button>
+                            `;
+                            selectedPlayers.appendChild(playerTag);
+
+                            playerTag.querySelector('button').addEventListener('click', () => {
+                                selectedPlayersList.delete(playerId);
+                                playerTag.remove();
+                            });
+                        }
+                    });
+                });
+            } catch (error) {
+                console.error('Error searching players:', error);
+            }
+        });
+
+        applyToAll.addEventListener('change', (e) => {
+            const searchSection = document.querySelector('.player-search');
+            searchSection.style.display = e.target.checked ? 'none' : 'block';
+            if (e.target.checked) {
+                selectedPlayersList.clear();
+                selectedPlayers.innerHTML = '';
+            }
+        });
+
+        saveMarketTime.addEventListener('click', async () => {
+            const openTime = document.getElementById('marketOpenTime').value;
+            const closeTime = document.getElementById('marketCloseTime').value;
+
+            if (!openTime || !closeTime) {
+                alert('Por favor, preencha os horários de abertura e fechamento.');
+                return;
+            }
+
+            try {
+                const marketTimes = {
+                    abertura: new Date(openTime).toISOString(),
+                    fechamento: new Date(closeTime).toISOString()
+                };
+
+                if (applyToAll.checked) {
+                    const jogadoresRef = collection(db, 'jogadores');
+                    const snapshot = await getDocs(jogadoresRef);
+                    const batch = [];
+
+                    snapshot.forEach(doc => {
+                        batch.push(updateDoc(doc.ref, { marketTimes }));
+                    });
+
+                    await Promise.all(batch);
+                } else if (selectedPlayersList.size > 0) {
+                    const batch = Array.from(selectedPlayersList).map(playerId => {
+                        const playerRef = doc(db, 'jogadores', playerId);
+                        return updateDoc(playerRef, { marketTimes });
+                    });
+
+                    await Promise.all(batch);
+                } else {
+                    alert('Por favor, selecione jogadores ou marque "Aplicar para todos os jogadores".');
+                    return;
+                }
+
+                alert('Horários do mercado atualizados com sucesso!');
+                marketTimeMenu.classList.remove('active');
+                overlay.classList.remove('active');
+            } catch (error) {
+                console.error('Error saving market times:', error);
+                alert('Erro ao salvar horários do mercado. Por favor, tente novamente.');
+            }
+        });
+    </script>
+</body>
+</html>
