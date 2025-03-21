@@ -326,7 +326,7 @@
     <script type="module">
         // Importar funções do Firebase
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, collection, getDocs, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getFirestore, collection, getDocs, doc, getDoc, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
     
         // Configuração do Firebase
@@ -381,6 +381,21 @@
                     const fimPalpites = game.fimIntervalo.toDate();
     
                     if (now >= inicioPalpites && now <= fimPalpites) {
+                        // Check if user has voted on this game
+                        if (auth.currentUser) {
+                            try {
+                                const userPalpitesRef = collection(doc(db, 'users', auth.currentUser.uid), 'palpites');
+                                const q = query(userPalpitesRef, where('jogoId', '==', gameDoc.id));
+                                const palpiteSnapshot = await getDocs(q);
+                                game.hasVoted = !palpiteSnapshot.empty;
+                                console.log(`Vote status for game ${gameDoc.id}:`, game.hasVoted);
+                            } catch (error) {
+                                console.error('Error checking user vote:', error);
+                                game.hasVoted = false;
+                            }
+                        } else {
+                            game.hasVoted = false;
+                        }
                         // Check if user has voted on this game by comparing game names
     
                         console.log("Objeto Game antes do erro equipaCasaId:", game);
