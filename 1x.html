@@ -350,12 +350,16 @@
         const loadingScreen = document.getElementById('loading-screen');
         const content = document.querySelector('.content');
 
-        // Função para obter o estatuto do usuário do Firestore
+        // Função para obter o estatuto e aceite do usuário do Firestore
         async function getUserStatus(userId) {
             const userDoc = doc(db, 'users', userId);
             const docSnap = await getDoc(userDoc);
             if (docSnap.exists()) {
-                return docSnap.data().estatuto;
+                const userData = docSnap.data();
+                return {
+                    estatuto: userData.estatuto,
+                    aceite: userData.aceite
+                };
             } else {
                 return null;
             }
@@ -508,15 +512,21 @@
 
         onAuthStateChanged(auth, async (user) => {
             if (user) {
-                currentUserStatus = await getUserStatus(user.uid);
-                console.log(`User is logged in with status: ${currentUserStatus}`);
-                loadActiveGames(); // Carrega os jogos apenas após a autenticação ser verificada e usuário logado
+                const userInfo = await getUserStatus(user.uid);
+                if (userInfo && userInfo.aceite === "Yes") {
+                    currentUserStatus = userInfo.estatuto;
+                    console.log(`User is logged in with status: ${currentUserStatus}`);
+                    loadActiveGames(); // Carrega os jogos apenas após a autenticação ser verificada e usuário logado
+                    document.body.style.display = 'block';
+                } else {
+                    console.log('User not accepted');
+                    window.location.href = 'index.html'; // Redireciona para a página de login se não estiver aceito
+                }
             } else {
                 console.log('No user is logged in on 1x.html');
                 loadingScreen.style.display = 'none'; // Esconde a tela de carregamento mesmo se não estiver logado para evitar carregamento infinito
                 window.location.href = 'index.html'; // Redireciona para a página de login se não estiver logado
             }
-            document.body.style.display = 'block'; // ADD THIS LINE: Show the body after authentication check
         });
 
         // Carregar jogos quando a página carrega
