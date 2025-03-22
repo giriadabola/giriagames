@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mods - G EMPIRE</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 100vh;
+            background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
+            /* overflow: hidden; REMOVED overflow: hidden; from body style */
+        }
+
+        .bottom-menu {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background-color: #ffffff;
+            box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+            padding: 12px 0;
+            display: flex;
+            justify-content: center;
+            gap: 32px;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .menu-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-decoration: none;
+            color: #666;
+            transition: color 0.3s ease;
+        }
+
+        .menu-item:hover, .menu-item.active {
+            color: #333;
+        }
+
+        .menu-item i {
+            font-size: 24px;
+            margin-bottom: 4px;
+        }
+
+        .empire-icon {
+            font-size: 42px;
+            color: #2176ff;
+            transform: translateY(-3px);
+            filter: drop-shadow(0 0 8px rgba(33, 118, 255, 0.4));
+            transition: all 0.3s ease;
+        }
+
+        .empire-icon:hover, .menu-item.active .empire-icon {
+            color: #0056d6;
+            transform: translateY(-8px);
+            filter: drop-shadow(0 0 12px rgba(33, 118, 255, 0.6));
+        }
+
+        .content {
+            padding: 20px;
+            margin-bottom: 80px;
+            display: none; /* Hide content initially */
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        /* Loading Screen Styles */
+        #loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #f0f0f0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1001;
+        }
+
+        .loading-spinner {
+            border: 16px solid #f3f3f3;
+            border-top: 16px solid #3498db;
+            border-radius: 50%;
+            width: 120px;
+            height: 120px;
+            animation: spin 2s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        @keyframes lightEffect {
+            0% {
+                left: -100%;
+            }
+            100% {
+                left: 200%;
+            }
+        }
+
+        /* Mods specific styles */
+        .mods-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 30px;
+            padding: 20px;
+        }
+
+        .mod-card {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            width: 100%;
+            aspect-ratio: 2/2.3;
+            border-radius: 15px;
+            position: relative;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            overflow: hidden;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1), 0 6px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Card tier styles */
+        .mod-card-gold::before {
+            content: '';
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            right: 8px;
+            bottom: 8px;
+            border: 3px solid rgba(255, 215, 0, 0.7);
+            border-radius: 10px;
+            pointer-events: none;
+            z-index: 1;
+            overflow: hidden;
+            box-shadow: 0 0 15px rgba(255, 215, 0, 0.5);
+        }
+        
+        .mod-card-silver::before {
+            content: '';
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            right: 8px;
+            bottom: 8px;
+            border: 2px solid rgba(192, 192, 192, 0.6);
+            border-radius: 10px;
+            pointer-events: none;
+            z-index: 1;
+            overflow: hidden;
+        }
+        
+        .mod-card-bronze::before {
+            content: '';
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            right: 8px;
+            bottom: 8px;
+            border: 2px solid rgba(205, 127, 50, 0.6);
+            border-radius: 10px;
+            pointer-events: none;
+            z-index: 1;
+            overflow: hidden;
+        }
+        
+        .mod-card-blue::before {
+            content: '';
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            right: 8px;
+            bottom: 8px;
+            border: 2px solid rgba(70, 130, 180, 0.5);
+            border-radius: 10px;
+            pointer-events: none;
+            z-index: 1;
+            overflow: hidden;
+        }
+        
+        /* Base light effect for all cards */
+        .mod-card::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 50%;
+            height: 100%;
+            background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.3), transparent);
+            transform: skewX(-25deg);
+            animation: lightEffect 3s infinite;
+            z-index: 2;
+        }
+        
+        /* Gold card enhanced light effect */
+        .mod-card-gold::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 50%;
+            height: 100%;
+            background: linear-gradient(to right, transparent, rgba(255, 215, 0, 0.5), transparent);
+            transform: skewX(-25deg);
+            animation: lightEffect 2.5s infinite;
+            z-index: 3;
+        }
+        
+        /* Silver card light effect */
+        .mod-card-silver::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 50%;
+            height: 100%;
+            background: linear-gradient(to right, transparent, rgba(192, 192, 192, 0.4), transparent);
+            transform: skewX(-25deg);
+            animation: lightEffect 2.7s infinite;
+            z-index: 3;
+        }
+        
+        /* Bronze card light effect */
+        .mod-card-bronze::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 50%;
+            height: 100%;
+            background: linear-gradient(to right, transparent, rgba(205, 127, 50, 0.4), transparent);
+            transform: skewX(-25deg);
+            animation: lightEffect 2.9s infinite;
+            z-index: 3;
+        }
+        
+        /* Blue card light effect */
+        .mod-card-blue::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 50%;
+            height: 100%;
+            background: linear-gradient(to right, transparent, rgba(70, 130, 180, 0.3), transparent);
+            transform: skewX(-25deg);
+            animation: lightEffect 3s infinite;
+            z-index: 3;
+        }
+
+        .mod-card:hover {
+            transform: translateY(-10px) scale(1.02);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2), 0 15px 12px rgba(0, 0, 0, 0.15);
+            cursor: pointer;
+        }
+
+        .mod-image-container {
+            width: 100%;
+            height: 55%;
+            overflow: hidden;
+            position: relative;
+            border-top-left-radius: 15px;
+            border-top-right-radius: 15px;
+            background-color: #e0e0e0;
+        }
+
+        .mod-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.5s ease;
+        }
+
+        .mod-card:hover .mod-image {
+            transform: scale(1.05);
+        }
+
+        .mod-icon {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 40px;
+            height: 40px;
+            background-color: rgba(255, 255, 255, 0.9);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+            z-index: 3;
+        }
+
+        .mod-icon img {
+            width: 24px;
+            height: 24px;
+            object-fit: contain;
+        }
+
+        .mod-content {
+            padding: 15px;
+            position: relative;
+            height: 45%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .mod-title {
+            font-size: 1.3em;
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: #2176ff;
+            text-align: center;
+            text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.1);
+        }
+
+        .mod-overall {
+            background: linear-gradient(135deg, #f0f8ff 0%, #e6f2ff 100%);
+            border-radius: 8px;
+            padding: 8px 12px;
+            margin: 8px 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            border: 1px solid rgba(33, 118, 255, 0.2);
+        }
+        
+        .overall-label {
+            font-weight: bold;
+            color: #2176ff;
+            margin-right: 8px;
+            font-size: 0.9em;
+        }
+        
+        .overall-value {
+            font-weight: bold;
+            font-size: 1.1em;
+            color: #333;
+        }
+        
+        /* Overall value colors based on tier */
+        .mod-card-gold .overall-value {
+            color: #b8860b;
+            text-shadow: 0 0 2px rgba(255, 215, 0, 0.5);
+        }
+        
+        .mod-card-silver .overall-value {
+            color: #707070;
+            text-shadow: 0 0 2px rgba(192, 192, 192, 0.5);
+        }
+        
+        .mod-card-bronze .overall-value {
+            color: #8b4513;
+            text-shadow: 0 0 2px rgba(205, 127, 50, 0.5);
+        }
+        
+        .mod-card-blue .overall-value {
+            color: #4682b4;
+            text-shadow: 0 0 2px rgba(70, 130, 180, 0.5);
+        }
+        
+        .mod-description {
+            color: #555;
+            font-size: 0.9em;
+            line-height: 1.4;
+            flex-grow: 1;
+            overflow: hidden;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            margin-bottom: 8px;
+        }
+
+        .mod-points {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 10px;
+            font-size: 0.9em;
+            font-weight: bold;
+        }
+
+        .points-gain {
+            color: #28a745;
+            display: flex;
+            align-items: center;
+        }
+
+        .points-loss {
+            color: #dc3545;
+            display: flex;
+            align-items: center;
+        }
+
+        .points-gain::before {
+            content: '+';
+            margin-right: 2px;
+        }
+
+        .points-loss::before {
+            content: '-';
+            margin-right: 2px;
+        }
+
+        .mod-button {
+            background-color: #2176ff;
+            color: white;
+            padding: 8px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            margin-top: 10px;
+            width: 100%;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            position: relative;
+            z-index: 10;
+        }
+
+        .mod-button:hover {
+            background-color: #0056d6;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 10px rgba(0, 0, 0, 0.1);
+        }
+        
+        /* Mod Card Opening Animation */
+        .mod-card.opening {
+            transform: rotateY(180deg);
+            transition: transform 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        
+        /* Mod Popup Styles */
+        .mod-popup-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        
+        .mod-popup-overlay.active {
+            display: flex;
+            opacity: 1;
+        }
+        
+        .mod-popup-content {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            width: 90%;
+            max-width: 600px;
+            max-height: 90vh;
+            overflow-y: auto;
+            border-radius: 15px;
+            padding: 25px;
+            position: relative;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3), 0 15px 12px rgba(0, 0, 0, 0.2);
+            transform: scale(0.9);
+            transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        
+        .mod-popup-overlay.active .mod-popup-content {
+            transform: scale(1);
+        }
+        
+        .mod-popup-close {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            font-size: 16px;
+            color: #666;
+            background: none;
+            border: none;
+            cursor: pointer;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            background-color: rgba(255, 255, 255, 0.8);
+            transition: all 0.3s ease;
+            z-index: 2100;
+        }
+        
+        .mod-popup-close:hover {
+            color: #333;
+            background-color: rgba(255, 255, 255, 1);
+            transform: rotate(90deg);
+        }
+        
+        .mod-popup-header {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-bottom: 20px;
+            position: relative;
+        }
+        
+        .mod-popup-image-container {
+            width: 100%;
+            height: 200px;
+            overflow: hidden;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            position: relative;
+        }
+        
+        .mod-popup-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .mod-popup-title {
+            font-size: 1.8em;
+            font-weight: bold;
+            color: #2176ff;
+            text-align: center;
+            margin-bottom: 10px;
+            text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.1);
+        }
+        
+        .mod-popup-overall {
+            background: linear-gradient(135deg, #f0f8ff 0%, #e6f2ff 100%);
+            border-radius: 8px;
+            padding: 8px 12px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            border: 1px solid rgba(33, 118, 255, 0.2);
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            z-index: 10;
+            width: auto;
+        }
+        
+        .mod-popup-description {
+            color: #444;
+            font-size: 1em;
+            line-height: 1.6;
+            margin: 20px 0;
+            padding: 15px;
+            background-color: rgba(255, 255, 255, 0.7);
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+        }
+        
+        .mod-popup-points {
+            display: flex;
+            justify-content: flex-end;
+            padding: 8px 12px;
+            background-color: rgba(255, 255, 255, 0.7);
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            z-index: 10;
+        }
+        
+        .mod-popup-points-gain {
+            color: #28a745;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            margin-right: 10px;
+        }
+        
+        .mod-popup-points-loss {
+            color: #dc3545;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+        }
+        
+        .mod-popup-points-gain::before {
+            content: '+';
+            margin-right: 2px;
+        }
+        
+        .mod-popup-points-loss::before {
+            content: '-';
+            margin-right: 2px;
+        }
+        
+        /* Gold card popup styling */
+        .mod-popup-gold {
+            background: linear-gradient(135deg, #fff9e6 0%, #fff5cc 100%);
+            border: 3px solid rgba(255, 215, 0, 0.7);
+        }
+        
+        .mod-popup-gold .mod-popup-title {
+            color: #b8860b;
+            text-shadow: 0 0 3px rgba(255, 215, 0, 0.5);
+        }
+        
+        /* Silver card popup styling */
+        .mod-popup-silver {
+            background: linear-gradient(135deg, #f5f5f5 0%, #e6e6e6 100%);
+            border: 2px solid rgba(192, 192, 192, 0.6);
+        }
+        
+        .mod-popup-silver .mod-popup-title {
+            color: #707070;
+            text-shadow: 0 0 3px rgba(192, 192, 192, 0.5);
+        }
+        
+        /* Bronze card popup styling */
+        .mod-popup-bronze {
+            background: linear-gradient(135deg, #f5e6d8 0%, #e6d0c0 100%);
+            border: 2px solid rgba(205, 127, 50, 0.6);
+        }
+        
+        .mod-popup-bronze .mod-popup-title {
+            color: #8b4513;
+            text-shadow: 0 0 3px rgba(205, 127, 50, 0.5);
+        }
+        
+        /* Blue card popup styling */
+        .mod-popup-blue {
+            background: linear-gradient(135deg, #e6f2ff 0%, #d0e6ff 100%);
+            border: 2px solid rgba(70, 130, 180, 0.5);
+        }
+        
+        .mod-popup-blue .mod-popup-title {
+            color: #4682b4;
+            text-shadow: 0 0 3px rgba(70, 130, 180, 0.5);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="loading-screen">
+        <div class="loading-spinner"></div>
+    </div>
+
+    <div class="content">
+        <h1>Mods</h1>
+        <div id="mods-container" class="mods-container">
+            <!-- Mods will be loaded here dynamically -->
+        </div>
+    </div>
+    
+    <!-- Mod Popup Overlay -->
+    <div id="mod-popup-overlay" class="mod-popup-overlay">
+        <div class="mod-popup-content">
+            <button class="mod-popup-close">
+                <i class="fas fa-times"></i>
+            </button>
+            <div class="mod-popup-header">
+                <div class="mod-popup-image-container">
+                    <img src="" alt="" class="mod-popup-image" id="popup-mod-image">
+                    <div class="mod-popup-overall">
+                        <span class="overall-label">Overall:</span>
+                        <span class="overall-value" id="popup-mod-overall"></span>
+                    </div>
+                    <div class="mod-popup-points">
+                        <span class="mod-popup-points-gain" id="popup-mod-points-gain"></span>
+                        <span class="mod-popup-points-loss" id="popup-mod-points-loss"></span>
+                    </div>
+                </div>
+                <h2 class="mod-popup-title" id="popup-mod-title"></h2>
+            </div>
+            <div class="mod-popup-description" id="popup-mod-description"></div>
+        </div>
+    </div>
+
+    <nav class="bottom-menu">
+        <a href="1x.html" class="menu-item">
+            <i class="fas fa-home"></i>
+        </a>
+        <a href="market.html" class="menu-item">
+            <i class="fas fa-shopping-cart"></i>
+        </a>
+        <a href="team.html" class="menu-item">
+            <i class="fas fa-users"></i>
+        </a>
+        <a href="empire.html" class="menu-item">
+            <i class="fas fa-landmark empire-icon"></i>
+        </a>
+        <a href="rankings.html" class="menu-item">
+            <i class="fas fa-list"></i>
+        </a>
+        <a href="profile.html" class="menu-item">
+            <i class="fas fa-user"></i>
+        </a>
+    </nav>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, collection, getDocs, doc, getDoc, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0",
+            authDomain: "g-games-8a8fc.firebaseapp.com",
+            projectId: "g-games-8a8fc",
+            storageBucket: "g-games-8a8fc.firebasestorage.app",
+            messagingSenderId: "689897349449",
+            appId: "1:689897349449:web:536599794579901beb7a98",
+            measurementId: "G-GTTPJ6G5MD"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+
+        const loadingScreen = document.getElementById('loading-screen');
+        const content = document.querySelector('.content');
+        const modsContainer = document.getElementById('mods-container');
+        let currentUserStatus = null;
+
+        async function getUserStatus(userId) {
+            const userDoc = doc(db, 'users', userId);
+            const docSnap = await getDoc(userDoc);
+            if (docSnap.exists() && docSnap.data().aceite === "Yes") {
+                return docSnap.data().estatuto;
+            } else {
+                return null;
+            }
+        }
+
+        async function loadMods() {
+            try {
+                const modsCollection = collection(db, 'mods');
+                const modsQuery = query(modsCollection, where("ativo", "==", "yes"));
+                const modsSnapshot = await getDocs(modsQuery);
+                
+                if (modsSnapshot.empty) {
+                    modsContainer.innerHTML = '<p class="no-mods">Não há mods disponíveis no momento.</p>';
+                    return;
+                }
+
+                modsContainer.innerHTML = '';
+                modsSnapshot.forEach(modDoc => {
+                    const modData = modDoc.data();
+                    const modCard = document.createElement('div');
+                    modCard.className = 'mod-card';
+                    
+                    // Add tier class based on overall rating
+                    const overall = parseInt(modData.overall) || 0;
+                    if (overall >= 90) {
+                        modCard.classList.add('mod-card-gold');
+                    } else if (overall >= 80) {
+                        modCard.classList.add('mod-card-silver');
+                    } else if (overall >= 70) {
+                        modCard.classList.add('mod-card-bronze');
+                    } else {
+                        modCard.classList.add('mod-card-blue');
+                    }
+
+                    modCard.innerHTML = `
+                        <div class="mod-image-container">
+                            <img src="${modData.imagem || 'https://via.placeholder.com/300x200?text=Sem+Imagem'}" alt="${modData.nomeMod || 'Mod sem nome'}" class="mod-image">
+                            ${modData.icon ? `<div class="mod-icon"><img src="${modData.icon}" alt="Ícone"></div>` : ''}
+                        </div>
+                        <div class="mod-content">
+                            <div class="mod-title">${modData.nomeMod || 'Mod sem nome'}</div>
+                            <div class="mod-overall">
+                                <span class="overall-label">Overall:</span>
+                                <span class="overall-value">${modData.overall || 'N/A'}</span>
+                            </div>
+                            <div class="mod-points">
+                                <span class="points-gain">${modData.possivelVitoria || '0'} pts</span>
+                                <span class="points-loss">${modData.possivelDerrota || '0'} pts</span>
+                            </div>
+                        </div>
+                    `;
+                    
+                    // Store the mod ID as a data attribute on the card
+                    modCard.setAttribute('data-mod-id', modDoc.id);
+
+                    modsContainer.appendChild(modCard);
+                });
+            } catch (error) {
+                console.error("Erro ao carregar mods:", error);
+                modsContainer.innerHTML = '<p class="error">Erro ao carregar os mods. Por favor, tente novamente mais tarde.</p>';
+            } finally {
+                loadingScreen.style.display = 'none';
+                content.style.display = 'block';
+            }
+        }
+
+        // Function to open mod popup with animation and details
+        async function openModPopup(modId) {
+            try {
+                const modDocRef = doc(db, 'mods', modId);
+                const modDocSnap = await getDoc(modDocRef);
+                
+                if (!modDocSnap.exists()) {
+                    console.error('Mod não encontrado!');
+                    return;
+                }
+                
+                const modData = modDocSnap.data();
+                const popupOverlay = document.getElementById('mod-popup-overlay');
+                const popupContent = popupOverlay.querySelector('.mod-popup-content');
+                
+                // Set popup content
+                document.getElementById('popup-mod-image').src = modData.imagem || 'https://via.placeholder.com/300x200?text=Sem+Imagem';
+                document.getElementById('popup-mod-image').alt = modData.nomeMod || 'Mod sem nome';
+                document.getElementById('popup-mod-title').textContent = modData.nomeMod || 'Mod sem nome';
+                document.getElementById('popup-mod-overall').textContent = modData.overall || 'N/A';
+                document.getElementById('popup-mod-description').textContent = modData.descricao || 'Sem descrição disponível.';
+                document.getElementById('popup-mod-points-gain').textContent = `${modData.possivelVitoria || '0'} pts`;
+                document.getElementById('popup-mod-points-loss').textContent = `${modData.possivelDerrota || '0'} pts`;
+                
+                // Add tier class to popup content
+                popupContent.className = 'mod-popup-content';
+                const overall = parseInt(modData.overall) || 0;
+                if (overall >= 90) {
+                    popupContent.classList.add('mod-popup-gold');
+                } else if (overall >= 80) {
+                    popupContent.classList.add('mod-popup-silver');
+                } else if (overall >= 70) {
+                    popupContent.classList.add('mod-popup-bronze');
+                } else {
+                    popupContent.classList.add('mod-popup-blue');
+                }
+                
+                // Show popup with animation
+                popupOverlay.classList.add('active');
+                
+            } catch (error) {
+                console.error('Erro ao abrir popup do mod:', error);
+            }
+        }
+        
+        // Add event delegation for mod cards
+        document.addEventListener('click', function(event) {
+            // Handle mod card clicks
+            const modCard = event.target.closest('.mod-card');
+            if (modCard) {
+                const modId = modCard.getAttribute('data-mod-id');
+                
+                // Add opening animation class
+                modCard.classList.add('opening');
+                
+                // Wait for animation to complete before showing popup
+                setTimeout(() => {
+                    modCard.classList.remove('opening');
+                    openModPopup(modId);
+                }, 400);
+            }
+            
+            // Handle popup close button
+            if (event.target.classList.contains('mod-popup-close') || 
+                event.target.closest('.mod-popup-close')) {
+                document.getElementById('mod-popup-overlay').classList.remove('active');
+            }
+        });
+        
+        // Close popup when clicking outside content
+        document.getElementById('mod-popup-overlay').addEventListener('click', function(event) {
+            if (event.target === this) {
+                this.classList.remove('active');
+            }
+        });
+
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                currentUserStatus = await getUserStatus(user.uid);
+                if (currentUserStatus !== null) {
+                    console.log(`User is logged in on mods.html with status: ${currentUserStatus}`);
+                    loadingScreen.style.display = 'none';
+                    content.style.display = 'block';
+                    loadMods();
+                } else {
+                    console.log('User is not accepted');
+                    window.location.href = 'index.html';
+                }
+            } else {
+                console.log('No user is logged in on mods.html');
+                loadingScreen.style.display = 'none';
+                window.location.href = 'index.html';
+            }
+        });
+    </script>
+</body>
+</html>
