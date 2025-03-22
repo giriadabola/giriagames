@@ -326,7 +326,11 @@
               const userDoc = doc(db, 'users', userId);
               const docSnap = await getDoc(userDoc);
               if (docSnap.exists()) {
-                  return docSnap.data().estatuto;
+                  const userData = docSnap.data();
+                  return {
+                      estatuto: userData.estatuto,
+                      aceite: userData.aceite
+                  };
               } else {
                   return null;
               }
@@ -623,10 +627,16 @@
               console.log("onAuthStateChanged chamado:", user);
               if (user) {
                   console.log("Usuário autenticado:", user.uid);
-                  currentUserStatus = await getUserStatus(user.uid);
-                  content.style.display = 'block';
-                  loadingScreen.style.display = 'none';
-                  await loadTransactions(); // Load transactions for the latest season on page load and set up real-time updates with forced page refresh
+                  const userInfo = await getUserStatus(user.uid);
+                  if (userInfo && userInfo.aceite === "Yes") {
+                      currentUserStatus = userInfo.estatuto;
+                      content.style.display = 'block';
+                      loadingScreen.style.display = 'none';
+                      await loadTransactions(); // Load transactions for the latest season on page load and set up real-time updates with forced page refresh
+                  } else {
+                      console.log("Usuário não aceito. Redirecionando para index.html");
+                      window.location.href = 'index.html';
+                  }
               } else {
                   console.log("Usuário não autenticado. Redirecionando para index.html");
                   window.location.href = 'index.html';
