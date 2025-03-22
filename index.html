@@ -280,7 +280,6 @@
             if (docSnap.exists()) {
                 return docSnap.data().estatuto; // Retorna o estatuto do Firestore
             } else {
-                console.warn(`User document not found for user ID: ${userId}. User status defaulting to null.`); // Alerta em vez de erro
                 return null; // Retorna null explicitamente quando o documento não existe
             }
         }
@@ -325,10 +324,31 @@
                     const user = userCredential.user;
 
                     currentUserStatus = await getUserStatus(user.uid); // Busca o estatuto após o login
-                    console.log(`User status: ${currentUserStatus}`); // Para debug, veja o estatuto no console
-
-                    // Redirecionar para a página principal após login bem-sucedido
-                    window.location.href = '1x.html';
+                    
+                    // Verificar o status de aceitação do usuário
+                    const userDoc = await getDoc(doc(db, 'users', user.uid));
+                    
+                    if (userDoc.exists()) {
+                        const aceiteStatus = userDoc.data().aceite;
+                        
+                        if (aceiteStatus === "no" || aceiteStatus === "No") {
+                            // Mostrar popup de verificação
+                            const verificationPopup = document.getElementById('verificationPopup');
+                            verificationPopup.style.display = 'flex';
+                            
+                            // Adicionar evento para fechar o popup
+                            document.getElementById('closeVerificationPopup').addEventListener('click', () => {
+                                verificationPopup.style.display = 'none';
+                                window.location.href = '1x.html'; // Redirecionar após fechar o popup
+                            });
+                        } else {
+                            // Redirecionar para a página principal após login bem-sucedido
+                            window.location.href = '1x.html';
+                        }
+                    } else {
+                        // Redirecionar para a página principal após login bem-sucedido
+                        window.location.href = '1x.html';
+                    }
                 } catch (error) {
                     showError('Erro ao fazer login: ' + error.message);
                 }
@@ -418,12 +438,10 @@
             onAuthStateChanged(auth, async (user) => {
                 if (user) {
                     currentUserStatus = await getUserStatus(user.uid); // Busca o estatuto quando a página carrega e o usuário já está logado
-                    console.log(`User status on load: ${currentUserStatus}`); // Para debug
                     // Do not redirect here, let 1x.html handle redirection if needed based on its own logic
                     // window.location.href = '1x.html';
                 } else {
                     currentUserStatus = null; // Limpar o estatuto se não houver usuário logado
-                    console.log('No user logged in');
                 }
             });
 
