@@ -456,6 +456,11 @@
                     <input type="text" id="emojiCastaMod" name="emojiCastaMod" readonly>
                 </div>
 
+                <div class="form-group" style="display:none;">
+                    <label for="castaExplicacaoMod">Explicação Casta (Hidden):</label>
+                    <textarea id="castaExplicacaoMod" name="castaExplicacaoMod" rows="2"></textarea>
+                </div>
+
                  <div class="form-group" style="display:none;">
                     <label for="multiUsersMod">Multi Users (Opcional - Hidden):</label>
                     <textarea id="multiUsersMod" name="multiUsersMod" rows="2"></textarea>
@@ -513,7 +518,7 @@
     <script>
         // Firebase configuration
         const firebaseConfig = {
-          apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0",
+          apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0", // Replace with your actual API Key
           authDomain: "g-games-8a8fc.firebaseapp.com",
           projectId: "g-games-8a8fc",
           storageBucket: "g-games-8a8fc.firebasestorage.app",
@@ -539,21 +544,27 @@
         const applyPositionBtn = document.getElementById('applyPositionBtn');
         const castaModDropdown = document.getElementById('castaMod');
         const emojiCastaModInput = document.getElementById('emojiCastaMod');
-        let currentModId = null; // To store the ID of the currently selected mod
+        const castaExplicacaoModInput = document.getElementById('castaExplicacaoMod'); // New field
+        let currentModId = null;
 
-        // Emoji URLs for Casta
-        const castaEmojis = {
-            "Risk": "https://cdn-icons-png.flaticon.com/512/8617/8617212.png",
-            "Donation": "https://cdn-icons-png.flaticon.com/512/8617/8617233.png",
-            "Glory": "https://cdn-icons-png.flaticon.com/512/8617/8617227.png",
-            "Calamity": "https://cdn-icons-png.flaticon.com/512/10606/10606703.png"
-        };
-
-        // Default image position values
-        let imagePosition = {
-            x: 'center',
-            y: 'center',
-            zoom: 100
+        // Casta Data with Emojis and Explanations
+        const castaData = {
+            "Risk": {
+                emoji: "https://cdn-icons-mp4.flaticon.com/512/8617/8617212.mp4",
+                explicacao: "Esta coleção de mods é uma moeda de duas faces, pode dar, mas também retira, levando ao risco!"
+            },
+            "Donation": {
+                emoji: "https://cdn-icons-mp4.flaticon.com/512/8617/8617233.mp4",
+                explicacao: "Esta coleção de mods é generosa, não apenas dá ao próprio como a outros, praticando a doação!"
+            },
+            "Glory": {
+                emoji: "https://cdn-icons-mp4.flaticon.com/512/8617/8617227.mp4",
+                explicacao: "Esta coleção de mods é virtuosa, dá tudo sem praticamente retirar nada, o que leva à glória!"
+            },
+            "Calamity": {
+                emoji: "https://cdn-icons-mp4.flaticon.com/512/10606/10606703.mp4",
+                explicacao: "Esta coleção de mods é nefasta, ela pode tirar tudo a todos, levando tudo à calamidade!"
+            }
         };
 
         // Function to populate the dropdown with mod names
@@ -562,25 +573,21 @@
                 querySnapshot.forEach((doc) => {
                     const modData = doc.data();
                     const option = document.createElement('option');
-                    option.value = doc.id; // Use doc.id as value to retrieve later
+                    option.value = doc.id;
                     option.textContent = modData.nomeMod;
                     modDropdown.appendChild(option);
                 });
             });
         }
 
-        populateModDropdown(); // Call on page load
+        populateModDropdown();
 
         // Function to update image position based on current settings
         function updateImagePosition() {
-            // Update zoom value display
             zoomValueDisplay.textContent = `${imagePosition.zoom}%`;
-
-            // Apply position and zoom to the preview image
             previewImage.style.objectPosition = `${imagePosition.x} ${imagePosition.y}`;
             previewImage.style.transform = `scale(${imagePosition.zoom / 100})`;
 
-            // Update active button state
             positionBtns.forEach(btn => {
                 if (btn.dataset.x === imagePosition.x && btn.dataset.y === imagePosition.y) {
                     btn.classList.add('active');
@@ -593,9 +600,8 @@
         // Event listener for dropdown change
         modDropdown.addEventListener('change', function() {
             const selectedModId = this.value;
-            currentModId = selectedModId; // Store the selected mod ID
+            currentModId = selectedModId;
             if (selectedModId) {
-                // Fetch mod data and populate the form
                 db.collection("mods").doc(selectedModId).get().then((doc) => {
                     if (doc.exists) {
                         const modData = doc.data();
@@ -614,79 +620,64 @@
                         document.getElementById('dataFimNovoMod').value = modData.dataFimNovoMod || '';
                         document.getElementById('castaMod').value = modData.castaMod || '';
                         document.getElementById('emojiCastaMod').value = modData.emojiCastaMod || '';
+                        document.getElementById('castaExplicacaoMod').value = modData.castaExplicacaoMod || ''; // Populate explicacao
                         document.getElementById('multiUsersMod').value = modData.multiUsersMod || '';
 
 
-                        // Load image position data if available
-                        console.log('Loaded mod data:', modData);
-                        console.log('Image position from database:', modData.imagePosition);
-
                         if (modData.imagePosition) {
                             imagePosition = modData.imagePosition;
-                            console.log('Loaded image position from database:', JSON.stringify(imagePosition));
                         } else {
-                            // Reset to default if no position data
                             imagePosition = {
                                 x: 'center',
                                 y: 'center',
                                 zoom: 100
                             };
-                            console.log('No image position found in database, using default:', JSON.stringify(imagePosition));
                         }
+                        updateImagePosition(); // Ensure position is updated after loading data
 
-
-                        editFormContainer.style.display = 'block'; // Show the form
+                        editFormContainer.style.display = 'block';
                     } else {
                         console.log("No such document!");
-                        editFormContainer.style.display = 'none'; // Hide form if no doc found
+                        editFormContainer.style.display = 'none';
                     }
                 }).catch((error) => {
                     console.error("Error getting document:", error);
-                    editFormContainer.style.display = 'none'; // Hide form on error
+                    editFormContainer.style.display = 'none';
                 });
             } else {
-                editFormContainer.style.display = 'none'; // Hide form if no mod selected
+                editFormContainer.style.display = 'none';
             }
         });
 
         // Event listener for preview button click
         previewImageBtn.addEventListener('click', function() {
-            console.log('Preview button clicked');
             const imageUrl = imagemModInput.value.trim();
             if (imageUrl) {
                 previewImage.src = imageUrl;
                 previewImage.onload = function() {
                     updateImagePosition();
-                    console.log('Image loaded and position updated');
                 };
             } else {
                 previewImage.src = 'https://via.placeholder.com/300x200?text=Sem+Imagem';
                 updateImagePosition();
-                console.log('Placeholder image loaded');
             }
-
-            // Show modal
             imagePreviewModal.style.display = 'flex';
-            console.log('Modal displayed');
         });
 
         // Close modal when X is clicked
         closeModalBtn.addEventListener('click', function() {
-            console.log('Close button clicked');
             imagePreviewModal.style.display = 'none';
         });
 
         // Close modal when clicking outside the content
         imagePreviewModal.addEventListener('click', function(event) {
             if (event.target === imagePreviewModal) {
-                console.log('Clicked outside modal content');
                 imagePreviewModal.style.display = 'none';
             }
         });
 
         // Handle zoom slider changes
         zoomSlider.addEventListener('input', function() {
-            console.log('Zoom slider changed to: ' + this.value);
             imagePosition.zoom = parseInt(this.value);
             updateImagePosition();
         });
@@ -694,7 +685,6 @@
         // Handle position button clicks
         positionBtns.forEach(btn => {
             btn.addEventListener('click', function() {
-                console.log('Position button clicked: ' + this.dataset.x + ', ' + this.dataset.y);
                 imagePosition.x = this.dataset.x;
                 imagePosition.y = this.dataset.y;
                 updateImagePosition();
@@ -703,16 +693,19 @@
 
         // Apply position button click
         applyPositionBtn.addEventListener('click', function() {
-            console.log('Apply position button clicked');
-            console.log('Current image position to be saved:', JSON.stringify(imagePosition));
-            // Store the position data to be saved with the mod
             imagePreviewModal.style.display = 'none';
         });
 
         // Event listener for Casta dropdown change
         castaModDropdown.addEventListener('change', function() {
             const selectedCasta = this.value;
-            emojiCastaModInput.value = castaEmojis[selectedCasta] || ''; // Set emoji or clear if no match
+            if (castaData[selectedCasta]) {
+                emojiCastaModInput.value = castaData[selectedCasta].emoji || '';
+                castaExplicacaoModInput.value = castaData[selectedCasta].explicacao || '';
+            } else {
+                emojiCastaModInput.value = '';
+                castaExplicacaoModInput.value = '';
+            }
         });
 
         // Event listener for form submission (for updating data)
@@ -739,18 +732,15 @@
             const dataFimNovoMod = document.getElementById('dataFimNovoMod').value;
             const castaMod = document.getElementById('castaMod').value;
             const emojiCastaMod = document.getElementById('emojiCastaMod').value;
+            const castaExplicacaoMod = document.getElementById('castaExplicacaoMod').value; // Get explicacao value
             const multiUsersMod = document.getElementById('multiUsersMod').value;
 
 
-            console.log('Saving mod with image position:', JSON.stringify(imagePosition));
-
-            // Create the update object
             const updateData = {
                 nomeMod: nomeMod,
                 ativo: ativoMod,
-                // Convert date strings to Firebase Timestamps
-                dataInicio: dataInicioMod ? firebase.firestore.Timestamp.fromDate(new Date(dataInicioMod)) : null, // Modified to Timestamp
-                dataFim: dataFimMod ? firebase.firestore.Timestamp.fromDate(new Date(dataFimMod)) : null, // Modified to Timestamp
+                dataInicio: dataInicioMod ? firebase.firestore.Timestamp.fromDate(new Date(dataInicioMod)) : null,
+                dataFim: dataFimMod ? firebase.firestore.Timestamp.fromDate(new Date(dataFimMod)) : null,
                 imagem: imagemMod || null,
                 descricao: descricaoMod || null,
                 possivelVitoria: possivelVitoriaMod || null,
@@ -758,27 +748,25 @@
                 overall: overallMod || null,
                 icon: iconMod || null,
                 videoMod: videoMod || null,
-                dataInicioNovoMod: dataInicioNovoMod ? firebase.firestore.Timestamp.fromDate(new Date(dataInicioNovoMod)) : null, // Modified to Timestamp
-                dataFimNovoMod: dataFimNovoMod ? firebase.firestore.Timestamp.fromDate(new Date(dataFimNovoMod)) : null, // Modified to Timestamp
+                dataInicioNovoMod: dataInicioNovoMod ? firebase.firestore.Timestamp.fromDate(new Date(dataInicioNovoMod)) : null,
+                dataFimNovoMod: dataFimNovoMod ? firebase.firestore.Timestamp.fromDate(new Date(dataFimNovoMod)) : null,
                 castaMod: castaMod,
                 emojiCastaMod: emojiCastaMod,
+                castaExplicacaoMod: castaExplicacaoMod, // Include explicacao in update
                 multiUsersMod: multiUsersMod || null,
-                imagePosition: imagePosition // Save the image position data
+                imagePosition: imagePosition
             };
-
-            console.log('Full update data being sent to Firebase:', JSON.stringify(updateData));
 
             db.collection("mods").doc(currentModId).update(updateData)
             .then(() => {
-                console.log("Document successfully updated with image position:", JSON.stringify(imagePosition));
+                console.log("Document successfully updated!");
                 alert("Modificado com sucesso!");
 
-                // Optionally refresh the dropdown list after update
-                modDropdown.innerHTML = '<option value="">Selecione um Mod para editar</option>'; // Reset dropdown
-                populateModDropdown(); // Repopulate dropdown
-                editFormContainer.style.display = 'none'; // Hide form after submit
-                document.getElementById("editarModForm").reset(); // Clear the form
-                currentModId = null; // Reset currentModId
+                modDropdown.innerHTML = '<option value="">Selecione um Mod para editar</option>';
+                populateModDropdown();
+                editFormContainer.style.display = 'none';
+                document.getElementById("editarModForm").reset();
+                currentModId = null;
             })
             .catch((error) => {
                 console.error("Error updating document: ", error);
