@@ -274,9 +274,34 @@
             height: 100%;
             background: #f0f0f0;
             display: flex;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
             z-index: 1001;
+        }
+        
+        .loading-percentage {
+            margin-top: 15px;
+            font-size: 18px;
+            font-weight: bold;
+            color: #2176ff;
+        }
+        
+        .progress-bar-container {
+            width: 200px;
+            height: 10px;
+            background-color: #e0e0e0;
+            border-radius: 5px;
+            margin-top: 10px;
+            overflow: hidden;
+        }
+        
+        .progress-bar {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(135deg, #2176ff 0%, #0056d6 100%);
+            border-radius: 5px;
+            transition: width 0.3s ease-in-out;
         }
 
         /* Popup Styles */
@@ -498,6 +523,10 @@
 
     <div id="loading-screen">
         <div class="loading-spinner"></div>
+        <div class="loading-percentage">0%</div>
+        <div class="progress-bar-container">
+            <div class="progress-bar"></div>
+        </div>
     </div>
 
     <!-- Popup Overlay -->
@@ -908,8 +937,14 @@
     
         async function loadPlayers() {
             try {
+                // Update progress - starting to load players data (5%)
+                updateLoadingProgress(5);
+                
                 const jogadoresRef = collection(db, 'jogadores');
                 const snapshot = await getDocs(jogadoresRef);
+                
+                // Update progress - player data fetched (10%)
+                updateLoadingProgress(10);
     
                 const players = {};
                 players['Guarda-Redes'] = document.getElementById('guarda-redes-grid');
@@ -948,6 +983,11 @@
                         grid.classList.toggle('collapsed');
                     });
                 });
+                
+                // Calculate progress increment per player
+                const marketPlayers = snapshot.docs.filter(doc => doc.data().noMercado);
+                const progressPerPlayer = marketPlayers.length > 0 ? 30 / marketPlayers.length : 30;
+                let playersLoaded = 0;
     
                 for (const doc of snapshot.docs) {
                     const player = doc.data();
@@ -957,15 +997,20 @@
                         if (grid) {
                             const card = await createPlayerCard(player);
                             grid.appendChild(card);
+                            
+                            // Update progress for each player loaded
+                            playersLoaded++;
+                            updateLoadingProgress(progressPerPlayer);
                         }
                     }
                 }
             } catch (error) {
                 console.error("Error loading players:", error);
-            } finally {
-                loadingScreen.style.display = 'none';
-                content.style.display = 'block';
+                // Even on error, update progress to 100% to remove loading screen
+                updateLoadingProgress(100);
             }
+            // Note: We don't hide the loading screen here anymore
+            // That's handled by the updateLoadingProgress function when it reaches 100%
         }
     
         function findLatestGcoinsField(userData) {
@@ -1001,14 +1046,43 @@
             popupContent.appendChild(successElement);
         }
     
+        // Loading progress tracking variables
+        let loadingProgress = 0;
+        const loadingPercentageElement = document.querySelector('.loading-percentage');
+        const progressBar = document.querySelector('.progress-bar');
+        
+        // Function to update loading progress
+        function updateLoadingProgress(increment) {
+            loadingProgress += increment;
+            if (loadingProgress > 100) loadingProgress = 100;
+            
+            loadingPercentageElement.textContent = `${Math.floor(loadingProgress)}%`;
+            progressBar.style.width = `${loadingProgress}%`;
+            
+            if (loadingProgress >= 100) {
+                setTimeout(() => {
+                    loadingScreen.style.display = 'none';
+                    content.style.display = 'block';
+                }, 500); // Small delay for smooth transition
+            }
+        }
+        
         onAuthStateChanged(auth, async (user) => {
             if (user) {
+                // Update progress after authentication check (25%)
+                updateLoadingProgress(25);
+                
                 currentUserStatus = await getUserStatus(user.uid);
                 if (currentUserStatus !== null) {
                     console.log(`User is logged in on market.html with status: ${currentUserStatus}`);
-                    loadPlayers();
-                    loadingScreen.style.display = 'none';
-                    content.style.display = 'block';
+                    // Update progress after user status check (25%)
+                    updateLoadingProgress(25);
+                    
+                    // Load players with progress tracking
+                    await loadPlayers();
+                    
+                    // Final progress update (50%)
+                    updateLoadingProgress(50);
                 } else {
                     console.log('User is not accepted');
                     loadingScreen.style.display = 'none';
