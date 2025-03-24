@@ -155,6 +155,37 @@
             margin-left: 10px;
         }
 
+        /* Collapsible Round Styles */
+        .round-header {
+            font-weight: bold;
+            background-color: #f0f4ff;
+            padding: 10px;
+            margin: 10px 0 5px 0;
+            border-radius: 5px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .round-header .toggle-arrow {
+            transition: transform 0.3s ease;
+        }
+
+        .round-header .toggle-arrow.open {
+            transform: rotate(90deg);
+        }
+
+        .round-content {
+            display: none;
+            padding: 0 10px;
+            margin-bottom: 15px;
+        }
+
+        .round-content.open {
+            display: block;
+        }
+
         .position-circle {
             display: inline-flex;
             align-items: center;
@@ -364,10 +395,8 @@
 
             if (sortedSeasons.length > 0) {
                 const mostRecentSeason = sortedSeasons[0]; // Get the most recent season
-                console.log(`Most recent season found: ${mostRecentSeason}`); // Log the most recent season
                 await loadRankings(mostRecentSeason); // Load rankings for the most recent season
             } else {
-                console.log("No seasons found in 'palpites' collection.");
                 rankingsBody.innerHTML = '<tr><td colspan="4">No rankings available.</td></tr>'; // Display message if no seasons
             }
         }
@@ -452,13 +481,7 @@
                 const popup = document.getElementById('predictions-popup');
                 const popupBody = document.getElementById('popup-predictions-body');
                 const infoIcon = document.querySelector(`.info-icon[data-userid="${userId}"]`);
-                if (!infoIcon) {
-                    console.error("Info icon not found for userId:", userId);
-                    return;
-                }
-                const row = infoIcon.closest('tr');
-                if (!row) {
-                    console.error("Row not found for info icon with userId:", userId);
+                if (!infoIcon || !infoIcon.closest('tr')) {
                     return;
                 }
 
@@ -500,61 +523,108 @@
             // Sort predictions by timestamp
             predictions.sort((a, b) => b.timestamp - a.timestamp);
 
-// Filter predictions by selected round
+// Group predictions by round
 const selectedRound = document.getElementById('round-filter').value;
 const filteredPredictions = selectedRound
     ? predictions.filter(p => String(p.ronda) === selectedRound) // Compare as string
     : predictions;
 
+// Group predictions by round
+const predictionsByRound = {};
+filteredPredictions.forEach(prediction => {
+    const round = prediction.ronda || 'Unknown';
+    if (!predictionsByRound[round]) {
+        predictionsByRound[round] = [];
+    }
+    predictionsByRound[round].push(prediction);
+});
+
 predictionsHTML = ''; // Reset predictionsHTML here
 
-filteredPredictions.forEach(prediction => {
-    let palpitesHTML = '';
-    for (let i = 1; i <= 10; i++) {
-        if (prediction[`palpite${i}`]) {
-            const points = prediction[`Palpite${i}PontosGanhos`] || 0;
-            const pointsClass = points > 0 ? 'prediction-points' : 'prediction-points-negative';
-            palpitesHTML += `
-                <div class="prediction-item">
-                    →${prediction[`palpite${i}`]}
-                    <span class="${pointsClass}">(${points} points)</span>
-                </div>`;
-        }
-    }
+// Sort rounds in descending order (newest first)
+const displaySortedRounds = Object.keys(predictionsByRound).sort((a, b) => b - a);
 
-    if (palpitesHTML) {
-        predictionsHTML += `
-            <div class="game-header">${prediction.nomeJogo}</div>
-            ${palpitesHTML}`;
-    }
+// Determine which round should be open by default
+const latestRound = displaySortedRounds[0];
+const roundToOpen = selectedRound || latestRound;
+
+displaySortedRounds.forEach(round => {
+    const isOpen = String(round) === String(roundToOpen);
+    const roundPredictions = predictionsByRound[round];
+    
+    let roundContentHTML = '';
+    
+    // Process predictions for this round
+    roundPredictions.forEach(prediction => {
+        let palpitesHTML = '';
+        for (let i = 1; i <= 10; i++) {
+            if (prediction[`palpite${i}`]) {
+                const points = prediction[`Palpite${i}PontosGanhos`] || 0;
+                const pointsClass = points > 0 ? 'prediction-points' : 'prediction-points-negative';
+                palpitesHTML += `
+                    <div class="prediction-item">
+                        →${prediction[`palpite${i}`]}
+                        <span class="${pointsClass}">(${points} points)</span>
+                    </div>`;
+            }
+        }
+
+        if (palpitesHTML) {
+            roundContentHTML += `
+                <div class="game-header">${prediction.nomeJogo}</div>
+                ${palpitesHTML}`;
+        }
+    });
+    
+    // Add round header and content to HTML
+    predictionsHTML += `
+        <div class="round-section">
+            <div class="round-header" data-round="${round}">
+                <span>Ronda ${round}</span>
+                <span class="toggle-arrow ${isOpen ? 'open' : ''}">▶</span>
+            </div>
+            <div class="round-content ${isOpen ? 'open' : ''}">
+                ${roundContentHTML}
+            </div>
+        </div>
+    `;
 });
 
 
 popupBody.innerHTML = predictionsHTML || 'No predictions found for this season';
                 popup.style.display = "block"; // Show the popup
 
-                // Add event listener for round filter -  moved inside togglePredictions to have access to userId and season
+                // Add event listener for round filter - moved inside togglePredictions to have access to userId and season
                 const roundFilterElement = document.getElementById('round-filter'); // Get element here
                 roundFilterElement.onchange = function() { // Use onchange directly for simpler assignment
                     selectedRounds[`${userId}-${season}`] = roundFilterElement.value; // Store selected value
                     togglePredictions(userId, season); // Re-render predictions based on new filter
                 };
+                
+                // Add event listeners for round headers to toggle content visibility
+                document.querySelectorAll('.round-header').forEach(header => {
+                    header.addEventListener('click', function() {
+                        const content = this.nextElementSibling;
+                        const arrow = this.querySelector('.toggle-arrow');
+                        
+                        // Toggle open class
+                        content.classList.toggle('open');
+                        arrow.classList.toggle('open');
+                    });
+                });
             }
 
         onAuthStateChanged(auth, async (user) => {
             if (user) {
                 currentUserStatus = await getUserStatus(user.uid);
                 if (currentUserStatus === null) {
-                    console.log('User is not accepted');
                     window.location.href = 'index.html';
                     return;
                 }
-                console.log(`User is logged in on rankings.html with status: ${currentUserStatus}`);
                 loadingScreen.style.display = 'none';
                 content.style.display = 'block';
                 await loadSeasons();
             } else {
-                console.log('No user is logged in on rankings.html');
                 loadingScreen.style.display = 'none';
                 window.location.href = 'index.html';
             }
