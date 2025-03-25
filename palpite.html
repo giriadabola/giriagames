@@ -466,89 +466,90 @@
 
         // Expose submitPredictions to global scope
         window.submitPredictions = async function() {
-            try {
-                if (!currentGame) {
-                    throw new Error('Game data not loaded');
-                }
+    try {
+        if (!currentGame) {
+            throw new Error('Game data not loaded');
+        }
 
-                // Check if prediction deadline has passed
-                const now = new Date();
+        // Check if prediction deadline has passed
+        const now = new Date();
 
-                // Check if fimIntervalo exists before calling toDate()
-                if (!currentGame.fimIntervalo) { // Changed to fimIntervalo
-                    showErrorPopup('Informação de data indisponível. Não é possível palpitar.');
-                    setTimeout(() => {
-                        window.location.href = '1x.html';
-                    }, 5000);
-                    return;
-                }
+        // Check if fimIntervalo exists before calling toDate()
+        if (!currentGame.fimIntervalo) {
+            showErrorPopup('Informação de data indisponível. Não é possível palpitar.');
+            setTimeout(() => {
+                window.location.href = '1x.html';
+            }, 5000);
+            return;
+        }
 
-                const fimIntervalo = currentGame.fimIntervalo.toDate(); // Changed to fimIntervalo
-                if (now > fimIntervalo) {
-                    showErrorPopup('Tempo esgotado, impossivel palpitar');
-                    setTimeout(() => {
-                        window.location.href = '1x.html';
-                    }, 5000);
-                    return;
-                }
+        const fimIntervalo = currentGame.fimIntervalo.toDate();
+        if (now > fimIntervalo) {
+            showErrorPopup('Tempo esgotado, impossivel palpitar');
+            setTimeout(() => {
+                window.location.href = '1x.html';
+            }, 5000);
+            return;
+        }
 
-                const predictions = [];
-                for (let i = 0; i < currentGame.numeroPalpites; i++) {
-                    const input = document.getElementById(`prediction${i + 1}`);
-                    if (!input || !input.value.trim()) {
-                        showErrorPopup('Ainda não fez todos os palpites possíveis do jogo');
-                        return;
-                    }
-                    predictions.push(input.value.trim());
-                }
-
-                // Get user document to fetch the username
-                const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
-                if (!userDoc.exists()) {
-                    throw new Error('User data not found');
-                }
-                const userData = userDoc.data();
-
-                const palpiteData = {
-                    userId: auth.currentUser.uid,
-                    nomeDeUsuario: userData.nomeDeUsuario,
-                    jogoId: currentGame.id,
-                    nomeJogo: currentGame.nomeJogo,
-                    equipaCasaId: currentGame.equipaCasaId,
-                    equipaCasa: currentGame.equipaCasa,
-                    equipaForaId: currentGame.equipaForaId,
-                    equipaFora: currentGame.equipaFora,
-                    dataJogo: currentGame.dataJogo,
-                    competicaoId: currentGame.competicaoId,
-                    competicao: currentGame.competicao,
-                    ronda: currentGame.ronda,
-                    modId: currentGame.modId,
-                    temporada: currentGame.temporada,
-                    dataPalpite: serverTimestamp(),
-                    PontosPossiveis: 0,
-                    PontosGanhos: 0,
-                    GCoinsGanhos: 0.0,
-                };
-
-                predictions.forEach((palpite, index) => {
-                    const predictionNumber = index + 1;
-                    palpiteData[`palpite${predictionNumber}`] = palpite;
-                    palpiteData[`Palpite${predictionNumber}PontosGanhos`] = 0;
-                    palpiteData[`Palpite${predictionNumber}PontosQuanto`] = 0;
-                });
-
-                await Promise.all([
-                    addDoc(collection(db, 'palpites'), palpiteData),
-                    addDoc(collection(doc(db, 'users', auth.currentUser.uid), 'palpites'), palpiteData)
-                ]);
-
-                window.location.reload();
-
-            } catch (error) {
-                console.error('Error submitting predictions:', error);
-                showErrorPopup(`Erro ao enviar palpites: ${error.message}`);
+        const predictions = [];
+        for (let i = 0; i < currentGame.numeroPalpites; i++) {
+            const input = document.getElementById(`prediction${i + 1}`);
+            if (!input || !input.value.trim()) {
+                showErrorPopup('Ainda não fez todos os palpites possíveis do jogo');
+                return;
             }
+            predictions.push(input.value.trim());
+        }
+
+        // Get user document to fetch the username
+        const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
+        if (!userDoc.exists()) {
+            throw new Error('User data not found');
+        }
+        const userData = userDoc.data();
+
+        const palpiteData = {
+            userId: auth.currentUser.uid,
+            nomeDeUsuario: userData.nomeDeUsuario,
+            jogoId: currentGame.id,
+            nomeJogo: currentGame.nomeJogo,
+            equipaCasaId: currentGame.equipaCasaId,
+            equipaCasa: currentGame.equipaCasa,
+            equipaForaId: currentGame.equipaForaId,
+            equipaFora: currentGame.equipaFora,
+            dataJogo: currentGame.dataJogo,
+            competicaoId: currentGame.competicaoId,
+            competicao: currentGame.competicao,
+            ronda: currentGame.ronda,
+            modId: currentGame.modId,
+            temporada: currentGame.temporada,
+            dataPalpite: serverTimestamp(),
+            PontosPossiveis: 0,
+            PontosGanhos: 0,
+            GCoinsGanhos: 0.0,
+            Analisado: "Não", // ADDED THIS LINE
         };
+
+        predictions.forEach((palpite, index) => {
+            const predictionNumber = index + 1;
+            palpiteData[`palpite${predictionNumber}`] = palpite;
+            palpiteData[`Palpite${predictionNumber}PontosGanhos`] = 0;
+            palpiteData[`Palpite${predictionNumber}PontosQuanto`] = 0;
+        });
+
+        await Promise.all([
+            addDoc(collection(db, 'palpites'), palpiteData),
+            addDoc(collection(doc(db, 'users', auth.currentUser.uid), 'palpites'), palpiteData)
+        ]);
+
+        window.location.reload();
+
+    } catch (error) {
+        console.error('Error submitting predictions:', error);
+        showErrorPopup(`Erro ao enviar palpites: ${error.message}`);
+    }
+};
 
         async function checkExistingPredictions(gameId) {
             try {
