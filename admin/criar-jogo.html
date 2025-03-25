@@ -106,8 +106,13 @@
             mods.forEach(mod => {
                 const option = document.createElement('option');
                 option.value = mod.id;
-                option.textContent = mod.nome;
+                option.textContent = mod.nomeMod;
                 modsSelect.appendChild(option);
+            });
+
+            // Add event listener for mods dropdown
+            modsSelect.addEventListener('change', function() {
+                modIdInput.value = this.value; // Set modId input to selected mod's ID
             });
 
             // Handle home team search
@@ -145,6 +150,18 @@
                             // Auto-fill competition based on home team
                             if (clubData && clubData.competicaoId) {
                                 competicaoSelect.value = clubData.competicaoId;
+                                
+                                // Update competition image
+                                const competicaoDoc = await getDoc(doc(db, 'competicoes', clubData.competicaoId));
+                                const competicaoData = competicaoDoc.data();
+                                const competicaoImage = document.getElementById('competicao-image');
+                                if (competicaoData && competicaoData.imagem) {
+                                    competicaoImage.innerHTML = `<img src="${competicaoData.imagem}" class="club-image" alt="${competicaoData.nome}">`;
+                                    competicaoImage.className = 'club-image';
+                                } else {
+                                    competicaoImage.innerHTML = '<i class="fas fa-trophy"></i>';
+                                    competicaoImage.className = 'club-image placeholder';
+                                }
                             }
 
                             updateGameName();
@@ -216,43 +233,51 @@
 
             // Form submission
             form.addEventListener('submit', async (e) => {
-                e.preventDefault();
+    e.preventDefault();
 
-                if (!selectedEquipaCasaId || !selectedEquipaForaId) {
-                    alert('Por favor, selecione ambas as equipas da lista.');
-                    return;
-                }
+    if (!selectedEquipaCasaId || !selectedEquipaForaId) {
+        alert('Por favor, selecione ambas as equipas da lista.');
+        return;
+    }
 
-                try {
-                    await addDoc(collection(db, 'jogos'), {
-                        equipaCasaId: selectedEquipaCasaId,
-                        equipaCasa: equipaCasaInput.value,
-                        equipaForaId: selectedEquipaForaId,
-                        equipaFora: equipaForaInput.value,
-                        competicaoId: competicaoSelect.value,
-                        competicao: competicaoSelect.options[competicaoSelect.selectedIndex].text,
-                        dataJogo: new Date(document.getElementById('data-jogo').value + 'T' + document.getElementById('hora-jogo').value),
-                        ronda: parseInt(roundSelect.value),
-                        inicioIntervalo: new Date(document.getElementById('inicio-palpite').value),
-                        fimIntervalo: new Date(document.getElementById('fim-palpite').value),
-                        numeroPalpites: parseInt(document.getElementById('numero-palpites').value),
-                        mods: modsSelect.value || null, // Keep existing mods dropdown value
-                        modId: document.getElementById('modId').value.trim() || null, // ADDED: Get value from the new modId input
-                        nomeJogo: nomeJogoInput.value,
-                        temporada: document.getElementById('temporada').value,
-                        dataCriacao: new Date()
-                    });
-
-                    alert('Jogo criado com sucesso!');
-                    form.reset();
-                    selectedEquipaCasaId = null;
-                    selectedEquipaForaId = null;
-                } catch (error) {
-                    console.error('Erro ao criar jogo:', error);
-                    alert('Erro ao criar jogo. Por favor, tente novamente.');
-                }
-            });
+    try {
+        await addDoc(collection(db, 'jogos'), {
+            equipaCasaId: selectedEquipaCasaId,
+            equipaCasa: equipaCasaInput.value,
+            equipaForaId: selectedEquipaForaId,
+            equipaFora: equipaForaInput.value,
+            competicaoId: competicaoSelect.value,
+            competicao: competicaoSelect.options[competicaoSelect.selectedIndex].text,
+            dataJogo: new Date(document.getElementById('data-jogo').value + 'T' + document.getElementById('hora-jogo').value),
+            ronda: parseInt(roundSelect.value),
+            inicioIntervalo: new Date(document.getElementById('inicio-palpite').value),
+            fimIntervalo: new Date(document.getElementById('fim-palpite').value),
+            numeroPalpites: parseInt(document.getElementById('numero-palpites').value),
+            mods: modsSelect.value || null,
+            modId: document.getElementById('modId').value.trim() || null,
+            nomeJogo: nomeJogoInput.value,
+            temporada: document.getElementById('temporada').value,
+            dataCriacao: new Date(),
+            anexado: document.getElementById('anexado').value,
+            analisado: document.getElementById('analisado').value
         });
+
+        alert('Jogo criado com sucesso!');
+        form.reset();
+        selectedEquipaCasaId = null;
+        selectedEquipaForaId = null;
+
+        // --- Page Refresh and Scroll to Top ---
+        window.location.reload();
+        window.scrollTo(0, 0); // Add this line
+
+
+    } catch (error) {
+        console.error('Erro ao criar jogo:', error);
+        alert('Erro ao criar jogo. Por favor, tente novamente.');
+    }
+});
+});
     </script>
     <style>
         * {
@@ -333,6 +358,13 @@
             display: flex;
             align-items: center;
             gap: 10px;
+        }
+
+        .form-group.highlight-section {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            border: 1px solid #e9ecef;
         }
 
         .form-group label {
@@ -460,6 +492,7 @@
 
     <div class="content">
         <h1>Criar Jogo</h1>
+        <a href="criar-whowins.html" class="submit-btn" style="display: block; margin: 0 auto 10px; text-decoration: none; padding: 8px 16px; font-size: 14px; width: fit-content;">Criar jogos WhoWins</a>
         <div class="form-container">
             <form id="criar-jogo-form">
                 <div class="form-group">
@@ -505,17 +538,28 @@
                     <label for="ronda">Ronda</label>
                     <select id="ronda" name="ronda" required></select>
                 </div>
-                <div class="form-group">
-                    <label for="inicio-palpite">Início do Intervalo de Palpites</label>
+                <div class="form-group highlight-section">
+                    <label for="inicio-palpite">Início dos Palpites</label>
                     <input type="datetime-local" id="inicio-palpite" name="inicio-palpite" required>
                 </div>
-                <div class="form-group">
-                    <label for="fim-palpite">Fim do Intervalo de Palpites</label>
+                <div class="form-group highlight-section">
+                    <label for="fim-palpite">Fim dos Palpites</label>
                     <input type="datetime-local" id="fim-palpite" name="fim-palpite" required>
                 </div>
-                <div class="form-group">
+                <div class="form-group highlight-section">
                     <label for="numero-palpites">Número de Palpites</label>
-                    <input type="number" id="numero-palpites" name="numero-palpites" min="1" required>
+                    <select id="numero-palpites" name="numero-palpites" required>
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4" selected>4</option>
+                        <option value="5">5</option>
+                        <option value="6">6</option>
+                        <option value="7">7</option>
+                        <option value="8">8</option>
+                        <option value="9">9</option>
+                        <option value="10">10</option>
+                    </select>
                 </div>
                 <div class="form-group">
                     <label for="mods">Mods</label>
@@ -523,14 +567,18 @@
                         <option value="">Selecione um mod (opcional)</option>
                     </select>
                 </div>
-                <!-- ADDED: New form group for modId -->
+                <input type="hidden" id="modId" name="modId">
+                <!-- ADDED: New form group for Anexado -->
                 <div class="form-group">
-                    <label for="modId">Mod ID (Opcional)</label>
-                    <input type="text" id="modId" name="modId" placeholder="Insira o Mod ID (se aplicável)">
+                    <label for="anexado">Anexado</label>
+                    <select id="anexado" name="anexado">
+                        <option value="1x"selected>1x</option>
+                        <option value="euro26">euro26</option>
+                    </select>
                 </div>
+                <input type="hidden" id="analisado" name="analisado" value="null">
                 <div class="form-group">
-                    <label for="nome-jogo">Nome do Jogo</label>
-                    <input type="text" id="nome-jogo" name="nome-jogo" required>
+                    <input type="hidden" id="nome-jogo" name="nome-jogo" required>
                 </div>
                 <div class="form-group">
                     <label for="temporada">Temporada</label>
