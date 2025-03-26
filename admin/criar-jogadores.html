@@ -42,6 +42,11 @@ const paisList = document.getElementById('pais-list');
 const clubeInput = document.getElementById('clube-jogador');
 const clubeList = document.getElementById('clube-list');
 const compradorJogadorSelect = document.getElementById('comprador-jogador');
+const posicaoJogadorSelect = document.getElementById('posicao-jogador');
+const firebaseDataDisplay = document.getElementById('firebase-data-display');
+const estatisticasJogadorInput = document.getElementById('estatisticas-jogador');
+const coeficientesSection = document.getElementById('coeficientes-section');
+
 
 // --- Funções no escopo global ---
 
@@ -94,13 +99,13 @@ async function fetchAndDisplayCategories() {
             for (const categoria in paineisCoeficiente) {
                 if (paineisCoeficiente.hasOwnProperty(categoria)) {
                     // Create Category Title Element
-                    const categoriaTitle = document.createElement('h4'); // Use h4 or similar
+                    const categoriaTitle = document.createElement('h4');
                     categoriaTitle.textContent = categoria;
                     categoriesList.appendChild(categoriaTitle);
 
                     // Create Subcategory Container (Flexbox)
                     const subcategoriesContainer = document.createElement('div');
-                    subcategoriesContainer.className = 'subcategories-container'; // Add a class for styling
+                    subcategoriesContainer.className = 'subcategories-container';
                     categoriesList.appendChild(subcategoriesContainer);
 
                     const subcategorias = paineisCoeficiente[categoria];
@@ -163,11 +168,11 @@ function openDetailedInfoPopup(categoria, subcategoriaNome, subcategoriaData) {
         if (!tipoData) return 'N/A';
         if (Array.isArray(tipoData)) {
             return tipoData.map(item => {
-                if (typeof item === 'string') return item; // Handle old format (array of strings)
-                return `${item.name} (${item.text || '-'})`; // Display with text value, or '-' if no text
+                if (typeof item === 'string') return item;
+                return `${item.name} (${item.text || '-'})`;
             }).join(', ');
         }
-        return 'N/A'; // Handle cases where tipoData is not an array
+        return 'N/A';
     }
 
 
@@ -199,11 +204,11 @@ function openDetailedInfoPopup(categoria, subcategoriaNome, subcategoriaData) {
         saveBtn.addEventListener('click', async () => {
             const newSubcategoriaNome = popupContainer.querySelector('.edit-subcategoria-nome').value.trim();
             const newCasta = getCheckedValues(popupContainer.querySelector('.edit-mode'), 'casta');
-            const newTipo = getTipoValuesFromEdit(popupContainer.querySelector('.edit-mode')); // Function to get Tipo and Text values
+            const newTipo = getTipoValuesFromEdit(popupContainer.querySelector('.edit-mode'));
 
             if (newSubcategoriaNome) {
                 await updateSubcategory(categoria, subcategoriaNome, newSubcategoriaNome, newCasta, newTipo);
-                fetchAndDisplayCategories(); // Refresh categories list
+                fetchAndDisplayCategories();
                 closePopup();
             } else {
                 alert('O nome da subcategoria não pode estar vazio.');
@@ -212,7 +217,7 @@ function openDetailedInfoPopup(categoria, subcategoriaNome, subcategoriaData) {
 
         const cancelBtn = popupContainer.querySelector('.cancel-btn');
         cancelBtn.addEventListener('click', () => {
-             closePopup(); // Close the detailed info popup on "Cancel"
+             closePopup();
         });
     });
 
@@ -222,7 +227,7 @@ function openDetailedInfoPopup(categoria, subcategoriaNome, subcategoriaData) {
         event.stopPropagation();
         if (confirm(`Tem certeza que deseja excluir a subcategoria "${subcategoriaNome}"?`)) {
             await deleteSubcategory(categoria, subcategoriaNome);
-            fetchAndDisplayCategories(); // Refresh categories list
+            fetchAndDisplayCategories();
             closePopup();
         }
     });
@@ -268,7 +273,7 @@ function createTipoCheckboxes(selectedTipo) {
                     break;
                 }
             }
-        } else if (Array.isArray(selectedTipo)) { // Redundant - remove later
+        } else if (Array.isArray(selectedTipo)) {
             isChecked = selectedTipo.includes(tipo);
         }
 
@@ -374,10 +379,6 @@ async function saveCategories() {
         }
 
         if (subcategoriaNome) {
-            // *** BLOCO IF REMOVIDO COMPLETAMENTE ***
-            // if (subcategoriaCasta.length === 0 && subcategoriaTipo.length === 0 && !updatedPaineisCoeficiente[categoriaNome][subcategoriaNome]) {
-            //     return; // **CONDIÇÃO REMOVIDA**
-            // }
             if (subcategoriaCasta.length === 0 && subcategoriaTipo.length === 0 && updatedPaineisCoeficiente[categoriaNome][subcategoriaNome]) {
                 delete updatedPaineisCoeficiente[categoriaNome][subcategoriaNome];
             }
@@ -389,17 +390,15 @@ async function saveCategories() {
             }
         }
 
-        // --- Correção: Usar a estrutura correta para setDoc e updateDoc ---
         if (!paineisDoc.exists()) {
             await setDoc(paineisRef, { paineis_coeficiente: updatedPaineisCoeficiente }, { merge: true });
         } else {
-            await updateDoc(paineisRef, { paineis_coeficiente: updatedPaineisCoeficiente }); // CORRIGIDO!
+            await updateDoc(paineisRef, { paineis_coeficiente: updatedPaineisCoeficiente });
         }
 
         categoriaNomeInput.value = '';
         subcategoriaNomeInput.value = '';
         castaCheckboxes.forEach(checkbox => checkbox.checked = false);
-        // No need to clear tipoCheckboxes here as getTipoValuesFromSave handles it dynamically
 
         fetchAndDisplayCategories();
         categoryMessage.textContent = "Categoria/Subcategoria salva com sucesso!";
@@ -414,10 +413,53 @@ function getTipoValuesFromSave() {
     const tipoCheckboxes = document.querySelectorAll('input[name="subcategoria-tipo"]');
     return Array.from(tipoCheckboxes).map(checkbox => {
         const tipoName = checkbox.value;
-        const textInput = checkbox.parentElement.querySelector('input[name="tipo-text-new"]'); // Assuming you'll add name="tipo-text-new" in saveCategories form
+        const textInput = checkbox.parentElement.querySelector('input[name="tipo-text-new"]');
         const textValue = textInput ? textInput.value.trim() : '';
         return checkbox.checked ? { name: tipoName, text: textValue } : null;
-    }).filter(item => item !== null); // Filter out unchecked ones
+    }).filter(item => item !== null);
+
+
+}
+
+async function fetchPaineisCoefficients() {
+    const paineisRef = doc(db, 'paineis', 'paineis coeficiente');
+    const paineisDoc = await getDoc(paineisRef);
+
+    if (paineisDoc.exists() && paineisDoc.data().paineis_coeficiente) {
+        return paineisDoc.data().paineis_coeficiente;
+    } else {
+        console.log("No 'paineis coeficiente' data found.");
+        return null;
+    }
+}
+
+async function displayFirebaseData(selectedPosition) {
+    firebaseDataDisplay.innerHTML = '';
+
+    if (!selectedPosition) {
+        return;
+    }
+
+    const paineisCoeficienteData = await fetchPaineisCoefficients();
+
+    if (paineisCoeficienteData) {
+        for (const categoria in paineisCoeficienteData) {
+            const subcategorias = paineisCoeficienteData[categoria];
+            for (const subcategoriaNome in subcategorias) {
+                const subcategoria = subcategorias[subcategoriaNome];
+                if (subcategoria.tipo) {
+                    for (const tipoItem of subcategoria.tipo) {
+                        if (tipoItem.name === selectedPosition) {
+                            const dataItem = document.createElement('p');
+                            dataItem.textContent = `- ${subcategoriaNome}: ${tipoItem.text || '-'}`;
+                            firebaseDataDisplay.appendChild(dataItem);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 
@@ -535,6 +577,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         const mercadoJogador = document.getElementById('mercado-jogador').value === 'true';
         const precoJogador = parseInt(document.getElementById('preco-jogador').value) || null;
         const compradorJogadorId = document.getElementById('comprador-jogador').value || null;
+        const estatisticasJogador = document.getElementById('estatisticas-jogador').value;
+
 
         if (!selectedPaisId) {
             alert('Por favor, selecione um país válido da lista.');
@@ -558,6 +602,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 noMercado: mercadoJogador,
                 preco: precoJogador,
                 compradopor: compradorJogadorId,
+                estatisticas: estatisticasJogador,
                 dataCriacao: new Date()
             };
             const jogadorRef = await addDoc(collection(db, 'jogadores'), jogadorData);
@@ -570,6 +615,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             form.reset();
             selectedPaisId = null;
             selectedClubeId = null;
+            coeficientesSection.style.display = 'none'; // Hide coeficientes section on submit
         } catch (error) {
             console.error('Erro ao criar jogador:', error);
             alert('Erro ao criar jogador. Por favor, tente novamente.');
@@ -577,13 +623,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     const subcategorySearchInput = document.getElementById('subcategory-search');
-    const categoriesListContainer = document.getElementById('categories-list'); // Container for categories
+    const categoriesListContainer = document.getElementById('categories-list');
     const addCategorySection = document.querySelector('.add-category-section');
     const sectionContent = document.querySelector('.add-category-section .section-content');
     const toggleIcon = document.querySelector('.add-category-section .toggle-icon');
 
     addCategorySection.addEventListener('click', (event) => {
-        // Prevent triggering the toggle if the click was inside an input or button
         if (event.target.tagName === 'INPUT' || event.target.tagName === 'BUTTON' || event.target.tagName === 'LABEL') {
             return;
         }
@@ -594,15 +639,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     subcategorySearchInput.addEventListener('input', () => {
         const searchTerm = subcategorySearchInput.value.trim().toLowerCase();
-        const categorySections = Array.from(categoriesListContainer.children); // Get all category sections (h4 and subcategories-container)
+        const categorySections = Array.from(categoriesListContainer.children);
         const matchingCategorySections = [];
         const nonMatchingCategorySections = [];
 
         categorySections.forEach(section => {
-            if (section.tagName === 'H4') { // Category title
+            if (section.tagName === 'H4') {
                 const categoryTitle = section;
-                const subcategoriesContainer = categoryTitle.nextElementSibling; // Assumes subcategories-container is immediately after h4
-                if (!subcategoriesContainer || !subcategoriesContainer.classList.contains('subcategories-container')) return; // Safety check
+                const subcategoriesContainer = categoryTitle.nextElementSibling;
+                if (!subcategoriesContainer || !subcategoriesContainer.classList.contains('subcategories-container')) return;
 
                 let categoryHasMatch = false;
                 const subcategoryCards = subcategoriesContainer.querySelectorAll('.subcategory-card');
@@ -612,7 +657,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     if (subcategoryNameElement) {
                         const subcategoryName = subcategoryNameElement.textContent.toLowerCase();
                         const matchesSearch = subcategoryName.includes(searchTerm);
-                        card.style.display = matchesSearch ? '' : 'none'; // Filter subcategories
+                        card.style.display = matchesSearch ? '' : 'none';
                         if (matchesSearch) {
                             categoryHasMatch = true;
                         }
@@ -629,14 +674,24 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         });
 
-        // Clear and reorder the categories list
         categoriesListContainer.innerHTML = '';
         matchingCategorySections.forEach(section => categoriesListContainer.appendChild(section));
         nonMatchingCategorySections.forEach(section => categoriesListContainer.appendChild(section));
     });
 
-
+    posicaoJogadorSelect.addEventListener('change', async () => {
+        const selectedPosition = posicaoJogadorSelect.value;
+        await displayFirebaseData(selectedPosition);
     });
+
+    estatisticasJogadorInput.addEventListener('input', () => {
+        if (estatisticasJogadorInput.value.trim() !== '') {
+            coeficientesSection.style.display = 'block';
+        } else {
+            coeficientesSection.style.display = 'none';
+        }
+    });
+});
 
     </script>
     <style>
@@ -738,7 +793,8 @@ h1 {
 }
 
 .form-group input,
-.form-group select {
+.form-group select,
+.form-group textarea {
     width: 100%;
     padding: 10px;
     border: 1px solid #ddd;
@@ -748,10 +804,12 @@ h1 {
 }
 
 .form-group input:focus,
-.form-group select:focus {
+.form-group select:focus,
+.form-group textarea:focus {
     outline: none;
     border-color: #2176ff;
 }
+
 
 #pais-list,
 #competicao-list {
@@ -1208,14 +1266,30 @@ h1 {
     cursor: text; /* Change cursor to text to indicate input focus */
 }
 
+/* Style for Firebase data display area */
+#firebase-data-display {
+    margin-top: 10px;
+    padding-left: 20px;
+    font-size: 14px;
+    color: #555;
+}
+
+/* Style for Coeficientes section title */
+#coeficientes-section h3 {
+    font-size: 16px;
+    font-weight: bold;
+    color: #333;
+    margin-bottom: 5px;
+    margin-top: 15px;
+}
+
 
 </style>
 
 </head>
 <body>
     <nav class="top-menu">
-        <!-- (Seu menu - MANTENHA O HTML DO MENU AQUI) -->
-         <a href="engrenagem.html" class="menu-item">
+        <a href="engrenagem.html" class="menu-item">
             <i class="fas fa-home"></i>
         </a>
         <a href="criar-gplayer.html" class="menu-item">
@@ -1256,7 +1330,6 @@ h1 {
         <h1>Criar Jogadores <i class="fas fa-cog gear-icon" id="params-settings-icon"></i></h1>
         <div class="form-container">
             <form id="criar-jogador-form">
-                <!-- (Seu formulário - MANTENHA O HTML DO FORMULÁRIO AQUI) -->
                  <div class="form-group">
                     <label for="nome-jogador">Nome do Jogador</label>
                     <input type="text" id="nome-jogador" name="nome-jogador" required>
@@ -1316,6 +1389,19 @@ h1 {
                         <option value="">Ninguém</option>
                     </select>
                 </div>
+
+                <div class="form-group">
+                    <label for="estatisticas-jogador">Estatísticas (Opcional)</label>
+                    <textarea id="estatisticas-jogador" name="estatisticas-jogador" rows="5"></textarea>
+                </div>
+
+                <div id="coeficientes-section" style="display: none;">
+                    <h3>Coeficientes</h3>
+                    <div id="firebase-data-display">
+                        <!-- Firebase data will be displayed here -->
+                    </div>
+                </div>
+
                 <button type="submit" class="submit-btn">Criar Jogador</button>
 
             </form>
@@ -1333,10 +1419,10 @@ h1 {
                 <div class="section-header">
                     <h3>
                         <i class="fas fa-plus-circle"></i> Adicionar Categoria/Subcategoria
-                        <i class="fas fa-chevron-down toggle-icon"></i> <!-- Toggle Arrow -->
+                        <i class="fas fa-chevron-down toggle-icon"></i>
                     </h3>
                 </div>
-                <div class="section-content" style="display: none;"> <!-- Content to be toggled, initially hidden -->
+                <div class="section-content" style="display: none;">
                     <div class="form-group">
                         <label for="categoria-nome">Nome da Categoria:</label>
                         <input type="text" id="categoria-nome" name="categoria-nome">
