@@ -475,17 +475,50 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
 
-    const addCategorySection = document.querySelector('.add-category-section');
-    const sectionContent = document.querySelector('.add-category-section .section-content');
-    const toggleIcon = document.querySelector('.add-category-section .toggle-icon');
+    const subcategorySearchInput = document.getElementById('subcategory-search');
+    const categoriesListContainer = document.getElementById('categories-list'); // Container for categories
 
-    addCategorySection.addEventListener('click', (event) => {
-        // Prevent triggering the toggle if the click was inside an input or button
-        if (event.target.tagName === 'INPUT' || event.target.tagName === 'BUTTON' || event.target.tagName === 'LABEL') {
-            return;
-        }
-        sectionContent.style.display = sectionContent.style.display === 'none' ? 'block' : 'none';
-        toggleIcon.classList.toggle('rotate');
+    subcategorySearchInput.addEventListener('input', () => {
+        const searchTerm = subcategorySearchInput.value.trim().toLowerCase();
+        const categorySections = Array.from(categoriesListContainer.children); // Get all category sections (h4 and subcategories-container)
+        const matchingCategorySections = [];
+        const nonMatchingCategorySections = [];
+
+        categorySections.forEach(section => {
+            if (section.tagName === 'H4') { // Category title
+                const categoryTitle = section;
+                const subcategoriesContainer = categoryTitle.nextElementSibling; // Assumes subcategories-container is immediately after h4
+                if (!subcategoriesContainer || !subcategoriesContainer.classList.contains('subcategories-container')) return; // Safety check
+
+                let categoryHasMatch = false;
+                const subcategoryCards = subcategoriesContainer.querySelectorAll('.subcategory-card');
+
+                subcategoryCards.forEach(card => {
+                    const subcategoryNameElement = card.querySelector('.subcategory-name');
+                    if (subcategoryNameElement) {
+                        const subcategoryName = subcategoryNameElement.textContent.toLowerCase();
+                        const matchesSearch = subcategoryName.includes(searchTerm);
+                        card.style.display = matchesSearch ? '' : 'none'; // Filter subcategories
+                        if (matchesSearch) {
+                            categoryHasMatch = true;
+                        }
+                    }
+                });
+
+                if (categoryHasMatch) {
+                    matchingCategorySections.push(categoryTitle);
+                    matchingCategorySections.push(subcategoriesContainer);
+                } else {
+                    nonMatchingCategorySections.push(categoryTitle);
+                    nonMatchingCategorySections.push(subcategoriesContainer);
+                }
+            }
+        });
+
+        // Clear and reorder the categories list
+        categoriesListContainer.innerHTML = '';
+        matchingCategorySections.forEach(section => categoriesListContainer.appendChild(section));
+        nonMatchingCategorySections.forEach(section => categoriesListContainer.appendChild(section));
     });
 
     paisInput.addEventListener('input', async (e) => {
@@ -1102,6 +1135,31 @@ h1 {
 }
 
 
+.search-container {
+    display: flex;
+    align-items: center;
+    margin-top: 15px;
+    margin-bottom: 10px; /* Add a bit of space below the search box */
+}
+
+#subcategory-search {
+    flex-grow: 1; /* Allow input to take up available space */
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px 0 0 4px; /* Rounded left corners */
+    font-size: 14px;
+}
+
+.search-icon {
+    background-color: #eee;
+    color: #666;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-left: none; /* Remove left border to join with input */
+    border-radius: 0 4px 4px 0; /* Rounded right corners */
+    cursor: text; /* Change cursor to text to indicate input focus */
+}
+
 .close-popup{
     background-color: #ccc; /* Cinza */
     color: #333;
@@ -1331,11 +1389,18 @@ h1 {
             <!-- Lista de Categorias e Subcategorias -->
             <div class="param-section existing-categories-section">
                 <h3><i class="fas fa-list-ul"></i> Categorias e Subcategorias Existentes</h3>
-               <ul id="categories-list" class="categories-list">
-                   <!-- As categorias e subcategorias serão inseridas aqui dinamicamente -->
-               </ul>
+                <div class="search-container">  <!-- Search container moved to the top -->
+                    <input type="text" id="subcategory-search" placeholder="Pesquisar Subcategoria...">
+                    <i class="fas fa-search search-icon"></i>
+                </div>
+                <ul id="categories-list" class="categories-list">
+                    <!-- Categories and subcategories will be dynamically inserted here -->
+                </ul>
+                <div class="search-container">
+                    <input type="text" id="subcategory-search" placeholder="Pesquisar Subcategoria...">
+                    <i class="fas fa-search search-icon"></i>
+                </div>
             </div>
-        </div>
         <button class="save-params-btn" id="save-params-btn"><i class="fas fa-save"></i> Salvar Configurações</button>
     </div>
 </body>
