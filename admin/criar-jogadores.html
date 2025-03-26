@@ -6,363 +6,1140 @@
     <title>Criar Jogadores - G EMPIRE</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
     <script type="module">
-        // Import Firebase functions
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, collection, addDoc, query, where, getDocs, doc, updateDoc, arrayUnion, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+ // Import Firebase functions
+ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-        // Firebase configuration
-        const firebaseConfig = {
-            apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0",
-            authDomain: "g-games-8a8fc.firebaseapp.com",
-            projectId: "g-games-8a8fc",
-            storageBucket: "g-games-8a8fc.firebasestorage.app",
-            messagingSenderId: "689897349449",
-            appId: "1:689897349449:web:536599794579901beb7a98",
-            measurementId: "G-GTTPJ6G5MD"
-        };
+// Firebase configuration
+const firebaseConfig = {
+    apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0",
+    authDomain: "g-games-8a8fc.firebaseapp.com",
+    projectId: "g-games-8a8fc",
+    storageBucket: "g-games-8a8fc.firebasestorage.app",
+    messagingSenderId: "689897349449",
+    appId: "1:689897349449:web:536599794579901beb7a98",
+    measurementId: "G-GTTPJ6G5MD"
+};
 
-        // Initialize Firebase
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
 
-        // Function to search countries
-        async function searchCountries(searchTerm) {
-            const paisesRef = collection(db, 'paises');
-            const searchTermLower = searchTerm.toLowerCase();
-            const querySnapshot = await getDocs(collection(db, 'paises'));
-            const results = querySnapshot.docs
-                .map(doc => ({ id: doc.id, ...doc.data() }))
-                .filter(country => country.nome.toLowerCase().includes(searchTermLower));
-            return results;
-        }
+// --- Variáveis de elementos do DOM no escopo global ---
+const paramsSettingsIcon = document.getElementById('params-settings-icon');
+const paramsOverlay = document.getElementById('params-overlay');
+const paramsPopup = document.getElementById('params-popup');
+const closeParamsPopup = document.getElementById('close-params-popup');
+const saveParamsBtn = document.getElementById('save-params-btn');
+const addCategoryBtn = document.getElementById('add-category-btn');
+const categoriesList = document.getElementById('categories-list');
+const categoriaNomeInput = document.getElementById('categoria-nome');
+const subcategoriaNomeInput = document.getElementById('subcategoria-nome');
+const categoryMessage = document.getElementById('category-message');
+const form = document.getElementById('criar-jogador-form');
+const nomeInput = document.getElementById('nome-jogador');
+const paisInput = document.getElementById('pais-jogador');
+const paisList = document.getElementById('pais-list');
+const clubeInput = document.getElementById('clube-jogador');
+const clubeList = document.getElementById('clube-list');
+const compradorJogadorSelect = document.getElementById('comprador-jogador');
 
-        // Function to search clubs
-        async function searchClubs(searchTerm) {
-            const clubesRef = collection(db, 'clubes');
-            const searchTermLower = searchTerm.toLowerCase();
-            const querySnapshot = await getDocs(collection(db, 'clubes'));
-            const results = querySnapshot.docs
-                .map(doc => ({ id: doc.id, ...doc.data() }))
-                .filter(club => club.nome.toLowerCase().includes(searchTermLower));
-            return results;
-        }
+// --- Funções no escopo global ---
 
-        // Function to fetch Users from 'users' collection for the dropdown
-        async function fetchUsers() {
-            const usersRef = collection(db, 'users'); // Assuming your collection is named 'users'
-            const querySnapshot = await getDocs(usersRef);
-            return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        }
+async function searchCountries(searchTerm) {
+    const paisesRef = collection(db, 'paises');
+    const searchTermLower = searchTerm.toLowerCase();
+    const querySnapshot = await getDocs(collection(db, 'paises'));
+    const results = querySnapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter(country => country.nome.toLowerCase().includes(searchTermLower));
+    return results;
+}
+
+async function searchClubs(searchTerm) {
+    const clubesRef = collection(db, 'clubes');
+    const searchTermLower = searchTerm.toLowerCase();
+    const querySnapshot = await getDocs(collection(db, 'clubes'));
+    const results = querySnapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter(club => club.nome.toLowerCase().includes(searchTermLower));
+    return results;
+}
+
+async function fetchUsers() {
+    const usersRef = collection(db, 'users');
+    const querySnapshot = await getDocs(usersRef);
+    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+}
+
+function openParamsPopup() {
+    paramsOverlay.classList.add('active');
+    paramsPopup.classList.add('active');
+}
+
+function closeParamsPopupFunction() {
+    paramsOverlay.classList.remove('active');
+    paramsPopup.classList.remove('active');
+}
 
 
-        document.addEventListener('DOMContentLoaded', async () => {
-            const form = document.getElementById('criar-jogador-form');
-            const nomeInput = document.getElementById('nome-jogador');
-            const paisInput = document.getElementById('pais-jogador');
-            const paisList = document.getElementById('pais-list');
-            const clubeInput = document.getElementById('clube-jogador');
-            const clubeList = document.getElementById('clube-list');
-            const compradorJogadorSelect = document.getElementById('comprador-jogador');
-            let selectedPaisId = null;
-            let selectedClubeId = null;
+async function fetchAndDisplayCategories() {
+    try {
+        const paineisRef = doc(db, 'paineis', 'paineis coeficiente');
+        const paineisDoc = await getDoc(paineisRef);
 
-            // Populate Users dropdown
-            try {
-                const users = await fetchUsers();
-                users.forEach(user => {
-                    const option = document.createElement('option');
-                    option.value = user.id; // Store user ID as value
-                    option.textContent = user.nomeDeUsuario; // Display nomeDeUsuario
-                    compradorJogadorSelect.appendChild(option);
-                });
-            } catch (error) {
-                console.error('Erro ao buscar Users:', error);
+        if (paineisDoc.exists() && paineisDoc.data().paineis_coeficiente) {
+            const paineisCoeficiente = paineisDoc.data().paineis_coeficiente;
+            categoriesList.innerHTML = '';
+
+            for (const categoria in paineisCoeficiente) {
+                if (paineisCoeficiente.hasOwnProperty(categoria)) {
+                    // Create Category Title Element
+                    const categoriaTitle = document.createElement('h4'); // Use h4 or similar
+                    categoriaTitle.textContent = categoria;
+                    categoriesList.appendChild(categoriaTitle);
+
+                    // Create Subcategory Container (Flexbox)
+                    const subcategoriesContainer = document.createElement('div');
+                    subcategoriesContainer.className = 'subcategories-container'; // Add a class for styling
+                    categoriesList.appendChild(subcategoriesContainer);
+
+                    const subcategorias = paineisCoeficiente[categoria];
+                    if (subcategorias && typeof subcategorias === 'object') {
+                        for (const subcategoriaNome in subcategorias) {
+                            if (subcategorias.hasOwnProperty(subcategoriaNome)) {
+                                const subcategoriaData = subcategorias[subcategoriaNome];
+
+                                // Create Subcategory Card
+                                const subcategoryCard = document.createElement('div');
+                                subcategoryCard.className = 'subcategory-card';
+
+                                // Subcategory Name (Visible Initially)
+                                const subcategoryNameSpan = document.createElement('span');
+                                subcategoryNameSpan.className = 'subcategory-name';
+                                subcategoryNameSpan.textContent = subcategoriaNome;
+                                subcategoryCard.appendChild(subcategoryNameSpan);
+
+                                // Card Click Event Listener (Open Popup)
+                                subcategoryCard.addEventListener('click', () => {
+                                    openDetailedInfoPopup(categoria, subcategoriaNome, subcategoriaData);
+                                });
+
+                                subcategoriesContainer.appendChild(subcategoryCard);
+                            }
+                        }
+                    }
+                }
             }
+        } else {
+            categoriesList.innerHTML = '<li>Nenhuma categoria/subcategoria encontrada.</li>';
+        }
+    } catch (error) {
+        console.error("Erro ao buscar categorias:", error);
+        categoryMessage.textContent = "Erro ao carregar categorias.";
+    }
+}
+
+function openDetailedInfoPopup(categoria, subcategoriaNome, subcategoriaData) {
+    // Create Popup Overlay
+    const popupOverlay = document.createElement('div');
+    popupOverlay.className = 'popup-overlay';
+    const popupContainer = document.createElement('div');
+    popupContainer.className = 'detailed-info-popup';
+
+    // Popup Content - using backticks for cleaner HTML structure
+    popupContainer.innerHTML = `
+        <h3>${subcategoriaNome}</h3>
+        <p><strong>Categoria:</strong> ${categoria}</p>
+        <p><strong>Casta:</strong> ${subcategoriaData.casta.join(', ') || 'N/A'}</p>
+        <p><strong>Tipo:</strong> ${formatTipoInfo(subcategoriaData.tipo) || 'N/A'}</p>
+        <div class="button-group">
+            <button class="edit-btn">Editar</button>
+            <button class="delete-btn">Excluir</button>
+            <button class="close-popup">Fechar</button>
+        </div>
+    `;
+
+    function formatTipoInfo(tipoData) {
+        if (!tipoData) return 'N/A';
+        if (Array.isArray(tipoData)) {
+            return tipoData.map(item => {
+                if (typeof item === 'string') return item; // Handle old format (array of strings)
+                return `${item.name} (${item.text || '-'})`; // Display with text value, or '-' if no text
+            }).join(', ');
+        }
+        return 'N/A'; // Handle cases where tipoData is not an array
+    }
 
 
-            // Create validation message element
-            const validationMessage = document.createElement('div');
-            validationMessage.style.color = '#ff0000';
-            validationMessage.style.marginTop = '5px';
-            validationMessage.style.fontSize = '14px';
-            nomeInput.parentNode.appendChild(validationMessage);
+    // Event Listeners for Edit/Delete/Close (inside popupContainer)
+    const editBtn = popupContainer.querySelector('.edit-btn');
+    editBtn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        // --- Modo de Edição ---
+        // Replace popup content with edit form (Adapt your existing edit form logic here)
+        popupContainer.innerHTML = `
+            <h3>Editar ${subcategoriaNome}</h3>
+            <p><strong>Categoria:</strong> ${categoria}</p>
+            <div class="edit-mode">
+                - Subcategoria: <input type="text" class="edit-subcategoria-nome" value="${subcategoriaNome}">
+                <div class="checkbox-group">
+                    Casta: ${createCastaCheckboxes(subcategoriaData.casta)}
+                </div>
+                <div class="checkbox-group">
+                    Tipo: ${createTipoCheckboxes(subcategoriaData.tipo)}
+                </div>
+                <div class="button-group">
+                    <button class="save-btn">Salvar</button>
+                    <button class="cancel-btn">Cancelar</button>
+                </div>
+            </div>
+        `;
+        // Re-attach event listeners for save and cancel buttons in edit mode
+        const saveBtn = popupContainer.querySelector('.save-btn');
+        saveBtn.addEventListener('click', async () => {
+            const newSubcategoriaNome = popupContainer.querySelector('.edit-subcategoria-nome').value.trim();
+            const newCasta = getCheckedValues(popupContainer.querySelector('.edit-mode'), 'casta');
+            const newTipo = getTipoValuesFromEdit(popupContainer.querySelector('.edit-mode')); // Function to get Tipo and Text values
 
-            // Handle player name validation
-            nomeInput.addEventListener('input', async (e) => {
-                const searchTerm = e.target.value.trim();
-                if (searchTerm.length < 2) {
-                    validationMessage.textContent = '';
-                    return;
-                }
-
-                try {
-                    const jogadoresRef = collection(db, 'jogadores');
-                    const querySnapshot = await getDocs(jogadoresRef);
-                    const exists = querySnapshot.docs.some(doc =>
-                        doc.data().nome.toLowerCase() === searchTerm.toLowerCase()
-                    );
-
-                    validationMessage.textContent = exists ? 'Jogador Já Criado!' : '';
-                } catch (error) {
-                    console.error('Erro ao verificar nome do jogador:', error);
-                }
-            });
-
-            // Handle country search
-            paisInput.addEventListener('input', async (e) => {
-                const searchTerm = e.target.value.trim();
-                if (searchTerm.length < 2) {
-                    paisList.innerHTML = '';
-                    return;
-                }
-
-                try {
-                    const countries = await searchCountries(searchTerm);
-                    paisList.innerHTML = '';
-                    countries.forEach(country => {
-                        const div = document.createElement('div');
-                        div.className = 'search-option';
-                        div.textContent = country.nome;
-                        div.addEventListener('click', () => {
-                            paisInput.value = country.nome;
-                            selectedPaisId = country.id;
-                            paisList.innerHTML = '';
-                        });
-                        paisList.appendChild(div);
-                    });
-                } catch (error) {
-                    console.error('Erro ao buscar países:', error);
-                }
-            });
-
-            // Handle club search
-            clubeInput.addEventListener('input', async (e) => {
-                const searchTerm = e.target.value.trim();
-                if (searchTerm.length < 2) {
-                    clubeList.innerHTML = '';
-                    return;
-                }
-
-                try {
-                    const clubs = await searchClubs(searchTerm);
-                    clubeList.innerHTML = '';
-                    clubs.forEach(club => {
-                        const div = document.createElement('div');
-                        div.className = 'search-option';
-                        div.textContent = `${club.nome} (${club.pais})`;
-                        // When selected, only store the club name without the country
-                        clubeInput.value = club.nome;
-                        div.addEventListener('click', () => {
-                            clubeInput.value = club.nome;
-                            selectedClubeId = club.id;
-                            clubeList.innerHTML = '';
-                        });
-                        clubeList.appendChild(div);
-                    });
-                } catch (error) {
-                    console.error('Erro ao buscar clubes:', error);
-                }
-            });
-
-            // Form submission handler
-            form.addEventListener('submit', async (e) => {
-                e.preventDefault();
-
-                const nomeJogador = document.getElementById('nome-jogador').value;
-                const imagemJogador = document.getElementById('imagem-jogador').value;
-                const posicaoJogador = document.getElementById('posicao-jogador').value;
-                const overallJogador = document.getElementById('overall-jogador').value;
-                const castaJogador = document.getElementById('casta-jogador').value;
-                const mercadoJogador = document.getElementById('mercado-jogador').value === 'true';
-                const precoJogador = parseInt(document.getElementById('preco-jogador').value) || null; // Get price value
-                const compradorJogadorId = document.getElementById('comprador-jogador').value || null; // Get selected user id, will be null if "Ninguém" is selected
-
-                if (!selectedPaisId) {
-                    alert('Por favor, selecione um país válido da lista.');
-                    return;
-                }
-
-                if (!selectedClubeId) {
-                    alert('Por favor, selecione um clube válido da lista.');
-                    return;
-                }
-
-                try {
-                    // Add new player to 'jogadores' collection
-                    const jogadorData = {
-                        nome: nomeJogador,
-                        imagem: imagemJogador,
-                        paisId: selectedPaisId,
-                        pais: paisInput.value,
-                        clube: clubeInput.value, // Store just the club name string
-                        posicao: posicaoJogador,
-                        overall: parseInt(overallJogador) || null,
-                        casta: castaJogador || null,
-                        noMercado: mercadoJogador,
-                        preco: precoJogador, // Include price as "preco"
-                        compradopor: compradorJogadorId, // Include userId as "compradopor"
-                        dataCriacao: new Date()
-                    };
-                    const jogadorRef = await addDoc(collection(db, 'jogadores'), jogadorData);
-                    const jogadorId = jogadorRef.id;
-
-
-                    // Add player document to the 'jogadores' subcollection of the club
-                    const clubeJogadoresRef = doc(db, 'clubes', selectedClubeId, 'jogadores', jogadorId);
-                    await setDoc(clubeJogadoresRef, jogadorData); // Alteração aqui: passar jogadorData completo
-
-
-                    alert('Jogador criado com sucesso!');
-                    form.reset();
-                    selectedPaisId = null;
-                    selectedClubeId = null;
-                } catch (error) {
-                    console.error('Erro ao criar jogador:', error);
-                    alert('Erro ao criar jogador. Por favor, tente novamente.');
-                }
-            });
+            if (newSubcategoriaNome) {
+                await updateSubcategory(categoria, subcategoriaNome, newSubcategoriaNome, newCasta, newTipo);
+                fetchAndDisplayCategories(); // Refresh categories list
+                closePopup();
+            } else {
+                alert('O nome da subcategoria não pode estar vazio.');
+            }
         });
+
+        const cancelBtn = popupContainer.querySelector('.cancel-btn');
+        cancelBtn.addEventListener('click', () => {
+             closePopup(); // Close the detailed info popup on "Cancel"
+        });
+    });
+
+
+    const deleteBtn = popupContainer.querySelector('.delete-btn');
+    deleteBtn.addEventListener('click', async (event) => {
+        event.stopPropagation();
+        if (confirm(`Tem certeza que deseja excluir a subcategoria "${subcategoriaNome}"?`)) {
+            await deleteSubcategory(categoria, subcategoriaNome);
+            fetchAndDisplayCategories(); // Refresh categories list
+            closePopup();
+        }
+    });
+
+    const closeBtn = popupContainer.querySelector('.close-popup');
+    closeBtn.addEventListener('click', closePopup);
+
+    // Append Popup to Body
+    popupOverlay.appendChild(popupContainer);
+    document.body.appendChild(popupOverlay);
+
+    // Function to Close Popup
+    function closePopup() {
+        document.body.removeChild(popupOverlay);
+    }
+}
+
+
+// --- Funções Auxiliares ---
+
+function createCastaCheckboxes(selectedCasta) {
+    const castas = ["Jogador Ouro", "Jogador Prata", "Jogador Bronze", "Jogador Platina"];
+    let html = '';
+    castas.forEach(casta => {
+        const checked = selectedCasta.includes(casta) ? 'checked' : '';
+        html += `<label><input type="checkbox" name="casta" value="${casta}" ${checked}> ${casta}</label>`;
+    });
+    return html;
+}
+
+function createTipoCheckboxes(selectedTipo) {
+    const tipos = ["Guarda-Redes", "Defesa", "Médio", "Avançado"];
+    let html = '';
+    tipos.forEach(tipo => {
+        let isChecked = false;
+        let textValue = '';
+
+        if (Array.isArray(selectedTipo)) {
+            for (const selectedItem of selectedTipo) {
+                if (typeof selectedItem === 'object' && selectedItem.name === tipo) {
+                    isChecked = true;
+                    textValue = selectedItem.text || '';
+                    break;
+                }
+            }
+        } else if (Array.isArray(selectedTipo)) { // Redundant - remove later
+            isChecked = selectedTipo.includes(tipo);
+        }
+
+        const checkedAttribute = isChecked ? 'checked' : '';
+
+        html += `<label>`;
+        html += `<input type="checkbox" name="tipo" value="${tipo}" ${checkedAttribute}> ${tipo}`;
+        html += `<input type="text" name="tipo-text" class="tipo-text-input" maxlength="5" value="${textValue}" style="margin-left: 5px; width: 50px;">`;
+        html += `</label>`;
+    });
+    return html;
+}
+
+
+function getCheckedValues(container, name) {
+    const checkboxes = container.querySelectorAll(`input[name="${name}"]:checked`);
+    return Array.from(checkboxes).map(cb => cb.value);
+}
+
+function getTipoValuesFromEdit(container) {
+    const tipoCheckboxes = Array.from(container.querySelectorAll('input[name="tipo"]:checked'));
+    return tipoCheckboxes.map(checkbox => {
+        const tipoName = checkbox.value;
+        const textInput = checkbox.parentElement.querySelector('input[name="tipo-text"]');
+        const textValue = textInput ? textInput.value.trim() : '';
+        return { name: tipoName, text: textValue };
+    });
+}
+
+
+// --- Funções de CRUD (Firebase) ---
+
+async function updateSubcategory(categoria, oldSubcategoriaNome, newSubcategoriaNome, newCasta, newTipo) {
+    const paineisRef = doc(db, 'paineis', 'paineis coeficiente');
+    const paineisDoc = await getDoc(paineisRef);
+
+    if (paineisDoc.exists()) {
+        const paineisCoeficiente = { ...paineisDoc.data().paineis_coeficiente };
+
+        if (paineisCoeficiente[categoria] && paineisCoeficiente[categoria][oldSubcategoriaNome]) {
+            // Delete old entry
+            delete paineisCoeficiente[categoria][oldSubcategoriaNome];
+
+            // Add/update with new name and data
+            paineisCoeficiente[categoria][newSubcategoriaNome] = {
+                casta: newCasta,
+                tipo: newTipo
+            };
+
+            await updateDoc(paineisRef, { paineis_coeficiente: paineisCoeficiente });
+
+        }
+    }
+}
+
+async function deleteSubcategory(categoria, subcategoriaNome) {
+    const paineisRef = doc(db, 'paineis', 'paineis coeficiente');
+    const paineisDoc = await getDoc(paineisRef);
+
+    if (paineisDoc.exists()) {
+        const paineisCoeficiente = { ...paineisDoc.data().paineis_coeficiente };
+          if (paineisCoeficiente[categoria] && paineisCoeficiente[categoria][subcategoriaNome]) {
+            delete paineisCoeficiente[categoria][subcategoriaNome];
+            await updateDoc(paineisRef, { paineis_coeficiente: paineisCoeficiente });
+        }
+    }
+}
+
+
+async function saveCategories() {
+    const categoriaNome = categoriaNomeInput.value.trim();
+    const subcategoriaNome = subcategoriaNomeInput.value.trim();
+
+    const subcategoriaCasta = [];
+    const castaCheckboxes = document.getElementsByName('subcategoria-casta');
+    for (let i = 0; i < castaCheckboxes.length; i++) {
+        if (castaCheckboxes[i].checked) {
+            subcategoriaCasta.push(castaCheckboxes[i].value);
+        }
+    }
+
+    // Modified to get Tipo and Text values
+    const subcategoriaTipo = getTipoValuesFromSave();
+
+
+    if (!categoriaNome) {
+        categoryMessage.textContent = "Por favor, insira o nome da categoria.";
+        return;
+    }
+    categoryMessage.textContent = "";
+
+    try {
+        const paineisRef = doc(db, 'paineis', 'paineis coeficiente');
+        const paineisDoc = await getDoc(paineisRef);
+        let updatedPaineisCoeficiente = {};
+
+        if (paineisDoc.exists() && paineisDoc.data().paineis_coeficiente) {
+            updatedPaineisCoeficiente = { ...paineisDoc.data().paineis_coeficiente };
+        }
+
+        if (!updatedPaineisCoeficiente[categoriaNome]) {
+            updatedPaineisCoeficiente[categoriaNome] = {};
+        }
+
+        if (subcategoriaNome) {
+            // *** BLOCO IF REMOVIDO COMPLETAMENTE ***
+            // if (subcategoriaCasta.length === 0 && subcategoriaTipo.length === 0 && !updatedPaineisCoeficiente[categoriaNome][subcategoriaNome]) {
+            //     return; // **CONDIÇÃO REMOVIDA**
+            // }
+            if (subcategoriaCasta.length === 0 && subcategoriaTipo.length === 0 && updatedPaineisCoeficiente[categoriaNome][subcategoriaNome]) {
+                delete updatedPaineisCoeficiente[categoriaNome][subcategoriaNome];
+            }
+            else {
+                updatedPaineisCoeficiente[categoriaNome][subcategoriaNome] = {
+                    casta: subcategoriaCasta,
+                    tipo: subcategoriaTipo
+                };
+            }
+        }
+
+        // --- Correção: Usar a estrutura correta para setDoc e updateDoc ---
+        if (!paineisDoc.exists()) {
+            await setDoc(paineisRef, { paineis_coeficiente: updatedPaineisCoeficiente }, { merge: true });
+        } else {
+            await updateDoc(paineisRef, { paineis_coeficiente: updatedPaineisCoeficiente }); // CORRIGIDO!
+        }
+
+        categoriaNomeInput.value = '';
+        subcategoriaNomeInput.value = '';
+        castaCheckboxes.forEach(checkbox => checkbox.checked = false);
+        // No need to clear tipoCheckboxes here as getTipoValuesFromSave handles it dynamically
+
+        fetchAndDisplayCategories();
+        categoryMessage.textContent = "Categoria/Subcategoria salva com sucesso!";
+
+    } catch (error) {
+        console.error("Erro ao salvar categoria/subcategoria:", error);
+        categoryMessage.textContent = "Erro ao salvar. Verifique o console.";
+    }
+}
+
+function getTipoValuesFromSave() {
+    const tipoCheckboxes = document.querySelectorAll('input[name="subcategoria-tipo"]');
+    return Array.from(tipoCheckboxes).map(checkbox => {
+        const tipoName = checkbox.value;
+        const textInput = checkbox.parentElement.querySelector('input[name="tipo-text-new"]'); // Assuming you'll add name="tipo-text-new" in saveCategories form
+        const textValue = textInput ? textInput.value.trim() : '';
+        return checkbox.checked ? { name: tipoName, text: textValue } : null;
+    }).filter(item => item !== null); // Filter out unchecked ones
+}
+
+
+document.addEventListener('DOMContentLoaded', async () => {
+
+    let selectedPaisId = null;
+    let selectedClubeId = null;
+
+    addCategoryBtn.addEventListener('click', saveCategories);
+
+    paramsSettingsIcon.addEventListener('click', () => {
+        openParamsPopup();
+        fetchAndDisplayCategories();
+    });
+
+    closeParamsPopup.addEventListener('click', closeParamsPopupFunction);
+    paramsOverlay.addEventListener('click', closeParamsPopupFunction);
+    saveParamsBtn.addEventListener('click', () => {
+        closeParamsPopupFunction();
+        alert('Configurações salvas (simulado)!');
+    });
+
+    try {
+        const users = await fetchUsers();
+        users.forEach(user => {
+            const option = document.createElement('option');
+            option.value = user.id;
+            option.textContent = user.nomeDeUsuario;
+            compradorJogadorSelect.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Erro ao buscar Users:', error);
+    }
+
+    const validationMessage = document.createElement('div');
+    validationMessage.style.color = '#ff0000';
+    validationMessage.style.marginTop = '5px';
+    validationMessage.style.fontSize = '14px';
+    nomeInput.parentNode.appendChild(validationMessage);
+
+    nomeInput.addEventListener('input', async (e) => {
+        const searchTerm = e.target.value.trim();
+        if (searchTerm.length < 2) {
+            validationMessage.textContent = '';
+            return;
+        }
+        try {
+            const jogadoresRef = collection(db, 'jogadores');
+            const querySnapshot = await getDocs(jogadoresRef);
+            const exists = querySnapshot.docs.some(doc => doc.data().nome.toLowerCase() === searchTerm.toLowerCase());
+            validationMessage.textContent = exists ? 'Jogador Já Criado!' : '';
+        } catch (error) {
+            console.error('Erro ao verificar nome do jogador:', error);
+        }
+    });
+
+    paisInput.addEventListener('input', async (e) => {
+        const searchTerm = e.target.value.trim();
+        if (searchTerm.length < 2) {
+            paisList.innerHTML = '';
+            return;
+        }
+        try {
+            const countries = await searchCountries(searchTerm);
+            paisList.innerHTML = '';
+            countries.forEach(country => {
+                const div = document.createElement('div');
+                div.className = 'search-option';
+                div.textContent = country.nome;
+                div.addEventListener('click', () => {
+                    paisInput.value = country.nome;
+                    selectedPaisId = country.id;
+                    paisList.innerHTML = '';
+                });
+                paisList.appendChild(div);
+            });
+        } catch (error) {
+            console.error('Erro ao buscar países:', error);
+        }
+    });
+
+    clubeInput.addEventListener('input', async (e) => {
+        const searchTerm = e.target.value.trim();
+        if (searchTerm.length < 2) {
+            clubeList.innerHTML = '';
+            return;
+        }
+        try {
+            const clubs = await searchClubs(searchTerm);
+            clubeList.innerHTML = '';
+            clubs.forEach(club => {
+                const div = document.createElement('div');
+                div.className = 'search-option';
+                div.textContent = `${club.nome} (${club.pais})`;
+                clubeInput.value = club.nome;
+                div.addEventListener('click', () => {
+                    clubeInput.value = club.nome;
+                    selectedClubeId = club.id;
+                    clubeList.innerHTML = '';
+                });
+                clubeList.appendChild(div);
+            });
+        } catch (error) {
+            console.error('Erro ao buscar clubes:', error);
+        }
+    });
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const nomeJogador = document.getElementById('nome-jogador').value;
+        const imagemJogador = document.getElementById('imagem-jogador').value;
+        const posicaoJogador = document.getElementById('posicao-jogador').value;
+        const overallJogador = document.getElementById('overall-jogador').value;
+        const castaJogador = document.getElementById('casta-jogador').value;
+        const mercadoJogador = document.getElementById('mercado-jogador').value === 'true';
+        const precoJogador = parseInt(document.getElementById('preco-jogador').value) || null;
+        const compradorJogadorId = document.getElementById('comprador-jogador').value || null;
+
+        if (!selectedPaisId) {
+            alert('Por favor, selecione um país válido da lista.');
+            return;
+        }
+        if (!selectedClubeId) {
+            alert('Por favor, selecione um clube válido da lista.');
+            return;
+        }
+
+        try {
+            const jogadorData = {
+                nome: nomeJogador,
+                imagem: imagemJogador,
+                paisId: selectedPaisId,
+                pais: paisInput.value,
+                clube: clubeInput.value,
+                posicao: posicaoJogador,
+                overall: parseInt(overallJogador) || null,
+                casta: castaJogador || null,
+                noMercado: mercadoJogador,
+                preco: precoJogador,
+                compradopor: compradorJogadorId,
+                dataCriacao: new Date()
+            };
+            const jogadorRef = await addDoc(collection(db, 'jogadores'), jogadorData);
+            const jogadorId = jogadorRef.id;
+
+            const clubeJogadoresRef = doc(db, 'clubes', selectedClubeId, 'jogadores', jogadorId);
+            await setDoc(clubeJogadoresRef, jogadorData);
+
+            alert('Jogador criado com sucesso!');
+            form.reset();
+            selectedPaisId = null;
+            selectedClubeId = null;
+        } catch (error) {
+            console.error('Erro ao criar jogador:', error);
+            alert('Erro ao criar jogador. Por favor, tente novamente.');
+        }
+    });
+    });
+
     </script>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+     * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
 
-        body {
-            min-height: 100vh;
-            background-color: #f0f0f0;
-            font-family: Arial, sans-serif;
-        }
+body {
+    min-height: 100vh;
+    background-color: #f0f0f0;
+    font-family: Arial, sans-serif;
+}
 
-        .top-menu {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            background-color: #ffffff;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-            padding: 12px 0;
-            display: flex;
-            justify-content: center;
-            gap: 24px;
-            align-items: center;
-            z-index: 1000;
-        }
+/* ... (outros estilos do menu, etc. - MANTENHA OS ESTILOS ORIGINAIS AQUI) ... */
 
-        .menu-item {
-            text-decoration: none;
-            color: #666;
-            transition: color 0.3s ease;
-            font-weight: 500;
-            padding: 8px 16px;
-            border-radius: 4px;
-            font-size: 14px;
-            line-height: 1.4;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
+.top-menu {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    background-color: #ffffff;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    padding: 12px 0;
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    align-items: center;
+    z-index: 1000;
+}
 
-        .menu-item:hover, .menu-item.active {
-            color: #2176ff;
-            background-color: rgba(33, 118, 255, 0.1);
-        }
+.menu-item {
+    text-decoration: none;
+    color: #666;
+    transition: color 0.3s ease;
+    font-weight: 500;
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-size: 14px;
+    line-height: 1.4;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
 
-        .content {
-            padding: 80px 20px 20px;
-            max-width: 1200px;
-            margin: 0 auto;
-        }
+.menu-item:hover, .menu-item.active {
+    color: #2176ff;
+    background-color: rgba(33, 118, 255, 0.1);
+}
 
-        h1 {
-            color: #333;
-            margin-bottom: 30px;
-            text-align: center;
-        }
+.content {
+    padding: 80px 20px 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
 
-        .form-container {
-            max-width: 600px;
-            margin: 0 auto;
-            background-color: #ffffff;
-            padding: 30px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-        }
+h1 {
+    color: #333;
+    margin-bottom: 30px;
+    text-align: center;
+    position: relative;
+}
 
-        .form-group {
-            margin-bottom: 20px;
-            position: relative;
-        }
+.gear-icon {
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 24px;
+    color: #666;
+    cursor: pointer;
+    transition: color 0.3s ease;
+}
 
-        .form-group label {
-            display: block;
-            margin-bottom: 8px;
-            color: #333;
-            font-weight: 500;
-        }
+.gear-icon:hover {
+    color: #2176ff;
+}
 
-        .form-group input,
-        .form-group select {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 16px;
-            transition: border-color 0.3s ease;
-        }
+.form-container {
+    max-width: 600px;
+    margin: 0 auto;
+    background-color: #ffffff;
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
 
-        .form-group input:focus,
-        .form-group select:focus {
-            outline: none;
-            border-color: #2176ff;
-        }
+.form-group {
+    margin-bottom: 20px;
+    position: relative;
+}
 
-        #pais-list,
-        #competicao-list {
-            position: absolute;
-            top: 100%;
-            left: 0;
-            right: 0;
-            background-color: #ffffff;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            max-height: 200px;
-            overflow-y: auto;
-            z-index: 1000;
-        }
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    color: #333;
+    font-weight: 500;
+}
 
-        .search-option {
-            padding: 10px;
-            cursor: pointer;
-            transition: background-color 0.3s ease;
-        }
+.form-group input,
+.form-group select {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 16px;
+    transition: border-color 0.3s ease;
+}
 
-        .search-option:hover {
-            background-color: #f5f5f5;
-        }
+.form-group input:focus,
+.form-group select:focus {
+    outline: none;
+    border-color: #2176ff;
+}
 
-        .submit-btn {
-            background-color: #2176ff;
-            color: #ffffff;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 4px;
-            font-size: 16px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: background-color 0.3s ease;
-        }
+#pais-list,
+#competicao-list {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background-color: #ffffff;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 1000;
+}
 
-        .submit-btn:hover {
-            background-color: #1a5cc4;
-        }
-    </style>
+.search-option {
+    padding: 10px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+.search-option:hover {
+    background-color: #f5f5f5;
+}
+
+.submit-btn {
+    background-color: #2176ff;
+    color: #ffffff;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 4px;
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+.submit-btn:hover {
+    background-color: #1a5cc4;
+}
+
+/* Estilos para o popup de parâmetros */
+.overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 2000;
+}
+
+.overlay.active {
+    display: block;
+}
+
+.params-popup {
+    display: none;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: #fff;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    padding: 20px;
+    width: 90%;
+    max-width: 800px;
+    max-height: 80vh;
+    overflow-y: auto;
+    z-index: 2001;
+}
+
+.params-popup.active {
+    display: block;
+}
+
+.params-popup h2 {
+    margin-bottom: 20px;
+    color: #333;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 10px;
+}
+
+.params-popup .close-btn {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    font-size: 20px;
+    color: #666;
+    cursor: pointer;
+    transition: color 0.3s ease;
+}
+
+.params-popup .close-btn:hover {
+    color: #2176ff;
+}
+
+/* Novos estilos para o popup aprimorado */
+.param-section {
+    margin-bottom: 30px;
+    border: 1px solid #eee;
+    border-radius: 8px;
+    padding: 20px; /* Aumentei o padding */
+    background-color: #f9f9f9; /* Fundo levemente diferente */
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1); /* Sombra sutil */
+}
+
+.param-section h3 {
+    margin-bottom: 15px;
+    color: #333;
+    display: flex; /* Para alinhar o ícone */
+    align-items: center; /* Alinhar verticalmente */
+    gap: 10px; /* Espaço entre ícone e texto */
+    border-bottom: 1px solid #eee;
+    padding-bottom: 10px;
+}
+/*
+.form-group {
+    margin-bottom: 15px;
+}
+*/
+.form-group label {
+    display: block;
+    margin-bottom: 5px; /* Reduzi o margin */
+    color: #555; /* Cor um pouco mais escura */
+    font-weight: 500;
+}
+
+.form-group input[type="text"],
+.form-group input[type="number"],
+ .form-group select
+ {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ccc; /* Borda mais suave */
+    border-radius: 4px;
+    font-size: 16px;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease; /* Transição mais suave */
+}
+
+.form-group input[type="text"]:focus,
+.form-group input[type="number"]:focus,
+.form-group select:focus
+ {
+    outline: none;
+    border-color: #2176ff;
+    box-shadow: 0 0 5px rgba(33, 118, 255, 0.5); /* Sombra ao focar */
+}
+
+.checkbox-group {
+    display: flex;
+    flex-direction: row; /* Exibe os itens lado a lado */
+    flex-wrap: wrap; /* Permite quebrar a linha se não houver espaço */
+    gap: 15px; /* Ajuste o espaçamento horizontal entre os itens */
+    margin-top: 5px;
+}
+
+.checkbox-group label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+    color: #555;
+    font-size: 14px;
+    /* width: auto;  Ou width: alguma porcentagem se precisar limitar a largura */
+    white-space: nowrap; /* Impede que o texto do label quebre linha */
+}
+
+/* Estilos para os checkboxes customizados */
+.checkbox-group input[type="checkbox"] {
+    appearance: none; /* Remove a aparência padrão */
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    width: 18px;
+    height: 18px;
+    border: 2px solid #ccc;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+.checkbox-group input[type="checkbox"]:checked {
+    background-color: #2176ff;
+    border-color: #2176ff;
+}
+
+/* Ícone dentro do checkbox (usando pseudoelemento) */
+.checkbox-group input[type="checkbox"]:checked::before {
+    content: '\f00c'; /* Código do ícone de check (Font Awesome) */
+    font-family: 'Font Awesome 6 Free'; /* Ajuste para a versão do Font Awesome */
+    font-weight: 900;
+    font-size: 12px;
+    color: white;
+    display: flex; /* Para centralizar o ícone */
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+}
+
+.add-category-btn {
+    background-color: #2176ff;
+    color: white;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 4px;
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+    display: flex; /* Para alinhar ícone e texto */
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+}
+ .add-category-btn:disabled {
+    background-color: #cccccc; /* Cor para botão desabilitado */
+    cursor: not-allowed;
+}
+
+.add-category-btn:hover {
+    background-color: #1a5cc4;
+}
+.existing-categories-section {
+    /* Estilos específicos para a seção de categorias existentes, se necessário */
+}
+/*
+.categories-list {
+    list-style: none;
+    padding: 0;
+}
+
+.categories-list li {
+    margin-bottom: 10px;
+    padding: 10px;
+    border-radius: 4px;
+    background-color: #eee;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    font-size: 14px;
+
+}
+.categories-list > li{
+     margin-bottom: 10px;
+    padding: 10px;
+    border-radius: 4px;
+    background-color: #ffffff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    font-size: 14px;
+}
+.categories-list ul {
+    list-style: none;
+    padding-left: 20px;
+    margin-top: 5px;
+}
+
+.categories-list li li {
+    background-color: #f5f5f5;
+
+}
+*/
+.message-error {
+    color: #ff0000;
+    margin-top: 5px;
+    font-size: 14px;
+}
+  .save-params-btn {
+    background-color: #4CAF50; /* tom verde */
+    color: white;
+    padding: 10px 15px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: background-color 0.3s ease;
+    display: block; /* Ocupa toda a largura */
+    width: 100%; /* Garante que ocupa toda a largura */
+    margin-top: 20px; /* Espaço do topo */
+}
+
+.save-params-btn:hover {
+    background-color: #388E3C; /*tom verde escuro */
+}
+
+
+/* Estilos gerais para a lista */
+.categories-list {
+    list-style: none;
+    padding: 0;
+}
+
+.categories-list > h4 { /* Style for category titles */
+    margin-bottom: 10px; /* Space below category title */
+    padding: 10px;
+    border-radius: 8px;
+    background-color: #f0f0f0; /* Light grey background for titles */
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    font-size: 18px;
+    font-weight: bold;
+    color: #333;
+}
+
+
+.subcategories-container {
+    display: flex; /* Use flexbox for horizontal layout */
+    flex-wrap: wrap; /* Allow cards to wrap to the next line */
+    gap: 10px; /* Space between cards */
+    margin-bottom: 15px; /* Space after each category */
+}
+
+.subcategory-card {
+    background-color: #f0f0f0;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    padding: 10px;
+    cursor: pointer;
+    width: 150px; /* Adjust as needed */
+    text-align: center;
+    transition: background-color 0.3s ease;
+}
+
+.subcategory-card:hover {
+    background-color: #e0e0e0;
+}
+
+.subcategory-name {
+    font-weight: bold;
+}
+
+
+/* Popup Styles */
+.popup-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5); /* Semi-transparent background */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2002; /* Increased z-index to be on top of params-popup overlay (2000) and params-popup (2001) */
+}
+
+.detailed-info-popup {
+    background-color: #fff;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    width: 80%; /* Adjust as needed */
+    max-width: 600px;
+    text-align: center;
+    z-index: 2003; /* Increased z-index to be on top of params-popup */
+}
+
+.detailed-info-popup h3 {
+    margin-bottom: 10px;
+}
+
+.detailed-info-popup p {
+    margin-bottom: 8px;
+    text-align: left; /* Align text within paragraphs to the left */
+}
+
+.detailed-info-popup button {
+    margin: 5px;
+}
+
+.detailed-info-popup .button-group {
+    margin-top: 15px; /* Add some space above the buttons */
+    display: flex;
+    justify-content: center; /* Center buttons horizontally */
+    gap: 10px; /* Space between buttons */
+}
+
+
+.close-popup{
+    background-color: #ccc; /* Cinza */
+    color: #333;
+}
+.close-popup:hover{
+     background-color: #bbb;
+}
+
+/* edit mode inside popup */
+.detailed-info-popup .edit-mode {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background-color: #fff;
+    text-align: left; /* Ensure text inside edit mode is left-aligned */
+    margin-top: 10px; /* Add margin above edit form */
+}
+.detailed-info-popup .edit-mode input[type="text"] {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 14px;
+}
+.detailed-info-popup .edit-mode .checkbox-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 5px; /* Add a little space above checkbox groups */
+}
+.detailed-info-popup .edit-mode .checkbox-group label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+.detailed-info-popup .edit-mode .button-group {
+    margin-top: 15px;
+    justify-content: flex-end; /* Align buttons to the right in edit mode */
+}
+
+
+/* Re-using button styles - Ensure these are consistent */
+.edit-btn, .delete-btn, .save-btn, .cancel-btn, .close-popup {
+    padding: 8px 16px; /* Slightly larger buttons */
+    border-radius: 4px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background-color 0.2s ease, color 0.2s ease;
+    border: none;
+    margin-left: 5px; /*spacing between buttons if needed*/
+    margin-right: 5px;
+}
+.edit-btn { background-color: #2196F3; color: white; }
+.edit-btn:hover{ background-color: #1976D2; }
+.delete-btn { background-color: #F44336; color: white; }
+.delete-btn:hover{ background-color: #D32F2F; }
+.save-btn { background-color: #4CAF50; color: white; }
+.save-btn:hover{ background-color: #388E3C; }
+.cancel-btn, .close-popup { background-color: #ccc; color: #333; }
+.cancel-btn:hover, .close-popup:hover{ background-color: #bbb; }
+
+
+</style>
+
 </head>
 <body>
     <nav class="top-menu">
-        <a href="engrenagem.html" class="menu-item">
+        <!-- (Seu menu - MANTENHA O HTML DO MENU AQUI) -->
+         <a href="engrenagem.html" class="menu-item">
             <i class="fas fa-home"></i>
         </a>
         <a href="criar-gplayer.html" class="menu-item">
@@ -400,10 +1177,11 @@
     </nav>
 
     <div class="content">
-        <h1>Criar Jogadores</h1>
+        <h1>Criar Jogadores <i class="fas fa-cog gear-icon" id="params-settings-icon"></i></h1>
         <div class="form-container">
             <form id="criar-jogador-form">
-                <div class="form-group">
+                <!-- (Seu formulário - MANTENHA O HTML DO FORMULÁRIO AQUI) -->
+                 <div class="form-group">
                     <label for="nome-jogador">Nome do Jogador</label>
                     <input type="text" id="nome-jogador" name="nome-jogador" required>
                 </div>
@@ -463,8 +1241,61 @@
                     </select>
                 </div>
                 <button type="submit" class="submit-btn">Criar Jogador</button>
+
             </form>
         </div>
+    </div>
+
+    <!-- Overlay and Popup for Parameters Settings -->
+    <div class="overlay" id="params-overlay"></div>
+    <div class="params-popup" id="params-popup">
+        <!-- (Seu popup - MANTENHA O HTML DO POPUP AQUI, COM AS MODIFICAÇÕES) -->
+         <i class="fas fa-times close-btn" id="close-params-popup"></i>
+        <h2><i class="fas fa-cog"></i> Configurações de Parâmetros</h2>
+        <div id="params-container">
+            <!-- Adicionar Categoria e Subcategoria -->
+            <div class="param-section add-category-section">
+                <h3><i class="fas fa-plus-circle"></i> Adicionar Categoria/Subcategoria</h3>
+                <div class="form-group">
+                    <label for="categoria-nome">Nome da Categoria:</label>
+                    <input type="text" id="categoria-nome" name="categoria-nome">
+                </div>
+                <div class="form-group">
+                    <label for="subcategoria-nome">Nome da Subcategoria:</label>
+                    <input type="text" id="subcategoria-nome" name="subcategoria-nome">
+                </div>
+                <!-- Checkboxes para Casta -->
+                <div class="form-group">
+                    <label>Casta:</label>
+                    <div class="checkbox-group">
+                        <label><input type="checkbox" name="subcategoria-casta" value="Jogador Ouro"> <i class="fas fa-medal" style="color: gold;"></i> Jogador Ouro</label>
+                        <label><input type="checkbox" name="subcategoria-casta" value="Jogador Prata"> <i class="fas fa-medal" style="color: silver;"></i> Jogador Prata</label>
+                        <label><input type="checkbox" name="subcategoria-casta" value="Jogador Bronze"> <i class="fas fa-medal" style="color: #cd7f32;"></i> Jogador Bronze</label>
+                        <label><input type="checkbox" name="subcategoria-casta" value="Jogador Platina"> <i class="fas fa-medal" style="color: #e5e4e2;"></i> Jogador Platina</label>
+                    </div>
+                </div>
+                <!-- Checkboxes para Tipo de Jogador -->
+                <div class="form-group">
+                    <label>Tipo de Jogador:</label>
+                    <div class="checkbox-group">
+                        <label><input type="checkbox" name="subcategoria-tipo" value="Guarda-Redes"> <i class="fas fa-hands"></i> Guarda-Redes</label>
+                        <label><input type="checkbox" name="subcategoria-tipo" value="Defesa"> <i class="fas fa-shield-alt"></i> Defesa</label>
+                        <label><input type="checkbox" name="subcategoria-tipo" value="Médio"> <i class="fas fa-running"></i> Médio</label>
+                        <label><input type="checkbox" name="subcategoria-tipo" value="Avançado"> <i class="fas fa-futbol"></i> Avançado</label>
+                    </div>
+                </div>
+                <button class="add-category-btn" id="add-category-btn"><i class="fas fa-plus"></i> Adicionar</button>
+                <div id="category-message" class="message-error"></div>
+            </div>
+            <!-- Lista de Categorias e Subcategorias -->
+            <div class="param-section existing-categories-section">
+                <h3><i class="fas fa-list-ul"></i> Categorias e Subcategorias Existentes</h3>
+               <ul id="categories-list" class="categories-list">
+                   <!-- As categorias e subcategorias serão inseridas aqui dinamicamente -->
+               </ul>
+            </div>
+        </div>
+        <button class="save-params-btn" id="save-params-btn"><i class="fas fa-save"></i> Salvar Configurações</button>
     </div>
 </body>
 </html>
