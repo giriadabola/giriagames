@@ -435,30 +435,157 @@ async function fetchPaineisCoefficients() {
 
 async function displayFirebaseData(selectedPosition) {
     firebaseDataDisplay.innerHTML = '';
+    console.log('displayFirebaseData called with position:', selectedPosition);
 
     if (!selectedPosition) {
+        console.log('No position selected, returning');
         return;
     }
 
     const paineisCoeficienteData = await fetchPaineisCoefficients();
+    const estatisticasText = estatisticasJogadorInput.value;
+    console.log('Estatisticas text:', estatisticasText);
 
     if (paineisCoeficienteData) {
+        console.log('Paineis coeficiente data loaded successfully');
+        
+        // Create table structure
+        const table = document.createElement('table');
+        table.className = 'coeficientes-table';
+        
+        // Create table header
+        const thead = document.createElement('thead');
+        const headerRow = document.createElement('tr');
+        
+        const thSubcategoria = document.createElement('th');
+        thSubcategoria.textContent = 'Nome da Subcategoria';
+        
+        const thCoeficiente = document.createElement('th');
+        thCoeficiente.textContent = 'Coeficientes';
+        
+        const thEstatistica = document.createElement('th');
+        thEstatistica.textContent = 'Estatística';
+        
+        headerRow.appendChild(thSubcategoria);
+        headerRow.appendChild(thCoeficiente);
+        headerRow.appendChild(thEstatistica);
+        thead.appendChild(headerRow);
+        table.appendChild(thead);
+        
+        // Create table body
+        const tbody = document.createElement('tbody');
+        
+        // Process data and populate table
         for (const categoria in paineisCoeficienteData) {
+            console.log(`Processing categoria: ${categoria}`);
             const subcategorias = paineisCoeficienteData[categoria];
             for (const subcategoriaNome in subcategorias) {
+                console.log(`  Processing subcategoria: ${subcategoriaNome}`);
                 const subcategoria = subcategorias[subcategoriaNome];
                 if (subcategoria.tipo) {
                     for (const tipoItem of subcategoria.tipo) {
                         if (tipoItem.name === selectedPosition) {
-                            const dataItem = document.createElement('p');
-                            dataItem.textContent = `- ${subcategoriaNome}: ${tipoItem.text || '-'}`;
-                            firebaseDataDisplay.appendChild(dataItem);
+                            console.log(`    Match found for position ${selectedPosition} in subcategoria ${subcategoriaNome}`);
+                            
+                            // Create table row
+                            const row = document.createElement('tr');
+                            
+                            // Firebase value (default display text)
+                            let firebaseValue = tipoItem.text || '-';
+                            console.log(`    Firebase value: ${firebaseValue}`);
+                            
+                            // Initialize estatisticaValue
+                            let estatisticaValue = '-';
+                            
+                            if (estatisticasText) {
+                                // Create a regex to find the subcategory name followed by digits
+                                // Try different patterns to match various formats
+                                console.log(`    Trying to match subcategoria: ${subcategoriaNome}`);
+                                
+                                // Parse the statistics text line by line
+                                const lines = estatisticasText.split('\n');
+                                let found = false;
+                                
+                                for (const line of lines) {
+                                    // Check if line contains the subcategory name
+                                    if (line.toLowerCase().includes(subcategoriaNome.toLowerCase())) {
+                                        // Extract the value after the subcategory name
+                                        const parts = line.split(':');
+                                        if (parts.length > 1) {
+                                            // Clean the value to extract only numbers (integers or decimals)
+                                            estatisticaValue = parts[1].trim().replace(/[^0-9.,]/g, '');
+                                            found = true;
+                                            console.log(`    Found value in line format: ${estatisticaValue}`);
+                                            break;
+                                        }
+                                        
+                                        // Try another pattern: "- Subcategory: Value"
+                                        const dashParts = line.split('-');
+                                        if (dashParts.length > 1) {
+                                            const subParts = dashParts[1].trim().split(' ');
+                                            if (subParts.length > 0) {
+                                                // Get the last part which should be the value
+                                                estatisticaValue = subParts[subParts.length - 1].trim().replace(/[^0-9.,]/g, '');
+                                                found = true;
+                                                console.log(`    Found value in dash format: ${estatisticaValue}`);
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                                
+                                // If not found in line-by-line parsing, try regex as fallback
+                                if (!found) {
+                                    // Updated regex to better capture numeric values with potential surrounding characters
+                                    const regex = new RegExp(`${subcategoriaNome}[\\s:]*([\\(\\)\\s\\-\\d.,]+)`, 'i');
+                                    console.log(`    Searching with regex: ${regex}`);
+                                    
+                                    const match = estatisticasText.match(regex);
+                                    console.log(`    Regex match result:`, match);
+                                    
+                                    if (match && match[1]) {
+                                        // If found, use the extracted numeric value and clean it
+                                        estatisticaValue = match[1].replace(/[^0-9.,]/g, '');
+                                        console.log(`    Found value with regex: ${estatisticaValue}`);
+                                    } else {
+                                        console.log(`    No match found for subcategoria ${subcategoriaNome} in estatisticas text`);
+                                    }
+                                }
+                            }
+                            
+                            // Create table cells
+                            const tdSubcategoria = document.createElement('td');
+                            tdSubcategoria.textContent = subcategoriaNome;
+                            
+                            const tdCoeficiente = document.createElement('td');
+                            tdCoeficiente.textContent = firebaseValue;
+                            
+                            const tdEstatistica = document.createElement('td');
+                            tdEstatistica.textContent = estatisticaValue;
+                            
+                            // Add cells to row
+                            row.appendChild(tdSubcategoria);
+                            row.appendChild(tdCoeficiente);
+                            row.appendChild(tdEstatistica);
+                            
+                            // Add row to table body
+                            tbody.appendChild(row);
+                            
+                            console.log(`    Added to table: ${subcategoriaNome}: ${firebaseValue}, ${estatisticaValue}`);
                             break;
                         }
                     }
                 }
             }
         }
+        
+        // Add table body to table
+        table.appendChild(tbody);
+        
+        // Add table to display
+        firebaseDataDisplay.appendChild(table);
+    } else {
+        console.log('No paineis coeficiente data found');
     }
 }
 
@@ -684,9 +811,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         await displayFirebaseData(selectedPosition);
     });
 
-    estatisticasJogadorInput.addEventListener('input', () => {
+    estatisticasJogadorInput.addEventListener('input', async () => {
+        console.log('Estatisticas input changed:', estatisticasJogadorInput.value);
         if (estatisticasJogadorInput.value.trim() !== '') {
+            console.log('Showing coeficientes section');
             coeficientesSection.style.display = 'block';
+            // Update the coefficients display when statistics text changes
+            const selectedPosition = posicaoJogadorSelect.value;
+            if (selectedPosition) {
+                await displayFirebaseData(selectedPosition);
+            }
         } else {
             coeficientesSection.style.display = 'none';
         }
@@ -741,6 +875,35 @@ body {
 .menu-item:hover, .menu-item.active {
     color: #2176ff;
     background-color: rgba(33, 118, 255, 0.1);
+}
+
+/* Estilos para a tabela de coeficientes */
+.coeficientes-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+    font-size: 14px;
+}
+
+.coeficientes-table th, 
+.coeficientes-table td {
+    padding: 8px 12px;
+    text-align: left;
+    border: 1px solid #ddd;
+}
+
+.coeficientes-table th {
+    background-color: #f2f2f2;
+    font-weight: bold;
+    color: #333;
+}
+
+.coeficientes-table tr:nth-child(even) {
+    background-color: #f9f9f9;
+}
+
+.coeficientes-table tr:hover {
+    background-color: #f0f7ff;
 }
 
 .content {
