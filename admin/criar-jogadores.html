@@ -43,9 +43,11 @@ const clubeInput = document.getElementById('clube-jogador');
 const clubeList = document.getElementById('clube-list');
 const compradorJogadorSelect = document.getElementById('comprador-jogador');
 const posicaoJogadorSelect = document.getElementById('posicao-jogador');
+const castaJogadorSelect = document.getElementById('casta-jogador'); // Define castaJogadorSelect here
 const firebaseDataDisplay = document.getElementById('firebase-data-display');
 const estatisticasJogadorInput = document.getElementById('estatisticas-jogador');
 const coeficientesSection = document.getElementById('coeficientes-section');
+const overallJogadorInput = document.getElementById('overall-jogador'); // Get Overall input element
 
 
 // --- Funções no escopo global ---
@@ -292,9 +294,9 @@ function createTipoCheckboxes(selectedTipo) {
 
         if (Array.isArray(selectedTipo)) {
             for (const selectedItem of selectedTipo) {
-                if (typeof selectedItem === 'object' && selectedItem.name === tipo) {
+                if (typeof item === 'object' && item.name === tipo) {
                     isChecked = true;
-                    textValue = selectedItem.text || '';
+                    textValue = item.text || '';
                     break;
                 }
             }
@@ -476,24 +478,18 @@ async function fetchPaineisCoefficients() {
 
 async function displayFirebaseData(selectedPosition) {
     firebaseDataDisplay.innerHTML = '';
-    console.log('displayFirebaseData called with position:', selectedPosition);
 
     if (!selectedPosition) {
-        console.log('No position selected, returning');
         return;
     }
 
     const paineisCoeficienteData = await fetchPaineisCoefficients();
     const estatisticasText = estatisticasJogadorInput.value;
-    console.log('Estatisticas text:', estatisticasText);
 
     if (paineisCoeficienteData) {
-        console.log('Paineis coeficiente data loaded successfully');
 
         // Get the selected 'casta' from the dropdown
-        const castaJogadorSelect = document.getElementById('casta-jogador');
         const selectedCasta = castaJogadorSelect.value;
-        console.log(`Selected Casta: ${selectedCasta}`);
 
         // Create table structure
         const table = document.createElement('table');
@@ -525,22 +521,18 @@ async function displayFirebaseData(selectedPosition) {
 
         // Process data and create rows (but don't append yet)
         for (const categoria in paineisCoeficienteData) {
-            console.log(`Processing categoria: ${categoria}`);
             const subcategorias = paineisCoeficienteData[categoria];
             for (const subcategoriaNome in subcategorias) {
-                console.log(`  Processing subcategoria: ${subcategoriaNome}`);
                 const subcategoria = subcategorias[subcategoriaNome];
                 if (subcategoria.tipo) {
                     for (const tipoItem of subcategoria.tipo) {
                         if (tipoItem.name === selectedPosition) {
-                            console.log(`    Match found for position ${selectedPosition} in subcategoria ${subcategoriaNome}`);
 
                             // Create table row
                             const row = document.createElement('tr');
 
                             // Firebase value (default display text) - Coefficient
                             let firebaseValue = tipoItem.text || '-';
-                            console.log(`    Firebase value (coefficient): ${firebaseValue}`);
                             const coefficientValue = parseFloat(firebaseValue.replace(',', '.')); // Parse coefficient
 
                             // Initialize estatisticaValue
@@ -559,17 +551,14 @@ async function displayFirebaseData(selectedPosition) {
                                             if (numberMatch) {
                                                 estatisticaValue = numberMatch[1]; // Extract the matched number (group 1)
                                                 statisticNumber = parseFloat(estatisticaValue.replace(',', '.')); // Parse statistic
-                                                console.log(`    Found value (statistic): ${estatisticaValue}, Parsed: ${statisticNumber}`);
                                             } else {
                                                 estatisticaValue = '-'; // No number found at the start of the line
                                                 statisticNumber = 0;
-                                                console.log(`    No number found at start of line after subcategory: ${subcategoriaNome}`);
                                             }
                                             break; // Stop after finding the value for this subcategory
                                         } else {
                                             estatisticaValue = '-'; // No value line found
                                             statisticNumber = 0;
-                                            console.log(`    No value line found after subcategoria: ${subcategoriaNome}`);
                                         }
                                     }
                                 }
@@ -578,7 +567,6 @@ async function displayFirebaseData(selectedPosition) {
                             // Calculate row total and add to totalSum
                             const rowTotal = coefficientValue * statisticNumber;
                             totalSum += rowTotal;
-                            console.log(`    Row Total (${subcategoriaNome}): ${rowTotal}, Current Total Sum: ${totalSum}`);
 
 
                             // Create table cells
@@ -598,7 +586,6 @@ async function displayFirebaseData(selectedPosition) {
 
                             rows.push(row); // Add row to the array for sorting
 
-                            console.log(`    Created row for table: ${subcategoriaNome}: ${firebaseValue}, ${estatisticaValue}`);
                             break;
                         }
                     }
@@ -658,15 +645,33 @@ async function displayFirebaseData(selectedPosition) {
         tdCastaValue.textContent = coeficienteCastaValue;
         tdCastaValue.style.fontWeight = 'bold';
 
+        // --- Calculate and set the value for "Estatística" column in "Coeficiente" row ---
+        let coeficienteStatisticValue = '-';
+        const totalStatisticCell = totalRow.querySelector('td:nth-child(3)'); // Get the 3rd cell (Estatística) of the "Total" row
+        if (totalStatisticCell) {
+            const totalStatistic = parseFloat(totalStatisticCell.textContent.replace(',', '.'));
+            const coefficientValueForCalculation = parseFloat(coeficienteCastaValue.replace(',', '.')); // Use the coefficient value itself
+            if (!isNaN(coefficientValueForCalculation) && !isNaN(totalStatistic)) {
+                coeficienteStatisticValue = (coefficientValueForCalculation * totalStatistic).toFixed(2);
+            }
+        }
 
-        const tdEmptyStatistic = document.createElement('td'); // Empty statistic cell for "Coeficiente" row
-        tdEmptyStatistic.textContent = '-';
+
+        const tdEmptyStatistic = document.createElement('td'); // Empty statistic cell for "Coeficiente" row - now used for calculated value
+        tdEmptyStatistic.textContent = coeficienteStatisticValue; // Set the calculated value here
 
 
         coeficienteRow.appendChild(tdCoeficienteLabel);
         coeficienteRow.appendChild(tdCastaValue);
         coeficienteRow.appendChild(tdEmptyStatistic);
         tbody.appendChild(coeficienteRow);
+
+        // --- Set Overall Input Value ---
+        if (coeficienteStatisticValue !== '-') {
+            overallJogadorInput.value = coeficienteStatisticValue;
+        } else {
+            overallJogadorInput.value = ''; // Clear the input if no value to display
+        }
 
 
         // Add table body to table
@@ -675,7 +680,7 @@ async function displayFirebaseData(selectedPosition) {
         // Add table to display
         firebaseDataDisplay.appendChild(table);
     } else {
-        console.log('No paineis coeficiente data found');
+        console.log("No paineis coeficiente data found");
     }
 }
 
@@ -901,12 +906,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         await displayFirebaseData(selectedPosition);
     });
 
+    castaJogadorSelect.addEventListener('change', async () => {
+        const selectedPosition = posicaoJogadorSelect.value;
+        await displayFirebaseData(selectedPosition);
+    });
+
     estatisticasJogadorInput.addEventListener('input', async () => {
-        console.log('Estatisticas input changed:', estatisticasJogadorInput.value);
         if (estatisticasJogadorInput.value.trim() !== '') {
-            console.log('Showing coeficientes section');
             coeficientesSection.style.display = 'block';
-            // Update the coefficients display when statistics text changes
             const selectedPosition = posicaoJogadorSelect.value;
             if (selectedPosition) {
                 await displayFirebaseData(selectedPosition);
@@ -916,6 +923,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 });
+
 
     </script>
     <style>
