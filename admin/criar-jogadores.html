@@ -188,7 +188,7 @@ function openDetailedInfoPopup(categoria, subcategoriaNome, subcategoriaData) {
             <div class="edit-mode">
                 - Subcategoria: <input type="text" class="edit-subcategoria-nome" value="${subcategoriaNome}">
                 <div class="checkbox-group">
-                    Casta: ${createCastaCheckboxes(subcategoriaData.casta)}
+                    Casta: ${createCastaCheckboxes(subcategoriaData.casta, categoria, subcategoriaNome)}
                 </div>
                 <div class="checkbox-group">
                     Tipo: ${createTipoCheckboxes(subcategoriaData.tipo)}
@@ -203,7 +203,7 @@ function openDetailedInfoPopup(categoria, subcategoriaNome, subcategoriaData) {
         const saveBtn = popupContainer.querySelector('.save-btn');
         saveBtn.addEventListener('click', async () => {
             const newSubcategoriaNome = popupContainer.querySelector('.edit-subcategoria-nome').value.trim();
-            const newCasta = getCheckedValues(popupContainer.querySelector('.edit-mode'), 'casta');
+            const newCasta = getCastaValuesFromEdit(categoria, subcategoriaNome, popupContainer.querySelector('.edit-mode'));
             const newTipo = getTipoValuesFromEdit(popupContainer.querySelector('.edit-mode'));
 
             if (newSubcategoriaNome) {
@@ -248,15 +248,40 @@ function openDetailedInfoPopup(categoria, subcategoriaNome, subcategoriaData) {
 
 // --- Funções Auxiliares ---
 
-function createCastaCheckboxes(selectedCasta) {
+function createCastaCheckboxes(selectedCasta, categoria, subcategoriaNome) {
     const castas = ["Jogador Ouro", "Jogador Prata", "Jogador Bronze", "Jogador Platina"];
     let html = '';
     castas.forEach(casta => {
-        const checked = selectedCasta.includes(casta) ? 'checked' : '';
-        html += `<label><input type="checkbox" name="casta" value="${casta}" ${checked}> ${casta}</label>`;
+        let isChecked = false;
+        let textValue = '';
+
+        if (Array.isArray(selectedCasta)) {
+            for (const selectedItem of selectedCasta) {
+                if (typeof selectedItem === 'object' && selectedItem.name === casta) {
+                    isChecked = true;
+                    textValue = selectedItem.text || '';
+                    break;
+                } else if (typeof selectedItem === 'string') {
+                    isChecked = selectedCasta.includes(casta);
+                }
+            }
+        } else if (Array.isArray(selectedCasta)) {
+            isChecked = selectedCasta.includes(casta);
+        }
+
+
+        const checkedAttribute = isChecked ? 'checked' : '';
+
+        html += `<label>`;
+        html += `<input type="checkbox" name="casta" value="${casta}" ${checkedAttribute}> ${casta}`;
+        if (categoria === 'Coeficiente' && subcategoriaNome === 'Coeficiente') {
+            html += `<input type="text" name="casta-text" class="casta-text-input" maxlength="5" value="${textValue}" style="margin-left: 5px; width: 50px;">`;
+        }
+        html += `</label>`;
     });
     return html;
 }
+
 
 function createTipoCheckboxes(selectedTipo) {
     const tipos = ["Guarda-Redes", "Defesa", "Médio", "Avançado"];
@@ -292,6 +317,22 @@ function getCheckedValues(container, name) {
     const checkboxes = container.querySelectorAll(`input[name="${name}"]:checked`);
     return Array.from(checkboxes).map(cb => cb.value);
 }
+
+
+function getCastaValuesFromEdit(categoria, subcategoriaNome, container) {
+    const castaCheckboxes = Array.from(container.querySelectorAll('input[name="casta"]:checked'));
+    if (categoria === 'Coeficiente' && subcategoriaNome === 'Coeficiente') {
+        return castaCheckboxes.map(checkbox => {
+            const castaName = checkbox.value;
+            const textInput = checkbox.parentElement.querySelector('input[name="casta-text"]');
+            const textValue = textInput ? textInput.value.trim() : '';
+            return { name: castaName, text: textValue };
+        });
+    } else {
+        return getCheckedValues(container, 'casta'); // Default behavior if not "Coeficiente"/"Coeficiente"
+    }
+}
+
 
 function getTipoValuesFromEdit(container) {
     const tipoCheckboxes = Array.from(container.querySelectorAll('input[name="tipo"]:checked'));
@@ -448,34 +489,41 @@ async function displayFirebaseData(selectedPosition) {
 
     if (paineisCoeficienteData) {
         console.log('Paineis coeficiente data loaded successfully');
-        
+
+        // Get the selected 'casta' from the dropdown
+        const castaJogadorSelect = document.getElementById('casta-jogador');
+        const selectedCasta = castaJogadorSelect.value;
+        console.log(`Selected Casta: ${selectedCasta}`);
+
         // Create table structure
         const table = document.createElement('table');
         table.className = 'coeficientes-table';
-        
+
         // Create table header
         const thead = document.createElement('thead');
         const headerRow = document.createElement('tr');
-        
+
         const thSubcategoria = document.createElement('th');
         thSubcategoria.textContent = 'Nome da Subcategoria';
-        
+
         const thCoeficiente = document.createElement('th');
         thCoeficiente.textContent = 'Coeficientes';
-        
+
         const thEstatistica = document.createElement('th');
         thEstatistica.textContent = 'Estatística';
-        
+
         headerRow.appendChild(thSubcategoria);
         headerRow.appendChild(thCoeficiente);
         headerRow.appendChild(thEstatistica);
         thead.appendChild(headerRow);
         table.appendChild(thead);
-        
+
         // Create table body
         const tbody = document.createElement('tbody');
-        
-        // Process data and populate table
+        const rows = []; // Array to hold data rows before sorting
+        let totalSum = 0; // Initialize total sum
+
+        // Process data and create rows (but don't append yet)
         for (const categoria in paineisCoeficienteData) {
             console.log(`Processing categoria: ${categoria}`);
             const subcategorias = paineisCoeficienteData[categoria];
@@ -486,102 +534,144 @@ async function displayFirebaseData(selectedPosition) {
                     for (const tipoItem of subcategoria.tipo) {
                         if (tipoItem.name === selectedPosition) {
                             console.log(`    Match found for position ${selectedPosition} in subcategoria ${subcategoriaNome}`);
-                            
+
                             // Create table row
                             const row = document.createElement('tr');
-                            
-                            // Firebase value (default display text)
+
+                            // Firebase value (default display text) - Coefficient
                             let firebaseValue = tipoItem.text || '-';
-                            console.log(`    Firebase value: ${firebaseValue}`);
-                            
+                            console.log(`    Firebase value (coefficient): ${firebaseValue}`);
+                            const coefficientValue = parseFloat(firebaseValue.replace(',', '.')); // Parse coefficient
+
                             // Initialize estatisticaValue
                             let estatisticaValue = '-';
-                            
+                            let statisticNumber = 0; // Initialize statistic number
+
                             if (estatisticasText) {
-                                // Create a regex to find the subcategory name followed by digits
-                                // Try different patterns to match various formats
-                                console.log(`    Trying to match subcategoria: ${subcategoriaNome}`);
-                                
-                                // Parse the statistics text line by line
                                 const lines = estatisticasText.split('\n');
-                                let found = false;
-                                
-                                for (const line of lines) {
-                                    // Check if line contains the subcategory name
-                                    if (line.toLowerCase().includes(subcategoriaNome.toLowerCase())) {
-                                        // Extract the value after the subcategory name
-                                        const parts = line.split(':');
-                                        if (parts.length > 1) {
-                                            // Clean the value to extract only numbers (integers or decimals)
-                                            estatisticaValue = parts[1].trim().replace(/[^0-9.,]/g, '');
-                                            found = true;
-                                            console.log(`    Found value in line format: ${estatisticaValue}`);
-                                            break;
-                                        }
-                                        
-                                        // Try another pattern: "- Subcategory: Value"
-                                        const dashParts = line.split('-');
-                                        if (dashParts.length > 1) {
-                                            const subParts = dashParts[1].trim().split(' ');
-                                            if (subParts.length > 0) {
-                                                // Get the last part which should be the value
-                                                estatisticaValue = subParts[subParts.length - 1].trim().replace(/[^0-9.,]/g, '');
-                                                found = true;
-                                                console.log(`    Found value in dash format: ${estatisticaValue}`);
-                                                break;
+                                for (let i = 0; i < lines.length; i++) {
+                                    const line = lines[i].trim();
+                                    if (line.toLowerCase().startsWith(subcategoriaNome.toLowerCase())) {
+                                        let valueLine = lines[i + 1] ? lines[i + 1].trim() : '';
+                                        if (valueLine) {
+                                            // Use regex to extract number at the start of the line
+                                            const numberMatch = valueLine.match(/^(\d+(\.\d+)?)/);
+                                            if (numberMatch) {
+                                                estatisticaValue = numberMatch[1]; // Extract the matched number (group 1)
+                                                statisticNumber = parseFloat(estatisticaValue.replace(',', '.')); // Parse statistic
+                                                console.log(`    Found value (statistic): ${estatisticaValue}, Parsed: ${statisticNumber}`);
+                                            } else {
+                                                estatisticaValue = '-'; // No number found at the start of the line
+                                                statisticNumber = 0;
+                                                console.log(`    No number found at start of line after subcategory: ${subcategoriaNome}`);
                                             }
+                                            break; // Stop after finding the value for this subcategory
+                                        } else {
+                                            estatisticaValue = '-'; // No value line found
+                                            statisticNumber = 0;
+                                            console.log(`    No value line found after subcategoria: ${subcategoriaNome}`);
                                         }
-                                    }
-                                }
-                                
-                                // If not found in line-by-line parsing, try regex as fallback
-                                if (!found) {
-                                    // Updated regex to better capture numeric values with potential surrounding characters
-                                    const regex = new RegExp(`${subcategoriaNome}[\\s:]*([\\(\\)\\s\\-\\d.,]+)`, 'i');
-                                    console.log(`    Searching with regex: ${regex}`);
-                                    
-                                    const match = estatisticasText.match(regex);
-                                    console.log(`    Regex match result:`, match);
-                                    
-                                    if (match && match[1]) {
-                                        // If found, use the extracted numeric value and clean it
-                                        estatisticaValue = match[1].replace(/[^0-9.,]/g, '');
-                                        console.log(`    Found value with regex: ${estatisticaValue}`);
-                                    } else {
-                                        console.log(`    No match found for subcategoria ${subcategoriaNome} in estatisticas text`);
                                     }
                                 }
                             }
-                            
+
+                            // Calculate row total and add to totalSum
+                            const rowTotal = coefficientValue * statisticNumber;
+                            totalSum += rowTotal;
+                            console.log(`    Row Total (${subcategoriaNome}): ${rowTotal}, Current Total Sum: ${totalSum}`);
+
+
                             // Create table cells
                             const tdSubcategoria = document.createElement('td');
                             tdSubcategoria.textContent = subcategoriaNome;
-                            
+
                             const tdCoeficiente = document.createElement('td');
                             tdCoeficiente.textContent = firebaseValue;
-                            
+
                             const tdEstatistica = document.createElement('td');
                             tdEstatistica.textContent = estatisticaValue;
-                            
+
                             // Add cells to row
                             row.appendChild(tdSubcategoria);
                             row.appendChild(tdCoeficiente);
                             row.appendChild(tdEstatistica);
-                            
-                            // Add row to table body
-                            tbody.appendChild(row);
-                            
-                            console.log(`    Added to table: ${subcategoriaNome}: ${firebaseValue}, ${estatisticaValue}`);
+
+                            rows.push(row); // Add row to the array for sorting
+
+                            console.log(`    Created row for table: ${subcategoriaNome}: ${firebaseValue}, ${estatisticaValue}`);
                             break;
                         }
                     }
                 }
             }
         }
-        
+
+        // Sort rows alphabetically by subcategory name (first cell text)
+        rows.sort((rowA, rowB) => {
+            const subcategoriaA = rowA.cells[0].textContent.toLowerCase();
+            const subcategoriaB = rowB.cells[0].textContent.toLowerCase();
+            return subcategoriaA.localeCompare(subcategoriaB);
+        });
+
+        // Append sorted data rows to table body
+        rows.forEach(row => {
+            tbody.appendChild(row);
+        });
+
+        // Create and append "Total" row
+        const totalRow = document.createElement('tr');
+        const tdTotalLabel = document.createElement('td');
+        tdTotalLabel.textContent = 'Total';
+        tdTotalLabel.style.fontWeight = 'bold'; // Make "Total" bold
+        const tdTotalCoefficient = document.createElement('td');
+        tdTotalCoefficient.textContent = '-'; // Or leave it empty
+        const tdTotalStatistic = document.createElement('td'); // Changed name to avoid conflict
+        tdTotalStatistic.textContent = totalSum.toFixed(2); // Display total sum, formatted to 2 decimal places, adjust as needed.
+        tdTotalStatistic.style.fontWeight = 'bold'; // Make total sum bold
+
+        totalRow.appendChild(tdTotalLabel);
+        totalRow.appendChild(tdTotalCoefficient);
+        totalRow.appendChild(tdTotalStatistic);
+        tbody.appendChild(totalRow);
+
+
+        // --- Create and append "Coeficiente" row ---
+        const coeficienteRow = document.createElement('tr');
+        const tdCoeficienteLabel = document.createElement('td');
+        tdCoeficienteLabel.textContent = 'Coeficiente';
+        tdCoeficienteLabel.style.fontWeight = 'bold';
+
+        const tdCastaValue = document.createElement('td');
+        let coeficienteCastaValue = '-'; // Default value if not found
+
+        if (paineisCoeficienteData && paineisCoeficienteData['Coeficiente'] && paineisCoeficienteData['Coeficiente']['Coeficiente']) {
+            const coeficienteSubcategory = paineisCoeficienteData['Coeficiente']['Coeficiente'];
+            if (coeficienteSubcategory.casta) {
+                for (const castaItem of coeficienteSubcategory.casta) {
+                    if (castaItem.name === selectedCasta) {
+                        coeficienteCastaValue = castaItem.text || '-';
+                        break; // Found the matching casta, exit loop
+                    }
+                }
+            }
+        }
+        tdCastaValue.textContent = coeficienteCastaValue;
+        tdCastaValue.style.fontWeight = 'bold';
+
+
+        const tdEmptyStatistic = document.createElement('td'); // Empty statistic cell for "Coeficiente" row
+        tdEmptyStatistic.textContent = '-';
+
+
+        coeficienteRow.appendChild(tdCoeficienteLabel);
+        coeficienteRow.appendChild(tdCastaValue);
+        coeficienteRow.appendChild(tdEmptyStatistic);
+        tbody.appendChild(coeficienteRow);
+
+
         // Add table body to table
         table.appendChild(tbody);
-        
+
         // Add table to display
         firebaseDataDisplay.appendChild(table);
     } else {
@@ -885,7 +975,7 @@ body {
     font-size: 14px;
 }
 
-.coeficientes-table th, 
+.coeficientes-table th,
 .coeficientes-table td {
     padding: 8px 12px;
     text-align: left;
