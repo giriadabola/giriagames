@@ -435,12 +435,14 @@ async function loadWhoWinsForEdit(whoWinsId) {
 function updateGameName() {
     const equipaCasa = document.getElementById('equipa-casa').value;
     const equipaFora = document.getElementById('equipa-fora').value;
+    const dataJogo = document.getElementById('data-jogo').value;
     const nomeJogoInput = document.getElementById('nome-jogo');
 
-    if (equipaCasa && equipaFora) {
-        nomeJogoInput.value = `${equipaCasa} vs ${equipaFora}`;
+    if (equipaCasa && equipaFora && dataJogo) {
+        const formattedDate = new Date(dataJogo).toLocaleDateString('pt-PT');
+        nomeJogoInput.value = `${equipaCasa} x ${equipaFora} - ${formattedDate}`;
     } else {
-        nomeJogoInput.value = ''; // Clear if not both teams are selected
+        nomeJogoInput.value = ''; // Clear if not all required fields are selected
     }
 }
 
@@ -453,10 +455,27 @@ function setDefaultPredictionTimes() {
     document.getElementById('hora-jogo').value = '15:00';
     const defaultStartTime = now.toISOString().slice(0, 16);
     document.getElementById('inicio-palpite').value = defaultStartTime;
-    const defaultEndTime = new Date(tomorrow);
-    defaultEndTime.setHours(14, 45, 0);
-    document.getElementById('fim-palpite').value = defaultEndTime.toISOString().slice(0, 16);
+    
+    // Set default end time to 1 hour before game time
+    const defaultGameTime = new Date(tomorrow);
+    defaultGameTime.setHours(14, 0, 0); // Set to 1 hour before default game time (15:00)
+    document.getElementById('fim-palpite').value = defaultGameTime.toISOString().slice(0, 16);
 }
+
+function updateFimPalpite() {
+    const gameDate = document.getElementById('data-jogo').value;
+    const gameTime = document.getElementById('hora-jogo').value;
+    if (gameDate && gameTime) {
+        const gameDateTime = new Date(gameDate + 'T' + gameTime);
+        gameDateTime.setHours(gameDateTime.getHours() - 1);
+        document.getElementById('fim-palpite').value = gameDateTime.toISOString().slice(0, 16);
+    }
+}
+
+// Add event listeners for updating fim-palpite
+document.getElementById('data-jogo').addEventListener('change', updateFimPalpite);
+document.getElementById('hora-jogo').addEventListener('change', updateFimPalpite);
+
 
 
 // --- Event Listeners ---
@@ -492,11 +511,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return; // Stop if validation fails
         }
 
-        //Prepare lowercase game name.
         const nomeJogo = document.getElementById('nome-jogo').value;
-        const nomeJogoLower = nomeJogo.toLowerCase();
-          // Create the nomeJogoParts array
-        const nomeJogoParts = nomeJogoLower.split(" ").filter(part => part !== "vs" && part!== '');
 
         const updatedData = {
             equipaCasa: document.getElementById('equipa-casa').value,
@@ -507,8 +522,6 @@ document.addEventListener('DOMContentLoaded', () => {
             fimIntervalo: new Date(document.getElementById('fim-palpite').value),
             anexado: document.getElementById('anexado').value,
             nomeJogo: nomeJogo,
-            nomeJogoLower: nomeJogoLower,
-            nomeJogoParts: nomeJogoParts, //  <-- ADD THIS LINE!
             temporada: document.getElementById('temporada').value,
             equipaCasaId: selectedEquipaCasaId,
             equipaForaId: selectedEquipaForaId
