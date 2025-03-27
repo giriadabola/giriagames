@@ -542,6 +542,13 @@
                                 <option value="">Selecione um mod (opcional)</option>
                             </select>
                         </div>
+                        <div class="form-group">
+                            <label for="anexado">Anexado</label>
+                            <select id="anexado" name="anexado">
+                                <option value="1x">1x</option>
+                                <option value="world26">world26</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
 
@@ -659,14 +666,14 @@
                             document.getElementById(resultsListId).innerHTML = '';
                             document.getElementById(imageElementId).innerHTML = club.imagem ? `<img src="${club.imagem}" class="club-image" alt="${club.nome}">` : '<i class="fas fa-shield-alt"></i>';
                             document.getElementById(imageElementId).className = club.imagem ? 'club-image' : 'club-image placeholder';
-                            
+
                             // Update the corresponding team ID based on which input field was used
                             if (inputId === 'equipa-casa') {
                                 selectedEquipaCasaId = club.id;
                             } else if (inputId === 'equipa-fora') {
                                 selectedEquipaForaId = club.id;
                             }
-                            
+
                             updateGameName();
                         });
                         resultsList.appendChild(optionDiv);
@@ -729,11 +736,11 @@
             return latestRound;
         }
 
-        // Function to get mods (no changes needed)
+        // Function to get mods (Modified to fetch nomeMod)
         async function getMods() {
             const modsRef = collection(db, 'mods');
             const querySnapshot = await getDocs(modsRef);
-            return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            return querySnapshot.docs.map(doc => ({ id: doc.id, nome: doc.data().nomeMod })); // return id and nomeMod
         }
 
         // Function to format date (no changes needed)
@@ -971,7 +978,7 @@
             `;
         }
 
-        // Function to load game data for editing into the form (no changes needed)
+        // Function to load game data for editing into the form (Modified to pre-select Mod and Anexado and handle awayTeamData error)
         async function loadGameForEdit(gameId) {
             selectedGameId = gameId;
             try {
@@ -982,11 +989,17 @@
                     originalEquipaForaId = gameData.equipaForaId;
 
                     const homeTeamDoc = await getDoc(doc(db, 'clubes', gameData.equipaCasaId));
-                    const awayTeamDoc = await getDoc(doc(db, 'clubes', gameData.equipaForaId));
+                     // Fetch away team data and handle potential errors
+                    try {
+                        const awayTeamDoc = await getDoc(doc(db, 'clubes', gameData.equipaForaId));
+                        var awayTeamData = awayTeamDoc.exists() ? awayTeamDoc.data() : null;
+                    } catch (error) {
+                        console.error("Error fetching away team data:", error);
+                        var awayTeamData = null;
+                    }
                     const competitionDoc = await getDoc(doc(db, 'competicoes', gameData.competicaoId));
 
                     const homeTeamData = homeTeamDoc.data();
-                    const awayTeamData = awayTeamDoc.data();
                     const competitionData = competitionDoc.data();
 
                     document.getElementById('equipa-casa').value = gameData.equipaCasa;
@@ -1008,7 +1021,8 @@
                     document.getElementById('inicio-palpite').value = inicioPalpiteDate ? inicioPalpiteDate.toISOString().slice(0, 16) : '';
                     document.getElementById('fim-palpite').value = fimPalpiteDate ? fimPalpiteDate.toISOString().slice(0, 16) : '';
                     document.getElementById('numero-palpites').value = gameData.numeroPalpites;
-                    document.getElementById('mods').value = gameData.modId || '';
+                    document.getElementById('mods').value = gameData.modId || ''; // Set the value for Mod dropdown
+                    document.getElementById('anexado').value = gameData.anexado || '1x'; // Set the value for Anexado dropdown, default to '1x' if null
                     document.getElementById('nome-jogo').value = gameData.nomeJogo;
 
                     const equipaCasaImage = document.getElementById('equipa-casa-image');
@@ -1061,10 +1075,18 @@
             const nomeJogoInput = document.getElementById('nome-jogo');
             const roundSelect = document.getElementById('ronda');
             const modsSelect = document.getElementById('mods');
+            const anexadoSelect = document.getElementById('anexado'); // Get Anexado select element
             const temporadaInput = document.getElementById('temporada');
 
             await loadCompetitions();
-            await getMods();
+
+            const mods = await getMods(); // Fetch mods data
+            mods.forEach(mod => { // Populate Mod dropdown
+                const option = document.createElement('option');
+                option.value = mod.id;
+                option.textContent = mod.nome;
+                modsSelect.appendChild(option);
+            });
 
             const latestRound = await getLatestRound();
             for (let i = 1; i <= 50; i++) {
@@ -1074,14 +1096,6 @@
                 if (i === latestRound) option.selected = true;
                 roundSelect.appendChild(option);
             }
-
-            const mods = await getMods();
-            mods.forEach(mod => {
-                const option = document.createElement('option');
-                option.value = mod.id;
-                option.textContent = mod.nome;
-                modsSelect.appendChild(option);
-            });
 
 
             equipaCasaInput.addEventListener('input', async (e) => {
@@ -1119,7 +1133,54 @@
             });
 
 
-            // Form submission for editing (no changes needed)
+            // Function to update prediction end time
+            function updatePredictionEndTime() {
+                const gameDate = document.getElementById('data-jogo').value;
+                const gameTime = document.getElementById('hora-jogo').value;
+
+                if (gameDate && gameTime) {
+                    const gameDateTime = new Date(`${gameDate}T${gameTime}`);
+                    const predictionEndTime = new Date(gameDateTime.getTime() - 60 * 60 * 1000); // 1 hour before
+
+                    // Format for datetime-local input
+                    const year = predictionEndTime.getFullYear();
+                    const month = String(predictionEndTime.getMonth() + 1).padStart(2, '0');
+                    const day = String(predictionEndTime.getDate()).padStart(2, '0');
+                    const hours = String(predictionEndTime.getHours()).padStart(2, '0');
+                    const minutes = String(predictionEndTime.getMinutes()).padStart(2, '0');
+
+                    document.getElementById('fim-palpite').value = `${year}-${month}-${day}T${hours}:${minutes}`;
+                }
+            }
+
+            // Add event listeners to game date and time fields
+            document.getElementById('data-jogo').addEventListener('change', updatePredictionEndTime);
+            document.getElementById('hora-jogo').addEventListener('change', updatePredictionEndTime);
+            document.getElementById('data-jogo').addEventListener('change', updateGameName);
+            document.getElementById('ronda').addEventListener('change', updateGameName);
+
+            recentGames.addEventListener('click', function(event) {
+                if (event.target.classList.contains('edit-btn')) {
+                    const gameId = event.target.dataset.gameId;
+                    loadGameForEdit(gameId);
+                }
+            });
+
+            searchResults.addEventListener('click', function(event) {
+                if (event.target.classList.contains('search-result-edit-btn')) {
+                    const gameId = event.target.dataset.gameId;
+                    loadGameForEdit(gameId);
+                }
+            });
+
+
+            document.getElementById('gameSearchInput').addEventListener('input', (event) => {
+                const searchTerm = event.target.value.trim();
+                searchGames(searchTerm);
+            });
+
+
+            // Form submission for editing (no changes needed, added "anexado" and form reset, and clear search results and page reload and scroll to top)
             form.addEventListener('submit', async (e) => {
                 e.preventDefault();
 
@@ -1143,30 +1204,33 @@
                         inicioIntervalo: new Date(document.getElementById('inicio-palpite').value),
                         fimIntervalo: new Date(document.getElementById('fim-palpite').value),
                         numeroPalpites: parseInt(document.getElementById('numero-palpites').value),
-                        modId: document.getElementById('mods').value || null
+                        modId: document.getElementById('mods').value || null,
+                        anexado: document.getElementById('anexado').value // Get value from Anexado dropdown
                     };
 
-                    console.log("Dados a serem atualizados em 'jogos':", updatedGameData); // LOG 8: Dados antes do updateDoc
-                    console.log("selectedEquipaCasaId:", selectedEquipaCasaId, "selectedEquipaForaId:", selectedEquipaForaId); // LOG NEW: Log IDs before updateDoc
+                    console.log("Dados a serem atualizados em 'jogos':", updatedGameData);
+                    console.log("selectedEquipaCasaId:", selectedEquipaCasaId, "selectedEquipaForaId:", selectedEquipaForaId);
                     await updateDoc(doc(db, 'jogos', selectedGameId), updatedGameData);
-                    console.log("updateDoc em 'jogos' finalizado com sucesso para gameId:", selectedGameId); // LOG 9: updateDoc finalizado
+                    console.log("updateDoc em 'jogos' finalizado com sucesso para gameId:", selectedGameId);
 
                     // Update club-game relationships if teams have changed
-                    console.log(`Verificando alteração da Equipa Casa: selectedEquipaCasaId=${selectedEquipaCasaId}, originalEquipaCasaId=${originalEquipaCasaId}`); // LOG 10: Verificação Equipa Casa
+                    console.log(`Verificando alteração da Equipa Casa: selectedEquipaCasaId=${selectedEquipaCasaId}, originalEquipaCasaId=${originalEquipaCasaId}`);
                     if (selectedEquipaCasaId !== originalEquipaCasaId) {
                         await updateClubGamesSubcollection(selectedGameId, originalEquipaCasaId, selectedEquipaCasaId, 'clubes', 'equipaCasaId');
                     }
-                    console.log(`Verificando alteração da Equipa Fora: selectedEquipaForaId=${selectedEquipaForaId}, originalEquipaForaId=${originalEquipaForaId}`); // LOG 11: Verificação Equipa Fora
+                    console.log(`Verificando alteração da Equipa Fora: selectedEquipaForaId=${selectedEquipaForaId}, originalEquipaForaId=${originalEquipaForaId}`);
                     if (selectedEquipaForaId !== originalEquipaForaId) {
                         await updateClubGamesSubcollection(selectedGameId, originalEquipaForaId, selectedEquipaForaId, 'clubes', 'equipaForaId');
                     }
 
 
                     alert('Jogo atualizado com sucesso!');
-                    fetchRecentGames();
-                    searchGames('');
-                    selectedGameId = null;
-                    form.reset();
+
+                    // Reload the page
+                    window.location.reload();
+
+                    // Scroll to the top after reload
+                    window.scrollTo(0, 0);
 
 
                 } catch (error) {
@@ -1176,17 +1240,17 @@
             });
 
             async function updateClubGamesSubcollection(gameId, originalClubId, newClubId, collectionName, teamType) {
-                console.log(`updateClubGamesSubcollection chamada para: gameId=${gameId}, originalClubId=${originalClubId}, newClubId=${newClubId}, teamType=${teamType}`); // LOG 1: Entrada na função
-                if (originalClubId && originalClubId !== newClubId) { // Only delete if originalClubId exists and is different from newClubId
+                console.log(`updateClubGamesSubcollection chamada para: gameId=${gameId}, originalClubId=${originalClubId}, newClubId=${newClubId}, teamType=${teamType}`);
+                if (originalClubId && originalClubId !== newClubId) {
                     try {
                         const originalClubGamesRef = collection(db, collectionName, originalClubId, 'jogos');
                         const gameQuery = query(originalClubGamesRef, where('jogoId', '==', gameId));
                         const gameQuerySnapshot = await getDocs(gameQuery);
-                        console.log(`Encontrados ${gameQuerySnapshot.size} documentos para deletar do clube original ${originalClubId} (${teamType})`); // LOG 2: Quantos documentos encontrados para deletar
+                        console.log(`Encontrados ${gameQuerySnapshot.size} documentos para deletar do clube original ${originalClubId} (${teamType})`);
                         gameQuerySnapshot.forEach(async (docToDelete) => {
-                            console.log(`Deletando jogo ${gameId} do clube original ${originalClubId} (${teamType}), docId=${docToDelete.id}`); // LOG 3: Deletando documento
+                            console.log(`Deletando jogo ${gameId} do clube original ${originalClubId} (${teamType}), docId=${docToDelete.id}`);
                             await deleteDoc(doc(originalClubGamesRef, docToDelete.id));
-                            console.log(`Jogo ${gameId} deletado do clube original ${originalClubId} (${teamType}), docId=${docToDelete.id}`); // LOG 4: Documento deletado
+                            console.log(`Jogo ${gameId} deletado do clube original ${originalClubId} (${teamType}), docId=${docToDelete.id}`);
                         });
                     } catch (error) {
                         console.error(`Error deleting game from original club ${teamType}:`, error);
@@ -1197,14 +1261,14 @@
                 if (newClubId) {
                     try {
                         const newClubGamesRef = collection(db, collectionName, newClubId, 'jogos');
-                        console.log(`Adicionando jogo ${gameId} ao novo clube ${newClubId} (${teamType})`); // LOG 5: Adicionando documento
+                        console.log(`Adicionando jogo ${gameId} ao novo clube ${newClubId} (${teamType})`);
                         await addDoc(newClubGamesRef, { jogoId: gameId });
-                        console.log(`Jogo ${gameId} adicionado ao novo clube ${newClubId} (${teamType})`); // LOG 6: Documento adicionado
+                        console.log(`Jogo ${gameId} adicionado ao novo clube ${newClubId} (${teamType})`);
                     } catch (error) {
                         console.error(`Error adding game to new club ${teamType}:`, error);
                     }
                 }
-                console.log(`updateClubGamesSubcollection finalizada para: gameId=${gameId}, originalClubId=${originalClubId}, newClubId=${newClubId}, teamType=${teamType}`); // LOG 7: Saída da função
+                console.log(`updateClubGamesSubcollection finalizada para: gameId=${gameId}, originalClubId=${originalClubId}, newClubId=${newClubId}, teamType=${teamType}`);
             }
 
 
@@ -1214,4 +1278,3 @@
     </script>
 </body>
 </html>
-
