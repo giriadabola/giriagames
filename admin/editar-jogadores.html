@@ -393,6 +393,17 @@
                         <div class="dropdown-results" id="clubResults"></div>
                     </div>
                 </div>
+
+                <div class="form-group">
+                    <label for="playerPosition">Posição do Jogador</label>
+                    <select class="form-control" id="playerPosition">
+                        <option value="">Selecione a posição</option>
+                        <option value="Guarda-Redes">Guarda-Redes</option>
+                        <option value="Defesa">Defesa</option>
+                        <option value="Médio">Médio</option>
+                        <option value="Avançado">Avançado</option>
+                    </select>
+                </div>
             </div>
 
             <div class="card">
@@ -424,7 +435,7 @@
                     <label>Mini Games? (Opcional)</label>
                     <div class="checkbox-group">
                         <div class="mini-game-option">
-                            <label><input type="checkbox" name="mini-games" value="world26" class="mini-game-checkbox"> Euro26</label>
+                            <label><input type="checkbox" name="mini-games" value="world26" class="mini-game-checkbox"> World26</label>
                             <div class="mini-game-price" style="display: none;">
                                 <input type="text" name="world26-preco" maxlength="5" placeholder="Preço" class="mini-game-price-input">
                             </div>
@@ -463,14 +474,17 @@
             <div id="coeficientes-section" style="display: none;">
                 <h3>Coeficientes</h3>
                 <div id="firebase-data-display">
-                    <!-- Firebase data will be displayed here -->
+                    <div id="loading-indicator" style="display: none; text-align: center; margin-top: 10px;">
+                        <i class="fas fa-spinner fa-spin"></i> Carregando coeficientes...
+                    </div>
+                    <!-- A tabela de dados do Firebase será exibida aqui -->
                 </div>
             </div>
         </form>
     </div>
 
     <script type="module">
-        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+                  import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
         import { getFirestore, collection, getDocs, query, where, orderBy, doc, getDoc, updateDoc, deleteDoc, setDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
         const firebaseConfig = {
@@ -551,27 +565,18 @@
             document.getElementById('playerPrice').value = player.preco || ''; // Default price
             document.getElementById('playerBuyer').value = player.compradopor || ''; // Default buyer
 
-            console.log("Dados do jogador:", player);
-            console.log("player.clube:", player.clube);
-            console.log("player.overall:", player.overall);
-            console.log("player.casta:", player.casta);
-            console.log("player.preco:", player.preco); // Log price
-            console.log("player.compradopor:", player.compradopor); // Log buyer
 
             originalClubName = player.clube; // Guarda o nome do clube original
 
             // Corrigido para usar player.paisId diretamente
             if (player.paisId) {
-                console.log("paisId encontrado no jogador:", player.paisId);
                 const paisesRef = collection(db, 'paises');
                 const paisDoc = doc(paisesRef, player.paisId);
                 getDoc(paisDoc).then(docSnap => {
                     if (docSnap.exists()) {
                         const paisData = docSnap.data();
-                        console.log("Documento de país encontrado:", paisData);
                         document.getElementById('playerCountry').value = paisData.nome;
                     } else {
-                        console.log("Documento de país NÃO encontrado para paisId:", player.paisId);
                         document.getElementById('playerCountry').value = '';
                     }
                 }).catch(error => {
@@ -579,7 +584,6 @@
                     document.getElementById('playerCountry').value = '';
                 });
             } else {
-                console.log("paisId NÃO encontrado no jogador:", player);
                 document.getElementById('playerCountry').value = '';
             }
 
@@ -588,6 +592,10 @@
             document.getElementById('playerTier').value = player.casta;
             document.getElementById('playerMarket').value = player.noMercado ? 'Sim' : 'Não';
             document.getElementById('playerStats').value = player.estatisticas || '';
+
+            // Set default value for "Posição do Jogador" dropdown
+            document.getElementById('playerPosition').value = player.posicao || '';
+
             searchResults.style.display = 'none';
             playerSearch.value = player.nome;
 
@@ -648,17 +656,31 @@
         });
 
         // Add event listener to playerStats textarea to update coeficientes table when content changes
-        document.getElementById('playerStats').addEventListener('input', function() {
-            // Get the current player position and casta
-            const playerPosition = document.querySelector('input[name="playerPosition"]:checked')?.value;
-            const playerCasta = document.getElementById('playerTier').value;
+        document.getElementById('playerStats').addEventListener('input', async function() {
 
-            // Only update if position is selected and coeficientes section is visible
-            if (playerPosition && document.getElementById('coeficientes-section').style.display !== 'none') {
-                // Call displayFirebaseData with the updated textarea content
-                displayFirebaseData(playerPosition, playerCasta, this.value);
-            }
-        });
+
+    let playerPosition = null;
+    if (selectedPlayerId) {
+        const playerRef = doc(db, 'jogadores', selectedPlayerId);
+        const playerDoc = await getDoc(playerRef);
+        if (playerDoc.exists()) {
+            const playerData = playerDoc.data();
+            playerPosition = playerData.posicao;
+        } else {
+            console.log("playerDoc DOES NOT exist for selectedPlayerId:", selectedPlayerId);
+        }
+    }
+
+
+    // *** Correção: Obter playerCasta DENTRO do event listener ***
+    const playerCasta = document.getElementById('playerTier').value; // Obter playerCasta do dropdown AQUI
+
+
+    if (playerPosition && document.getElementById('coeficientes-section').style.display !== 'none') {
+        displayFirebaseData(playerPosition, playerCasta, this.value);
+    }
+});
+
 
         // Add event listeners to mini game checkboxes to show/hide price inputs
         document.querySelectorAll('.mini-game-checkbox').forEach(checkbox => {
@@ -765,13 +787,14 @@
             e.preventDefault();
             if (!selectedPlayerId) return;
 
+            console.log("Botão 'Editar Jogador' clicado!"); // LOG PARA O BOTÃO CLICADO
+
             try {
                 // Get the country name and club name from inputs
                 const countryName = document.getElementById('playerCountry').value;
                 const newClubName = document.getElementById('playerClub').value;
                 const newPrice = parseInt(document.getElementById('playerPrice').value) || null; // Get price value
                 const newBuyerId = document.getElementById('playerBuyer').value || null; // Get buyer id
-
 
                 // Get the player's current data to check for club changes
                 const playerRef = doc(db, 'jogadores', selectedPlayerId);
@@ -810,14 +833,16 @@
                     pais: countryName,
                     paisId: paisId,
                     clube: newClubName,
-                    overall: parseFloat(document.getElementById('playerOverall').value),
+                    posicao: document.getElementById('playerPosition').value,
+                    overall: parseFloat(document.getElementById('playerOverall').value) || 0,
                     casta: document.getElementById('playerTier').value,
                     noMercado: document.getElementById('playerMarket').value === 'Sim',
                     preco: newPrice,
                     compradopor: newBuyerId,
                     estatisticas: document.getElementById('playerStats').value,
-                    miniGames: miniGames.length > 0 ? miniGames : null,
-                    ...miniGamesPrices
+                    miniGames: miniGames.length > 0 ? miniGames : [],
+                    ...miniGamesPrices,
+                    ultimaAtualizacao: new Date().toISOString()
                 };
 
                 // Update player document
@@ -860,8 +885,17 @@
                     }
                 }
 
-
                 alert('Jogador atualizado com sucesso!');
+
+                // Reset the form here after successful update
+                document.getElementById('editPlayerForm').reset();
+                document.getElementById('imagePreview').src = ""; // Clear image preview
+                selectedPlayerId = null; // Clear selected player ID
+                playerSearch.value = ""; // Clear player search input
+                document.getElementById('searchResults').style.display = 'none'; // Hide search results
+                document.getElementById('coeficientes-section').style.display = 'none'; // Hide coeficientes section
+
+
             } catch (error) {
                 console.error('Erro ao atualizar jogador:', error);
                 alert('Erro ao atualizar jogador');
@@ -883,8 +917,11 @@
 
         // Function to display firebase data in the coeficientes table
         async function displayFirebaseData(selectedPosition, selectedCasta, estatisticasText) {
-            const firebaseDataDisplay = document.getElementById('firebase-data-display');
-            firebaseDataDisplay.innerHTML = '';
+
+
+const firebaseDataDisplay = document.getElementById('firebase-data-display');
+    const loadingIndicator = document.getElementById('loading-indicator'); // *** Obter referência ao indicador de carregamento ***
+    firebaseDataDisplay.innerHTML = '';
 
             if (!selectedPosition) {
                 return;
@@ -921,8 +958,6 @@
                 const rows = []; // Array to hold data rows before sorting
                 let totalSum = 0; // Initialize total sum
 
-                // Log the content of estatisticasText
-                console.log("Conteúdo de estatisticasText:", estatisticasText);
 
                 // Process data and create rows (but don't append yet)
                 for (const categoria in paineisCoeficienteData) {
@@ -955,17 +990,14 @@
                                                     if (numberMatch) {
                                                         estatisticaValue = numberMatch[1]; // Extract the matched number (group 1)
                                                         statisticNumber = parseFloat(estatisticaValue.replace(',', '.')); // Parse statistic
-                                                        console.log(`Estatística encontrada para "${subcategoriaNome}": Valor = "${estatisticaValue}"`); // Log when statistic is found
                                                     } else {
                                                         estatisticaValue = '-'; // No number found at the start of the line
                                                         statisticNumber = 0;
-                                                        console.log(`Estatística NÃO encontrada (sem número no início da linha) para "${subcategoriaNome}" na linha: "${valueLine}"`); // Log when no number is found
                                                     }
                                                     break; // Stop after finding the value for this subcategory
                                                 } else {
                                                     estatisticaValue = '-'; // No value line found
                                                     statisticNumber = 0;
-                                                    console.log(`Estatística NÃO encontrada (sem linha de valor) para "${subcategoriaNome}"`); // Log when no value line
                                                 }
                                             }
                                         }
