@@ -120,6 +120,54 @@
             overflow: hidden;
             font-family: 'Roboto Condensed', sans-serif;
             transition: transform 0.2s ease;
+            position: relative; /* For absolute positioning of background logo */
+        }
+
+        .game-item {
+            --competition-logo: none;
+        }
+
+        .game-item::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 80%;
+            height: 80%;
+            transform: translate(-50%, -50%);
+            background-image: var(--competition-logo);
+            background-size: contain;
+            background-position: center;
+            background-repeat: no-repeat;
+            opacity: 0.15; /* Reduced opacity for background logo */
+            pointer-events: none; /* Ensures the logo doesn't interfere with clicks */
+            z-index: 0; /* Places the logo behind content */
+        }
+
+        .game-item {
+            --competition-logo: none;
+        }
+
+        .game-item::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 80%;
+            height: 80%;
+            transform: translate(-50%, -50%);
+            background-image: var(--competition-logo);
+            background-size: contain;
+            background-position: center;
+            background-repeat: no-repeat;
+            opacity: 0.15; /* Reduced opacity for background logo */
+            pointer-events: none; /* Ensures the logo doesn't interfere with clicks */
+            z-index: 0; /* Places the logo behind content */
+        }
+
+        .teams-container, .league-name, .game-date-time {
+            position: relative;
+            z-index: 1; /* Ensures content stays above the background logo */
         }
 
         .game-item:hover {
@@ -210,21 +258,14 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: #f0f0f0;
+            background: #FFFFFF; /* Changed background color to white */
             display: flex;
+            flex-direction: column; /* Stack items vertically */
             justify-content: center;
             align-items: center;
             z-index: 1001;
         }
 
-        .loading-spinner {
-            border: 16px solid #f3f3f3;
-            border-top: 16px solid #3498db;
-            border-radius: 50%;
-            width: 120px;
-            height: 120px;
-            animation: spin 2s linear infinite;
-        }
 
         @keyframes spin {
             0% { transform: rotate(0deg); }
@@ -252,8 +293,8 @@
             pointer-events: none; /* Disable pointer interactions */
         }
 
-   /* Media query for screens smaller than 768px (typical mobile screens) */
-   @media (max-width: 768px) {
+       /* Media query for screens smaller than 768px (typical mobile screens) */
+       @media (max-width: 768px) {
             .game-list-container {
                 max-width: 100%; /* Make game list full width on mobile */
                 padding-left: 10px; /* Reduce left/right padding on mobile if needed */
@@ -261,8 +302,32 @@
             }
         }
 
+        /* Style for Arena Loading Image */
+        #arena-loading-image {
+            display: none; /* Hidden by default, shown by script */
+            max-width: 30%; /* Increased max width to 80% of loading screen */
+            max-height: 30%; /* Reduced max height to accommodate video above */
+            object-fit: contain; /* Make sure image fits within its container */
+            margin-bottom: 10px; /* Add margin below image for text spacing */
+        }
 
+        /* Style for Loading Video */
+        #arena-loading-video {
+            display: none; /* Hidden by default */
+            max-width: 40%; /* Adjust video width as needed */
+            max-height: 40%; /* Adjust video height as needed */
+            object-fit: contain; /* Ensure video fits within its container */
+            margin-bottom: 10px; /* Space between video and image */
+        }
 
+        /* Style for Welcome Text */
+        #arena-welcome-text {
+            display: none; /* Hidden by default */
+            font-size: 1.2em; /* Adjust font size as needed */
+            color: #333; /* Adjust text color as needed */
+            margin-top: 10px; /* Add some space above the text */
+            text-align: center; /* Center the text */
+        }
 
 
     </style>
@@ -271,7 +336,9 @@
 <body>
 
     <div id="loading-screen">
-        <div class="loading-spinner"></div>
+        <video id="arena-loading-video" src="https://cdnl.iconscout.com/lottie/premium/thumb/sword-animated-icon-download-in-lottie-json-gif-static-svg-file-formats--weapon-war-blade-minimal-pack-miscellaneous-icons-9553869.mp4" autoplay loop muted playsinline style="display: none;"></video>
+        <img id="arena-loading-image" src="" alt="Arena Loading Image" style="display: none;">
+        <p id="arena-welcome-text" style="display: none;"></p> <!-- Welcome text element added here -->
     </div>
 
     <div class="game-list-container">
@@ -306,7 +373,7 @@
         import { getFirestore, collection, getDocs, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import { Timestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-    
+
         const firebaseConfig = {
             apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0",
             authDomain: "g-games-8a8fc.firebaseapp.com",
@@ -316,17 +383,20 @@
             appId: "1:689897349449:web:536599794579901beb7a98",
             measurementId: "G-GTTPJ6G5MD"
         };
-    
+
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const auth = getAuth(app);
         const loadingScreen = document.getElementById('loading-screen');
         const gameListContainer = document.querySelector('.game-list-container');
+        const arenaLoadingImage = document.getElementById('arena-loading-image');
+        const arenaLoadingVideo = document.getElementById('arena-loading-video'); // Get video element
+        const arenaWelcomeText = document.getElementById('arena-welcome-text'); // Get welcome text element
         let currentUserStatus = null;
-    
+
         // Data URI for a simple placeholder image (grey square)
         const placeholderImage = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
-    
+
         async function getUserStatus(userId) {
             const userDoc = doc(db, 'users', userId);
             const docSnap = await getDoc(userDoc);
@@ -340,24 +410,24 @@
                 return null;
             }
         }
-    
+
         async function loadGames() {
             const gamesListElement = document.getElementById('games-list');
             const gamesCollection = collection(db, 'whowinsJogos');
             const clubesCollection = collection(db, 'clubes');
             const paisesCollection = collection(db, 'paises');
             const competicoesCollection = collection(db, 'competicoes');
-    
+
             try {
                 const gamesSnapshot = await getDocs(gamesCollection);
                 const games = gamesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    
+
                 // Organize games by league
                 const leaguesGames = {};
                 for (const game of games) {
                     const leagueName = game.competicao || 'Outra Liga';
                     const competicaoId = game.competicaoId;
-    
+
                     if (!leaguesGames[leagueName]) {
                         leaguesGames[leagueName] = {
                             games: [],
@@ -366,23 +436,23 @@
                     }
                     leaguesGames[leagueName].games.push(game);
                 }
-    
+
                 let gamesHTML = '';
                 for (const leagueName in leaguesGames) {
                     if (leaguesGames.hasOwnProperty(leagueName)) {
                         const leagueData = leaguesGames[leagueName];
                         let countryFlagImage = placeholderImage;
-    
+
                         if (leagueData.competicaoId) {
                             try {
                                 // 1. Fetch competition document
                                 const competicaoDocRef = doc(competicoesCollection, leagueData.competicaoId);
                                 const competicaoDocSnap = await getDoc(competicaoDocRef);
-    
+
                                 if (competicaoDocSnap.exists()) {
                                     const competicaoData = competicaoDocSnap.data();
                                     const paisId = competicaoData.paisId;
-    
+
                                     if (paisId) {
                                         // 3. Fetch country document
                                         const countryDocRef = doc(paisesCollection, paisId);
@@ -397,16 +467,16 @@
                                 console.error("Error fetching country flag:", error);
                             }
                         }
-    
-    
+
+
                         // Sort games within each league by date and time (nearest first)
                         leagueData.games.sort((gameA, gameB) => {
-                            const dateA = gameA.dataJogo instanceof Timestamp ? gameA.dataJogo.toDate() : new Date(0); // Ensure Date object for comparison
-                            const dateB = gameB.dataJogo instanceof Timestamp ? gameB.dataJogo.toDate() : new Date(0); // Ensure Date object for comparison
-                            return dateA - dateB; // Sort in ascending order (nearest first)
+                            const dateA = gameA.dataJogo instanceof Timestamp ? gameA.dataJogo.toDate() : new Date(0);
+                            const dateB = gameB.dataJogo instanceof Timestamp ? gameB.dataJogo.toDate() : new Date(0);
+                            return dateA - dateB;
                         });
-    
-    
+
+
                         gamesHTML += `
                                 <h2 class="game-league-title">
                                     <img src="${countryFlagImage}" alt="${leagueName} Flag" onerror="this.src='${placeholderImage}'">
@@ -418,21 +488,21 @@
                             const homeTeamId = game.equipaCasaId;
                             const awayTeamId = game.equipaForaId;
                             const gameDateTime = game.dataJogo;
-    
+
                             const homeTeamDocRef = doc(clubesCollection, homeTeamId);
                             const awayTeamDocRef = doc(clubesCollection, awayTeamId);
-    
+
                             const homeTeamDocSnap = await getDoc(homeTeamDocRef);
                             const awayTeamDocSnap = await getDoc(awayTeamDocRef);
-    
+
                             const homeTeamData = homeTeamDocSnap.data();
                             const awayTeamData = awayTeamDocSnap.data();
-    
+
                             const homeTeamImage = homeTeamData?.imagem || placeholderImage;
                             const homeTeamName = game.equipaCasa || 'Unknown Home Team';
                             const awayTeamImage = awayTeamData?.imagem || placeholderImage;
                             const awayTeamName = game.equipaFora || 'Unknown Away Team';
-    
+
                             // Format game date and time
                             let formattedDateTime = 'Data Indisponível';
                             if (gameDateTime instanceof Timestamp) {
@@ -443,8 +513,8 @@
                                 const minutes = String(date.getMinutes()).padStart(2, '0');
                                 formattedDateTime = `${day}/${month} ${hours}h${minutes}`;
                             }
-    
-    
+
+
                             gamesHTML += `
     <li class="game-item">
         <div class="teams-container">
@@ -456,7 +526,7 @@
                 EMPATE
                 <div class="game-date-time">${formattedDateTime}</div>
             </span>
-    
+
             <div class="team-info" data-team-name="${awayTeamName}">
                 <img src="${awayTeamImage}" alt="${awayTeamName} Logo" class="team-logo" onerror="this.src='${placeholderImage}'">
                 <span class="team-name">${awayTeamName}</span>
@@ -467,16 +537,19 @@
                         }
                     }
                 }
-    
+
                 gamesListElement.innerHTML = gamesHTML;
-    
+
                 loadingScreen.style.display = 'none';
+                arenaLoadingImage.style.display = 'none';
+                arenaLoadingVideo.style.display = 'none'; // Hide video as well
+                arenaWelcomeText.style.display = 'none'; // Hide welcome text
                 gameListContainer.style.display = 'block';
-    
+
                 // Function to trigger confetti
                 const scalar = 0.7;
                 const sword = confetti.shapeFromText({ text: '⚔️', scalar });
-    
+
                 const defaults = {
                     spread: 90,
                     ticks: 30,
@@ -487,19 +560,19 @@
                     scalar,
                     origin: { y: 0.7 }
                 };
-    
+
                 function shootConfetti(element) {
                     const rect = element.getBoundingClientRect();
                     const originX = (rect.left + rect.right) / 2 / window.innerWidth;
                     const originY = (rect.top + rect.bottom) / 2 / window.innerHeight;
-    
+
                     confetti({
                         ...defaults,
                         origin: { x: originX, y: originY },
                         particleCount: 50,
                     });
                 }
-    
+
                // Add click handlers for predictions
             document.querySelectorAll('.game-item').forEach(gameItem => {
                 const homeTeam = gameItem.querySelector('.team-info:first-child');
@@ -512,62 +585,65 @@
 
                 homeTeam.addEventListener('click', () => {
                     if (homeTeam.classList.contains('selected')) {
-                        homeTeam.classList.remove('selected'); // Deselect if already selected
+                        homeTeam.classList.remove('selected');
                     } else {
-                        clearSelection(); // Clear other selections in this game
-                        homeTeam.classList.add('selected'); // Select if not selected
-                        shootConfetti(homeTeam); // Trigger confetti on home team
+                        clearSelection();
+                        homeTeam.classList.add('selected');
+                        shootConfetti(homeTeam);
                     }
                 });
 
                 draw.addEventListener('click', () => {
                     if (draw.classList.contains('selected')) {
-                        draw.classList.remove('selected'); // Deselect if already selected
+                        draw.classList.remove('selected');
                     } else {
-                        clearSelection(); // Clear other selections in this game
-                        draw.classList.add('selected'); // Select if not selected
-                        shootConfetti(draw); // Trigger confetti on draw
+                        clearSelection();
+                        draw.classList.add('selected');
+                        shootConfetti(draw);
                     }
                 });
 
                 awayTeam.addEventListener('click', () => {
                     if (awayTeam.classList.contains('selected')) {
-                        awayTeam.classList.remove('selected'); // Deselect if already selected
+                        awayTeam.classList.remove('selected');
                     } else {
-                        clearSelection(); // Clear other selections in this game
-                        awayTeam.classList.add('selected'); // Select if not selected
-                        shootConfetti(awayTeam); // Trigger confetti on away team
+                        clearSelection();
+                        awayTeam.classList.add('selected');
+                        shootConfetti(awayTeam);
                     }
                 });
             });
-    
-    
+
+
             } catch (error) {
                 console.error("Error fetching games:", error);
                 gamesListElement.innerHTML = '<li>Failed to load games.</li>';
                 loadingScreen.style.display = 'none';
+                arenaLoadingImage.style.display = 'none';
+                arenaLoadingVideo.style.display = 'none'; // Hide video on error as well
+                arenaWelcomeText.style.display = 'none'; // Hide welcome text on error
                 gameListContainer.style.display = 'block';
-    
-                // Add click handlers for predictions
+
+                // Add click handlers for predictions (keep these even if games fail to load)
                 document.querySelectorAll('.game-item').forEach(gameItem => {
                     const homeTeam = gameItem.querySelector('.team-info:first-child');
                     const draw = gameItem.querySelector('.versus');
                     const awayTeam = gameItem.querySelector('.team-info:last-child');
-    
+
                     const clearSelection = () => {
                         gameItem.querySelectorAll('.selected').forEach(el => el.classList.remove('selected'));
                     };
-    
+
                     homeTeam.addEventListener('click', () => {
                         clearSelection();
                         homeTeam.classList.add('selected');
                     });
-    
+
                     draw.addEventListener('click', () => {
                         clearSelection();
                         draw.classList.add('selected');
                     });
-    
+
                     awayTeam.addEventListener('click', () => {
                         clearSelection();
                         awayTeam.classList.add('selected');
@@ -575,7 +651,7 @@
                 });
             }
         }
-    
+
         onAuthStateChanged(auth, async (user) => {
             if (user) {
                 currentUserStatus = await getUserStatus(user.uid);
@@ -583,9 +659,53 @@
                     window.location.href = 'index.html';
                     return;
                 }
+
+                const userRef = doc(db, 'users', user.uid);
+                const userSnap = await getDoc(userRef);
+
+                if (userSnap.exists()) {
+                    const userData = userSnap.data();
+                    const arenaName = userData.Arena;
+                    console.log("Arena Name from User:", arenaName);
+
+                    // CORRECTED SECTION (Again, based on image structure):
+                    const paineisCollectionRef = collection(db, 'paineis'); // Reference to 'paineis' collection
+                    const arenaDocRef = doc(paineisCollectionRef, 'paineis arena'); // Reference to 'paineis arena' document in 'paineis' collection
+                    const arenaDocSnap = await getDoc(arenaDocRef);
+
+
+                    if (arenaDocSnap.exists()) {
+                        const arenaData = arenaDocSnap.data();
+                        const arenaImageURL = arenaData['Arena 1']; // Field name "Arena 1" is still correct
+
+                        if (arenaImageURL) {
+                            arenaLoadingImage.src = arenaImageURL;
+                            arenaLoadingImage.style.display = 'block';
+                        } else {
+                            console.warn("URL da imagem da Arena não encontrado no documento 'paineis arena' no campo 'Arena 1'.");
+                            arenaLoadingImage.style.display = 'none';
+                        }
+                    } else {
+                        console.warn(`Documento 'paineis arena' não encontrado na coleção 'paineis'.`); // Corrected warning message to reflect collection 'paineis'
+                        arenaLoadingImage.style.display = 'none';
+                    }
+
+                    arenaWelcomeText.textContent = `Bem-Vindo à  ${arenaName}`; // Set welcome text
+                    arenaWelcomeText.style.display = 'block'; // Show welcome text
+
+                } else {
+                    console.warn("Documento do usuário não encontrado.");
+                    arenaLoadingImage.style.display = 'none';
+                    arenaWelcomeText.style.display = 'none'; // Hide welcome text if user doc not found
+                }
+
+                arenaLoadingVideo.style.display = 'block'; // Show video here, before loading games, so it appears during loading
                 await loadGames();
             } else {
                 loadingScreen.style.display = 'none';
+                arenaLoadingImage.style.display = 'none';
+                arenaLoadingVideo.style.display = 'none'; // Hide video if not logged in
+                arenaWelcomeText.style.display = 'none'; // Hide welcome text if not logged in
                 window.location.href = 'index.html';
             }
         });
