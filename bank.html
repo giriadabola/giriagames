@@ -85,24 +85,18 @@
             height: 100%;
             background: #f0f0f0;
             display: flex;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
-            z-index: 1001;
+            z-index: 1001; /* Above content but below popup */
         }
 
-        .loading-spinner {
-            border: 16px solid #f3f3f3;
-            border-top: 16px solid #3498db;
-            border-radius: 50%;
-            width: 120px;
-            height: 120px;
-            animation: spin 2s linear infinite;
-        }
+        .loading-percentage { margin-top: 15px; font-size: 18px; font-weight: bold; color: #2176ff; }
+        .progress-bar-container { width: 200px; height: 10px; background-color: #e0e0e0; border-radius: 5px; margin-top: 10px; overflow: hidden; }
+        .progress-bar { height: 100%; width: 0%; background: linear-gradient(135deg, #2176ff 0%, #0056d6 100%); border-radius: 5px; transition: width 0.3s ease-in-out; }
+        .loading-spinner { border: 16px solid #f3f3f3; border-top: 16px solid #3498db; border-radius: 50%; width: 120px; height: 120px; animation: spin 2s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
 
         /* Transaction List Styles */
         .transactions-container {
@@ -257,6 +251,10 @@
 
     <div id="loading-screen">
         <div class="loading-spinner"></div>
+        <div class="loading-percentage">0%</div>
+        <div class="progress-bar-container">
+            <div class="progress-bar"></div>
+        </div>
     </div>
 
     <div class="content">
@@ -274,22 +272,22 @@
     </div>
 
     <nav class="bottom-menu">
-        <a href="1x.html" class="menu-item">
+        <a href="1x.html" class="menu-item" id="menu-item-1x">
             <i class="fas fa-home"></i>
         </a>
-        <a href="market.html" class="menu-item">
+        <a href="market.html" class="menu-item" id="menu-item-market">
             <i class="fas fa-shopping-cart"></i>
         </a>
-        <a href="team.html" class="menu-item">
+        <a href="team.html" class="menu-item" id="menu-item-team">
             <i class="fas fa-users"></i>
         </a>
-        <a href="empire.html" class="menu-item">
+        <a href="empire.html" class="menu-item" id="menu-item-empire">
             <i class="fas fa-landmark empire-icon"></i>
         </a>
-        <a href="rankings.html" class="menu-item">
+        <a href="rankings.html" class="menu-item" id="menu-item-rankings">
             <i class="fas fa-list"></i>
         </a>
-        <a href="profile.html" class="menu-item">
+        <a href="profile.html" class="menu-item" id="menu-item-profile">
             <i class="fas fa-user"></i>
         </a>
     </nav>
@@ -298,7 +296,7 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
           import { getFirestore, doc, getDoc, collection, query, where, getDocs, orderBy, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
           import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-  
+
           const firebaseConfig = {
               apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0",
               authDomain: "g-games-8a8fc.firebaseapp.com",
@@ -308,20 +306,46 @@
               appId: "1:689897349449:web:536599794579901beb7a98",
               measurementId: "G-GTTPJ6G5MD"
           };
-  
+
           const app = initializeApp(firebaseConfig);
           const db = getFirestore(app);
           const auth = getAuth(app);
-  
+
           const loadingScreen = document.getElementById('loading-screen');
           const content = document.querySelector('.content');
           const transactionsList = document.getElementById('transactions-list');
-  
+
           let currentUserStatus = null;
           let userCache = {}; // Cache for user data
           let playerCache = {}; // Cache for player data
           let empireItemCache = {}; // Cache for empire items
-  
+
+          // --- Loading Progress ---
+          let loadingProgress = 0;
+          const loadingPercentageElement = document.querySelector('.loading-percentage');
+          const progressBar = document.querySelector('.progress-bar');
+
+          /**
+           * Updates loading progress.
+           */
+          function updateLoadingProgress(increment = 0, absoluteValue = null) {
+              if (absoluteValue !== null) loadingProgress = absoluteValue;
+              else loadingProgress += increment;
+              loadingProgress = Math.max(0, Math.min(100, loadingProgress));
+
+              const displayPercentage = Math.floor(loadingProgress);
+              if (loadingPercentageElement) loadingPercentageElement.textContent = `${displayPercentage}%`;
+              if (progressBar) progressBar.style.width = `${loadingProgress}%`;
+          }
+
+          updateLoadingProgress(0); // Initialize loading to 0%
+
+          function hideLoadingScreen() {
+              if (loadingScreen) loadingScreen.style.display = 'none';
+              if (content) content.style.display = 'block';
+          }
+
+
           async function getUserStatus(userId) {
               const userDoc = doc(db, 'users', userId);
               const docSnap = await getDoc(userDoc);
@@ -335,13 +359,13 @@
                   return null;
               }
           }
-  
+
           // Function to get user data (with caching)
           async function getUserData(userId) {
               if (userCache[userId]) {
                   return userCache[userId];
               }
-  
+
               try {
                   const userDoc = await getDoc(doc(db, 'users', userId));
                   if (userDoc.exists()) {
@@ -352,16 +376,16 @@
               } catch (error) {
                   console.error("Error fetching user data:", error);
               }
-  
+
               return null;
           }
-  
+
           // Function to get player data (with caching)
           async function getPlayerData(playerId) {
               if (playerCache[playerId]) {
                   return playerCache[playerId];
               }
-  
+
               try {
                   const playerDoc = await getDoc(doc(db, 'jogadores', playerId));
                   if (playerDoc.exists()) {
@@ -372,16 +396,16 @@
               } catch (error) {
                   console.error("Error fetching player data:", error);
               }
-  
+
               return null;
           }
-  
+
           // Function to get empire item data (with caching)
           async function getEmpireItemData(itemId) {
               if (empireItemCache[itemId]) {
                   return empireItemCache[itemId];
               }
-  
+
               try {
                   const itemDoc = await getDoc(doc(db, 'empireitems', itemId));
                   if (itemDoc.exists()) {
@@ -395,13 +419,13 @@
               }
               return null; // Add a return null here if no data is found or error in try block
           }
-  
+
           // Function to find the most recent season from 'palpites' collection - returns YYYYYYYY format
           async function fetchLatestSeason() {
               try {
                   const palpitesRef = collection(db, 'palpites');
                   const querySnapshot = await getDocs(palpitesRef);
-  
+
                   let seasons = new Set();
                   querySnapshot.forEach(doc => {
                       const data = doc.data();
@@ -409,15 +433,15 @@
                           seasons.add(data.temporada);
                       }
                   });
-  
+
                   if (seasons.size > 0) {
                       let latestSeasonWithSlash = Array.from(seasons).sort().reverse()[0]; // Get latest season WITH slash
                       console.log("Temporada mais recente (com barra):", latestSeasonWithSlash); // Log temporada com barra
-  
+
                       // Remover a barra "/" para formatar como YYYYYYYY
                       let latestSeasonNoSlash = latestSeasonWithSlash.replace('/', '');
                       console.log("Temporada mais recente (sem barra - para query):", latestSeasonNoSlash); // Log temporada sem barra
-  
+
                       return latestSeasonNoSlash; // Return the latest season in YYYYYYYY format
                   } else {
                       return null; // No seasons found
@@ -427,12 +451,12 @@
                   return null;
               }
           }
-  
-  
+
+
           // Function to format date
           function formatDate(timestamp) {
               if (!timestamp) return 'Data desconhecida';
-  
+
               const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
               return date.toLocaleDateString('pt-BR', {
                   day: '2-digit',
@@ -442,16 +466,16 @@
                   minute: '2-digit'
               });
           }
-  
+
           // Função normalizeSeason MODIFICADA para retornar YYYYYYYY
           function normalizeSeason(season) {
               if (!season) {
                   return season; // Retorna null ou undefined como está
               }
-  
+
               // Remove qualquer caractere que não seja dígito
               const digitsOnly = season.replace(/[^0-9]/g, '');
-  
+
               // Se após remover caracteres não numéricos, tivermos 8 dígitos, retornamos esse formato
               if (digitsOnly.length === 8) {
                   return digitsOnly; // Retorna no formato YYYYYYYY
@@ -461,7 +485,7 @@
                   return digitsOnly.substring(0, 8); // Se não tiver 8 dígitos após limpeza, trunca para no máximo 8 dígitos ou retorna o que sobrou
               }
           }
-  
+
           // Function to populate the transaction table
           async function populateTransactionTable(latestSeason) {
               console.log("populateTransactionTable() iniciada para temporada:", latestSeason);
@@ -475,92 +499,98 @@
                       orderBy('movimentoData', 'desc')
                   );
                   const querySnapshot = await getDocs(q);
-  
+
                   if (querySnapshot.empty) {
                       console.log("Nenhuma transação encontrada para a temporada:", latestSeason);
                       transactionsList.innerHTML = '<div class="no-transactions">Nenhuma transação encontrada</div>';
-                      return;
-                  }
-  
-                  let transactionsHTML = '';
-  
-                  for (const doc of querySnapshot.docs) {
-                      const data = doc.data();
-                      const normalizedDocSeason = normalizeSeason(data.temporada);
-                      const userData = await getUserData(data.userId);
-                      let itemData = null;
-                      let userName = 'Usuário Desconhecido';
-                      let itemName = 'Item Desconhecido';
-  
-                      if (data.tipo === 'Mercado' && data.jogadorId) {
-                          itemData = await getPlayerData(data.jogadorId);
-                      } else if (data.tipo === 'Empire' && data.empireitem) {
-                          itemData = await getEmpireItemData(data.empireitem);
-                      }
-  
-                      userName = userData ? userData.nomeDeUsuario : userName;
-                      itemName = itemData ? (data.tipo === 'Mercado' ? itemData.nome : itemData.name) : itemName;
-                      const itemImage = itemData ? (data.tipo === 'Mercado' ? itemData.imagem : '') : '';
-  
-                      transactionsHTML += `
-                          <div class="transaction-item">
-                              <div class="transaction-col transaction-tipo-col">
-                                  <div class="transaction-tipo">
-                                      <span class="transaction-type ${data.tipo.toLowerCase()}">${data.tipo}</span>
+
+                  } else {
+
+                      let transactionsHTML = '';
+
+                      for (const doc of querySnapshot.docs) {
+                          const data = doc.data();
+                          const normalizedDocSeason = normalizeSeason(data.temporada);
+                          const userData = await getUserData(data.userId);
+                          let itemData = null;
+                          let userName = 'Usuário Desconhecido';
+                          let itemName = 'Item Desconhecido';
+
+                          if (data.tipo === 'Mercado' && data.jogadorId) {
+                              itemData = await getPlayerData(data.jogadorId);
+                          } else if (data.tipo === 'Empire' && data.empireitem) {
+                              itemData = await getEmpireItemData(data.empireitem);
+                          }
+
+                          userName = userData ? userData.nomeDeUsuario : userName;
+                          itemName = itemData ? (data.tipo === 'Mercado' ? itemData.nome : itemData.name) : itemName;
+                          const itemImage = itemData ? (data.tipo === 'Mercado' ? itemData.imagem : '') : '';
+
+                          transactionsHTML += `
+                              <div class="transaction-item">
+                                  <div class="transaction-col transaction-tipo-col">
+                                      <div class="transaction-tipo">
+                                          <span class="transaction-type ${data.tipo.toLowerCase()}">${data.tipo}</span>
+                                      </div>
+                                  </div>
+                                  <div class="transaction-col transaction-user-col">
+                                      <div class="transaction-user">${userName}</div>
+                                  </div>
+                                  <div class="transaction-col transaction-item-name-col">
+                                      ${itemImage ? `<img src="${itemImage}" alt="${itemName}" class="transaction-item-image">` : ''}
+                                      <div class="transaction-item-name">${itemName}</div>
+                                  </div>
+                                  <div class="transaction-col transaction-estado-col">
+                                      <div class="transaction-estado">${data.estado || 'N/A'}</div>
+                                  </div>
+                                   <div class="transaction-col transaction-price-col">
+                                      <div class="transaction-price">${data.preco.toLocaleString('pt-BR') + ' ₲₵'}</div>
+                                  </div>
+                                  <div class="transaction-col transaction-date-col">
+                                      <div class="transaction-date">${formatDate(data.movimentoData)}</div>
                                   </div>
                               </div>
-                              <div class="transaction-col transaction-user-col">
-                                  <div class="transaction-user">${userName}</div>
-                              </div>
-                              <div class="transaction-col transaction-item-name-col">
-                                  ${itemImage ? `<img src="${itemImage}" alt="${itemName}" class="transaction-item-image">` : ''}
-                                  <div class="transaction-item-name">${itemName}</div>
-                              </div>
-                              <div class="transaction-col transaction-estado-col">
-                                  <div class="transaction-estado">${data.estado || 'N/A'}</div>
-                              </div>
-                               <div class="transaction-col transaction-price-col">
-                                  <div class="transaction-price">${data.preco.toLocaleString('pt-BR') + ' ₲₵'}</div>
-                              </div>
-                              <div class="transaction-col transaction-date-col">
-                                  <div class="transaction-date">${formatDate(data.movimentoData)}</div>
-                              </div>
-                          </div>
-                      `;
+                          `;
+                      }
+
+                      transactionsList.innerHTML = transactionsHTML;
+                      console.log("Tabela de transações populada.");
                   }
-  
-                  transactionsList.innerHTML = transactionsHTML;
-                  console.log("Tabela de transações populada.");
-  
+
+
               } catch (error) {
                   console.error('Erro ao popular tabela de transações:', error);
                   transactionsList.innerHTML = '<div class="no-transactions">Erro ao carregar transações. Tente novamente mais tarde.</div>';
               } finally {
                   console.log("populateTransactionTable() finalizada.");
+                  hideLoadingScreen(); // Hide loading screen after table is populated or error occurs
               }
           }
-  
-  
+
+
           // Function to load transactions for the latest season with real-time updates and forced page refresh
           async function loadTransactions() {
               console.log("loadTransactions() iniciada");
-  
+              updateLoadingProgress(50);
+
               transactionsList.innerHTML = '<div class="no-transactions">Carregando transações...</div>';
-  
+
               let latestSeason = await fetchLatestSeason();
               console.log("Temporada mais recente obtida:", latestSeason);
-  
+
               if (!latestSeason) {
                   console.log("Nenhuma temporada encontrada.");
                   transactionsList.innerHTML = '<div class="no-transactions">Nenhuma temporada encontrada.</div>';
+                  hideLoadingScreen(); // Even if no season, hide loading screen
                   return;
               }
-  
+
               // First, populate the table with initial data
               await populateTransactionTable(latestSeason);
-  
+              // Loading screen will be hidden in populateTransactionTable's finally block
+
               let initialLoadComplete = false; // Flag to track initial load
-  
+
               try {
                   console.log("Iniciando listener onSnapshot para detetar ALTERAÇÕES (após carregamento inicial) na temporada:", latestSeason);
                   const movimentosRef = collection(db, 'movimentos');
@@ -570,25 +600,25 @@
                       where('tipo', 'in', ['Mercado', 'Empire']),
                       orderBy('movimentoData', 'desc')
                   );
-  
+
                   // Usar onSnapshot para detetar alterações e forçar refresh da página - ONLY FOR SUBSEQUENT CHANGES
                   const unsubscribe = onSnapshot(q, (snapshot) => { // Callback simplificado - não precisa ser async
                       console.log("Snapshot de ALTERAÇÕES recebido (após carregamento inicial):", snapshot); // Log do snapshot
-  
+
                       if (!initialLoadComplete) {
                           console.log("Primeiro snapshot recebido após carregamento inicial - IGNORANDO para evitar refresh imediato.");
                           initialLoadComplete = true; // Set flag to true after first snapshot
                           return; // Ignore this first snapshot and do not refresh
                       }
-  
-  
+
+
                       if (snapshot.empty) {
                           console.log("Nenhuma transação encontrada no snapshot.");
                           return; // No need to refresh if no transactions in snapshot (though unlikely in a change event)
                       }
-  
+
                       let hasChanges = false; // Flag para verificar se houve alterações
-  
+
                       for (const docChange of snapshot.docChanges()) { // Iterar sobre as mudanças nos documentos
                           if (docChange.type === "added" || docChange.type === "modified" || docChange.type === "removed") { // Detetar qualquer tipo de alteração
                               console.log(`Alteração detetada (${docChange.type}): Documento ID:`, docChange.doc.id);
@@ -596,43 +626,93 @@
                               break; // No need to check further, refresh is needed
                           }
                       }
-  
+
                       if (hasChanges) {
                           console.log("Alterações detetadas. Forçando refresh da página.");
                           window.location.reload(); // Forçar o refresh da página
                       } else {
                           console.log("Snapshot recebido, mas SEM alterações relevantes para refresh da página.");
                       }
-  
-  
+
+
                   }, (error) => { // Segundo argumento para lidar com erros no listener
                       console.error("Erro no listener onSnapshot:", error);
                       transactionsList.innerHTML = '<div class="no-transactions">Erro ao carregar transações em tempo real.</div>';
+                      hideLoadingScreen(); // Hide loading screen on listener error as well
                   });
-  
+
                   // **Importante:** Manter o 'unsubscribe' para poder cancelar o listener quando não for mais necessário.
-  
-  
+
+
               } catch (error) {
                   console.error('Erro ao iniciar o listener de transações:', error);
                   transactionsList.innerHTML = '<div class="no-transactions">Erro ao carregar transações. Tente novamente mais tarde.</div>';
-              } finally {
-                  console.log("loadTransactions() finalizada (listener onSnapshot ativo - com refresh da página para alterações REAIS).");
+                  hideLoadingScreen(); // Hide loading screen on load error
               }
           }
-  
-  
+
+
           // Initialize the page
           onAuthStateChanged(auth, async (user) => {
               console.log("onAuthStateChanged chamado:", user);
+              updateLoadingProgress(10);
               if (user) {
                   console.log("Usuário autenticado:", user.uid);
                   const userInfo = await getUserStatus(user.uid);
+                  updateLoadingProgress(20);
                   if (userInfo && userInfo.aceite === "Yes") {
                       currentUserStatus = userInfo.estatuto;
-                      content.style.display = 'block';
-                      loadingScreen.style.display = 'none';
-                      await loadTransactions(); // Load transactions for the latest season on page load and set up real-time updates with forced page refresh
+
+                      // Fetch paineis menu settings
+                      const paineisMenuDoc = await getDoc(doc(db, 'paineis', 'paineis menu'));
+                      updateLoadingProgress(30);
+                      if (paineisMenuDoc.exists()) {
+                          const paineisMenuData = paineisMenuDoc.data();
+                          console.log("Painéis menu data:", paineisMenuData);
+
+                          // Check bank access rule
+                          if (paineisMenuData.bank === "off" && currentUserStatus !== 'ruler') {
+                              console.log("Acesso ao banco está 'off' e usuário não é 'ruler'. Redirecionando para index.html");
+                              window.location.href = 'index.html';
+                              return; // Exit to prevent further execution
+                          }
+
+                          // Hide menu items based on paineis menu settings
+                          const menuItemsConfig = {
+                              "1x": "menu-item-1x",
+                              "market": "menu-item-market",
+                              "team": "menu-item-team",
+                              "empire": "menu-item-empire",
+                              "rankings": "menu-item-rankings",
+                              "profile": "menu-item-profile",
+                              "bank": "menu-item-bank" // Although bank is current page, handle it for consistency if needed in future
+                          };
+
+                          for (const menuItemKey in menuItemsConfig) {
+                              if (paineisMenuData[menuItemKey] === "off") {
+                                  const menuItemId = menuItemsConfig[menuItemKey];
+                                  const menuItemElement = document.getElementById(menuItemId);
+                                  if (menuItemElement) {
+                                      menuItemElement.style.display = 'none';
+                                      console.log(`Menu item '${menuItemKey}' escondido.`);
+                                  }
+                              }
+                          }
+
+
+                          content.style.display = 'block';
+                          loadingScreen.style.display = 'none';
+                          await loadTransactions(); // Load transactions for the latest season on page load and set up real-time updates with forced page refresh
+
+                      } else {
+                          console.error("Painéis menu document not found.");
+                          // Handle case where paineis menu data is not available, maybe redirect or show error
+                          content.style.display = 'block'; // Or decide how to handle this case
+                          loadingScreen.style.display = 'none';
+                          await loadTransactions(); // Still try to load transactions if menu config fails, or handle differently
+                      }
+
+
                   } else {
                       console.log("Usuário não aceito. Redirecionando para index.html");
                       window.location.href = 'index.html';
@@ -642,6 +722,6 @@
                   window.location.href = 'index.html';
               }
           });
-      </script>
+    </script>
 </body>
 </html>
