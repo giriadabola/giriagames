@@ -301,7 +301,7 @@
                 filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.8));
             }
         }
-        
+
         @keyframes rotate {
             0% {
                 transform: scale(1) rotate(0deg);
@@ -780,8 +780,60 @@
         const auth = getAuth(app);
 
         let currentUserStatus = null;
+        let menuVisibilitySettings = null;
         const loadingScreen = document.getElementById('loading-screen');
         const content = document.querySelector('.content');
+
+        // Função para carregar configurações do menu
+        async function loadMenuSettings() {
+            try {
+                const menuSettingsDocRef = doc(db, 'paineis', 'paineis menu');
+                const docSnap = await getDoc(menuSettingsDocRef);
+                if (docSnap.exists()) {
+                    return docSnap.data();
+                } else {
+                    console.log("Menu settings document not found.");
+                    return {}; // Return empty object to avoid errors
+                }
+            } catch (error) {
+                console.error('Erro ao carregar configurações do menu:', error);
+                return {}; // Return empty object to avoid errors
+            }
+        }
+
+        // Função para verificar acesso à página
+        async function checkPageAccess(userStatus, menuSettings) {
+            if (!menuSettings || menuSettings['1x'] !== 'on') {
+                if (!userStatus || userStatus !== 'ruler') { // Changed to check userStatus directly
+                    window.location.href = 'index.html';
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        // Função para atualizar visibilidade do menu
+        function updateMenuVisibility(menuSettings) {
+            if (!menuSettings) return;
+
+            const menuItems = {
+                '1x': document.querySelector('a[href="1x.html"]'),
+                'bank': document.querySelector('a[href="bank.html"]'),
+                'empire': document.querySelector('a[href="empire.html"]'),
+                'market': document.querySelector('a[href="market.html"]'),
+                'profile': document.querySelector('a[href="profile.html"]'),
+                'rankings': document.querySelector('a[href="rankings.html"]'),
+                'team': document.querySelector('a[href="team.html"]')
+            };
+
+            for (const [key, element] of Object.entries(menuItems)) {
+                if (element && menuSettings[key] === 'off') {
+                    element.style.display = 'none';
+                } else if (element) {
+                    element.style.display = ''; // Ensure it's visible if setting is 'on' or missing
+                }
+            }
+        }
 
         // Função para obter o estatuto e aceite do usuário do Firestore
         async function getUserStatus(userId) {
@@ -795,6 +847,27 @@
                 };
             } else {
                 return null;
+            }
+        }
+
+        // Função para verificar acesso e configurar menu
+        async function setupPageAccess() {
+            try {
+                // Carregar configurações do menu
+                const menuSettings = await loadMenuSettings();
+
+                // Verificar acesso à página
+                const hasPageAccess = await checkPageAccess(currentUserStatus, menuSettings); // Pass currentUserStatus
+                if (!hasPageAccess) {
+                    return; // checkPageAccess already redirects if no access
+                }
+
+                // Atualizar visibilidade do menu
+                updateMenuVisibility(menuSettings);
+
+            } catch (error) {
+                console.error('Erro ao verificar acesso:', error);
+                window.location.href = 'index.html';
             }
         }
 
@@ -1041,31 +1114,31 @@
                 } else {
                     popupContent.classList.add('mod-popup-blue');
                 }
-                
+
                 // Show the animated icon first
                 const iconContainer = document.getElementById('mod-icon-container');
                 const iconAnimation = document.getElementById('mod-icon-animation');
-                
+
                 // Set the icon from Firebase if available, otherwise use a default
                 iconAnimation.src = modData.icon || 'https://firebasestorage.googleapis.com/v0/b/giria-games.appspot.com/o/default-mod-icon.png?alt=media';
-                
+
                 // Show the icon animation
                 iconContainer.classList.add('active');
-                
+
                 // Wait for 3.5 seconds (animation duration)
                 await new Promise(resolve => setTimeout(resolve, 3500));
-                
+
                 // Hide the icon with a fade out effect
                 iconContainer.style.transition = 'opacity 0.5s ease';
                 iconContainer.style.opacity = '0';
-                
+
                 // Wait for fade out to complete
                 await new Promise(resolve => setTimeout(resolve, 500));
-                
+
                 // Hide the icon container completely
                 iconContainer.classList.remove('active');
                 iconContainer.style.opacity = '';
-                
+
                 // Show popup with animation
                 popupOverlay.classList.add('active');
                 console.log('Popup do mod ativado com sucesso');
@@ -1203,8 +1276,9 @@
             if (user) {
                 const userInfo = await getUserStatus(user.uid);
                 if (userInfo && userInfo.aceite === "Yes") {
-                    currentUserStatus = userInfo.estatuto;
+                    currentUserStatus = userInfo.estatuto; // Store only the status string
                     console.log(`User is logged in with status: ${currentUserStatus}`);
+                    await setupPageAccess(); // Verificar acesso e configurar menu
                     loadActiveGames(); // Carrega os jogos apenas após a autenticação ser verificada e usuário logado
                     document.body.style.display = 'block';
 
