@@ -372,7 +372,9 @@
         .player-card.golden {
             background: linear-gradient(135deg, #ffd700, #daa520);
             color: white;
+            /*text-shadow: 0 0 4px black;*/ /* Opcional: Sombra no texto para melhor contraste */
         }
+
 
         .player-card.diamond {
             background: linear-gradient(135deg, #b9f2ff, #00bfff);
@@ -574,11 +576,7 @@
                         <div class="formation-select-container">
                             <label for="formation-select">Formação:</label>
                             <select id="formation-select">
-                                <option value="4-4-2">4-4-2</option>
-                                <option value="4-3-3">4-3-3</option>
-                                <option value="4-5-1">4-5-1</option>
-                                <option value="3-4-3">3-4-3</option>
-                                <option value="5-3-2">5-3-2</option>
+                                <option value="" disabled selected>Selecionar Formação</option>
                             </select>
                         </div>
                         <button id="saveFormationBtn">Guardar</button>
@@ -697,7 +695,7 @@
         let userPlayers = [];
         let countries = {};
         let clubs = new Set();
-        let currentFormation = '4-4-2';
+        let currentFormation = ''; // Initialize currentFormation to empty string
         let hasUnsavedChanges = false;
         const formationSelect = document.getElementById('formation-select');
         const pitchArea = document.querySelector('.pitch-area');
@@ -713,7 +711,7 @@
         let assignedPlayers = {}; // Declare assignedPlayers outside renderFormation scope
 
 
-        const formations = {
+        const formations = { // Keep formations for pitch rendering logic
             '4-4-2': [
                 { position: 'GK', top: '90%', left: '47%', positionType: 'GK' },
                 { position: 'DL', top: '75%', left: '12%', positionType: 'DEF' },
@@ -1256,33 +1254,35 @@
 
 
         formationSelect.addEventListener('change', async (e) => {
-    const newFormation = e.target.value;
-    if (hasUnsavedChanges) {
-        console.log("Inside if (hasUnsavedChanges) - value is:", hasUnsavedChanges); // ADDED CONSOLE LOG
-        showConfirmationModal(
-            'Quer guardar as alterações feitas?',
-            async () => {
-                // User clicked 'Sim'
-                await saveFormation();
+            const newFormation = e.target.value;
+            if (!newFormation) return; // Prevent rendering if formation is empty (default option)
+
+            if (hasUnsavedChanges) {
+                console.log("Inside if (hasUnsavedChanges) - value is:", hasUnsavedChanges); // ADDED CONSOLE LOG
+                showConfirmationModal(
+                    'Quer guardar as alterações feitas?',
+                    async () => {
+                        // User clicked 'Sim'
+                        await saveFormation();
+                        currentFormation = newFormation;
+                        renderFormation(currentFormation);
+                        await loadFormation();
+                    },
+                    () => {
+                        // User clicked 'Não'
+                        hasUnsavedChanges = false;
+                        currentFormation = newFormation;
+                        renderFormation(currentFormation);
+                        loadFormation();
+                    }
+                );
+            } else {
+                console.log("Inside else (hasUnsavedChanges) - value is:", hasUnsavedChanges); // ADDED CONSOLE LOG
                 currentFormation = newFormation;
                 renderFormation(currentFormation);
                 await loadFormation();
-            },
-            () => {
-                // User clicked 'Não'
-                hasUnsavedChanges = false;
-                currentFormation = newFormation;
-                renderFormation(currentFormation);
-                loadFormation();
             }
-        );
-    } else {
-        console.log("Inside else (hasUnsavedChanges) - value is:", hasUnsavedChanges); // ADDED CONSOLE LOG
-        currentFormation = newFormation;
-        renderFormation(currentFormation);
-        await loadFormation();
-    }
-});
+        });
 
         // Função para mostrar o modal de confirmação personalizado
         function showConfirmationModal(message, confirmCallback, cancelCallback) {
@@ -1356,7 +1356,7 @@
         }
 
         async function fetchUserPlayers(userId) {
-            const userPlayersRef = collection(db, 'users', userId, 'jogadores');
+            const userPlayersRef = collection(db, 'users', userId, 'jogadores'); // This path seems incorrect, should be just 'jogadores' collection for all players bought by users
             const userPlayersSnap = await getDocs(userPlayersRef);
             const fetchedUserPlayers = [];
             userPlayersSnap.forEach(doc => {
@@ -1603,6 +1603,61 @@
             }
         }
 
+        async function fetchFormationsFromFirestore() {
+            if (!currentUserUid) {
+                console.log("currentUserUid não definido ao buscar formações.");
+                return []; // Retorna um array vazio se não houver utilizador
+            }
+            try {
+                const userDocRef = firebase.firestore.doc(db, 'users', currentUserUid); // Referência ao documento do utilizador atual
+                const userDocSnap = await firebase.firestore.getDoc(userDocRef);
+
+                if (userDocSnap.exists()) {
+                    const userData = userDocSnap.data();
+                    const táticaString = userData.tática; // Assume que o campo se chama 'tática'
+
+                    if (táticaString) {
+                        // Processa a string para criar um array de formações
+                        const formationNames = táticaString.split(' '); // Divide a string por espaços
+                        return formationNames.map(name => ({ value: name, label: name })); // Cria objetos com value e label
+                    } else {
+                        console.log("Campo 'tática' está vazio ou não existe no documento do utilizador.");
+                        return []; // Retorna array vazio se o campo 'tática' estiver vazio
+                    }
+                } else {
+                    console.log("Documento do utilizador não encontrado.");
+                    return []; // Retorna array vazio se o documento do utilizador não existir
+                }
+            } catch (error) {
+                console.error("Erro ao buscar formações do Firestore:", error);
+                return []; // Retorna array vazio em caso de erro
+            }
+        }
+
+
+        async function populateFormationDropdownFromFirestore() {
+            const formations = await fetchFormationsFromFirestore();
+            const formationSelect = document.getElementById('formation-select');
+
+            // Limpa as opções existentes antes de adicionar novas
+            formationSelect.innerHTML = '';
+            const defaultOption = document.createElement('option');
+            defaultOption.value = "";
+            defaultOption.disabled = true;
+            defaultOption.selected = true;
+            defaultOption.textContent = "Selecionar Formação";
+            formationSelect.appendChild(defaultOption);
+
+
+            formations.forEach(formation => {
+                const option = document.createElement('option');
+                option.value = formation.value;
+                option.textContent = formation.label;
+                formationSelect.appendChild(option);
+            });
+        }
+
+
         async function loadFormation() {
             if (!currentUserUid) {
                 console.log("currentUserUid não definido ao carregar formação. Aguardando autenticação...");
@@ -1681,7 +1736,14 @@
                     await fetchUserPlayers(user.uid);
                     await fetchPlayers();
                     await fetchCountries();
-                    renderFormation(currentFormation); // Render initial formation *before* loading
+                    await populateFormationDropdownFromFirestore(); // Populate dropdown from Firestore
+                    const formationOptions = await fetchFormationsFromFirestore(); // Fetch formations again to get the first one
+                    if (formationOptions.length > 0) {
+                        currentFormation = formationOptions[0].value; // Set initial formation to the first one from Firebase
+                    } else {
+                        currentFormation = '4-4-2'; // Default to 4-4-2 if no formations in Firebase, or handle as needed
+                    }
+                    renderFormation(currentFormation); // Render initial formation *after* loading dropdown and setting currentFormation
                     await loadFormation(); // Load saved formation after players are fetched
                     loadingScreen.style.display = 'none';
                     content.style.display = 'block';
@@ -1696,7 +1758,6 @@
             }
         });
 
-        renderFormation(currentFormation);
 
         // Add event listener for page navigation
         window.addEventListener('beforeunload', (e) => {
