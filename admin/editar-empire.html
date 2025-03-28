@@ -126,6 +126,39 @@
              font-size: 18px;
          }
 
+        /* Search Bar Styling */
+        .search-container {
+            position: relative;
+            margin-bottom: 20px;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 12px 40px 12px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: #2176ff;
+            box-shadow: 0 0 0 3px rgba(33, 118, 255, 0.1);
+        }
+
+        .search-icon {
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #666;
+            pointer-events: none;
+        }
+
 
         /* Form Container Styling - From create page */
         .form-container {
@@ -312,6 +345,12 @@
     <main class="content">
         <!-- Update Heading -->
         <h1>Listar e Editar Itens do Império</h1>
+
+        <!-- Search Bar -->
+        <div class="search-container">
+            <input type="text" id="search-input" placeholder="Pesquisar por nome ou tipo..." class="search-input">
+            <i class="fas fa-search search-icon"></i>
+        </div>
 
         <!-- Item List Area -->
         <div id="item-list" class="item-list">
@@ -643,6 +682,47 @@
         });
 
         // --- Load Item List (Unchanged) ---
+        let allItems = []; // Store all items for filtering
+
+        // Function to filter items
+        function filterItems(searchText) {
+            const normalizedSearch = searchText.toLowerCase().trim();
+            const filteredItems = allItems.filter(item => {
+                const nome = (item.nome || '').toLowerCase();
+                const tipo = (item.tipo || '').toLowerCase();
+                return nome.includes(normalizedSearch) || tipo.includes(normalizedSearch);
+            });
+            displayItems(filteredItems);
+        }
+
+        // Function to display items
+        function displayItems(items) {
+            if (!itemListDiv) return;
+            itemListDiv.innerHTML = '';
+
+            if (items.length === 0) {
+                itemListDiv.innerHTML = '<p>Nenhum item encontrado.</p>';
+                return;
+            }
+
+            items.forEach((item) => {
+                const card = document.createElement('div');
+                card.className = 'item-card';
+                card.onclick = () => loadItemDetails(item.id);
+
+                card.innerHTML = `
+                    <div class="item-info">
+                        <h3>${item.nome || 'Item sem nome'}</h3>
+                        <p>Tipo: ${item.tipo || 'N/A'}</p>
+                    </div>
+                    <div class="item-actions">
+                        <i class="fas fa-edit"></i>
+                    </div>
+                `;
+                itemListDiv.appendChild(card);
+            });
+        }
+
         async function loadItems() {
             if (!itemListDiv) return;
             const itemsCollection = collection(db, 'empireitens');
@@ -657,30 +737,22 @@
                      return;
                 }
 
-                // Sort items alphabetically by name before displaying
-                const itemsArray = [];
-                 querySnapshot.forEach((doc) => {
-                     itemsArray.push({ id: doc.id, ...doc.data() });
-                 });
-                 itemsArray.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
-
-
-                 itemsArray.forEach((item) => { // Use the sorted array
-                     const card = document.createElement('div');
-                     card.className = 'item-card';
-                     card.onclick = () => loadItemDetails(item.id); // Pass the ID
-
-                    card.innerHTML = `
-                        <div class="item-info">
-                            <h3>${item.nome || 'Item sem nome'}</h3>
-                            <p>Tipo: ${item.tipo || 'N/A'}</p>
-                        </div>
-                        <div class="item-actions">
-                            <i class="fas fa-edit"></i>
-                        </div>
-                    `;
-                    itemListDiv.appendChild(card);
+                allItems = [];
+                querySnapshot.forEach((doc) => {
+                    allItems.push({ id: doc.id, ...doc.data() });
                 });
+                allItems.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+
+
+                displayItems(allItems);
+
+                // Add search functionality
+                const searchInput = document.getElementById('search-input');
+                if (searchInput) {
+                    searchInput.addEventListener('input', (e) => {
+                        filterItems(e.target.value);
+                    });
+                }
             } catch (error) {
                 console.error('Error loading items:', error);
                 itemListDiv.innerHTML = '<p style="color: red;">Erro ao carregar itens.</p>';
