@@ -258,18 +258,35 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: #FFFFFF; /* Changed background color to white */
+            background: #FFFFFF;
             display: flex;
-            flex-direction: column; /* Stack items vertically */
+            flex-direction: column;
             justify-content: center;
             align-items: center;
             z-index: 1001;
+            transition: opacity 0.5s ease;
         }
 
+        .loading-spinner {
+            border: 16px solid #f3f3f3;
+            border-top: 16px solid #3498db;
+            border-radius: 50%;
+            width: 120px;
+            height: 120px;
+            animation: spin 2s linear infinite;
+            opacity: 1;
+            transition: opacity 0.5s ease;
+        }
 
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
+        }
+
+        /* Hide spinner when video is playing */
+        .loading-spinner.hidden {
+            opacity: 0;
+            visibility: hidden;
         }
 
         /* Reduced size for team logos */
@@ -336,6 +353,7 @@
 <body>
 
     <div id="loading-screen">
+        <div id="loading-spinner" class="loading-spinner"></div>
         <video id="arena-loading-video" src="https://cdnl.iconscout.com/lottie/premium/thumb/sword-animated-icon-download-in-lottie-json-gif-static-svg-file-formats--weapon-war-blade-minimal-pack-miscellaneous-icons-9553869.mp4" autoplay loop muted playsinline style="display: none;"></video>
         <img id="arena-loading-image" src="" alt="Arena Loading Image" style="display: none;">
         <p id="arena-welcome-text" style="display: none;"></p> <!-- Welcome text element added here -->
@@ -653,40 +671,50 @@
         }
 
         onAuthStateChanged(auth, async (user) => {
+            console.log("onAuthStateChanged triggered"); // Log when auth state changes
             if (user) {
+                console.log("User is logged in:", user.uid); // Log if user is logged in
                 currentUserStatus = await getUserStatus(user.uid);
                 if (currentUserStatus === null) {
+                    console.log("User status is null, redirecting to index.html"); // Log if user status is null
                     window.location.href = 'index.html';
                     return;
                 }
 
                 const userRef = doc(db, 'users', user.uid);
+                console.log("Fetching user document..."); // Log before fetching user doc
                 const userSnap = await getDoc(userRef);
 
                 if (userSnap.exists()) {
+                    console.log("User document exists."); // Log if user doc exists
                     const userData = userSnap.data();
                     const arenaName = userData.Arena;
-                    console.log("Arena Name from User:", arenaName);
+                    console.log("Arena Name from User:", arenaName); // Log arena name
 
-                    // CORRECTED SECTION (Again, based on image structure):
-                    const paineisCollectionRef = collection(db, 'paineis'); // Reference to 'paineis' collection
-                    const arenaDocRef = doc(paineisCollectionRef, 'paineis arena'); // Reference to 'paineis arena' document in 'paineis' collection
+                    // Fetch arena image based on user's Arena value
+                    const paineisCollectionRef = collection(db, 'paineis');
+                    const arenaDocRef = doc(paineisCollectionRef, 'paineis arena');
+                    console.log("Fetching 'paineis arena' document..."); // Log before fetching paineis arena doc
                     const arenaDocSnap = await getDoc(arenaDocRef);
 
-
                     if (arenaDocSnap.exists()) {
+                        console.log("'paineis arena' document exists."); // Log if paineis arena doc exists
                         const arenaData = arenaDocSnap.data();
-                        const arenaImageURL = arenaData['Arena 1']; // Field name "Arena 1" is still correct
+                        console.log("Arena data:", arenaData); // Log arena data
+                        const arenaImageURL = arenaData[arenaName]?.image; // Use user's Arena value to get the image URL
 
                         if (arenaImageURL) {
+                            console.log("Arena Image URL found:", arenaImageURL); // Log image URL
                             arenaLoadingImage.src = arenaImageURL;
                             arenaLoadingImage.style.display = 'block';
                         } else {
-                            console.warn("URL da imagem da Arena não encontrado no documento 'paineis arena' no campo 'Arena 1'.");
+                            console.warn(`URL da imagem não encontrado para a Arena: ${arenaName}`);
+                            console.log("Arena Image URL not found for arena:", arenaName); // Log if image URL is not found
                             arenaLoadingImage.style.display = 'none';
                         }
                     } else {
                         console.warn(`Documento 'paineis arena' não encontrado na coleção 'paineis'.`); // Corrected warning message to reflect collection 'paineis'
+                        console.log("'paineis arena' document not found in 'paineis' collection."); // Log if paineis arena doc is not found
                         arenaLoadingImage.style.display = 'none';
                     }
 
@@ -695,13 +723,16 @@
 
                 } else {
                     console.warn("Documento do usuário não encontrado.");
+                    console.log("User document not found."); // Log if user document is not found
                     arenaLoadingImage.style.display = 'none';
                     arenaWelcomeText.style.display = 'none'; // Hide welcome text if user doc not found
                 }
 
                 arenaLoadingVideo.style.display = 'block'; // Show video here, before loading games, so it appears during loading
+                document.querySelector('.loading-spinner').classList.add('hidden'); // Hide spinner when video appears
                 await loadGames();
             } else {
+                console.log("User is not logged in."); // Log if user is not logged in
                 loadingScreen.style.display = 'none';
                 arenaLoadingImage.style.display = 'none';
                 arenaLoadingVideo.style.display = 'none'; // Hide video if not logged in
