@@ -84,7 +84,7 @@
             box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15);
             background-color: #f0f0f0;
         }
-        
+
         .timer-unit {
             display: inline-block;
             padding: 4px 8px;
@@ -130,7 +130,7 @@
             background-image: linear-gradient(90deg, #2176ff, #21d4fd, #b721ff, #ffdd00, #2176ff);
             background-size: 400% 100%;
             animation: snake-border 8s linear infinite;
-            -webkit-mask: 
+            -webkit-mask:
                 linear-gradient(#fff 0 0) content-box,
                 linear-gradient(#fff 0 0);
             -webkit-mask-composite: xor;
@@ -384,6 +384,10 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+
+        .hidden-menu-item {
+            display: none !important;
+        }
     </style>
 </head>
 <body>
@@ -408,28 +412,28 @@
     </div>
 
     <nav class="bottom-menu">
-        <a href="1x.html" class="menu-item">
+        <a href="1x.html" class="menu-item" id="menu-item-1x">
             <i class="fas fa-home"></i>
         </a>
-        <a href="market.html" class="menu-item">
+        <a href="market.html" class="menu-item" id="menu-item-market">
             <i class="fas fa-shopping-cart"></i>
         </a>
-        <a href="team.html" class="menu-item">
+        <a href="team.html" class="menu-item" id="menu-item-team">
             <i class="fas fa-users"></i>
         </a>
-        <a href="empire.html" class="menu-item">
+        <a href="empire.html" class="menu-item" id="menu-item-empire">
             <i class="fas fa-landmark empire-icon"></i>
         </a>
-        <a href="rankings.html" class="menu-item">
+        <a href="rankings.html" class="menu-item" id="menu-item-rankings">
             <i class="fas fa-list"></i>
         </a>
-        <a href="profile.html" class="menu-item">
+        <a href="profile.html" class="menu-item" id="menu-item-profile">
             <i class="fas fa-user"></i>
         </a>
     </nav>
 
     <script type="module">
-              import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getFirestore, doc, getDoc, addDoc, collection, serverTimestamp, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
@@ -462,94 +466,103 @@
             }
         }
 
+        async function getPaineisMenuSettings() {
+            const paineisMenuDoc = await getDoc(doc(db, 'paineis', 'paineis menu'));
+            if (paineisMenuDoc.exists()) {
+                return paineisMenuDoc.data();
+            } else {
+                return {};
+            }
+        }
+
         let currentGame = null;
 
         // Expose submitPredictions to global scope
         window.submitPredictions = async function() {
-    try {
-        if (!currentGame) {
-            throw new Error('Game data not loaded');
-        }
+            try {
+                if (!currentGame) {
+                    throw new Error('Game data not loaded');
+                }
 
-        // Check if prediction deadline has passed
-        const now = new Date();
+                // Check if prediction deadline has passed
+                const now = new Date();
 
-        // Check if fimIntervalo exists before calling toDate()
-        if (!currentGame.fimIntervalo) {
-            showErrorPopup('Informação de data indisponível. Não é possível palpitar.');
-            setTimeout(() => {
-                window.location.href = '1x.html';
-            }, 5000);
-            return;
-        }
+                // Check if fimIntervalo exists before calling toDate()
+                if (!currentGame.fimIntervalo) {
+                    showErrorPopup('Informação de data indisponível. Não é possível palpitar.');
+                    setTimeout(() => {
+                        window.location.href = '1x.html';
+                    }, 5000);
+                    return;
+                }
 
-        const fimIntervalo = currentGame.fimIntervalo.toDate();
-        if (now > fimIntervalo) {
-            showErrorPopup('Tempo esgotado, impossivel palpitar');
-            setTimeout(() => {
-                window.location.href = '1x.html';
-            }, 5000);
-            return;
-        }
+                const fimIntervalo = currentGame.fimIntervalo.toDate();
+                if (now > fimIntervalo) {
+                    showErrorPopup('Tempo esgotado, impossivel palpitar');
+                    setTimeout(() => {
+                        window.location.href = '1x.html';
+                    }, 5000);
+                    return;
+                }
 
-        const predictions = [];
-        for (let i = 0; i < currentGame.numeroPalpites; i++) {
-            const input = document.getElementById(`prediction${i + 1}`);
-            if (!input || !input.value.trim()) {
-                showErrorPopup('Ainda não fez todos os palpites possíveis do jogo');
-                return;
+                const predictions = [];
+                for (let i = 0; i < currentGame.numeroPalpites; i++) {
+                    const input = document.getElementById(`prediction${i + 1}`);
+                    if (!input || !input.value.trim()) {
+                        showErrorPopup('Ainda não fez todos os palpites possíveis do jogo');
+                        return;
+                    }
+                    predictions.push(input.value.trim());
+                }
+
+                // Get user document to fetch the username
+                const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
+                if (!userDoc.exists()) {
+                    throw new Error('User data not found');
+                }
+                const userData = userDoc.data();
+
+                const palpiteData = {
+                    userId: auth.currentUser.uid,
+                    nomeDeUsuario: userData.nomeDeUsuario,
+                    jogoId: currentGame.id,
+                    nomeJogo: currentGame.nomeJogo,
+                    equipaCasaId: currentGame.equipaCasaId,
+                    equipaCasa: currentGame.equipaCasa,
+                    equipaForaId: currentGame.equipaForaId,
+                    equipaFora: currentGame.equipaFora,
+                    dataJogo: currentGame.dataJogo,
+                    competicaoId: currentGame.competicaoId,
+                    competicao: currentGame.competicao,
+                    ronda: currentGame.ronda,
+                    modId: currentGame.modId,
+                    temporada: currentGame.temporada,
+                    dataPalpite: serverTimestamp(),
+                    PontosPossiveis: 0,
+                    PontosGanhos: 0,
+                    GCoinsGanhos: 0.0,
+                    Analisado: "Não", // ADDED THIS LINE
+                };
+
+                predictions.forEach((palpite, index) => {
+                    const predictionNumber = index + 1;
+                    palpiteData[`palpite${predictionNumber}`] = palpite;
+                    palpiteData[`Palpite${predictionNumber}PontosGanhos`] = 0;
+                    palpiteData[`Palpite${predictionNumber}PontosQuanto`] = 0;
+                });
+
+                await Promise.all([
+                    addDoc(collection(db, 'palpites'), palpiteData),
+                    addDoc(collection(doc(db, 'users', auth.currentUser.uid), 'palpites'), palpiteData)
+                ]);
+
+                window.location.reload();
+
+            } catch (error) {
+                console.error('Error submitting predictions:', error);
+                showErrorPopup(`Erro ao enviar palpites: ${error.message}`);
             }
-            predictions.push(input.value.trim());
-        }
-
-        // Get user document to fetch the username
-        const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
-        if (!userDoc.exists()) {
-            throw new Error('User data not found');
-        }
-        const userData = userDoc.data();
-
-        const palpiteData = {
-            userId: auth.currentUser.uid,
-            nomeDeUsuario: userData.nomeDeUsuario,
-            jogoId: currentGame.id,
-            nomeJogo: currentGame.nomeJogo,
-            equipaCasaId: currentGame.equipaCasaId,
-            equipaCasa: currentGame.equipaCasa,
-            equipaForaId: currentGame.equipaForaId,
-            equipaFora: currentGame.equipaFora,
-            dataJogo: currentGame.dataJogo,
-            competicaoId: currentGame.competicaoId,
-            competicao: currentGame.competicao,
-            ronda: currentGame.ronda,
-            modId: currentGame.modId,
-            temporada: currentGame.temporada,
-            dataPalpite: serverTimestamp(),
-            PontosPossiveis: 0,
-            PontosGanhos: 0,
-            GCoinsGanhos: 0.0,
-            Analisado: "Não", // ADDED THIS LINE
         };
-
-        predictions.forEach((palpite, index) => {
-            const predictionNumber = index + 1;
-            palpiteData[`palpite${predictionNumber}`] = palpite;
-            palpiteData[`Palpite${predictionNumber}PontosGanhos`] = 0;
-            palpiteData[`Palpite${predictionNumber}PontosQuanto`] = 0;
-        });
-
-        await Promise.all([
-            addDoc(collection(db, 'palpites'), palpiteData),
-            addDoc(collection(doc(db, 'users', auth.currentUser.uid), 'palpites'), palpiteData)
-        ]);
-
-        window.location.reload();
-
-    } catch (error) {
-        console.error('Error submitting predictions:', error);
-        showErrorPopup(`Erro ao enviar palpites: ${error.message}`);
-    }
-};
 
         async function checkExistingPredictions(gameId) {
             try {
@@ -759,6 +772,34 @@
         onAuthStateChanged(auth, async (user) => {
             if (user) {
                 currentUserStatus = await getUserStatus(user.uid);
+                const paineisMenuSettings = await getPaineisMenuSettings();
+
+                // Access control for palpite page
+                if (paineisMenuSettings.palpite !== "on" && currentUserStatus !== 'ruler') {
+                    window.location.href = 'index.html';
+                    return;
+                }
+
+                // Menu visibility control
+                const menuItemsConfig = {
+                    'menu-item-1x': paineisMenuSettings['1x'],
+                    'menu-item-market': paineisMenuSettings.market,
+                    'menu-item-team': paineisMenuSettings.team,
+                    'menu-item-empire': paineisMenuSettings.empire,
+                    'menu-item-rankings': paineisMenuSettings.rankings,
+                    'menu-item-profile': paineisMenuSettings.profile,
+                };
+
+                for (const menuItemId in menuItemsConfig) {
+                    if (menuItemsConfig[menuItemId] === 'off') {
+                        const menuItem = document.getElementById(menuItemId);
+                        if (menuItem) {
+                            menuItem.classList.add('hidden-menu-item');
+                        }
+                    }
+                }
+
+
                 console.log(`User is logged in on palpite.html with status: ${currentUserStatus}`);
                 await loadGameDetails(); // Load game details after authentication
                 loadingScreen.style.display = 'none';
