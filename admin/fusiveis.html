@@ -8,11 +8,11 @@
     <script type="module">
         // Import Firebase functions
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, collection, addDoc, query, where, getDocs, doc, updateDoc, arrayUnion } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getFirestore, collection, doc, updateDoc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         // Firebase configuration
         const firebaseConfig = {
-            apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0",
+            apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0", // Replace with your actual API key if different
             authDomain: "g-games-8a8fc.firebaseapp.com",
             projectId: "g-games-8a8fc",
             storageBucket: "g-games-8a8fc.firebasestorage.app",
@@ -22,104 +22,751 @@
         };
 
         // Initialize Firebase
+        console.log("Initializing Firebase...");
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
+        console.log("Firebase initialized.");
 
-        document.addEventListener('DOMContentLoaded', async () => {
-            // Page initialization code will go here
+        // --- State Variables ---
+        let visibilitySettings = null; // Stores loaded profile settings
+        const defaultSettings = {
+            GCoin: 'on', dividas: 'on', devolver: 'on', myteam: 'on',
+            minigames: 'on', world26: 'on', quemganha: 'on', FusiveisBtn: 'on' // Assuming FusiveisBtn is needed, add if necessary
+        };
+        const firebaseFieldMap = { // For Profile Popup
+            gcoinsDisplay: 'GCoin', debtDisplay: 'dividas', returnDisplay: 'devolver',
+            squadDisplay: 'myteam', minigamesDisplay: 'minigames',
+            euro26Display: 'world26', quemGanhaDisplay: 'quemganha'
+        };
+
+        // --- State Variables for Menu Popup ---
+        let menuVisibilitySettings = null; // Stores loaded menu settings
+        const defaultMenuSettings = {
+            '1x': 'on', bank: 'on', empire: 'on', market: 'on',
+            profile: 'on', rankings: 'on', team: 'on'
+        };
+        const menuFirebaseFieldMap = { // Maps data-menu attribute to Firestore field
+            home: '1x',
+            bank: 'bank',
+            empire: 'empire',
+            market: 'market',
+            profile: 'profile',
+            rankings: 'rankings',
+            team: 'team'
+        };
+        const menuDisplayNames = { // For notifications
+            home: 'Home', bank: 'Transações', empire: 'Empire', market: 'Market',
+            profile: 'Profile', rankings: 'Rankings', team: 'Team'
+        };
+
+        // --- Popup Functions ---
+        window.openProfilePopup = async function() {
+            console.log("openProfilePopup: Opening...");
+            const popup = document.getElementById('profile-popup');
+            const popupContent = document.getElementById('profile-popup-content');
+            const template = document.getElementById('profile-controls-template');
+
+            if (!popup || !popupContent || !template) {
+                console.error("openProfilePopup: Popup elements or template not found!");
+                return;
+            }
+
+            // Clone the content from the template
+            const clonedContent = template.content.cloneNode(true);
+
+            // Clear previous popup content
+            popupContent.innerHTML = ''; // Clear only the target div
+
+            // Apply current visibility settings to the cloned buttons BEFORE adding to DOM
+            if (!visibilitySettings) {
+                console.warn("openProfilePopup: Settings not loaded yet, attempting to load now...");
+                await loadDisplaySettings(); // Try loading if not already loaded
+                if (!visibilitySettings) {
+                     console.error("openProfilePopup: Failed to load settings. Using defaults for display.");
+                     visibilitySettings = { ...defaultSettings }; // Use defaults as fallback
+                }
+            }
+
+            console.log("openProfilePopup: Applying profile settings to cloned content:", visibilitySettings);
+            clonedContent.querySelectorAll('.display-item').forEach(item => {
+                const displayType = item.dataset.display;
+                const firebaseKey = firebaseFieldMap[displayType];
+                const toggleBtn = item.querySelector('.toggle-btn');
+
+                if (firebaseKey && toggleBtn && visibilitySettings.hasOwnProperty(firebaseKey)) {
+                    const isActive = visibilitySettings[firebaseKey] === 'on';
+                    console.log(`openProfilePopup: Setting button for ${displayType} (${firebaseKey}) to ${isActive ? 'Active' : 'Inactive'}`);
+                    if (isActive) {
+                        toggleBtn.classList.add('active');
+                        toggleBtn.textContent = 'Ativo';
+                    } else {
+                        toggleBtn.classList.remove('active');
+                        toggleBtn.textContent = 'Desativo';
+                    }
+                } else {
+                    console.warn(`openProfilePopup: Could not apply setting for ${displayType} (Key: ${firebaseKey})`);
+                    if (toggleBtn) {
+                        toggleBtn.textContent = 'Erro';
+                        toggleBtn.disabled = true;
+                    }
+                }
+            });
+
+            // Add cloned content to the popup
+            popupContent.appendChild(clonedContent);
+
+            // Add event listeners ONLY to the buttons inside the popup's dynamic content
+            popupContent.querySelectorAll('.toggle-btn').forEach(btn => {
+                btn.removeEventListener('click', handleToggleClick); // Remove previous listener just in case
+                btn.addEventListener('click', handleToggleClick);
+            });
+            console.log("openProfilePopup: Event listeners added to profile popup buttons.");
+
+            popup.style.display = 'flex';
+            console.log("openProfilePopup: Popup displayed.");
+        };
+
+        window.closeProfilePopup = function() {
+            const popup = document.getElementById('profile-popup');
+            if (popup) popup.style.display = 'none';
+        };
+
+        window.openMenuPopup = async function() {
+            console.log("openMenuPopup: Opening...");
+            const popup = document.getElementById('menu-popup');
+            if (!popup) return; // Safety check
+
+            // Load settings if not already loaded
+            if (!menuVisibilitySettings) {
+                console.warn("openMenuPopup: Menu settings not loaded, loading now...");
+                await loadMenuSettings();
+                if (!menuVisibilitySettings) {
+                    console.error("openMenuPopup: Failed to load menu settings. Cannot update buttons.");
+                    // Keep 'Aguarde...' or show an error state on buttons
+                     popup.querySelectorAll('.controlled-item .toggle-btn').forEach(btn => {
+                        btn.textContent = 'Erro';
+                        btn.disabled = true;
+                     });
+                     popup.style.display = 'flex';
+                     return; // Stop if settings failed to load
+                }
+            }
+
+            // Apply loaded settings to buttons inside the menu popup
+            console.log("openMenuPopup: Applying menu settings:", menuVisibilitySettings);
+            popup.querySelectorAll('.controlled-item').forEach(item => {
+                const menuType = item.dataset.menu; // e.g., 'home'
+                const firebaseKey = menuFirebaseFieldMap[menuType]; // e.g., '1x'
+                const toggleBtn = item.querySelector('.toggle-btn');
+
+                if (firebaseKey && toggleBtn && menuVisibilitySettings.hasOwnProperty(firebaseKey)) {
+                    const isActive = menuVisibilitySettings[firebaseKey] === 'on';
+                    console.log(`openMenuPopup: Setting button for ${menuType} (${firebaseKey}) to ${isActive ? 'Active' : 'Inactive'}`);
+                    if (isActive) {
+                        toggleBtn.classList.add('active');
+                        toggleBtn.textContent = 'Ativo';
+                    } else {
+                        toggleBtn.classList.remove('active');
+                        toggleBtn.textContent = 'Desativo';
+                    }
+                    toggleBtn.disabled = false; // Enable button after setting state
+                } else {
+                    console.warn(`openMenuPopup: Could not apply setting for ${menuType} (Key: ${firebaseKey})`);
+                    if (toggleBtn) {
+                         toggleBtn.textContent = 'Erro';
+                         toggleBtn.disabled = true;
+                    }
+                }
+            });
+
+            popup.style.display = 'flex';
+            console.log("openMenuPopup: Menu Popup displayed.");
+        };
+
+        window.closeMenuPopup = function() {
+            const popup = document.getElementById('menu-popup');
+            if (popup) popup.style.display = 'none';
+        };
+
+        // Close popups when clicking outside
+        document.getElementById('profile-popup')?.addEventListener('click', function(event) {
+            if (event.target === this) {
+                closeProfilePopup();
+            }
         });
+        document.getElementById('menu-popup')?.addEventListener('click', function(event) {
+            if (event.target === this) {
+                closeMenuPopup();
+            }
+        });
+
+         // --- Load Settings Functions ---
+        async function loadDisplaySettings() { // Loads profile settings
+            console.log("loadDisplaySettings: Attempting to load profile settings...");
+            try {
+                const panelSettingsDocRef = doc(db, 'paineis', 'paineis perfil');
+                const docSnap = await getDoc(panelSettingsDocRef);
+
+                if (docSnap.exists()) {
+                    visibilitySettings = docSnap.data();
+                    // Optional: Ensure default keys exist if needed
+                     for (const key in firebaseFieldMap) {
+                         const firestoreKey = firebaseFieldMap[key];
+                         if (!visibilitySettings.hasOwnProperty(firestoreKey) && defaultSettings.hasOwnProperty(firestoreKey)) {
+                            console.warn(`loadDisplaySettings: Field '${firestoreKey}' missing. Using default.`);
+                            visibilitySettings[firestoreKey] = defaultSettings[firestoreKey];
+                         }
+                     }
+                    console.log("loadDisplaySettings: Profile settings loaded:", visibilitySettings);
+                } else {
+                    console.warn("loadDisplaySettings: Profile settings document not found. Using defaults and creating document.");
+                    visibilitySettings = { ...defaultSettings }; // Use defaults
+                    // Create a version of defaultSettings that ONLY includes keys mapped in firebaseFieldMap
+                    const initialProfileSettings = {};
+                    Object.values(firebaseFieldMap).forEach(key => {
+                        if (defaultSettings.hasOwnProperty(key)) {
+                            initialProfileSettings[key] = defaultSettings[key];
+                        }
+                    });
+                    await setDoc(panelSettingsDocRef, initialProfileSettings);
+                    console.log("loadDisplaySettings: Default profile settings written to Firebase:", initialProfileSettings);
+                }
+            } catch (error) {
+                console.error("loadDisplaySettings: Error loading profile settings:", error);
+                showNotification('Erro ao carregar configurações de perfil', 'error');
+                // Use defaults locally on error
+                if (!visibilitySettings) {
+                   visibilitySettings = { ...defaultSettings };
+                }
+                console.log("loadDisplaySettings: Using default profile settings locally due to error.");
+            }
+        }
+
+        async function loadMenuSettings() { // Loads menu settings
+            console.log("loadMenuSettings: Attempting to load menu settings...");
+            try {
+                const menuSettingsDocRef = doc(db, 'paineis', 'paineis menu'); // Correct path
+                const docSnap = await getDoc(menuSettingsDocRef);
+
+                if (docSnap.exists()) {
+                    menuVisibilitySettings = docSnap.data();
+                    // Ensure all expected keys exist, using defaults if not
+                    for (const key in defaultMenuSettings) {
+                        if (!menuVisibilitySettings.hasOwnProperty(key)) {
+                            console.warn(`loadMenuSettings: Field '${key}' missing in Firestore. Using default '${defaultMenuSettings[key]}'.`);
+                            menuVisibilitySettings[key] = defaultMenuSettings[key];
+                            // Optionally, update Firestore with the missing default field here if desired
+                            // try { await updateDoc(menuSettingsDocRef, { [key]: defaultMenuSettings[key] }); } catch(e) { console.error("Error adding missing default:", e); }
+                        }
+                    }
+                    console.log("loadMenuSettings: Menu settings loaded:", menuVisibilitySettings);
+                } else {
+                    console.warn("loadMenuSettings: Menu settings document not found. Using defaults and creating document.");
+                    menuVisibilitySettings = { ...defaultMenuSettings }; // Use defaults
+                    await setDoc(menuSettingsDocRef, defaultMenuSettings); // Write defaults to Firebase
+                    console.log("loadMenuSettings: Default menu settings written to Firebase:", defaultMenuSettings);
+                }
+            } catch (error) {
+                console.error("loadMenuSettings: Error loading menu settings:", error);
+                showNotification('Erro ao carregar configurações do menu', 'error');
+                // Use defaults locally on error
+                if (!menuVisibilitySettings) {
+                   menuVisibilitySettings = { ...defaultMenuSettings };
+                }
+                console.log("loadMenuSettings: Using default menu settings locally due to error.");
+                 // Indicate error state on buttons if popup is already open or opened later
+                document.querySelectorAll('#menu-popup .controlled-item .toggle-btn').forEach(btn => {
+                     btn.textContent = 'Erro';
+                     btn.disabled = true;
+                });
+            }
+        }
+
+        // --- Handle Toggle Click Functions ---
+        async function handleToggleClick(event) { // Handles profile popup toggles
+            console.log("handleToggleClick: Profile toggle button clicked.");
+            const btn = event.currentTarget;
+            const displayItem = btn.closest('.display-item');
+            if (!displayItem) {
+                console.error("handleToggleClick: Could not find parent '.display-item'");
+                return;
+            }
+
+            const displayType = displayItem.dataset.display;
+            const firebaseField = firebaseFieldMap[displayType];
+            if (!firebaseField) {
+                 console.error(`handleToggleClick: No Firebase field mapped for display type '${displayType}'`);
+                return;
+            }
+
+            const wasActive = btn.classList.contains('active');
+            const newState = wasActive ? 'off' : 'on';
+
+            console.log(`handleToggleClick: Display: ${displayType}, Field: ${firebaseField}, New State: ${newState}`);
+
+            // Update button visually immediately
+            btn.classList.toggle('active', !wasActive);
+            btn.textContent = newState === 'on' ? 'Ativo' : 'Desativo';
+            console.log(`handleToggleClick: Button visually updated.`);
+
+            try {
+                const docRef = doc(db, "paineis", "paineis perfil");
+                const updateData = { [firebaseField]: newState };
+
+                console.log(`handleToggleClick: Updating Firestore '${docRef.path}' with:`, updateData);
+                await updateDoc(docRef, updateData);
+
+                // Update local state as well
+                if (visibilitySettings) {
+                    visibilitySettings[firebaseField] = newState;
+                }
+
+                console.log("handleToggleClick: Firestore update successful.");
+                showNotification(`Visibilidade de ${getDisplayName(displayType)} ${newState === 'on' ? 'ativada' : 'desativada'}!`, 'success');
+
+            } catch (error) {
+                console.error("handleToggleClick: Error updating Firestore:", error);
+                showNotification(`Erro ao atualizar visibilidade de ${getDisplayName(displayType)}`, 'error');
+
+                // Revert button state visually on error
+                console.log("handleToggleClick: Reverting button state due to error.");
+                 btn.classList.toggle('active', wasActive); // Set back to original state
+                 btn.textContent = wasActive ? 'Ativo' : 'Desativo';
+
+                 // Revert local state
+                 if (visibilitySettings) {
+                    visibilitySettings[firebaseField] = wasActive ? 'on' : 'off';
+                 }
+            }
+        }
+
+        async function handleMenuToggleClick(event) { // Handles menu popup toggles
+            console.log("handleMenuToggleClick: Menu toggle button clicked.");
+            const btn = event.currentTarget;
+            const displayItem = btn.closest('.controlled-item'); // Get the parent item
+            if (!displayItem) {
+                console.error("handleMenuToggleClick: Could not find parent '.controlled-item'");
+                return;
+            }
+
+            const menuType = displayItem.dataset.menu; // e.g., 'home'
+            const firebaseField = menuFirebaseFieldMap[menuType]; // e.g., '1x'
+            if (!firebaseField) {
+                console.error(`handleMenuToggleClick: No Firebase field mapped for menu type '${menuType}'`);
+                return;
+            }
+
+            // Prevent action if settings haven't loaded properly
+            if (!menuVisibilitySettings) {
+                 console.error("handleMenuToggleClick: Menu settings not available. Cannot perform toggle.");
+                 showNotification('Configurações do menu não carregadas. Tente recarregar.', 'error');
+                 return;
+            }
+
+            const wasActive = btn.classList.contains('active');
+            const newState = wasActive ? 'off' : 'on';
+
+            console.log(`handleMenuToggleClick: Menu: ${menuType}, Field: ${firebaseField}, New State: ${newState}`);
+
+            // Update button visually immediately
+            btn.classList.toggle('active', !wasActive);
+            btn.textContent = newState === 'on' ? 'Ativo' : 'Desativo';
+            console.log(`handleMenuToggleClick: Button visually updated.`);
+
+            try {
+                const docRef = doc(db, "paineis", "paineis menu"); // Correct path
+                const updateData = { [firebaseField]: newState };
+
+                console.log(`handleMenuToggleClick: Updating Firestore '${docRef.path}' with:`, updateData);
+                await updateDoc(docRef, updateData);
+
+                // Update local state as well
+                menuVisibilitySettings[firebaseField] = newState; // Update directly
+
+                console.log("handleMenuToggleClick: Firestore update successful.");
+                const displayName = menuDisplayNames[menuType] || menuType; // Get friendly name
+                showNotification(`Visibilidade de '${displayName}' ${newState === 'on' ? 'ativada' : 'desativada'}!`, 'success');
+
+            } catch (error) {
+                console.error("handleMenuToggleClick: Error updating Firestore:", error);
+                showNotification(`Erro ao atualizar '${menuDisplayNames[menuType] || menuType}'`, 'error');
+
+                // Revert button state visually on error
+                console.log("handleMenuToggleClick: Reverting button state due to error.");
+                btn.classList.toggle('active', wasActive); // Set back to original state
+                btn.textContent = wasActive ? 'Ativo' : 'Desativo';
+
+                 // Revert local state if it was updated optimistically
+                if (menuVisibilitySettings) {
+                    menuVisibilitySettings[firebaseField] = wasActive ? 'on' : 'off';
+                }
+            }
+        }
+
+        // --- Utility Functions ---
+        function getDisplayName(displayType) { // For profile popup items
+            const displayNames = { gcoinsDisplay: 'GCoins', debtDisplay: 'Dividas', returnDisplay: 'Devolver Jogadores', squadDisplay: 'Minha Equipa', minigamesDisplay: 'Mini GGames', euro26Display: 'Rumo a Jersey', quemGanhaDisplay: 'Quem Ganha?' };
+            return displayNames[displayType] || displayType;
+        }
+
+        function showNotification(message, type = 'success') {
+             const notification = document.createElement('div');
+             notification.className = `notification ${type}`;
+             notification.textContent = message;
+             document.body.appendChild(notification);
+             setTimeout(() => {
+                 notification.classList.add('hide');
+                 setTimeout(() => { notification.remove(); }, 300); // Remove after fade out
+             }, 3000); // Display for 3 seconds
+        }
+
+        // --- Initial Load ---
+        document.addEventListener('DOMContentLoaded', async () => {
+            console.log("DOMContentLoaded: Page loaded.");
+
+            // Load both settings initially
+            await loadDisplaySettings(); // Load profile popup settings
+            await loadMenuSettings();    // Load menu popup settings
+            console.log("DOMContentLoaded: Initial settings load attempted for both popups.");
+
+            // Add event listeners ONCE for menu toggle buttons
+            const menuContainer = document.getElementById('menu-items-container');
+            if (menuContainer) {
+                menuContainer.querySelectorAll('.controlled-item .toggle-btn').forEach(btn => {
+                    // Remove listener first to prevent duplicates if this code runs multiple times
+                    btn.removeEventListener('click', handleMenuToggleClick);
+                    btn.addEventListener('click', handleMenuToggleClick);
+                });
+                console.log("DOMContentLoaded: Event listeners added to menu toggle buttons.");
+            } else {
+                console.error("DOMContentLoaded: Could not find '#menu-items-container' to attach listeners.");
+            }
+
+            // Note: Listeners for profile popup toggles are added dynamically in openProfilePopup
+            // because its content is generated from a template each time it opens.
+        });
+
     </script>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        /* Base Styles */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { min-height: 100vh; background-color: #f0f0f0; font-family: Arial, sans-serif; }
+
+        /* Top Menu */
+        .top-menu { position: fixed; top: 0; left: 0; width: 100%; background-color: #ffffff; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); padding: 12px 0; display: flex; justify-content: center; gap: 24px; align-items: center; z-index: 1000; }
+        .menu-item { text-decoration: none; color: #666; transition: color 0.3s ease, background-color 0.3s ease; font-weight: 500; padding: 8px 16px; border-radius: 4px; font-size: 14px; line-height: 1.4; display: flex; align-items: center; gap: 8px; }
+        .menu-item i { font-size: 16px; }
+        .menu-item:hover, .menu-item.active { color: #2176ff; background-color: rgba(33, 118, 255, 0.1); }
+
+        /* Content Area */
+        .content { padding: 80px 20px 20px; max-width: 1200px; margin: 0 auto; }
+        h1 { color: #333; margin-bottom: 30px; text-align: center; }
+
+        /* Buttons (Profile & Menu Principal Trigger) */
+        .profile-btn { background-color: #2176ff; color: white; border: none; border-radius: 4px; padding: 8px 16px; font-weight: 500; cursor: pointer; transition: background-color 0.3s; display: inline-flex; /* Changed to inline-flex */ align-items: center; gap: 8px; vertical-align: middle; /* Align buttons nicely if text wraps */ }
+        .profile-btn:hover { background-color: #1a5cc8; }
+
+        /* Button Row Container - NEW */
+        .button-row {
+            display: flex;      /* Arrange buttons horizontally */
+            align-items: center;/* Vertically align buttons */
+            gap: 10px;          /* Space between the buttons */
+            margin-bottom: 20px;/* Space below the row of buttons */
+            flex-wrap: wrap;    /* Allow buttons to wrap on small screens */
+        }
+        .button-row .profile-btn {
+            margin: 0; /* Reset any potential default margins */
         }
 
-        body {
-            min-height: 100vh;
-            background-color: #f0f0f0;
-            font-family: Arial, sans-serif;
-        }
+        /* Popup Overlays */
+        .profile-popup-overlay, .menu-popup-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.5); z-index: 2000; justify-content: center; align-items: center; padding: 20px; /* Added padding for smaller screens */ }
 
-        .top-menu {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            background-color: #ffffff;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-            padding: 12px 0;
+        /* Popup Content Common Styles */
+        .profile-popup-content, .menu-popup-content { background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2); max-width: 800px; width: 100%; /* Changed from 90% */ max-height: 90vh; overflow-y: auto; position: relative; }
+        .profile-popup-close, .menu-popup-close { position: absolute; top: 15px; right: 15px; background: none; border: none; font-size: 24px; cursor: pointer; color: #666; transition: color 0.3s; }
+        .profile-popup-close:hover, .menu-popup-close:hover { color: #333; }
+        .profile-popup-content h2, .menu-popup-content h2 { margin-bottom: 10px; color: #333; }
+        .profile-popup-content p, .menu-popup-content p { margin-bottom: 20px; color: #555; font-size: 15px; }
+
+
+        /* Profile Popup Specific - List from Template */
+        .display-list { list-style: none; padding: 0; margin: 0; }
+        .display-item { display: flex; justify-content: space-between; align-items: center; padding: 15px; border-bottom: 1px solid #eee; transition: background-color 0.3s; }
+        .display-item:last-child { border-bottom: none; }
+        .display-item:hover { background-color: #f9f9f9; }
+        .display-info { display: flex; align-items: center; gap: 15px; }
+        .display-icon { width: 40px; height: 40px; border-radius: 50%; display: flex; justify-content: center; align-items: center; color: white; font-size: 18px; flex-shrink: 0; } /* Added flex-shrink */
+        .gcoins-icon { background: linear-gradient(135deg, #2ecc71, #27ae60); }
+        .debt-icon { background: linear-gradient(135deg, #e74c3c, #c0392b); }
+        .return-icon { background: linear-gradient(135deg, #9b59b6, #8e44ad); }
+        .squad-icon { background: linear-gradient(135deg, #f1c40f, #f39c12); }
+        .minigames-icon { background: linear-gradient(135deg, #4a148c, #311b92); }
+        .display-name { font-weight: 500; font-size: 16px; }
+        .display-description { color: #666; font-size: 14px; margin-top: 5px; }
+        /* Nested list styles (Usados no template/popup) */
+        ul.display-list ul.display-list { margin-left: 40px; margin-top: 10px; padding-left: 0; border-left: 1px dashed #ccc; width: calc(100% - 40px); }
+        ul.display-list ul.display-list .display-item { padding: 10px 15px; border-bottom: 1px solid #f0f0f0; }
+        ul.display-list ul.display-list .display-item:last-child { border-bottom: none; }
+
+        /* Menu Popup Specific */
+        .menu-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); /* Adjusted minmax */ gap: 20px; margin-top: 20px; }
+        /* Modified menu grid item */
+        .menu-grid-item.controlled-item {
             display: flex;
-            justify-content: center;
-            gap: 24px;
+            flex-direction: column; /* Stack content and button vertically */
             align-items: center;
-            z-index: 1000;
-        }
-
-        .menu-item {
-            text-decoration: none;
-            color: #666;
-            transition: color 0.3s ease;
-            font-weight: 500;
-            padding: 8px 16px;
-            border-radius: 4px;
-            font-size: 14px;
-            line-height: 1.4;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .menu-item i {
-            font-size: 16px;
-        }
-
-        .menu-item:hover, .menu-item.active {
-            color: #2176ff;
-            background-color: rgba(33, 118, 255, 0.1);
-        }
-
-        .content {
-            padding: 80px 20px 20px;
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-
-        h1 {
-            color: #333;
-            margin-bottom: 30px;
             text-align: center;
+            padding: 15px 10px; /* Adjusted padding */
+            gap: 12px; /* Space between content and button */
+            text-decoration: none; /* Remove underline if it was an <a> */
+            color: #333;
+            border-radius: 8px;
+            background-color: #fff; /* Give items a background */
+            border: 1px solid #eee; /* Subtle border */
+            transition: background-color 0.3s, box-shadow 0.3s;
+            cursor: default; /* Change cursor as it's not just a link */
+        }
+        .menu-grid-item.controlled-item:hover {
+            background-color: #f8f8f8; /* Lighter hover */
+            box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+        }
+        /* Content within menu item */
+        .menu-item-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px; /* Space between icon and text */
+            flex-grow: 1; /* Allow content to take space */
+        }
+        .menu-item-content i {
+            font-size: 24px;
+            color: #555; /* Icon color */
+            /* margin-bottom is removed, using gap now */
+        }
+        .menu-item-content span {
+            font-size: 14px;
+            font-weight: 500;
         }
 
-        .form-container {
-            max-width: 600px;
-            margin: 0 auto;
-            background-color: #ffffff;
-            padding: 30px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        /* Toggle button styles (Common) */
+        .toggle-btn { background-color: #ccc; color: white; border: none; border-radius: 20px; padding: 8px 16px; font-weight: 500; cursor: pointer; transition: background-color 0.3s; min-width: 100px; text-align: center; font-size: 14px; }
+        .toggle-btn.active { background-color: #4CAF50; }
+        .toggle-btn:not(.active) { background-color: #f44336; }
+        .toggle-btn:disabled { background-color: #aaa; cursor: not-allowed; }
+        /* Specific toggle style for menu items */
+        .menu-grid-item .toggle-btn {
+            margin-top: auto; /* Push button towards the bottom */
+            min-width: 90px; /* Adjust width */
+            padding: 6px 12px; /* Adjust padding */
+            font-size: 13px; /* Adjust font size */
         }
+
+
+        /* Notification styles */
+        .notification { position: fixed; bottom: 20px; right: 20px; padding: 15px 20px; border-radius: 5px; color: white; font-weight: 500; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2); z-index: 2001; /* Ensure it's above popups */ animation: slideIn 0.3s ease-out forwards; }
+        .notification.success { background-color: #4CAF50; }
+        .notification.error { background-color: #f44336; }
+        .notification.hide { animation: slideOut 0.3s ease-in forwards; }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        @keyframes slideOut { from { transform: translateX(0); opacity: 1; } to { transform: translateX(100%); opacity: 0; } }
+
     </style>
 </head>
 <body>
-    <nav class="top-menu">
-        <a href="engrenagem.html" class="menu-item">
-            <i class="fas fa-home"></i>
-            Home
-        </a>
-        <a href="fusiveis.html" class="menu-item active">
-            <i class="fas fa-bolt"></i>
-            FUSÍVEIS
-        </a>
-    </nav>
-
-    <div class="content">
-        <h1>Fusíveis</h1>
-        <div class="form-container">
-            <!-- Content will be added here based on requirements -->
-            <p>Página de gerenciamento de fusíveis em desenvolvimento.</p>
+    <!-- Profile Popup (Content dynamically inserted from template) -->
+    <div class="profile-popup-overlay" id="profile-popup">
+        <div class="profile-popup-content">
+            <button class="profile-popup-close" onclick="closeProfilePopup()">×</button>
+            <h2>Controle de Visibilidade dos Displays</h2>
+            <p>Configure quais elementos serão visíveis para os usuários na página de perfil.</p>
+            <!-- The content from #profile-controls-template will be inserted here by JS -->
+            <div id="profile-popup-content">
+                <!-- JS will populate this -->
+            </div>
         </div>
     </div>
+
+    <!-- Menu Principal Popup (Content is static, but toggles managed by JS) -->
+    <div class="menu-popup-overlay" id="menu-popup">
+         <div class="menu-popup-content">
+             <button class="menu-popup-close" onclick="closeMenuPopup()">×</button>
+             <h2>Controle de Visibilidade do Menu Principal</h2>
+             <p>Configure quais itens serão visíveis no menu principal para os usuários.</p>
+             <div class="menu-grid" id="menu-items-container"> <!-- Added ID -->
+                 <!-- Home -->
+                 <div class="menu-grid-item controlled-item" data-menu="home">
+                     <div class="menu-item-content">
+                         <i class="fas fa-home"></i>
+                         <span>Home</span>
+                     </div>
+                     <button class="toggle-btn">Aguarde...</button>
+                 </div>
+                 <!-- Market -->
+                 <div class="menu-grid-item controlled-item" data-menu="market">
+                     <div class="menu-item-content">
+                         <i class="fas fa-shopping-cart"></i>
+                         <span>Market</span>
+                     </div>
+                     <button class="toggle-btn">Aguarde...</button>
+                 </div>
+                 <!-- Team -->
+                 <div class="menu-grid-item controlled-item" data-menu="team">
+                     <div class="menu-item-content">
+                         <i class="fas fa-users"></i>
+                         <span>Team</span>
+                     </div>
+                     <button class="toggle-btn">Aguarde...</button>
+                 </div>
+                 <!-- Empire -->
+                 <div class="menu-grid-item controlled-item" data-menu="empire">
+                     <div class="menu-item-content">
+                         <i class="fas fa-landmark empire-icon"></i>
+                         <span>Empire</span>
+                     </div>
+                     <button class="toggle-btn">Aguarde...</button>
+                 </div>
+                 <!-- Rankings -->
+                 <div class="menu-grid-item controlled-item" data-menu="rankings">
+                     <div class="menu-item-content">
+                         <i class="fas fa-list"></i>
+                         <span>Rankings</span>
+                     </div>
+                     <button class="toggle-btn">Aguarde...</button>
+                 </div>
+                 <!-- Transações (Bank) -->
+                 <div class="menu-grid-item controlled-item" data-menu="bank">
+                     <div class="menu-item-content">
+                         <i class="fas fa-exchange-alt"></i>
+                         <span>Transações</span>
+                     </div>
+                     <button class="toggle-btn">Aguarde...</button>
+                 </div>
+                 <!-- Profile -->
+                 <div class="menu-grid-item controlled-item" data-menu="profile">
+                     <div class="menu-item-content">
+                         <i class="fas fa-user"></i>
+                         <span>Profile</span>
+                     </div>
+                     <button class="toggle-btn">Aguarde...</button>
+                 </div>
+             </div>
+         </div>
+    </div>
+
+    <!-- Template for Profile Visibility Controls (Not directly displayed) -->
+    <template id="profile-controls-template">
+        <ul class="display-list">
+            <!-- GCoins Display Control -->
+            <li class="display-item" data-display="gcoinsDisplay">
+                <div class="display-info">
+                    <div class="display-icon gcoins-icon"><i class="fas fa-dollar-sign"></i></div>
+                    <div>
+                        <div class="display-name">GCoins</div>
+                        <div class="display-description">Exibe o saldo de GCoins do usuário</div>
+                    </div>
+                </div>
+                <button class="toggle-btn">Aguarde...</button> <!-- State set by JS -->
+            </li>
+            <!-- Debt Display Control -->
+            <li class="display-item" data-display="debtDisplay">
+                <div class="display-info">
+                    <div class="display-icon debt-icon"><i class="fas fa-money-bill-wave"></i></div>
+                    <div>
+                        <div class="display-name">Dividas</div>
+                        <div class="display-description">Exibe as dívidas pendentes do usuário</div>
+                    </div>
+                </div>
+                <button class="toggle-btn">Aguarde...</button>
+            </li>
+            <!-- Return Players Display Control -->
+            <li class="display-item" data-display="returnDisplay">
+                <div class="display-info">
+                    <div class="display-icon return-icon"><i class="fas fa-undo"></i></div>
+                    <div>
+                        <div class="display-name">Devolver Jogadores</div>
+                        <div class="display-description">Permite ao usuário devolver jogadores</div>
+                    </div>
+                </div>
+                <button class="toggle-btn">Aguarde...</button>
+            </li>
+            <!-- Squad Display Control -->
+            <li class="display-item" data-display="squadDisplay">
+                <div class="display-info">
+                    <div class="display-icon squad-icon"><i class="fas fa-users"></i></div>
+                    <div>
+                        <div class="display-name">Minha Equipa</div>
+                        <div class="display-description">Acesso à página da equipe do usuário</div>
+                    </div>
+                </div>
+                <button class="toggle-btn">Aguarde...</button>
+            </li>
+            <!-- Mini Games Display Control (Main Toggle) -->
+            <li class="display-item" data-display="minigamesDisplay">
+                <div class="display-info">
+                    <div class="display-icon minigames-icon"><i class="fas fa-gamepad"></i></div>
+                    <div>
+                        <div class="display-name">Mini GGames</div>
+                        <div class="display-description">Acesso aos mini-jogos disponíveis</div>
+                    </div>
+                </div>
+                <button class="toggle-btn">Aguarde...</button>
+            </li>
+            <!-- Container for Sub-settings (Mini-Games) -->
+            <li>
+                <ul class="display-list">
+                    <!-- Rumo a Jersey Control -->
+                    <li class="display-item" data-display="euro26Display">
+                        <div class="display-info">
+                            <div class="display-icon minigames-icon" style="background: linear-gradient(135deg, #004488, #001a33);"><i class="fas fa-trophy"></i></div>
+                            <div>
+                                <div class="display-name">Rumo a Jersey</div>
+                                <div class="display-description">Mini-jogo Rumo a Jersey</div>
+                            </div>
+                        </div>
+                        <button class="toggle-btn">Aguarde...</button>
+                    </li>
+                    <!-- Quem Ganha Control -->
+                    <li class="display-item" data-display="quemGanhaDisplay">
+                        <div class="display-info">
+                            <div class="display-icon minigames-icon" style="background: linear-gradient(135deg, #228B22, #006400);"><i class="fas fa-futbol"></i></div>
+                            <div>
+                                <div class="display-name">Quem Ganha?</div>
+                                <div class="display-description">Mini-jogo Quem Ganha?</div>
+                            </div>
+                        </div>
+                        <button class="toggle-btn">Aguarde...</button>
+                    </li>
+                </ul>
+            </li>
+        </ul>
+    </template>
+
+    <!-- Top Navigation Bar -->
+    <nav class="top-menu">
+        <a href="engrenagem.html" class="menu-item"> <i class="fas fa-home"></i> Home </a>
+        <a href="fusiveis.html" class="menu-item active"> <i class="fas fa-bolt"></i> FUSÍVEIS </a>
+        <!-- Add other top menu items as needed -->
+    </nav>
+
+    <!-- Main Page Content -->
+    <div class="content">
+        <h1>Fusíveis</h1>
+
+        <!-- Button Row Container -->
+        <div class="button-row">
+            <button class="profile-btn" onclick="openProfilePopup()">
+                <i class="fas fa-user"></i>
+                Profile Settings
+            </button>
+            <button class="profile-btn" onclick="openMenuPopup()">
+                <i class="fas fa-bars"></i>
+                Menu Settings
+            </button>
+        </div>
+
+        <!-- Other content for the Fusiveis page can go here -->
+        <!-- The visibility controls list is now inside the popups/template -->
+
+    </div> <!-- End div.content -->
 </body>
 </html>
