@@ -5,18 +5,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Empire - G EMPIRE</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&display=swap">
     <style>
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+            user-select: none;
         }
 
         body {
             min-height: 100vh;
-            background-color: #f0f0f0;
-            font-family: Arial, sans-serif;
-            /* overflow: hidden; REMOVED overflow: hidden; from body style */
+            background: linear-gradient(135deg, #0a0a14 0%, #1a1a3a 50%, #2a1a4a 100%);
+            background-attachment: fixed;
+            font-family: 'Cinzel', serif;
+            color: #e0d2b4;
         }
 
         .bottom-menu {
@@ -24,8 +27,9 @@
             bottom: 0;
             left: 0;
             width: 100%;
-            background-color: #ffffff;
-            box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+            background-color: rgba(20, 20, 40, 0.9);
+            border-top: 2px solid #c9a959;
+            box-shadow: 0 -5px 15px rgba(0, 0, 0, 0.5);
             padding: 12px 0;
             display: flex;
             justify-content: center;
@@ -39,12 +43,13 @@
             flex-direction: column;
             align-items: center;
             text-decoration: none;
-            color: #666;
-            transition: color 0.3s ease;
+            color: #a99a7c;
+            transition: all 0.3s ease;
         }
 
         .menu-item:hover, .menu-item.active {
-            color: #333;
+            color: #e0d2b4;
+            transform: translateY(-3px);
         }
 
         .menu-item i {
@@ -54,69 +59,267 @@
 
         .empire-icon {
             font-size: 42px;
-            color: #2176ff;
+            color: #c9a959;
             transform: translateY(-3px);
-            filter: drop-shadow(0 0 8px rgba(33, 118, 255, 0.4));
+            filter: drop-shadow(0 0 8px rgba(201, 169, 89, 0.6));
             transition: all 0.3s ease;
         }
 
         .empire-icon:hover, .menu-item.active .empire-icon {
-            color: #0056d6;
+            color: #e6c675;
             transform: translateY(-8px);
-            filter: drop-shadow(0 0 12px rgba(33, 118, 255, 0.6));
+            filter: drop-shadow(0 0 12px rgba(230, 198, 117, 0.8));
         }
 
-        .content {
-            padding: 20px;
-            margin-bottom: 80px;
-            display: none; /* Hide content initially */
-        }
-
-        h1 {
-            color: #333;
-            margin-bottom: 20px;
-        }
-
-        /* Loading Screen Styles */
-        #loading-screen {
+        /* --- Popup Styles --- */
+        .popup-overlay {
+            display: none;
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background: #f0f0f0;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1001; /* Base popup z-index */
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            overflow-y: auto; /* Allow scrolling if content overflows */
+            padding: 20px 0; /* Add some padding for scroll */
+        }
+
+        .popup-content {
+            position: relative; /* Changed from fixed for scrolling */
+            margin: 5vh auto; /* Center vertically with margin */
+            transform: scale(0.8);
+            background: rgba(26, 26, 58, 0.95);
+            padding: 30px;
+            border-radius: 10px;
+            border: 2px solid #c9a959;
+            max-width: 95%;
+            width: 800px;
+            opacity: 0;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 25px rgba(0, 0, 0, 0.7);
+        }
+
+        .popup-overlay.active {
+            display: block;
+            opacity: 1;
+        }
+
+        .popup-overlay.active .popup-content {
+            transform: scale(1); /* Adjusted transform for margin centering */
+            opacity: 1;
+        }
+
+        .popup-title {
+            text-align: center;
+            color: #c9a959;
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+
+        .items-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+            max-height: 60vh; /* Limit height and allow internal scroll if needed */
+            overflow-y: auto; /* Scroll within the grid if many items */
+            padding-right: 10px; /* Space for scrollbar */
+        }
+
+        .item-card {
+            background: rgba(20, 20, 40, 0.6);
+            border: 1px solid #c9a959;
+            border-radius: 8px;
+            padding: 10px;
+            text-align: center;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.3s ease;
+            cursor: pointer; /* Indicate clickable */
+        }
+        .item-card:hover {
+            border-color: #e6c675;
+            background: rgba(30, 30, 60, 0.8);
+        }
+
+        .item-card.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .item-image {
+            width: 100px;
+            height: 100px;
+            object-fit: contain;
+            margin-bottom: 10px;
+            pointer-events: none; /* Prevent image drag ghost */
+        }
+
+        .item-name {
+            color: #e0d2b4;
+            font-size: 14px;
+            margin-bottom: 5px;
+            min-height: 2.5em; /* Ensure space even if name is short */
+        }
+
+        .item-nota {
+            color: #c9a959;
+            font-size: 12px;
+        }
+
+        .type-header { /* Style for the type headers */
+            width: 100%;
+            padding: 10px;
+            margin: 15px 0 10px;
+            color: #c9a959;
+            font-size: 18px;
+            font-weight: bold;
+            border-bottom: 1px solid #c9a959;
+            grid-column: 1 / -1; /* Span across all columns */
+            text-transform: uppercase; /* Optional: make titles stand out */
+            letter-spacing: 1px;
+        }
+
+        .popup-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .popup-button {
+            padding: 10px 20px;
+            border: 2px solid #c9a959;
+            background: transparent;
+            color: #e0d2b4;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-family: 'Cinzel', serif;
+        }
+
+        .popup-button:hover {
+            background: #c9a959;
+            color: #1a1a3a;
+        }
+
+        /* Confirmation and Nested Popup Specifics */
+        .confirmation-popup, .nested-popup-overlay {
+            z-index: 1002; /* Ensure they appear above the first popup */
+        }
+
+        /* Nested Popup Close Button */
+        .close-button {
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            background: none;
+            border: none;
+            font-size: 28px;
+            color: #a99a7c;
+            cursor: pointer;
+            transition: color 0.3s ease;
+            padding: 5px;
+            line-height: 1;
+        }
+        .close-button:hover {
+            color: #e0d2b4;
+        }
+
+        /* --- START: Additions for Filosofia Card Glow --- */
+
+        /* Define the floating glow animation */
+        @keyframes floatGlow {
+            0%, 100% {
+                filter: drop-shadow(0 0 8px rgba(201, 169, 89, 0.6)); /* Base gold glow */
+            }
+            50% {
+                filter: drop-shadow(0 0 12px rgba(201, 169, 89, 0.75)); /* Slightly stronger glow */
+            }
+        }
+
+        /* Style the filosofia card container */
+        .filosofia-card {
+            opacity: 0; /* Start hidden for JS animation */
+            transform: translateY(10px); /* Start slightly lower for JS animation */
+            transition: opacity 0.8s ease-in-out, transform 0.8s ease-in-out; /* JS transitions */
             display: flex;
             justify-content: center;
             align-items: center;
-            z-index: 1001;
+            margin: 15px; /* Increased margin for better spacing with glow */
+            cursor: pointer; /* Add cursor */
+            position: relative; /* Needed for pseudo-elements if used, good practice */
         }
 
-        .loading-spinner {
-            border: 16px solid #f3f3f3;
-            border-top: 16px solid #3498db;
-            border-radius: 50%;
-            width: 120px;
-            height: 120px;
-            animation: spin 2s linear infinite;
+        /* Style the image within the card */
+        .filosofia-card img {
+            width: 300px;
+            height: 300px;
+            object-fit: contain;
+            pointer-events: none; /* Prevent image interaction */
+            /* Apply the base floating glow animation */
+            animation: floatGlow 3.5s infinite ease-in-out;
+            /* Add transition for smooth hover effect change */
+            transition: filter 0.4s ease-in-out;
         }
 
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+        /* Enhance glow on hover of the CARD */
+        .filosofia-card:hover img {
+            /* Override animation with a stronger, static glow on hover */
+            animation: none; /* Pause the floating animation */
+            filter: drop-shadow(0 0 18px rgba(230, 198, 117, 0.9)); /* Stronger gold glow */
         }
+        /* --- END: Additions for Filosofia Card Glow --- */
+
     </style>
 </head>
 <body>
-
-    <div id="loading-screen">
-        <div class="loading-spinner"></div>
+    <!-- Container for Filosofias (if user needs to choose) -->
+    <div id="filosofias-container" style="display: none; padding: 20px; margin-bottom: 80px;">
+        <h2 style="text-align: center; margin-bottom: 30px; font-size: 32px; color: #c9a959;">Escolha sua Filosofia</h2>
+        <div id="filosofias-list" style="display: flex; flex-wrap: wrap; justify-content: center; gap: 10px;"></div>
     </div>
 
-    <div class="content">
-        <h1>Seu Império</h1>
-        <!-- Add empire page specific content here -->
+    <!-- Main Popup (for Filosofia items) -->
+    <div id="popup-overlay" class="popup-overlay">
+        <div class="popup-content">
+            <h3 class="popup-title"></h3>
+            <div class="items-grid"></div>
+            <div class="popup-buttons">
+                <button class="popup-button" onclick="closePopup()">Fechar</button>
+                <!-- Only show Escolher button if it's the filosofia selection -->
+                <button id="escolher-filosofia-btn" class="popup-button" onclick="showConfirmation()">Escolher Filosofia</button>
+            </div>
+        </div>
     </div>
 
+    <!-- Confirmation Popup -->
+    <div id="confirmation-popup" class="popup-overlay confirmation-popup">
+        <div class="popup-content" style="width: 400px;"> <!-- Smaller confirmation box -->
+            <h3 class="popup-title">Confirmar Escolha</h3>
+            <p style="text-align: center; color: #e0d2b4; margin-bottom: 20px;">Tem certeza que deseja escolher esta filosofia?</p>
+            <div class="popup-buttons">
+                <button class="popup-button" onclick="confirmChoice(false)">Não</button>
+                <button class="popup-button" onclick="confirmChoice(true)">Sim</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Nested Popup (for items attached to items) -->
+    <div id="nested-popup" class="popup-overlay nested-popup-overlay">
+        <div class="popup-content">
+            <button class="close-button" onclick="closeNestedPopup()">×</button>
+            <h3 class="popup-title"></h3>
+            <div class="items-grid"></div>
+            <!-- No action buttons needed here, just the close button -->
+        </div>
+    </div>
+
+
+    <!-- Bottom Navigation Menu -->
     <nav class="bottom-menu">
         <a href="1x.html" class="menu-item">
             <i class="fas fa-home"></i>
@@ -140,11 +343,11 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getFirestore, doc, getDoc, collection, query, where, getDocs, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
         const firebaseConfig = {
-            apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0",
+            apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0", // IMPORTANT: Hide in production
             authDomain: "g-games-8a8fc.firebaseapp.com",
             projectId: "g-games-8a8fc",
             storageBucket: "g-games-8a8fc.firebasestorage.app",
@@ -157,37 +360,325 @@
         const db = getFirestore(app);
         const auth = getAuth(app);
 
-        const loadingScreen = document.getElementById('loading-screen');
-        const content = document.querySelector('.content');
-        let currentUserStatus = null;
+        let currentUser = null; // Store user globally within the module
+        let selectedFilosofia = null; // Store selected filosofia for confirmation
 
+        // --- Utility Functions ---
         async function getUserStatus(userId) {
-            const userDoc = doc(db, 'users', userId);
-            const docSnap = await getDoc(userDoc);
+            const userDocRef = doc(db, 'users', userId);
+            const docSnap = await getDoc(userDocRef);
             if (docSnap.exists() && docSnap.data().aceite === "Yes") {
-                return docSnap.data().estatuto;
+                const userData = docSnap.data();
+                return {
+                    uid: userId, // Store UID
+                    estatuto: userData.estatuto,
+                    filosofia: userData.filosofia || null
+                };
             } else {
+                console.log('User document not found or not accepted.');
                 return null;
             }
         }
 
-        onAuthStateChanged(auth, async (user) => {
-            if (user) {
-                currentUserStatus = await getUserStatus(user.uid);
-                if (currentUserStatus !== null) {
-                    console.log(`User is logged in on empire.html with status: ${currentUserStatus}`);
-                    loadingScreen.style.display = 'none';
-                    content.style.display = 'block';
-                } else {
-                    console.log('User is not accepted');
-                    window.location.href = 'index.html';
+        // --- Popup Logic ---
+        function showPopup(filosofia) {
+            selectedFilosofia = filosofia; // Store filosofia for potential confirmation
+            const popup = document.getElementById('popup-overlay');
+            const popupTitle = popup.querySelector('.popup-title');
+            const itemsGrid = popup.querySelector('.items-grid');
+            const escolherButton = document.getElementById('escolher-filosofia-btn');
+
+            popupTitle.textContent = filosofia.nome;
+            itemsGrid.innerHTML = ''; // Clear previous items
+            escolherButton.style.display = 'inline-block'; // Show confirmation button
+
+            const itemsQuery = query(
+                collection(db, 'empireitens'),
+                where('anexadoItemId', '==', filosofia.id),
+                where('noMercado', '==', true)
+            );
+
+            getDocs(itemsQuery).then((snapshot) => {
+                const itemsByType = {};
+                let totalItems = 0; // For animation delay calculation
+
+                snapshot.forEach((doc) => {
+                    // Add document ID to the item object
+                    const item = { id: doc.id, ...doc.data() };
+                    const tipo = item.tipo || 'Outros';
+                    if (!itemsByType[tipo]) {
+                        itemsByType[tipo] = [];
+                    }
+                    itemsByType[tipo].push(item);
+                    totalItems++;
+                });
+
+                 // Sort types alphabetically, or custom order if needed
+                 const sortedTypes = Object.keys(itemsByType).sort();
+                 let itemIndex = 0;
+                 
+                 // Sort items by 'ordem' field within each type
+                 for (const tipo in itemsByType) {
+                     itemsByType[tipo].sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
+                 }
+
+                 sortedTypes.forEach(tipo => {
+                    // Create header for the type
+                    const typeHeader = document.createElement('div');
+                    typeHeader.className = 'type-header';
+                    typeHeader.textContent = tipo;
+                    itemsGrid.appendChild(typeHeader);
+
+                    // Add items for this type
+                    itemsByType[tipo].forEach((item) => {
+                        const itemCard = document.createElement('div');
+                        itemCard.className = 'item-card';
+                        itemCard.innerHTML = `
+                            <img src="${item.imagem}" alt="${item.nome}" class="item-image">
+                            <div class="item-name">${item.nome}</div>
+                            <div class="item-nota">${item.nota || 'N/A'}</div>
+                        `;
+                        // --- Add click listener for nested popup ---
+                        itemCard.addEventListener('click', () => window.showNestedPopup(item)); // Use window. prefix
+
+                        itemsGrid.appendChild(itemCard);
+
+                        // Staggered animation
+                        setTimeout(() => {
+                            itemCard.classList.add('visible');
+                        }, itemIndex * 100); // Delay based on overall item index
+                        itemIndex++;
+                    });
+                 });
+
+                 if (totalItems === 0) {
+                     itemsGrid.innerHTML = '<p style="color: #a99a7c; text-align: center; grid-column: 1 / -1;">Nenhum item associado encontrado.</p>';
+                 }
+
+            }).catch(error => {
+                console.error("Error fetching items for popup:", error);
+                itemsGrid.innerHTML = '<p style="color: #ff6b6b; text-align: center; grid-column: 1 / -1;">Erro ao carregar itens.</p>';
+            });
+
+            popup.classList.add('active');
+        }
+
+        function closePopup() {
+            document.getElementById('popup-overlay').classList.remove('active');
+            selectedFilosofia = null; // Clear selection when closing
+        }
+
+        function showConfirmation() {
+             if (!selectedFilosofia) return; // Should not happen if button is visible
+             document.getElementById('confirmation-popup').classList.add('active');
+        }
+
+        function closeConfirmation() {
+             document.getElementById('confirmation-popup').classList.remove('active');
+        }
+
+        async function confirmChoice(confirmed) {
+            closeConfirmation(); // Close confirmation box regardless of choice
+            if (confirmed && selectedFilosofia && currentUser) {
+                try {
+                    console.log(`Updating user ${currentUser.uid} filosofia to ${selectedFilosofia.id}`);
+                    await updateDoc(doc(db, 'users', currentUser.uid), {
+                        filosofia: selectedFilosofia.id
+                    });
+                    console.log('User filosofia updated successfully.');
+                    closePopup(); // Close the main popup
+                    document.getElementById('filosofias-container').style.display = 'none'; // Hide selection screen
+                    // Optionally: Reload or update UI to reflect the chosen filosofia immediately
+                } catch (error) {
+                    console.error('Error updating user philosophy:', error);
+                    alert('Erro ao salvar a escolha. Tente novamente.'); // User feedback
                 }
             } else {
-                console.log('No user is logged in on empire.html');
-                loadingScreen.style.display = 'none';
-                window.location.href = 'index.html';
+                 console.log('Filosofia choice cancelled or data missing.');
+            }
+        }
+
+        // --- Nested Popup Logic ---
+        window.showNestedPopup = function(parentItem) { // Attach to window
+            if (!parentItem || !parentItem.id) {
+                console.error("Invalid item data provided for nested popup.");
+                return;
+            }
+            const nestedPopup = document.getElementById('nested-popup');
+            const popupTitle = nestedPopup.querySelector('.popup-title');
+            const itemsGrid = nestedPopup.querySelector('.items-grid');
+
+            popupTitle.textContent = `Itens anexados a: ${parentItem.nome}`;
+            itemsGrid.innerHTML = ''; // Clear previous items
+
+            console.log(`Fetching items where anexadoItemId == ${parentItem.id}`);
+            const itemsQuery = query(
+                collection(db, 'empireitens'),
+                where('anexadoItemId', '==', parentItem.id),
+                where('noMercado', '==', true)
+            );
+
+            getDocs(itemsQuery).then((snapshot) => {
+                const itemsByType = {};
+                let totalItems = 0;
+
+                snapshot.forEach((doc) => {
+                    const item = { id: doc.id, ...doc.data() }; // Include ID for potential further nesting
+                    const tipo = item.tipo || 'Outros';
+                    if (!itemsByType[tipo]) {
+                        itemsByType[tipo] = [];
+                    }
+                    itemsByType[tipo].push(item);
+                    totalItems++;
+                });
+
+                const sortedTypes = Object.keys(itemsByType).sort();
+                let itemIndex = 0;
+                
+                // Sort items by 'ordem' field within each type
+                for (const tipo in itemsByType) {
+                    itemsByType[tipo].sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
+                }
+
+                sortedTypes.forEach(tipo => {
+                    const typeHeader = document.createElement('div');
+                    typeHeader.className = 'type-header';
+                    typeHeader.textContent = tipo;
+                    itemsGrid.appendChild(typeHeader);
+
+                    itemsByType[tipo].forEach((item) => {
+                        const itemCard = document.createElement('div');
+                        itemCard.className = 'item-card';
+                         // Ensure nota is handled if null/undefined
+                        const notaDisplay = item.nota !== null && item.nota !== undefined ? item.nota : 'N/A';
+                        itemCard.innerHTML = `
+                            <img src="${item.imagem || 'placeholder.png'}" alt="${item.nome || 'Item sem nome'}" class="item-image">
+                            <div class="item-name">${item.nome || 'Item sem nome'}</div>
+                            <div class="item-nota">${notaDisplay}</div>
+                        `;
+
+                        // Add click listener for potentially *deeper* nesting
+                        itemCard.addEventListener('click', () => window.showNestedPopup(item)); // Recursive call
+
+                        itemsGrid.appendChild(itemCard);
+
+                        // Staggered animation
+                        setTimeout(() => {
+                            itemCard.classList.add('visible');
+                        }, itemIndex * 100);
+                        itemIndex++;
+                    });
+                });
+
+                 if (totalItems === 0) {
+                     itemsGrid.innerHTML = '<p style="color: #a99a7c; text-align: center; grid-column: 1 / -1;">Nenhum item anexado encontrado.</p>';
+                 }
+
+            }).catch(error => {
+                console.error("Error fetching items for nested popup:", error);
+                 itemsGrid.innerHTML = '<p style="color: #ff6b6b; text-align: center; grid-column: 1 / -1;">Erro ao carregar itens anexados.</p>';
+            });
+
+            nestedPopup.classList.add('active');
+        }
+
+        window.closeNestedPopup = function() { // Attach to window
+            document.getElementById('nested-popup').classList.remove('active');
+        }
+
+         // Make confirmation functions global too, if called from HTML
+         window.closePopup = closePopup;
+         window.showConfirmation = showConfirmation;
+         window.confirmChoice = confirmChoice;
+
+
+        // --- Initial Loading Logic ---
+        async function loadFilosofias() {
+            const filosofiasQuery = query(
+                collection(db, 'empireitens'),
+                where('tipo', '==', 'Filosofia'),
+                where('noMercado', '==', true)
+            );
+
+            try {
+                const querySnapshot = await getDocs(filosofiasQuery);
+                const filosofias = [];
+                querySnapshot.forEach((doc) => {
+                    filosofias.push({ id: doc.id, ...doc.data() });
+                });
+
+                // Sort filosofias by 'ordem' field
+                filosofias.sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
+
+                const container = document.getElementById('filosofias-list');
+                container.innerHTML = ''; // Clear previous
+
+                for (let i = 0; i < filosofias.length; i++) {
+                    const filosofia = filosofias[i];
+                    const card = document.createElement('div');
+                    card.className = 'filosofia-card'; // Assign the CSS class
+
+                    // --- JS MODIFICATION: Inline styles removed, using CSS class now ---
+
+                    card.innerHTML = `
+                        <img src="${filosofia.imagem}" alt="${filosofia.nome}" style="width: 300px; height: 300px; object-fit: contain; pointer-events: none;">
+                    `; // Basic img styles kept for size/fit
+
+                    // Add click listener to show the main popup with this filosofia's items
+                    card.addEventListener('click', () => showPopup(filosofia));
+
+                    container.appendChild(card);
+
+                    // Animate card appearance using opacity/transform from CSS class
+                    requestAnimationFrame(() => {
+                        setTimeout(() => {
+                            card.style.opacity = '1';
+                            card.style.transform = 'translateY(0)';
+                        }, (i + 1) * 200); // Staggered animation
+                    });
+                }
+                document.getElementById('filosofias-container').style.display = 'block'; // Show container after loading
+
+            } catch (error) {
+                console.error("Error loading filosofias:", error);
+                document.getElementById('filosofias-container').innerHTML = '<p style="color: #ff6b6b; text-align: center;">Erro ao carregar as filosofias.</p>';
+                document.getElementById('filosofias-container').style.display = 'block';
+            }
+        }
+
+        // --- Authentication Listener ---
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                currentUser = await getUserStatus(user.uid); // Store user status globally
+                if (currentUser === null) {
+                    console.log('User is not accepted or not found.');
+                    // Redirect to index.html only if not already there
+                    if (window.location.pathname !== '/index.html' && window.location.pathname !== '/') { // Check for root path too
+                       window.location.href = 'index.html';
+                    }
+                } else {
+                    console.log(`User ${currentUser.uid} is logged in with status: ${currentUser.estatuto}`);
+                    if (!currentUser.filosofia) {
+                        console.log('User needs to choose a filosofia.');
+                        await loadFilosofias(); // Load and display filosofia choices
+                    } else {
+                        console.log(`User has already chosen filosofia: ${currentUser.filosofia}`);
+                        // User already has a filosofia, maybe display their empire details instead?
+                        // For now, we just don't show the filosofia selection.
+                        document.getElementById('filosofias-container').style.display = 'none';
+                        // --------> ADD CODE HERE LATER to display the chosen empire details <--------
+                    }
+                }
+            } else {
+                console.log('No user is logged in.');
+                currentUser = null; // Clear user data
+                // Redirect to index.html only if not already there
+                 if (window.location.pathname !== '/index.html' && window.location.pathname !== '/') { // Check for root path too
+                   window.location.href = 'index.html';
+                }
             }
         });
+
     </script>
 </body>
 </html>
