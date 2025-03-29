@@ -232,6 +232,17 @@
             content: '\f521';
         }
 
+        .myths-display {
+            background: linear-gradient(135deg, #8B4513, #654321);
+            box-shadow: 0 4px 15px rgba(139, 69, 19, 0.3);
+            display: none; /* Hidden by default, controlled by toggle */
+        }
+
+        .myths-display .display-icon::before {
+            font-family: 'Font Awesome 6 Free';
+            content: '\f564'; /* Ícone de máscara antiga */
+        }
+
 
         body {
             min-height: 100vh;
@@ -882,6 +893,17 @@
             content: '\f521';
         }
 
+        .myths-display {
+            background: linear-gradient(135deg, #8B4513, #654321);
+            box-shadow: 0 4px 15px rgba(139, 69, 19, 0.3);
+            display: none; /* Hidden by default, controlled by toggle */
+        }
+
+        .myths-display .display-icon::before {
+            font-family: 'Font Awesome 6 Free';
+            content: '\f564'; /* Ícone de máscara antiga */
+        }
+
         /* Specific styles for Rumo Jersey */
         .jornada-world26-display {
             background: linear-gradient(135deg, #004488, #001a33); /* European colors */
@@ -1087,6 +1109,12 @@
                 <!-- Add Quem Ganha specific content here later -->
             </div>
 
+            <div class="mini-game-display myths-display" style="display: none;">
+                <h3>Mitos e Lendas</h3>
+                <div class="display-icon"><i class="fas fa-dragon"></i></div>
+                <!-- Add Myths specific content here later -->
+            </div>
+
         </div>
     </div>
 
@@ -1141,6 +1169,7 @@
         const closeMiniGamesPopupIcon = document.getElementById('closeMiniGamesPopupIcon');
         const jornadaEuroDisplay = miniGamesPopup.querySelector('.jornada-world26-display');
         const quemGanhaDisplay = miniGamesPopup.querySelector('.quem-ganha-display');
+        const mythsDisplay = miniGamesPopup.querySelector('.myths-display');
         const logoutBtn = document.getElementById('logoutBtn'); // Already selected
 
         // --- Bottom Menu Items ---
@@ -1157,6 +1186,12 @@
         let unsubscribePanelListener = null;
         let initialPanelSettings = null;
         let isInitialPanelLoad = true;
+
+        // Function to update mini-games visibility based on panel settings
+        async function updateMiniGamesVisibility(panelSettings) {
+            const mythsDisplay = miniGamesPopup.querySelector('.myths-display');
+            mythsDisplay.style.display = panelSettings?.['Myths'] === 'off' ? 'none' : 'flex';
+        }
 
         // Add click event listeners (remains the same)
         returnDisplay.addEventListener('click', () => {
@@ -1193,6 +1228,27 @@
         });
         quemGanhaDisplay.addEventListener('click', () => {
             window.location.href = 'whowins.html';
+        });
+
+        // Check Firebase panel settings for myths visibility
+        const checkMythsVisibility = async () => {
+            try {
+                const painelDoc = await getDoc(doc(db, 'paineis', 'paineis perfil'));
+                if (painelDoc.exists()) {
+                    const painelData = painelDoc.data();
+                    mythsDisplay.style.display = painelData.myths === 'off' ? 'none' : 'block';
+                }
+            } catch (error) {
+                console.error('Error checking myths visibility:', error);
+            }
+        };
+
+        // Call the function to check myths visibility
+        checkMythsVisibility();
+
+        // Add click event for myths display
+        mythsDisplay.addEventListener('click', () => {
+            window.location.href = 'myths.html';
         });
 
         // Logout button functionality (remains the same)
@@ -1611,6 +1667,15 @@
                  initialPanelSettings = null;
                  isInitialPanelLoad = true;
             }
+
+            // Subscribe to panel settings changes
+            const panelDocRef = doc(db, 'paineis', 'paineis perfil');
+            unsubscribePanelListener = onSnapshot(panelDocRef, (doc) => {
+                if (doc.exists()) {
+                    const panelSettings = doc.data();
+                    updateMiniGamesVisibility(panelSettings);
+                }
+            });
 
             if (user) {
                 try {
