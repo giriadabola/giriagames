@@ -1634,6 +1634,34 @@
             }
         }
 
+        async function fetchActiveFormationFromPlanteis() {
+            if (!currentUserUid) {
+                console.log("currentUserUid não definido ao buscar formação ativa em planteis.");
+                return null;
+            }
+            try {
+                const planteisRef = collection(db, 'planteis');
+                const activePlanteisQuery = query(
+                    planteisRef,
+                    where('userId', '==', currentUserUid),
+                    where('estado', '==', 'ativo'),
+                    limit(1) // Assumindo que só existe um plantel ativo por utilizador
+                );
+                const activePlanteisSnapshot = await getDocs(activePlanteisQuery);
+
+                if (!activePlanteisSnapshot.empty) {
+                    const plantelData = activePlanteisSnapshot.docs[0].data();
+                    return plantelData.formacao; // Retorna a formação ativa
+                } else {
+                    console.log("Nenhum plantel ativo encontrado para o utilizador.");
+                    return null; // Retorna null se não encontrar plantel ativo
+                }
+            } catch (error) {
+                console.error("Erro ao buscar formação ativa do planteis:", error);
+                return null; // Retorna null em caso de erro
+            }
+        }
+
 
         async function populateFormationDropdownFromFirestore() {
             const formations = await fetchFormationsFromFirestore();
@@ -1737,12 +1765,22 @@
                     await fetchPlayers();
                     await fetchCountries();
                     await populateFormationDropdownFromFirestore(); // Populate dropdown from Firestore
-                    const formationOptions = await fetchFormationsFromFirestore(); // Fetch formations again to get the first one
-                    if (formationOptions.length > 0) {
-                        currentFormation = formationOptions[0].value; // Set initial formation to the first one from Firebase
+
+                    const activeFormation = await fetchActiveFormationFromPlanteis(); // Fetch active formation from planteis
+                    const formationOptions = await fetchFormationsFromFirestore(); // Fetch formations again to get the list
+
+                    if (activeFormation) {
+                        currentFormation = activeFormation; // Set currentFormation to the active one
+                        formationSelect.value = activeFormation; // Set dropdown to the active formation
+                    } else if (formationOptions.length > 0) {
+                        currentFormation = formationOptions[0].value; // Fallback to the first from 'tática' if no active plantel, if available
+                        formationSelect.value = currentFormation; // Ensure dropdown is set even if no active plantel
                     } else {
-                        currentFormation = '4-4-2'; // Default to 4-4-2 if no formations in Firebase, or handle as needed
+                        currentFormation = '4-4-2'; // Default to 4-4-2 if no formations anywhere, or handle as needed
+                        formationSelect.value = '4-4-2'; // Set dropdown to default as well
                     }
+
+
                     renderFormation(currentFormation); // Render initial formation *after* loading dropdown and setting currentFormation
                     await loadFormation(); // Load saved formation after players are fetched
                     loadingScreen.style.display = 'none';
