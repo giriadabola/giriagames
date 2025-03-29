@@ -380,6 +380,42 @@
             }
         }
 
+        async function getMenuSettings() {
+            const paineisMenuRef = doc(db, 'paineis', 'paineismenu');
+            const docSnap = await getDoc(paineisMenuRef);
+            return docSnap.exists() ? docSnap.data() : null;
+        }
+
+        async function checkPageAccess(userStatus, menuSettings) {
+            if (!menuSettings || menuSettings['empire'] !== 'on') {
+                if (!userStatus || userStatus.estatuto !== 'ruler') {
+                    window.location.href = 'index.html';
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        function updateMenuVisibility(menuSettings) {
+            if (!menuSettings) return;
+            
+            const menuItems = {
+                '1x': document.querySelector('a[href="1x.html"]'),
+                'bank': document.querySelector('a[href="bank.html"]'),
+                'empire': document.querySelector('a[href="empire.html"]'),
+                'market': document.querySelector('a[href="market.html"]'),
+                'profile': document.querySelector('a[href="profile.html"]'),
+                'rankings': document.querySelector('a[href="rankings.html"]'),
+                'team': document.querySelector('a[href="team.html"]')
+            };
+
+            for (const [key, element] of Object.entries(menuItems)) {
+                if (element && menuSettings[key] === 'off') {
+                    element.style.display = 'none';
+                }
+            }
+        }
+
         // --- Popup Logic ---
         function showPopup(filosofia) {
             selectedFilosofia = filosofia; // Store filosofia for potential confirmation
@@ -650,12 +686,18 @@
         onAuthStateChanged(auth, async (user) => {
             if (user) {
                 currentUser = await getUserStatus(user.uid); // Store user status globally
+                const menuSettings = await getMenuSettings(); // Get menu settings
+
+                // Check page access based on menu settings and user status
+                const hasAccess = await checkPageAccess(currentUser, menuSettings);
+                if (!hasAccess) return; // Exit if no access
+
+                // Update menu visibility based on settings
+                updateMenuVisibility(menuSettings);
+
                 if (currentUser === null) {
                     console.log('User is not accepted or not found.');
-                    // Redirect to index.html only if not already there
-                    if (window.location.pathname !== '/index.html' && window.location.pathname !== '/') { // Check for root path too
-                       window.location.href = 'index.html';
-                    }
+                    window.location.href = 'index.html';
                 } else {
                     console.log(`User ${currentUser.uid} is logged in with status: ${currentUser.estatuto}`);
                     if (!currentUser.filosofia) {
@@ -663,8 +705,6 @@
                         await loadFilosofias(); // Load and display filosofia choices
                     } else {
                         console.log(`User has already chosen filosofia: ${currentUser.filosofia}`);
-                        // User already has a filosofia, maybe display their empire details instead?
-                        // For now, we just don't show the filosofia selection.
                         document.getElementById('filosofias-container').style.display = 'none';
                         // --------> ADD CODE HERE LATER to display the chosen empire details <--------
                     }
@@ -672,10 +712,7 @@
             } else {
                 console.log('No user is logged in.');
                 currentUser = null; // Clear user data
-                // Redirect to index.html only if not already there
-                 if (window.location.pathname !== '/index.html' && window.location.pathname !== '/') { // Check for root path too
-                   window.location.href = 'index.html';
-                }
+                window.location.href = 'index.html';
             }
         });
 
