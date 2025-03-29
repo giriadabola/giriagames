@@ -1372,26 +1372,75 @@
         }
         
         onAuthStateChanged(auth, async (user) => {
+            loadingScreen.style.display = 'flex'; // Show loading screen at the beginning
             if (user) {
                 currentUserStatus = await getUserStatus(user.uid);
+                const paineisMenuDocRef = doc(db, 'paineis', 'paineis menu'); // Get ref to 'paineis menu' doc
+                const paineisMenuSnap = await getDoc(paineisMenuDocRef); // Get doc snapshot
+                let paineisMenuData = null;
+                if (paineisMenuSnap.exists()) {
+                    paineisMenuData = paineisMenuSnap.data();
+                } else {
+                    console.log("paineis menu document does not exist");
+                    // Decide how to handle if 'paineis menu' is not found, maybe redirect or show error
+                    loadingScreen.style.display = 'none';
+                    window.location.href = '404.html'; // Redirect if paineis menu is missing
+                    return;
+                }
+
+
+                // Access control for mods page
+                const modsPageEnabled = paineisMenuData && paineisMenuData.mods === "on";
+                const isRuler = currentUserStatus === 'ruler';
+
+                if (!modsPageEnabled && !isRuler) {
+                    console.log('Mods page is off or user is not ruler, redirecting...');
+                    loadingScreen.style.display = 'none'; // Hide loading screen before redirect
+                    window.location.href = '404.html';
+                    return;
+                }
+
+
                 if (currentUserStatus !== null) {
                     console.log(`User is logged in on mods.html with status: ${currentUserStatus}`);
+
+                    // Bottom menu visibility logic
+                    const bottomMenu = document.querySelector('.bottom-menu');
+                    bottomMenu.querySelectorAll('.menu-item').forEach(menuItem => {
+                        let menuItemName = "";
+                        const href = menuItem.getAttribute('href');
+                        if (href === '1x.html') menuItemName = '1x';
+                        else if (href === 'market.html') menuItemName = 'market';
+                        else if (href === 'team.html') menuItemName = 'team';
+                        else if (href === 'empire.html') menuItemName = 'empire';
+                        else if (href === 'rankings.html') menuItemName = 'rankings';
+                        else if (href === 'profile.html') menuItemName = 'profile';
+                        else if (href === 'bank.html') menuItemName = 'bank'; // Assuming 'bank.html' is for transactions
+
+                        if (menuItemName && paineisMenuData && paineisMenuData[menuItemName] === "off") {
+                            menuItem.style.display = 'none';
+                        } else {
+                            menuItem.style.display = 'flex'; // or 'block' depending on your layout
+                        }
+                    });
+
+
                     // Don't hide loading screen yet, keep it visible
                     content.style.display = 'block';
                     await loadMods();
-                    
+
                     // Wait for all images to load
                     await waitForImagesToLoad();
-                    
+
                     // Now hide the loading screen after everything is loaded
                     loadingScreen.style.display = 'none';
-                    
+
                     // Check for mod ID in localStorage after mods are loaded
                     checkAndOpenModFromStorage();
                 } else {
                     console.log('User is not accepted');
                     loadingScreen.style.display = 'none'; // Hide loading screen before redirect
-                    window.location.href = 'index.html';
+                    window.location.href = '404.html';
                 }
             } else {
                 console.log('No user is logged in on mods.html');
