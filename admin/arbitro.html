@@ -441,30 +441,66 @@
                  let predictionsHTML = '';
 
                  for (const palpite of filteredPredictions) {
-                     const jogoDoc = await getDoc(doc(db, 'jogos', palpite.jogoId));
-                     const jogo = jogoDoc.data();
+                     try {
+                         // Verificar se jogoId existe
+                         if (!palpite.jogoId) {
+                             console.warn('Palpite sem jogoId encontrado:', palpite);
+                             continue; // Pular este palpite
+                         }
+                         
+                         const jogoDoc = await getDoc(doc(db, 'jogos', palpite.jogoId));
+                         
+                         // Verificar se o documento do jogo existe
+                         if (!jogoDoc.exists()) {
+                             console.warn(`Jogo com ID ${palpite.jogoId} não encontrado`);
+                             continue; // Pular este palpite
+                         }
+                         
+                         const jogo = jogoDoc.data();
+                         
+                         // Verificar se jogo tem as propriedades necessárias
+                         if (!jogo || !jogo.equipaCasaId || !jogo.equipaForaId) {
+                             console.warn(`Jogo com ID ${palpite.jogoId} tem dados incompletos:`, jogo);
+                             continue; // Pular este palpite
+                         }
 
-                     // Get team names
-                     const [equipaCasaDoc, equipaForaDoc] = await Promise.all([
-                         getDoc(doc(db, 'clubes', jogo.equipaCasaId)),
-                         getDoc(doc(db, 'clubes', jogo.equipaForaId))
-                     ]);
+                         // Get team names
+                         const [equipaCasaDoc, equipaForaDoc] = await Promise.all([
+                             getDoc(doc(db, 'clubes', jogo.equipaCasaId)),
+                             getDoc(doc(db, 'clubes', jogo.equipaForaId))
+                         ]);
 
                      // Add null checks and default values
                      const equipaCasa = equipaCasaDoc && equipaCasaDoc.exists() ? equipaCasaDoc.data()?.nome || 'Equipa Desconhecida' : 'Equipa Desconhecida';
                      const equipaFora = equipaForaDoc && equipaForaDoc.exists() ? equipaForaDoc.data()?.nome || 'Equipa Desconhecida' : 'Equipa Desconhecida';
 
-                     // Format date
-                     const dataJogo = jogo.dataJogo.toDate();
-                     const dataFormatada = dataJogo.toLocaleDateString('pt-PT');
+                     // Format date - com verificação de segurança
+                     let dataFormatada = 'Data não disponível';
+                     try {
+                         if (jogo.dataJogo && typeof jogo.dataJogo.toDate === 'function') {
+                             const dataJogo = jogo.dataJogo.toDate();
+                             dataFormatada = dataJogo.toLocaleDateString('pt-PT');
+                         }
+                     } catch (error) {
+                         console.warn('Erro ao formatar data do jogo:', error);
+                     }
 
-                     // Get user name
-                     const userDoc = await getDoc(doc(db, 'users', palpite.userId));
-                     const userName = userDoc.exists() ? userDoc.data().nomeDeUsuario : 'Usuário Desconhecido';
+                     // Get user name - com verificação de segurança
+                     let userName = 'Usuário Desconhecido';
+                     try {
+                         if (palpite.userId) {
+                             const userDoc = await getDoc(doc(db, 'users', palpite.userId));
+                             userName = userDoc.exists() ? userDoc.data()?.nomeDeUsuario || 'Usuário Desconhecido' : 'Usuário Desconhecido';
+                         }
+                     } catch (error) {
+                         console.warn('Erro ao buscar dados do usuário:', error);
+                     }
 
                      // Create prediction values HTML
                      let palpitesHTML = '';
-                     for (let i = 1; i <= jogo.numeroPalpites; i++) {
+                     // Verificar se jogo.numeroPalpites existe e é um número válido
+                     const numeroPalpites = jogo && typeof jogo.numeroPalpites === 'number' ? jogo.numeroPalpites : 0;
+                     for (let i = 1; i <= numeroPalpites; i++) {
                          const palpiteKey = `palpite${i}`; // Mantém palpiteKey para referenciar o texto do palpite
                          const pontosKey = `Palpite${i}PontosQuanto`;
                          // Check if palpiteKey exists in palpite data before accessing it
@@ -504,6 +540,10 @@
                                  ${palpitesHTML}
                              </div>
                          </div>`;
+                     } catch (error) {
+                         console.error('Erro ao processar palpite:', error, palpite);
+                         // Continua para o próximo palpite
+                     }
                  }
 
                  predictionsContainer.innerHTML = predictionsHTML;
