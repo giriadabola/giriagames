@@ -111,6 +111,34 @@
             font-size: 16px;
         }
 
+        .select2-container {
+            width: 100% !important;
+        }
+
+        .select2-container--default .select2-selection--multiple {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 5px;
+        }
+
+        .select2-container--default .select2-selection--multiple .select2-selection__choice {
+            background-color: #007bff;
+            border: none;
+            color: white;
+            padding: 5px 10px;
+            margin: 3px;
+            border-radius: 3px;
+        }
+
+        .select2-container--default .select2-selection--multiple .select2-selection__choice__remove {
+            color: white;
+            margin-right: 5px;
+        }
+
+        .select2-container--default .select2-search--inline .select2-search__field {
+            margin-top: 3px;
+        }
+
         .form-group select {
             appearance: none; /* Remove estilos padrão do select */
             -webkit-appearance: none; /* Para navegadores Safari e Chrome */
@@ -252,8 +280,39 @@
                     </div>
 
                     <div class="form-group">
+                        <label for="indiceIngles">Indice Inglês</label>
+                        <input type="text" id="indiceIngles" name="indiceIngles" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="breveDescricao">Breve Descrição</label>
+                        <input type="text" id="breveDescricao" name="breveDescricao" value="( )" required>
+                    </div>
+
+                    <div class="form-group">
                         <label for="ordem">Ordem</label>
                         <input type="number" id="ordem" name="ordem" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="competicoes">Competições</label>
+                        <div style="margin-bottom: 10px;">
+                            <button type="button" id="selecionarTudo" style="width: auto; margin-right: 10px;">Selecionar Tudo</button>
+                            <button type="button" id="limparSelecao" style="width: auto; background-color: #dc3545;">Tirar todas as seleções</button>
+                        </div>
+                        <select id="competicoes" name="competicoes" multiple>
+                            <!-- As competições serão adicionadas aqui via JavaScript -->
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="icon">Icon / Emoji</label>
+                        <input type="text" id="icon" name="icon" placeholder="Insira a URL do ícone ou um Emoji" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="ativado">Ativado?</label>
+                        <input type="checkbox" id="ativado" name="ativado" value="true"> <span style="font-size: 0.9em; color: #777;">(preencha a caixa para ativar)</span>
                     </div>
 
                     <button type="submit">Criar Odd</button>
@@ -264,6 +323,9 @@
 
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
     <script type="module">
         // Initialize Firebase
@@ -283,6 +345,93 @@
 
 
         const tipoCategoriaSelect = document.getElementById('tipoCategoria');
+        const competicoesSelect = $('#competicoes');
+
+        // Inicializa o Select2 com configurações avançadas
+        competicoesSelect.select2({
+            placeholder: 'Pesquisar e selecionar competições',
+            allowClear: true,
+            width: '100%',
+            language: 'pt',
+            theme: 'default',
+            dropdownAutoWidth: true,
+            dropdownParent: competicoesSelect.parent(),
+            minimumInputLength: 0,
+            maximumSelectionLength: 10,
+            templateResult: formatCompeticao,
+            templateSelection: formatCompeticao,
+            minimumResultsForSearch: -1,
+            maximumInputLength: 20,
+            closeOnSelect: false,
+            pageSize: 9
+        });
+
+        // Função para formatar a exibição das competições
+        function formatCompeticao(competicao) {
+            if (!competicao.id) return competicao.text;
+            return $('<span><i class="fas fa-trophy" style="color: black;"></i> ' + competicao.text + '</span>');
+        }
+
+        // Função para carregar as competições
+        async function carregarCompeticoes() {
+            try {
+                const competicoesSnapshot = await db.collection('competicoes').get();
+                const paisesSnapshot = await db.collection('paises').get();
+
+                // Cria um mapa de países para acesso rápido
+                const paisesMap = {};
+                paisesSnapshot.forEach(doc => {
+                    paisesMap[doc.id] = doc.data().nome;
+                });
+
+                // Limpa as opções existentes
+                competicoesSelect.empty();
+
+                // Cria um array para ordenar as competições
+                const competicoes = [];
+                competicoesSnapshot.forEach(doc => {
+                    const competicao = doc.data();
+                    const paisNome = paisesMap[competicao.paisId] || '';
+                    competicoes.push({
+                        text: `${paisNome}: ${competicao.nome}`,
+                        value: competicao.nome,
+                        paisNome: paisNome
+                    });
+                });
+
+                // Ordena as competições por país e nome
+                competicoes.sort((a, b) => {
+                    if (a.paisNome === b.paisNome) {
+                        return a.value.localeCompare(b.value);
+                    }
+                    return a.paisNome.localeCompare(b.paisNome);
+                });
+
+                // Adiciona as competições ordenadas
+                competicoes.forEach(competicao => {
+                    const option = new Option(competicao.text, competicao.value, false, false);
+                    competicoesSelect.append(option);
+                });
+
+                competicoesSelect.trigger('change');
+            } catch (error) {
+                console.error('Erro ao carregar competições:', error);
+            }
+        }
+
+        // Carrega as competições quando a página é carregada
+        carregarCompeticoes();
+
+        // Adiciona funcionalidade aos botões de seleção
+        document.getElementById('selecionarTudo').addEventListener('click', function() {
+            $('#competicoes > option').prop('selected', true);
+            $('#competicoes').trigger('change');
+        });
+
+        document.getElementById('limparSelecao').addEventListener('click', function() {
+            $('#competicoes').val(null).trigger('change');
+        });
+
         const categoriaNomeDiv = document.getElementById('categoriaNome');
         const subcategoriaDropdownDiv = document.getElementById('subcategoriaDropdown');
         const subcategoriaNomeDiv = document.getElementById('subcategoriaNome');
@@ -383,9 +532,16 @@
             event.preventDefault();
 
             const tipoCategoria = document.getElementById('tipoCategoria').value;
+            const competicoesSelecionadas = $('#competicoes').val();
+            const isAtivado = document.getElementById('ativado').checked; // Get the state of the toggle
+
             let formData = {
+                competicoes: competicoesSelecionadas,
                 categoria_subcategoria_3cat: tipoCategoria,
-                ordem: parseInt(document.getElementById('ordem').value)
+                ordem: parseInt(document.getElementById('ordem').value),
+                indiceIngles: document.getElementById('indiceIngles').value,
+                icon: document.getElementById('icon').value,
+                ativado: isAtivado // Include 'ativado' in formData
             };
 
             if (tipoCategoria === 'categoria') {
