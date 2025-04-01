@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Editar Mods - G EMPIRE</title>
+    <title>Editar Odds - G EMPIRE</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <style>
         * {
             margin: 0;
@@ -28,23 +29,25 @@
             padding: 12px 0;
             display: flex;
             justify-content: center;
-            gap: 24px;
+            gap: 12px; /* Reduced gap slightly */
             align-items: center;
             z-index: 1000;
+            flex-wrap: wrap; /* Allow wrapping on smaller screens */
         }
 
         .menu-item {
             text-decoration: none;
             color: #666;
-            transition: color 0.3s ease;
+            transition: color 0.3s ease, background-color 0.3s ease;
             font-weight: 500;
-            padding: 8px 16px;
+            padding: 8px 12px; /* Adjusted padding */
             border-radius: 4px;
+            font-size: 13px; /* Slightly smaller font */
+            line-height: 1.4;
             display: flex;
             align-items: center;
-            gap: 8px;
-            font-size: 14px;
-            line-height: 1.4;
+            gap: 6px; /* Reduced gap */
+            white-space: nowrap; /* Prevent text wrapping within item */
         }
 
         .menu-item:hover, .menu-item.active {
@@ -52,12 +55,10 @@
             background-color: rgba(33, 118, 255, 0.1);
         }
 
-        .menu-item i {
-            font-size: 16px;
-        }
-
         .content {
-            padding: 80px 20px 20px;
+             /* Adjust top padding dynamically based on menu height if needed, JS might be required for perfect wrapping */
+            padding: 80px 20px 20px; /* Start with enough padding */
+            padding-top: calc(60px + 24px); /* Adjust based on typical menu height + some space */
             max-width: 1200px;
             margin: 0 auto;
         }
@@ -68,711 +69,919 @@
             text-align: center;
         }
 
-        .form-container {
-            background-color: #fff;
+        .container {
+            background-color: transparent;
+            padding: 30px;
+            width: 800px; /* Wider to accommodate cards */
+            max-width: 95%;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .search-container {
+            grid-column: 1 / -1; /* Span full width */
+            background: #fff;
             padding: 20px;
             border-radius: 8px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.05);
-            margin-top: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .search-container {
+            position: relative; /* Needed for absolute positioning of results */
+            margin-bottom: 30px;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+
+        .search-results {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 0 0 4px 4px; /* Style bottom corners */
+            border-top: none; /* Avoid double border */
+            max-height: 250px; /* Increase max height */
+            overflow-y: auto;
+            display: none;
+            position: absolute;
+            width: 100%; /* Match input width */
+            top: 100%; /* Position below the input */
+            left: 0;
+            z-index: 1001;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+
+        .search-result-item {
+            padding: 10px 12px;
+            cursor: pointer;
+            border-bottom: 1px solid #eee;
+            font-size: 14px;
+        }
+
+         .search-result-item:last-child {
+            border-bottom: none;
+        }
+
+        .search-result-item:hover {
+            background-color: #f5f5f5;
+        }
+
+        h2 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 20px;
         }
 
         .form-group {
-            margin-bottom: 15px;
+            margin-bottom: 20px;
+            background: #ffffff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .form-group:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
         }
 
         .form-group label {
             display: block;
-            margin-bottom: 5px;
+            margin-bottom: 8px;
             color: #555;
             font-weight: bold;
+            font-size: 14px; /* Consistent label size */
         }
 
-        .form-group input[type="text"],
-        .form-group input[type="date"],
-        .form-group input[type="number"],
         .form-group select,
-        .form-group textarea {
+        .form-group input[type="text"],
+        .form-group input[type="number"],
+        .form-group input[type="url"] {
             width: 100%;
-            padding: 10px;
+            padding: 10px 12px;
             border: 1px solid #ddd;
             border-radius: 4px;
-            font-size: 16px;
+            font-size: 15px; /* Adjust input font size */
         }
-
-        .form-group textarea {
-            resize: vertical;
-            font-family: Arial, sans-serif;
+        .form-group input[type="checkbox"] {
+            width: auto;
+            margin-right: 5px;
+            vertical-align: middle;
         }
 
         .form-group select {
-            appearance: none; /* Remove default dropdown arrow in some browsers */
-            -webkit-appearance: none; /* For Safari */
-            -moz-appearance: none; /* For Firefox */
-            background-image: url('data:image/svg+xml;utf8,<svg fill="black" height="24" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><path d="M7 10l5 5 5-5z"/><path d="M0 0h24v24H0z" fill="none"/></svg>');
-            background-repeat: no-repeat;
-            background-position-x: 100%;
-            background-position-y: 5px;
+             appearance: none; /* Custom arrow */
+             background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23007bff%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E');
+             background-repeat: no-repeat;
+             background-position: right 10px top 50%;
+             background-size: .65em auto;
+             padding-right: 30px; /* Space for arrow */
         }
 
-        button[type="submit"] {
-            background-color: #2176ff;
-            color: white;
-            padding: 10px 20px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 16px;
-            transition: background-color 0.3s ease;
+
+        /* Select2 Specific Styles */
+        .select2-container {
+            width: 100% !important;
         }
 
-        button[type="submit"]:hover {
-            background-color: #0b5ed7;
-        }
-
-        #modDropdown {
-            width: 100%;
-            padding: 10px;
+        .select2-container--default .select2-selection--multiple {
             border: 1px solid #ddd;
             border-radius: 4px;
+            padding: 5px;
+            min-height: 42px; /* Match input height */
+            font-size: 15px;
+        }
+
+        .select2-container--default .select2-selection--multiple .select2-selection__choice {
+            background-color: #007bff;
+            border: none;
+            color: white;
+            padding: 5px 10px;
+            margin: 3px;
+            border-radius: 3px;
+            font-size: 13px;
+        }
+
+        .select2-container--default .select2-selection--multiple .select2-selection__choice__remove {
+            color: rgba(255,255,255,0.7);
+            margin-right: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+         .select2-container--default .select2-selection--multiple .select2-selection__choice__remove:hover {
+             color: white;
+         }
+         .select2-container--default .select2-search--inline .select2-search__field {
+             margin-top: 5px; /* Align search field nicely */
+             font-size: 15px;
+         }
+         .select2-dropdown {
+             border: 1px solid #ddd;
+             border-radius: 4px;
+             box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+         }
+
+        button {
+            background-color: #007bff;
+            color: #fff;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 6px;
+            cursor: pointer;
             font-size: 16px;
-            margin-bottom: 20px;
-        }
-
-        /* Image preview button styles */
-        .image-input-container {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .preview-btn {
-            background-color: #2176ff;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            width: 40px;
-            height: 40px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .preview-btn:hover {
-            background-color: #0b5ed7;
-            transform: scale(1.05);
-        }
-
-        .form-hint {
-            display: block;
-            margin-top: 5px;
-            color: #666;
-            font-size: 12px;
-            font-style: italic;
-        }
-
-        /* Modal styles */
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.7);
-            z-index: 2000;
-            justify-content: center;
-            align-items: center;
-        }
-
-        .modal-content {
-            background-color: #fff;
-            border-radius: 8px;
-            padding: 20px;
-            width: 90%;
-            max-width: 900px;
-            max-height: 90vh;
-            overflow-y: auto;
-            position: relative;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
-        }
-
-        .close-modal {
-            position: absolute;
-            top: 10px;
-            right: 15px;
-            font-size: 24px;
-            color: #666;
-            cursor: pointer;
-            transition: color 0.3s ease;
-        }
-
-        .close-modal:hover {
-            color: #333;
-        }
-
-        .preview-container {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 20px;
-            margin-top: 20px;
-        }
-
-        .card-preview {
-            flex: 1;
-            min-width: 300px;
-            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-            border-radius: 15px;
-            overflow: hidden;
-            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
-            height: 400px;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .mod-image-container {
-            width: 100%;
-            height: 55%;
-            overflow: hidden;
-            position: relative;
-            border-top-left-radius: 15px;
-            border-top-right-radius: 15px;
-            background-color: #e0e0e0;
-        }
-
-        .mod-image {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            transition: transform 0.3s ease;
-        }
-
-        .mod-content-preview {
-            padding: 15px;
-            flex-grow: 1;
-        }
-
-        .mod-title-preview {
-            font-size: 1.3em;
             font-weight: bold;
-            color: #2176ff;
-            text-align: center;
-            margin-bottom: 10px;
-        }
-
-        .position-controls {
-            flex: 1;
-            min-width: 300px;
-            padding: 20px;
-            background-color: #f5f5f5;
-            border-radius: 8px;
-        }
-
-        .position-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 10px;
-            margin: 20px 0;
-        }
-
-        .position-btn {
-            background-color: #e0e0e0;
-            border: none;
-            border-radius: 4px;
-            padding: 10px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-
-        .position-btn:hover {
-            background-color: #d0d0d0;
-        }
-
-        .position-btn.active {
-            background-color: #2176ff;
-            color: white;
-        }
-
-        .zoom-control {
-            margin: 20px 0;
-        }
-
-        .zoom-control input {
+            transition: all 0.3s ease;
             width: 100%;
             margin-top: 10px;
+            grid-column: 1 / -1;
         }
 
-        .apply-btn {
-            background-color: #28a745;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            padding: 10px 15px;
-            cursor: pointer;
-            width: 100%;
-            font-weight: bold;
-            transition: background-color 0.3s ease;
+        button:hover:not(:disabled) {
+            background-color: #0056b3;
+        }
+        button:disabled {
+             opacity: 0.6;
+             cursor: not-allowed;
         }
 
-        .apply-btn:hover {
-            background-color: #218838;
+        .button-group {
+            grid-column: 1 / -1;
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: center;
+            gap: 10px;
         }
+
+        .button-group button {
+            width: auto;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: normal;
+            border-radius: 6px;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+         .button-group button#limparSelecao {
+             background-color: #dc3545;
+         }
+         .button-group button#limparSelecao:hover:not(:disabled) {
+              background-color: #c82333;
+          }
+
+
+        #categoriaNome,
+        #subcategoriaNome,
+        #terceiraCategoriaNome {
+             /* Removed: #subcategoriaDropdown, #terceiraCategoriaDropdown, #terceiraCategoriaDropdownSubcategoria */
+            display: none; /* Hide initially */
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 992px) {
+             .top-menu {
+                 justify-content: flex-start;
+                 padding-left: 15px;
+                 padding-right: 15px;
+                 gap: 8px; /* Adjust gap */
+             }
+             .menu-item {
+                 padding: 6px 10px;
+                 font-size: 12px;
+             }
+              .menu-item .fas { /* Keep icons */
+                  font-size: 14px;
+              }
+             .content {
+                 padding-top: 100px; /* Adjust if menu wraps */
+             }
+         }
+
+         @media (max-width: 768px) {
+              .top-menu {
+                  gap: 5px;
+              }
+              .menu-item span {
+                  display: none;
+              }
+              .menu-item .fas {
+                   margin-right: 0;
+              }
+              .menu-item {
+                   padding: 8px;
+              }
+              .content {
+                   padding-top: 80px;
+              }
+              .container {
+                  width: 95%;
+                  padding: 15px;
+                  grid-template-columns: 1fr;
+              }
+              .search-results {
+                  max-width: 100%;
+              }
+              .form-group {
+                  padding: 15px;
+              }
+         }
+
+          @media (max-width: 480px) {
+               h1 { font-size: 24px; }
+               .form-group label { font-size: 13px; }
+               .form-group input, .form-group select, .select2-container--default .select2-selection--multiple { font-size: 14px; }
+               button { font-size: 15px; }
+               .button-group button { font-size: 13px;}
+          }
+
     </style>
-    <!-- Firebase SDK -->
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 </head>
 <body>
     <nav class="top-menu">
-        <a href="engrenagem.html" class="menu-item">
-            <i class="fas fa-home"></i>
-        </a>
-        <a href="editar-gplayer.html" class="menu-item">
+        <!-- Menu items remain the same -->
+        <a href="engrenagem.html" class="menu-item"><i class="fas fa-home"></i><span>HOME</span></a>
+        <a href="criar-gplayer.html" class="menu-item">
             <i class="fas fa-user"></i>
-            EDITAR GPLAYER
+            <span>CRIAR GPLAYER</span>
         </a>
-        <a href="editar-jogo.html" class="menu-item">
+        <a href="criar-jogo.html" class="menu-item">
             <i class="fas fa-gamepad"></i>
-            EDITAR JOGO
+            <span>CRIAR JOGO</span>
         </a>
-        <a href="editar-jogadores.html" class="menu-item">
+        <a href="criar-jogadores.html" class="menu-item">
             <i class="fas fa-users"></i>
-            EDITAR JOGADORES
+            <span>CRIAR JOGADORES</span>
         </a>
-        <a href="editar-clubes.html" class="menu-item">
+        <a href="criar-clubes.html" class="menu-item">
             <i class="fas fa-shield-alt"></i>
-            EDITAR CLUBES
+            <span>CRIAR CLUBES</span>
         </a>
-        <a href="editar-competicoes.html" class="menu-item">
+        <a href="criar-competicoes.html" class="menu-item">
             <i class="fas fa-trophy"></i>
-            EDITAR COMPETIÇÕES
+            <span>CRIAR COMPETIÇÕES</span>
         </a>
-        <a href="editar-pais.html" class="menu-item">
+        <a href="criar-pais.html" class="menu-item">
             <i class="fas fa-globe"></i>
-            EDITAR PAÍS
+            <span>CRIAR PAÍS</span>
         </a>
-        <a href="editar-mods.html" class="menu-item active">
+        <a href="criar-mods.html" class="menu-item">
             <i class="fas fa-puzzle-piece"></i>
-            EDITAR MODS
+            <span>CRIAR MODS</span>
         </a>
+        <a href="editar-odds.html" class="menu-item active">
+            <i class="fas fa-percentage"></i>
+            <span>EDITAR ODDS</span>
+        </a>
+         <a href="criar-odds.html" class="menu-item">
+             <i class="fas fa-plus-circle"></i>
+             <span>CRIAR ODDS</span>
+         </a>
     </nav>
+
     <div class="content">
-        <h1>Editar Mods</h1>
+        <h1>Editar Odds</h1>
+        <div class="container">
+            <div class="search-container">
+                <input type="text" class="search-input" placeholder="Pesquisar odd por nome ou índice..." id="searchInput" autocomplete="off">
+                <div class="search-results" id="searchResults"></div>
+            </div>
 
-        <select id="modDropdown">
-            <option value="">Selecione um Mod para editar</option>
-        </select>
-
-        <div class="form-container" style="display:none;" id="editFormContainer">
-            <form id="editarModForm">
+            <form id="editarOddForm">
+                <!-- Tipo de Categoria -->
                 <div class="form-group">
-                    <label for="nomeMod">Nome do Mod:</label>
-                    <input type="text" id="nomeMod" name="nomeMod" required>
-                </div>
-
-                <div class="form-group">
-                    <label for="ativoMod">Ativo:</label>
-                    <select id="ativoMod" name="ativoMod" required>
-                        <option value="yes">Sim</option>
-                        <option value="no">Não</option>
+                    <label for="tipoCategoria">Tipo de Categoria</label>
+                    <select id="tipoCategoria" name="tipoCategoria" required>
+                        <option value="" disabled selected>Selecione o Tipo de Categoria</option>
+                        <option value="categoria">Categoria</option>
+                        <option value="subcategoria">Subcategoria</option>
+                        <option value="3cat">3ª Categoria</option>
                     </select>
                 </div>
 
+                <!-- Categoria -->
                 <div class="form-group">
-                    <label for="dataInicioMod">Data de Início (Opcional):</label>
-                    <input type="date" id="dataInicioMod" name="dataInicioMod">
+                    <label for="categoriaDropdown">Categoria</label>
+                    <select id="categoriaDropdown" name="categoriaDropdown" required>
+                        <option value="" disabled selected>Selecione a Categoria</option>
+                    </select>
                 </div>
 
-                <div class="form-group">
-                    <label for="dataFimMod">Data de Fim (Opcional):</label>
-                    <input type="date" id="dataFimMod" name="dataFimMod">
+                <!-- Campos Categoria -->
+                <div class="form-group" id="categoriaNome">
+                    <label for="nomeCategoriaInput">Nome da Categoria</label>
+                    <input type="text" id="nomeCategoriaInput" name="nomeCategoriaInput">
                 </div>
 
+                <!-- Dropdown Subcategoria para 3ª Categoria -->
+                <div class="form-group" id="subcategoriaDropdown" style="display: none;">
+                    <label for="subcategoriaPai">Subcategoria</label>
+                    <select id="subcategoriaPai" name="subcategoriaPai" required>
+                        <option value="" disabled selected>Selecione a Subcategoria</option>
+                    </select>
+                </div>
+
+                <!-- Campos Subcategoria - REMOVED Categoria Pai -->
+                <div class="form-group" id="subcategoriaNome">
+                    <label for="nomeSubcategoriaInput">Nome da Subcategoria</label>
+                    <input type="text" id="nomeSubcategoriaInput" name="nomeSubcategoriaInput">
+                </div>
+
+                <!-- Campos 3ª Categoria - REMOVED Categoria Pai and Subcategoria Pai -->
+                <div class="form-group" id="terceiraCategoriaNome">
+                    <label for="nomeTerceiraCategoriaInput">Nome da 3ª Categoria</label>
+                    <input type="text" id="nomeTerceiraCategoriaInput" name="nomeTerceiraCategoriaInput">
+                </div>
+
+                <!-- Campos Comuns -->
                 <div class="form-group">
-                    <label for="imagemMod">Imagem de Mod (Link):</label>
-                    <div class="image-input-container">
-                        <input type="text" id="imagemMod" name="imagemMod">
-                        <button type="button" id="previewImageBtn" class="preview-btn">
-                            <i class="fas fa-eye"></i>
-                        </button>
+                    <label for="indiceIngles">Indice Inglês</label>
+                    <input type="text" id="indiceIngles" name="indiceIngles" required>
+                </div>
+                <div class="form-group">
+                    <label for="breveDescricao">Breve Descrição</label>
+                    <input type="text" id="breveDescricao" name="breveDescricao" required>
+                </div>
+                <div class="form-group">
+                    <label for="ordem">Ordem (para exibição)</label>
+                    <input type="number" id="ordem" name="ordem" placeholder="Ex: 10" required>
+                </div>
+                 <div class="form-group">
+                    <label for="icon">Icon / Emoji</label>
+                    <input type="text" id="icon" name="icon" placeholder="Ex: ⚽ ou https://url.to/icon.png" required>
+                </div>
+
+                 <!-- Competições -->
+                <div class="form-group">
+                    <label for="competicoes">Associar a Competições</label>
+                    <div class="button-group" style="margin-bottom: 10px;">
+                        <button type="button" id="selecionarTudo">Selecionar Todas</button>
+                        <button type="button" id="limparSelecao">Limpar Seleção</button>
                     </div>
-                    <small class="form-hint">Clique no ícone para visualizar e posicionar a imagem no card</small>
-                </div>
-
-                <div class="form-group">
-                    <label for="descricaoMod">Descrição:</label>
-                    <textarea id="descricaoMod" name="descricaoMod" rows="4"></textarea>
-                </div>
-
-                <div class="form-group">
-                    <label for="possivelVitoriaMod">Possível Vitória (Opcional):</label>
-                    <input type="text" id="possivelVitoriaMod" name="possivelVitoriaMod" step="any">
-                </div>
-
-                <div class="form-group">
-                    <label for="possivelDerrotaMod">Possível Derrota (Opcional):</label>
-                    <input type="text" id="possivelDerrotaMod" name="possivelDerrotaMod" step="any">
-                </div>
-
-                <div class="form-group">
-                    <label for="overallMod">Overall (Opcional):</label>
-                    <input type="number" id="overallMod" name="overallMod">
-                </div>
-
-                <div class="form-group">
-                    <label for="iconMod">Icon (Link Opcional):</label>
-                    <input type="text" id="iconMod" name="iconMod">
-                </div>
-
-                <div class="form-group">
-                    <label for="videoMod">Video (Link Opcional):</label>
-                    <input type="text" id="videoMod" name="videoMod">
-                </div>
-
-                <div class="form-group">
-                    <label for="dataInicioNovoMod">Data de Início Novo (Opcional):</label>
-                    <input type="date" id="dataInicioNovoMod" name="dataInicioNovoMod">
-                </div>
-
-                <div class="form-group">
-                    <label for="dataFimNovoMod">Data de Fim Novo (Opcional):</label>
-                    <input type="date" id="dataFimNovoMod" name="dataFimNovoMod">
-                </div>
-
-                <div class="form-group">
-                    <label for="castaMod">Casta:</label>
-                    <select id="castaMod" name="castaMod">
-                        <option value="">Selecione a Casta</option>
-                        <option value="Glory">Glory</option>
-                        <option value="Risk">Risk</option>
-                        <option value="Donation">Donation</option>
-                        <option value="Calamity">Calamity</option>
+                    <select id="competicoes" name="competicoes" multiple>
+                        <!-- Options loaded via JS -->
                     </select>
                 </div>
 
-                <div class="form-group">
-                    <label for="emojiCastaMod">Emoji Casta:</label>
-                    <input type="text" id="emojiCastaMod" name="emojiCastaMod" readonly>
+                <!-- Ativado? -->
+                 <div class="form-group">
+                    <label for="ativado">
+                        <input type="checkbox" id="ativado" name="ativado" value="true">
+                        Ativado? <span style="font-size: 0.9em; color: #777; font-weight: normal;">(Desmarque para desativar esta odd)</span>
+                    </label>
                 </div>
 
-                <div class="form-group" style="display:none;">
-                    <label for="castaExplicacaoMod">Explicação Casta (Hidden):</label>
-                    <textarea id="castaExplicacaoMod" name="castaExplicacaoMod" rows="2"></textarea>
-                </div>
-
-                 <div class="form-group" style="display:none;">
-                    <label for="multiUsersMod">Multi Users (Opcional - Hidden):</label>
-                    <textarea id="multiUsersMod" name="multiUsersMod" rows="2"></textarea>
-                </div>
-
-                <button type="submit">Salvar Modificações</button>
+                <button type="submit" id="submitButton">Salvar Alterações</button>
             </form>
         </div>
     </div>
 
-    <!-- Image Preview Modal -->
-    <div id="imagePreviewModal" class="modal">
-        <div class="modal-content">
-            <span class="close-modal">×</span>
-            <h2>Visualização e Posicionamento da Imagem</h2>
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <!-- jQuery and Select2 -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/i18n/pt.js"></script> <!-- Select2 Portuguese -->
 
-            <div class="preview-container">
-                <div class="card-preview">
-                    <div class="mod-image-container">
-                        <img src="" id="previewImage" class="mod-image">
-                    </div>
-                    <div class="mod-content-preview">
-                        <div class="mod-title-preview">Visualização do Card</div>
-                    </div>
-                </div>
 
-                <div class="position-controls">
-                    <h3>Ajustar Posição da Imagem</h3>
-
-                    <div class="position-grid">
-                        <button type="button" class="position-btn" data-x="left" data-y="top"><i class="fas fa-arrow-up-left"></i></button>
-                        <button type="button" class="position-btn" data-x="center" data-y="top"><i class="fas fa-arrow-up"></i></button>
-                        <button type="button" class="position-btn" data-x="right" data-y="top"><i class="fas fa-arrow-up-right"></i></button>
-
-                        <button type="button" class="position-btn" data-x="left" data-y="center"><i class="fas fa-arrow-left"></i></button>
-                        <button type="button" class="position-btn" data-x="center" data-y="center"><i class="fas fa-dot-circle"></i></button>
-                        <button type="button" class="position-btn" data-x="right" data-y="center"><i class="fas fa-arrow-right"></i></button>
-
-                        <button type="button" class="position-btn" data-x="left" data-y="bottom"><i class="fas fa-arrow-down-left"></i></button>
-                        <button type="button" class="position-btn" data-x="center" data-y="bottom"><i class="fas fa-arrow-down"></i></button>
-                        <button type="button" class="position-btn" data-x="right" data-y="bottom"><i class="fas fa-arrow-down-right"></i></button>
-                    </div>
-
-                    <div class="zoom-control">
-                        <label for="zoomSlider">Zoom: <span id="zoomValue">100%</span></label>
-                        <input type="range" id="zoomSlider" min="100" max="200" value="100">
-                    </div>
-
-                    <button type="button" id="applyPositionBtn" class="apply-btn">Aplicar Posição</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        // Firebase configuration
+    <script type="module">
+        // ------------- Firebase Initialization -------------
         const firebaseConfig = {
-          apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0", // Replace with your actual API Key
-          authDomain: "g-games-8a8fc.firebaseapp.com",
-          projectId: "g-games-8a8fc",
-          storageBucket: "g-games-8a8fc.firebasestorage.app",
-          messagingSenderId: "689897349449",
-          appId: "1:689897349449:web:536599794579901beb7a98",
-          measurementId: "G-GTTPJ6G5MD"
+            // !!! Substitua pela sua configuração real do Firebase !!!
+            apiKey: "YOUR_API_KEY",
+            authDomain: "g-games-8a8fc.firebaseapp.com",
+            projectId: "g-games-8a8fc",
+            storageBucket: "g-games-8a8fc.firebasestorage.app",
+            messagingSenderId: "689897349449",
+            appId: "1:689897349449:web:536599794579901beb7a98",
+            measurementId: "G-GTTPJ6G5MD"
+            // !!! ------------------------------------------ !!!
         };
 
-        // Initialize Firebase
-        firebase.initializeApp(firebaseConfig);
+        if (!firebase.apps.length) {
+             firebase.initializeApp(firebaseConfig);
+        }
         const db = firebase.firestore();
-        const modDropdown = document.getElementById('modDropdown');
-        const editForm = document.getElementById('editarModForm');
-        const editFormContainer = document.getElementById('editFormContainer');
-        const imagePreviewModal = document.getElementById('imagePreviewModal');
-        const previewImageBtn = document.getElementById('previewImageBtn');
-        const closeModalBtn = document.querySelector('.close-modal');
-        const previewImage = document.getElementById('previewImage');
-        const imagemModInput = document.getElementById('imagemMod');
-        const zoomSlider = document.getElementById('zoomSlider');
-        const zoomValueDisplay = document.getElementById('zoomValue');
-        const positionBtns = document.querySelectorAll('.position-btn');
-        const applyPositionBtn = document.getElementById('applyPositionBtn');
-        const castaModDropdown = document.getElementById('castaMod');
-        const emojiCastaModInput = document.getElementById('emojiCastaMod');
-        const castaExplicacaoModInput = document.getElementById('castaExplicacaoMod'); // New field
-        let currentModId = null;
+        const timestamp = firebase.firestore.FieldValue.serverTimestamp;
 
-        // Casta Data with Emojis and Explanations
-        const castaData = {
-            "Risk": {
-                emoji: "https://cdn-icons-mp4.flaticon.com/512/8617/8617212.mp4",
-                explicacao: "Esta coleção de mods é uma moeda de duas faces, pode dar, mas também retira, levando ao risco!"
-            },
-            "Donation": {
-                emoji: "https://cdn-icons-mp4.flaticon.com/512/8617/8617233.mp4",
-                explicacao: "Esta coleção de mods é generosa, não apenas dá ao próprio como a outros, praticando a doação!"
-            },
-            "Glory": {
-                emoji: "https://cdn-icons-mp4.flaticon.com/512/8617/8617227.mp4",
-                explicacao: "Esta coleção de mods é virtuosa, dá tudo sem praticamente retirar nada, o que leva à glória!"
-            },
-            "Calamity": {
-                emoji: "https://cdn-icons-mp4.flaticon.com/512/10606/10606703.mp4",
-                explicacao: "Esta coleção de mods é nefasta, ela pode tirar tudo a todos, levando tudo à calamidade!"
-            }
-        };
+        // ------------- DOM Elements -------------
+        const tipoCategoriaSelect = document.getElementById('tipoCategoria');
+        const categoriaDropdown = document.getElementById('categoriaDropdown');
+        const categoriaNomeDiv = document.getElementById('categoriaNome');
+        const nomeCategoriaInput = document.getElementById('nomeCategoriaInput');
+        // REMOVED: subcategoriaDropdownDiv, categoriaPaiSubcategoriaSelect
+        const subcategoriaNomeDiv = document.getElementById('subcategoriaNome');
+        const nomeSubcategoriaInput = document.getElementById('nomeSubcategoriaInput');
+        // REMOVED: terceiraCategoriaDropdownDiv, categoriaPaiTerceiraCategoriaSelect
+        // REMOVED: terceiraCategoriaDropdownSubcategoriaDiv, subcategoriaPaiTerceiraCategoriaSelect
+        const terceiraCategoriaNomeDiv = document.getElementById('terceiraCategoriaNome');
+        const nomeTerceiraCategoriaInput = document.getElementById('nomeTerceiraCategoriaInput');
+        const searchInput = document.getElementById('searchInput');
+        const searchResults = document.getElementById('searchResults');
+        const editarOddForm = document.getElementById('editarOddForm');
+        const indiceInglesInput = document.getElementById('indiceIngles');
+        const breveDescricaoInput = document.getElementById('breveDescricao');
+        const ordemInput = document.getElementById('ordem');
+        const iconInput = document.getElementById('icon');
+        const ativadoCheckbox = document.getElementById('ativado');
+        const competicoesSelect = $('#competicoes');
+        const submitButton = document.getElementById('submitButton');
 
-        // Function to populate the dropdown with mod names
-        function populateModDropdown() {
-            db.collection("mods").get().then((querySnapshot) => {
-                querySnapshot.forEach((doc) => {
-                    const modData = doc.data();
-                    const option = document.createElement('option');
-                    option.value = doc.id;
-                    option.textContent = modData.nomeMod;
-                    modDropdown.appendChild(option);
-                });
-            });
-        }
+        let selectedOddId = null;
+        let allCompeticoesData = [];
 
-        populateModDropdown();
+        // ------------- Helper Functions -------------
+        // Carregar subcategorias do Firebase
+        async function loadSubcategorias() {
+            try {
+                const subcategoriaPaiSelect = document.getElementById('subcategoriaPai');
+                // Limpar opções existentes, mantendo apenas a opção padrão
+                subcategoriaPaiSelect.innerHTML = '<option value="" disabled selected>Selecione a Subcategoria</option>';
 
-        // Function to update image position based on current settings
-        function updateImagePosition() {
-            zoomValueDisplay.textContent = `${imagePosition.zoom}%`;
-            previewImage.style.objectPosition = `${imagePosition.x} ${imagePosition.y}`;
-            previewImage.style.transform = `scale(${imagePosition.zoom / 100})`;
+                const snapshot = await db.collection('oddcategorias')
+                    .where('categoria_subcategoria_3cat', '==', 'subcategoria')
+                    .get();
 
-            positionBtns.forEach(btn => {
-                if (btn.dataset.x === imagePosition.x && btn.dataset.y === imagePosition.y) {
-                    btn.classList.add('active');
-                } else {
-                    btn.classList.remove('active');
-                }
-            });
-        }
-
-        // Event listener for dropdown change
-        modDropdown.addEventListener('change', function() {
-            const selectedModId = this.value;
-            currentModId = selectedModId;
-            if (selectedModId) {
-                db.collection("mods").doc(selectedModId).get().then((doc) => {
-                    if (doc.exists) {
-                        const modData = doc.data();
-                        document.getElementById('nomeMod').value = modData.nomeMod || '';
-                        document.getElementById('ativoMod').value = modData.ativo || 'yes';
-                        document.getElementById('dataInicioMod').value = modData.dataInicio || '';
-                        document.getElementById('dataFimMod').value = modData.dataFim || '';
-                        document.getElementById('imagemMod').value = modData.imagem || '';
-                        document.getElementById('descricaoMod').value = modData.descricao || '';
-                        document.getElementById('possivelVitoriaMod').value = modData.possivelVitoria || '';
-                        document.getElementById('possivelDerrotaMod').value = modData.possivelDerrota || '';
-                        document.getElementById('overallMod').value = modData.overall || '';
-                        document.getElementById('iconMod').value = modData.icon || '';
-                        document.getElementById('videoMod').value = modData.videoMod || '';
-                        document.getElementById('dataInicioNovoMod').value = modData.dataInicioNovoMod || '';
-                        document.getElementById('dataFimNovoMod').value = modData.dataFimNovoMod || '';
-                        document.getElementById('castaMod').value = modData.castaMod || '';
-                        document.getElementById('emojiCastaMod').value = modData.emojiCastaMod || '';
-                        document.getElementById('castaExplicacaoMod').value = modData.castaExplicacaoMod || ''; // Populate explicacao
-                        document.getElementById('multiUsersMod').value = modData.multiUsersMod || '';
-
-
-                        if (modData.imagePosition) {
-                            imagePosition = modData.imagePosition;
-                        } else {
-                            imagePosition = {
-                                x: 'center',
-                                y: 'center',
-                                zoom: 100
-                            };
+                const subcategorias = [];
+                for (const doc of snapshot.docs) {
+                    const data = doc.data();
+                    if (data.nomesubcategoria && data.categoriapai) {
+                        // Buscar o nome da categoria pai
+                        try {
+                            const categoriaPaiDoc = await db.collection('oddcategorias').doc(data.categoriapai).get();
+                            const categoriaPaiData = categoriaPaiDoc.data();
+                            const categoriaPaiNome = categoriaPaiData?.nomecategoria || 'Categoria Desconhecida';
+                            
+                            subcategorias.push({
+                                id: doc.id,
+                                nome: data.nomesubcategoria,
+                                categoriaPaiNome: categoriaPaiNome
+                            });
+                        } catch (error) {
+                            console.error('Erro ao buscar categoria pai:', error);
+                            subcategorias.push({
+                                id: doc.id,
+                                nome: data.nomesubcategoria,
+                                categoriaPaiNome: 'Categoria Desconhecida'
+                            });
                         }
-                        updateImagePosition(); // Ensure position is updated after loading data
-
-                        editFormContainer.style.display = 'block';
-                    } else {
-                        console.log("No such document!");
-                        editFormContainer.style.display = 'none';
                     }
-                }).catch((error) => {
-                    console.error("Error getting document:", error);
-                    editFormContainer.style.display = 'none';
+                }
+
+                // Ordenar subcategorias por nome
+                subcategorias.sort((a, b) => a.nome.localeCompare(b.nome));
+
+                // Adicionar opções ordenadas ao select
+                subcategorias.forEach(subcategoria => {
+                    const option = document.createElement('option');
+                    option.value = subcategoria.id;
+                    option.textContent = `${subcategoria.nome} (Categoria: ${subcategoria.categoriaPaiNome})`;
+                    subcategoriaPaiSelect.appendChild(option);
                 });
-            } else {
-                editFormContainer.style.display = 'none';
+            } catch (error) {
+                console.error('Erro ao carregar subcategorias:', error);
+            }
+        }
+
+        // Carregar categorias do Firebase
+        async function loadCategorias() {
+            try {
+                const snapshot = await db.collection('oddcategorias')
+                    .where('categoria_subcategoria_3cat', '==', 'categoria')
+                    .get();
+
+                // Limpar opções existentes
+                categoriaDropdown.innerHTML = '<option value="" disabled selected>Selecione a Categoria</option>';
+
+                const categorias = [];
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    if (data.nomecategoria) {
+                        categorias.push({
+                            id: doc.id,
+                            nome: data.nomecategoria
+                        });
+                    }
+                });
+
+                // Ordenar categorias por nome
+                categorias.sort((a, b) => a.nome.localeCompare(b.nome));
+
+                // Adicionar opções ordenadas ao select
+                categorias.forEach(categoria => {
+                    const option = document.createElement('option');
+                    option.value = categoria.id;
+                    option.textContent = categoria.nome;
+                    categoriaDropdown.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Erro ao carregar categorias:', error);
+            }
+        }
+
+        // Carregar categorias ao iniciar a página
+        loadCategorias();
+
+        function resetForm() {
+            editarOddForm.reset();
+            competicoesSelect.val(null).trigger('change');
+            tipoCategoriaSelect.value = "";
+            selectedOddId = null;
+            searchInput.value = '';
+            toggleCategoryFields();
+            submitButton.disabled = false;
+            submitButton.textContent = 'Salvar Alterações';
+            loadCategorias(); // Recarregar categorias
+        }
+
+        function toggleCategoryFields() {
+            const selectedValue = tipoCategoriaSelect.value;
+            const subcategoriaPaiSelect = document.getElementById('subcategoriaPai');
+            categoriaNomeDiv.style.display = 'none';
+            subcategoriaNomeDiv.style.display = 'none';
+            terceiraCategoriaNomeDiv.style.display = 'none';
+            document.getElementById('subcategoriaDropdown').style.display = 'none';
+            categoriaDropdown.style.display = 'block'; // Sempre mostrar o dropdown de categoria
+
+            // Remover required quando o campo estiver oculto
+            subcategoriaPaiSelect.required = false;
+
+            // Carregar subcategorias se o tipo for 3ª Categoria
+            if (selectedValue === '3cat') {
+                document.getElementById('subcategoriaDropdown').style.display = 'block';
+                subcategoriaPaiSelect.required = true;
+                loadSubcategorias();
+            }
+
+            switch(selectedValue) {
+                case 'categoria':
+                    categoriaNomeDiv.style.display = 'block';
+                    break;
+                case 'subcategoria':
+                    // REMOVED: subcategoriaDropdownDiv.style.display = 'block';
+                    subcategoriaNomeDiv.style.display = 'block';
+                    // REMOVED: Logic to load parent categories
+                    break;
+                case '3cat':
+                    // REMOVED: terceiraCategoriaDropdownDiv.style.display = 'block';
+                    // REMOVED: terceiraCategoriaDropdownSubcategoriaDiv.style.display = 'block';
+                    terceiraCategoriaNomeDiv.style.display = 'block';
+                    // REMOVED: Logic to load parent categories
+                    break;
+            }
+        }
+
+        // ------------- Data Loading Functions -------------
+        // REMOVED: carregarCategoriasPai function
+        // REMOVED: carregarSubcategoriasPai function
+
+        async function carregarCompeticoes() {
+            try {
+                const [competicoesSnapshot, paisesSnapshot] = await Promise.all([
+                    db.collection('competicoes').orderBy('nome').get(),
+                    db.collection('paises').get()
+                ]);
+
+                const paisesMap = {};
+                paisesSnapshot.forEach(doc => {
+                    paisesMap[doc.id] = doc.data().nome;
+                });
+
+                allCompeticoesData = [];
+                competicoesSnapshot.forEach(doc => {
+                    const competicao = doc.data();
+                    const paisNome = paisesMap[competicao.paisId] || 'País Desconhecido';
+                    allCompeticoesData.push({
+                        id: competicao.nome, // Assuming competicao.nome is the unique ID/value
+                        text: `${paisNome}: ${competicao.nome}`,
+                    });
+                });
+
+                allCompeticoesData.sort((a, b) => a.text.localeCompare(b.text));
+
+                competicoesSelect.select2({
+                    placeholder: 'Pesquisar e selecionar competições',
+                    allowClear: true,
+                    width: '100%',
+                    language: 'pt',
+                    theme: 'default',
+                    dropdownAutoWidth: true,
+                    minimumInputLength: 0,
+                    closeOnSelect: false,
+                    data: allCompeticoesData
+                });
+                 competicoesSelect.val(null).trigger('change');
+
+            } catch (error) {
+                console.error('Erro ao carregar competições ou países:', error);
+                alert('Falha crítica ao carregar competições. A página pode não funcionar corretamente.');
+            }
+        }
+
+        // ------------- Form Population -------------
+        async function preencherFormulario(oddId) {
+             selectedOddId = oddId;
+             tipoCategoriaSelect.value = '';
+             toggleCategoryFields();
+             competicoesSelect.val(null).trigger('change');
+             submitButton.disabled = true;
+             submitButton.textContent = 'Carregando Dados...';
+             
+             // Preencher o dropdown de categoria baseado no tipo
+             const oddDoc = await db.collection('oddcategorias').doc(oddId).get();
+             if (oddDoc.exists) {
+                 const oddData = oddDoc.data();
+                 if (oddData.categoria_subcategoria_3cat === 'categoria') {
+                     // Se for categoria, selecionar o próprio ID
+                     categoriaDropdown.value = oddId;
+                 } else if (oddData.categoria_subcategoria_3cat === 'subcategoria' || oddData.categoria_subcategoria_3cat === '3cat') {
+                     // Se for subcategoria ou 3cat, selecionar a categoria pai
+                     if (oddData.categoriapai) {
+                         categoriaDropdown.value = oddData.categoriapai;
+                     }
+                 }
+             }
+
+             try {
+                const docSnap = await db.collection('oddcategorias').doc(oddId).get();
+
+                if (!docSnap.exists) {
+                    throw new Error(`Documento com ID ${oddId} não encontrado no Firestore.`);
+                }
+
+                const data = docSnap.data();
+
+                indiceInglesInput.value = data.indiceIngles || '';
+                breveDescricaoInput.value = data.breveDescricao || '';
+                ordemInput.value = data.ordem !== undefined ? data.ordem : '';
+                iconInput.value = data.icon || '';
+                ativadoCheckbox.checked = data.ativado === true;
+
+                tipoCategoriaSelect.value = data.categoria_subcategoria_3cat || '';
+                toggleCategoryFields(); // Call *after* setting the type
+
+                 if (data.categoria_subcategoria_3cat === 'categoria') {
+                    nomeCategoriaInput.value = data.nomecategoria || '';
+                } else if (data.categoria_subcategoria_3cat === 'subcategoria') {
+                    nomeSubcategoriaInput.value = data.nomesubcategoria || '';
+                } else if (data.categoria_subcategoria_3cat === '3cat') {
+                    nomeTerceiraCategoriaInput.value = data.nome3categoria || '';
+                    if (data.subcategoriapai) {
+                        await loadSubcategorias();
+                        document.getElementById('subcategoriaPai').value = data.subcategoriapai;
+                    }
+                }
+
+                 if (data.competicoes && Array.isArray(data.competicoes)) {
+                    const validCompeticoes = data.competicoes.filter(compValue =>
+                        allCompeticoesData.some(option => option.id === compValue)
+                    );
+                    competicoesSelect.val(validCompeticoes).trigger('change');
+                 } else {
+                    competicoesSelect.val(null).trigger('change'); // Clear if no data or invalid format
+                 }
+
+                let displayText = data.indiceIngles || 'Odd Selecionada';
+                 if (data.categoria_subcategoria_3cat === 'categoria' && data.nomecategoria) displayText = data.nomecategoria;
+                 else if (data.categoria_subcategoria_3cat === 'subcategoria' && data.nomesubcategoria) displayText = data.nomesubcategoria;
+                 else if (data.categoria_subcategoria_3cat === '3cat' && data.nome3categoria) displayText = data.nome3categoria;
+                 searchInput.value = `${displayText} (${data.categoria_subcategoria_3cat || 'Tipo Desconhecido'})`;
+                 searchResults.style.display = 'none';
+
+            } catch (error) {
+                console.error("Erro ao preencher formulário:", error);
+                alert(`Erro ao carregar dados da odd para edição: ${error.message}`);
+                resetForm(); // Reset form on error
+            } finally {
+                 submitButton.disabled = false;
+                 submitButton.textContent = 'Salvar Alterações';
+            }
+        }
+
+        // ------------- Event Listeners -------------
+        tipoCategoriaSelect.addEventListener('change', toggleCategoryFields);
+
+        // Atualizar subcategoria quando um item é selecionado na pesquisa
+        async function updateSubcategoriaPai(oddId) {
+            try {
+                const oddDoc = await db.collection('oddcategorias').doc(oddId).get();
+                if (oddDoc.exists) {
+                    const oddData = oddDoc.data();
+                    if (oddData.subcategoriapai) {
+                        subcategoriaPaiSelect.value = oddData.subcategoriapai;
+                    }
+                }
+            } catch (error) {
+                console.error('Erro ao atualizar subcategoria:', error);
+            }
+        }
+
+        // REMOVED: Event listener for categoriaPaiTerceiraCategoriaSelect
+
+        let searchDebounceTimer;
+        searchInput.addEventListener('input', (e) => {
+            const searchTerm = e.target.value.trim().toLowerCase();
+            searchResults.innerHTML = '';
+            searchResults.style.display = 'none';
+            clearTimeout(searchDebounceTimer);
+
+            if (searchTerm.length < 2) return;
+
+            searchDebounceTimer = setTimeout(async () => {
+                searchResults.innerHTML = '<div class="search-result-item" style="cursor:default;">Pesquisando...</div>';
+                searchResults.style.display = 'block';
+                try {
+                    // Search logic remains the same conceptually
+                    const oddSnapshot = await db.collection('oddcategorias').get();
+                    const results = [];
+                    oddSnapshot.forEach(doc => {
+                        const data = doc.data();
+                        const tipo = data.categoria_subcategoria_3cat;
+                        let nome = ''; let match = false;
+                        if (tipo === 'categoria' && data.nomecategoria?.toLowerCase().includes(searchTerm)) { nome = data.nomecategoria; match = true; }
+                        else if (tipo === 'subcategoria' && data.nomesubcategoria?.toLowerCase().includes(searchTerm)) { nome = data.nomesubcategoria; match = true; }
+                        else if (tipo === '3cat' && data.nome3categoria?.toLowerCase().includes(searchTerm)) { nome = data.nome3categoria; match = true; }
+                        else if (data.indiceIngles?.toLowerCase().includes(searchTerm)) {
+                             match = true;
+                            if (tipo === 'categoria') nome = data.nomecategoria;
+                            else if (tipo === 'subcategoria') nome = data.nomesubcategoria;
+                            else if (tipo === '3cat') nome = data.nome3categoria;
+                            else nome = data.indiceIngles; // Fallback to index if name missing
+                        }
+                        if (match) results.push({ id: doc.id, nome: nome || data.indiceIngles || 'Nome Indefinido', tipo: tipo || 'Tipo Indefinido', indice: data.indiceIngles || '' });
+                    });
+
+                    results.sort((a, b) => a.nome.localeCompare(b.nome));
+
+                    if (results.length > 0) {
+                        searchResults.innerHTML = results.map(result =>
+                            `<div class="search-result-item" data-id="${result.id}">
+                                ${result.nome} ${result.indice && result.indice !== result.nome ? '<span style="color:#555;">('+result.indice+')</span>' : ''} - <span style="color:#888;">[${result.tipo}]</span>
+                            </div>`
+                        ).join('');
+                        document.querySelectorAll('.search-result-item[data-id]').forEach(item => {
+                            item.addEventListener('click', function() { preencherFormulario(this.dataset.id); searchResults.style.display = 'none'; });
+                        });
+                    } else {
+                        searchResults.innerHTML = '<div class="search-result-item" style="cursor:default;">Nenhum resultado encontrado</div>';
+                    }
+                    searchResults.style.display = 'block';
+                } catch (error) {
+                    console.error('Erro na pesquisa:', error);
+                    searchResults.innerHTML = '<div class="search-result-item" style="color:red; cursor:default;">Erro ao realizar pesquisa</div>';
+                    searchResults.style.display = 'block';
+                }
+            }, 300);
+        });
+
+        document.addEventListener('click', function(e) {
+            if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
+                searchResults.style.display = 'none';
             }
         });
 
-        // Event listener for preview button click
-        previewImageBtn.addEventListener('click', function() {
-            const imageUrl = imagemModInput.value.trim();
-            if (imageUrl) {
-                previewImage.src = imageUrl;
-                previewImage.onload = function() {
-                    updateImagePosition();
-                };
-            } else {
-                previewImage.src = 'https://via.placeholder.com/300x200?text=Sem+Imagem';
-                updateImagePosition();
-            }
-            imagePreviewModal.style.display = 'flex';
+        document.getElementById('selecionarTudo').addEventListener('click', function() {
+            const allOptionValues = allCompeticoesData.map(option => option.id);
+            competicoesSelect.val(allOptionValues).trigger('change');
         });
 
-        // Close modal when X is clicked
-        closeModalBtn.addEventListener('click', function() {
-            imagePreviewModal.style.display = 'none';
+        document.getElementById('limparSelecao').addEventListener('click', function() {
+            competicoesSelect.val(null).trigger('change');
         });
 
-        // Close modal when clicking outside the content
-        imagePreviewModal.addEventListener('click', function(event) {
-            if (event.target === imagePreviewModal) {
-                imagePreviewModal.style.display = 'none';
-            }
-        });
-
-        // Handle zoom slider changes
-        zoomSlider.addEventListener('input', function() {
-            imagePosition.zoom = parseInt(this.value);
-            updateImagePosition();
-        });
-
-        // Handle position button clicks
-        positionBtns.forEach(btn => {
-            btn.addEventListener('click', function() {
-                imagePosition.x = this.dataset.x;
-                imagePosition.y = this.dataset.y;
-                updateImagePosition();
-            });
-        });
-
-        // Apply position button click
-        applyPositionBtn.addEventListener('click', function() {
-            imagePreviewModal.style.display = 'none';
-        });
-
-        // Event listener for Casta dropdown change
-        castaModDropdown.addEventListener('change', function() {
-            const selectedCasta = this.value;
-            if (castaData[selectedCasta]) {
-                emojiCastaModInput.value = castaData[selectedCasta].emoji || '';
-                castaExplicacaoModInput.value = castaData[selectedCasta].explicacao || '';
-            } else {
-                emojiCastaModInput.value = '';
-                castaExplicacaoModInput.value = '';
-            }
-        });
-
-        // Event listener for form submission (for updating data)
-        editForm.addEventListener('submit', function(event) {
-            event.preventDefault();
-
-            if (!currentModId) {
-                alert("Por favor, selecione um Mod para editar.");
+        // ------------- Form Submission -------------
+        editarOddForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            if (!selectedOddId) {
+                alert('Por favor, pesquise e selecione uma odd da lista antes de salvar.');
+                searchInput.focus();
                 return;
             }
 
-            const nomeMod = document.getElementById('nomeMod').value;
-            const ativoMod = document.getElementById('ativoMod').value;
-            const dataInicioMod = document.getElementById('dataInicioMod').value;
-            const dataFimMod = document.getElementById('dataFimMod').value;
-            const imagemMod = document.getElementById('imagemMod').value;
-            const descricaoMod = document.getElementById('descricaoMod').value;
-            const possivelVitoriaMod = document.getElementById('possivelVitoriaMod').value;
-            const possivelDerrotaMod = document.getElementById('possivelDerrotaMod').value;
-            const overallMod = document.getElementById('overallMod').value;
-            const iconMod = document.getElementById('iconMod').value;
-            const videoMod = document.getElementById('videoMod').value;
-            const dataInicioNovoMod = document.getElementById('dataInicioNovoMod').value;
-            const dataFimNovoMod = document.getElementById('dataFimNovoMod').value;
-            const castaMod = document.getElementById('castaMod').value;
-            const emojiCastaMod = document.getElementById('emojiCastaMod').value;
-            const castaExplicacaoMod = document.getElementById('castaExplicacaoMod').value; // Get explicacao value
-            const multiUsersMod = document.getElementById('multiUsersMod').value;
+            submitButton.disabled = true;
+            submitButton.textContent = 'Salvando...';
 
+            try {
+                const tipoCategoria = tipoCategoriaSelect.value;
+                if (!tipoCategoria) throw new Error("O campo 'Categoria' é obrigatório."); // Updated error message
 
-            const updateData = {
-                nomeMod: nomeMod,
-                ativo: ativoMod,
-                dataInicio: dataInicioMod ? firebase.firestore.Timestamp.fromDate(new Date(dataInicioMod)) : null,
-                dataFim: dataFimMod ? firebase.firestore.Timestamp.fromDate(new Date(dataFimMod)) : null,
-                imagem: imagemMod || null,
-                descricao: descricaoMod || null,
-                possivelVitoria: possivelVitoriaMod || null,
-                possivelDerrota: possivelDerrotaMod || null,
-                overall: overallMod || null,
-                icon: iconMod || null,
-                videoMod: videoMod || null,
-                dataInicioNovoMod: dataInicioNovoMod ? firebase.firestore.Timestamp.fromDate(new Date(dataInicioNovoMod)) : null,
-                dataFimNovoMod: dataFimNovoMod ? firebase.firestore.Timestamp.fromDate(new Date(dataFimNovoMod)) : null,
-                castaMod: castaMod,
-                emojiCastaMod: emojiCastaMod,
-                castaExplicacaoMod: castaExplicacaoMod, // Include explicacao in update
-                multiUsersMod: multiUsersMod || null,
-                imagePosition: imagePosition
-            };
+                const formData = {
+                    categoria_subcategoria_3cat: tipoCategoria,
+                    indiceIngles: indiceInglesInput.value.trim(),
+                    breveDescricao: breveDescricaoInput.value.trim(),
+                    ordem: parseInt(ordemInput.value),
+                    icon: iconInput.value.trim(),
+                    competicoes: competicoesSelect.val() || [],
+                    ativado: ativadoCheckbox.checked,
+                    lastUpdated: timestamp()
+                };
 
-            db.collection("mods").doc(currentModId).update(updateData)
-            .then(() => {
-                console.log("Document successfully updated!");
-                alert("Modificado com sucesso!");
+                 // --- Data Cleaning ---
+                 // Ensure these fields are removed if not applicable to the selected type
+                 delete formData.nomecategoria;
+                 delete formData.nomesubcategoria;
+                 delete formData.nome3categoria;
+                 delete formData.categoriapai;      // Ensure removed from potential old data structures
+                 delete formData.subcategoriaPaiId; // Ensure removed
 
-                modDropdown.innerHTML = '<option value="">Selecione um Mod para editar</option>';
-                populateModDropdown();
-                editFormContainer.style.display = 'none';
-                document.getElementById("editarModForm").reset();
-                currentModId = null;
-            })
-            .catch((error) => {
-                console.error("Error updating document: ", error);
-                alert("Erro ao modificar mod. Verifique a consola para mais detalhes.");
-            });
+                // --- Validation ---
+                if (!formData.indiceIngles) throw new Error("O campo 'Indice Inglês' é obrigatório.");
+                if (!formData.breveDescricao) throw new Error("O campo 'Breve Descrição' é obrigatório.");
+                if (isNaN(formData.ordem)) throw new Error("O campo 'Ordem' deve ser um número válido.");
+                if (!formData.icon) throw new Error("O campo 'Icon / Emoji' é obrigatório.");
+
+                if (tipoCategoria === 'categoria') {
+                    formData.nomecategoria = nomeCategoriaInput.value.trim();
+                    if (!formData.nomecategoria) throw new Error("O campo 'Nome da Categoria' é obrigatório.");
+                } else if (tipoCategoria === 'subcategoria') {
+                    formData.nomesubcategoria = nomeSubcategoriaInput.value.trim();
+                    formData.categoriapai = categoriaDropdown.value;
+                    if (!formData.nomesubcategoria) throw new Error("O campo 'Nome da Subcategoria' é obrigatório.");
+                    if (!formData.categoriapai) throw new Error("É necessário selecionar uma Categoria.");
+                } else if (tipoCategoria === '3cat') {
+                    formData.nome3categoria = nomeTerceiraCategoriaInput.value.trim();
+                    formData.categoriapai = categoriaDropdown.value;
+                    formData.subcategoriapai = document.getElementById('subcategoriaPai').value;
+                    if (!formData.nome3categoria) throw new Error("O campo 'Nome da 3ª Categoria' é obrigatório.");
+                    if (!formData.categoriapai) throw new Error("É necessário selecionar uma Categoria.");
+                    if (!formData.subcategoriapai) throw new Error("É necessário selecionar uma Subcategoria.");
+                }
+
+                console.log("Dados a serem atualizados:", formData); // For debugging
+
+                await db.collection('oddcategorias').doc(selectedOddId).update(formData);
+
+                alert('Odd atualizada com sucesso!');
+                // Optionally, re-fetch the data to show the update or just clear
+                // preencherFormulario(selectedOddId); // To reload the saved data
+
+            } catch (error) {
+                console.error('Erro ao salvar alterações:', error);
+                alert(`Erro ao salvar: ${error.message}\nPor favor, verifique os campos e tente novamente.`);
+            } finally {
+                 submitButton.disabled = false;
+                 submitButton.textContent = 'Salvar Alterações';
+            }
         });
+
+        // ------------- Initial Page Load Setup -------------
+        function initializePage() {
+            resetForm();
+            carregarCompeticoes();
+            // REMOVED: Call to carregarCategoriasPai()
+        }
+
+        initializePage();
+
     </script>
 </body>
 </html>
