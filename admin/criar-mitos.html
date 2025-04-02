@@ -9,6 +9,7 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <style>
+        /* --- Previous CSS styles remain the same --- */
         * {
             margin: 0;
             padding: 0;
@@ -30,6 +31,7 @@
             cursor: pointer;
             box-shadow: 0 2px 5px rgba(0,0,0,0.2);
             transition: transform 0.3s ease;
+            z-index: 1500; /* Ensure it's above content but potentially below modal overlay */
         }
 
         .lab-icon:hover {
@@ -45,12 +47,13 @@
             height: 100%;
             background-color: rgba(0,0,0,0.5);
             z-index: 2000;
+            overflow-y: auto; /* Allow scrolling if content is long */
         }
 
         .modal-content {
             position: relative;
             background-color: white;
-            margin: 100px auto;
+            margin: 50px auto; /* Reduced top margin slightly */
             padding: 20px;
             width: 90%;
             max-width: 500px;
@@ -72,7 +75,7 @@
         }
 
         .select2-dropdown {
-            z-index: 2001;
+            z-index: 2001; /* Ensure dropdown is above modal content */
         }
 
         body {
@@ -130,7 +133,7 @@
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
 
-        h1 {
+        h1, h2 { /* Apply consistent styling */
             color: #333;
             margin-bottom: 24px;
             font-size: 24px;
@@ -156,6 +159,7 @@
             border: 1px solid #ddd;
             border-radius: 4px;
             font-size: 14px;
+            background-color: white; /* Ensure selects have white background */
         }
 
         textarea {
@@ -188,28 +192,62 @@
     </style>
 </head>
 <body>
+    <!-- ****** MODAL START ****** -->
     <div id="familyModal" class="modal">
         <div class="modal-content">
-            <span class="close-modal">&times;</span>
-            <h2>Criar Família</h2>
+            <span class="close-modal">×</span>
+            <h2>Criar Item Mitos Game</h2> <!-- Changed title slightly -->
             <form id="createFamilyForm">
+
+                <!-- 1º Campo: Tipo (Dropdown) -->
+                <div class="form-group">
+                    <label for="familyType">Tipo:</label>
+                    <select id="familyType" name="familyType" required>
+                        <option value="" disabled selected>Selecione o tipo</option>
+                        <option value="familia">Família</option>
+                        <option value="casta">Casta</option>
+                    </select>
+                    <div class="error-message">Por favor, selecione um tipo.</div>
+                </div>
+
+                <!-- 2º Campo: Nome -->
                 <div class="form-group">
                     <label for="familyName">Nome:</label>
                     <input type="text" id="familyName" name="familyName" required>
+                     <div class="error-message">Por favor, insira um nome.</div>
                 </div>
+
+                <!-- 3º Campo: Selecionar Família (Condicional) -->
+                <div class="form-group" id="castaFamilySelectorGroup" style="display: none;">
+                    <label for="castaFamilySelect">Selecione a Família da Casta:</label>
+                    <select id="castaFamilySelect" name="castaFamily">
+                        <option value="">Carregando famílias...</option>
+                    </select>
+                    <div class="error-message">Por favor, selecione a família da casta.</div>
+                </div>
+
+                <!-- 4º Campo: Imagem -->
                 <div class="form-group">
-                    <label for="familyType">Tipo:</label>
-                    <input type="text" id="familyType" name="familyType" value="familia" readonly>
+                    <label for="familyImage">Imagem (URL):</label>
+                    <input type="text" id="familyImage" name="familyImage" required>
+                     <div class="error-message">Por favor, insira um URL de imagem.</div>
                 </div>
+
+                <!-- 5º Campo: Países (Select2) -->
                 <div class="form-group">
                     <label for="familyCountries">Países:</label>
                     <select id="familyCountries" name="familyCountries[]" multiple="multiple" required>
+                       <!-- Options will be loaded by Select2 if needed, or add static ones -->
+                       <!-- Example: <option value="Portugal">Portugal</option> -->
                     </select>
+                     <div class="error-message">Por favor, selecione pelo menos um país.</div>
                 </div>
-                <button type="submit" class="btn">Criar Família</button>
+
+                <button type="submit" class="btn">Criar Item</button>
             </form>
         </div>
     </div>
+    <!-- ****** MODAL END ****** -->
 
     <div class="lab-icon" id="openFamilyModal">
         <i class="fas fa-flask"></i>
@@ -230,6 +268,15 @@
         <div class="form-container">
             <h1>Criar Novo Jogo de Mitos</h1>
             <form id="createMitosForm">
+                <!-- ... Main form content remains the same ... -->
+                 <div class="form-group">
+                    <label for="tipo">Tipo</label>
+                    <select id="tipo" name="tipo" required>
+                        <option value="familia">Família</option>
+                        <option value="casta">Casta</option>
+                    </select>
+                </div>
+
                 <div class="form-group">
                     <label for="name">Nome</label>
                     <input type="text" id="name" name="name" required>
@@ -311,23 +358,20 @@
                     </select>
                     <div class="error-message">Por favor, selecione um comprador.</div>
                 </div>
-
-                <div class="form-group">
-                    <label for="tipo">Tipo</label>
-                    <input type="text" id="tipo" name="tipo" value="heroi" readonly>
-                </div>
-
                 <button type="submit" class="btn">Criar Jogo de Mitos</button>
             </form>
         </div>
     </main>
 
     <script type="module">
+        // ****** Firebase Imports ******
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-        import { getFirestore, collection, addDoc, getDocs } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        import { getFirestore, collection, addDoc, getDocs, query, where } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
+        // ****** Firebase Configuration ******
         const firebaseConfig = {
-            apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0",
+            // --- KEEP YOUR CONFIG HERE ---
+            apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0", // Example - Use your actual key
             authDomain: "g-games-8a8fc.firebaseapp.com",
             projectId: "g-games-8a8fc",
             storageBucket: "g-games-8a8fc.firebasestorage.app",
@@ -336,16 +380,29 @@
             measurementId: "G-GTTPJ6G5MD"
         };
 
+        // ****** Firebase Initialization ******
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
 
-        // Modal functionality
+        // ****** Modal Functionality ******
         const modal = document.getElementById('familyModal');
         const openBtn = document.getElementById('openFamilyModal');
-        const closeBtn = document.querySelector('.close-modal');
+        const closeBtn = modal.querySelector('.close-modal'); // Scope query to modal
+        const familyTypeSelect = document.getElementById('familyType');
+        const castaFamilySelectorGroup = document.getElementById('castaFamilySelectorGroup');
+        const castaFamilySelect = document.getElementById('castaFamilySelect');
+        const createFamilyForm = document.getElementById('createFamilyForm'); // Get form reference
 
         openBtn.onclick = function() {
             modal.style.display = "block";
+            // Reset form state when opening
+            createFamilyForm.reset();
+            $('#familyCountries').val(null).trigger('change'); // Reset Select2
+            castaFamilySelectorGroup.style.display = 'none';
+            castaFamilySelect.required = false;
+            castaFamilySelect.innerHTML = '<option value="">Carregando famílias...</option>'; // Reset conditional select
+            // Clear potential validation errors
+            modal.querySelectorAll('.error-message').forEach(el => el.style.display = 'none');
         }
 
         closeBtn.onclick = function() {
@@ -358,136 +415,278 @@
             }
         }
 
-        // Initialize Select2
+        // ****** Function to load families into the Casta dropdown ******
+        async function loadFamiliesForCastaSelect() {
+            castaFamilySelect.disabled = true; // Disable while loading
+            castaFamilySelect.innerHTML = '<option value="">Carregando famílias...</option>'; // Show loading state
+            try {
+                const q = query(collection(db, 'mitosgameItens'), where("tipo", "==", "familia"));
+                const querySnapshot = await getDocs(q);
+                castaFamilySelect.innerHTML = '<option value="" disabled selected>Selecione a família</option>'; // Add default prompt
+                if (querySnapshot.empty) {
+                    castaFamilySelect.innerHTML = '<option value="">Nenhuma família encontrada</option>';
+                } else {
+                    querySnapshot.forEach((doc) => {
+                        const data = doc.data();
+                        // Using doc.id as value might be more robust if names aren't unique
+                        const option = new Option(data.nome, doc.id); // Text: data.nome, Value: doc.id
+                        castaFamilySelect.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                console.error("Erro ao carregar famílias para casta: ", error);
+                castaFamilySelect.innerHTML = '<option value="">Erro ao carregar</option>'; // Show error state
+            } finally {
+                 castaFamilySelect.disabled = false; // Re-enable after loading
+            }
+        }
+
+        // ****** Event Listener for Tipo change in Modal ******
+        familyTypeSelect.addEventListener('change', function() {
+            const selectedType = this.value;
+            const familyNameInput = document.getElementById('familyName');
+            const familyImageInput = document.getElementById('familyImage');
+            const familyCountriesSelect = document.getElementById('familyCountries');
+
+            // Reset related field requirement status initially
+            castaFamilySelect.required = false;
+            familyNameInput.required = true; // Name is always required
+            familyImageInput.required = true; // Image is always required
+            familyCountriesSelect.required = true; // Countries are always required (via Select2)
+
+
+            if (selectedType === 'casta') {
+                castaFamilySelectorGroup.style.display = 'block';
+                castaFamilySelect.required = true; // Make family selection required for Casta
+                loadFamiliesForCastaSelect(); // Load families when Casta is selected
+            } else {
+                castaFamilySelectorGroup.style.display = 'none';
+                castaFamilySelect.required = false;
+                 // No need to load families if not casta
+            }
+            // Hide any previous error messages for the conditional field
+             castaFamilySelectorGroup.querySelector('.error-message').style.display = 'none';
+        });
+
+        // ****** Initialize Select2 ******
         $(document).ready(function() {
+            // Initialize Select2 for the main form
             $('#equipes').select2({
                 placeholder: 'Selecione as equipes',
-                allowClear: true
+                allowClear: true,
+                dropdownAutoWidth: true // Optional: Adjust dropdown width
             });
 
             $('#familia, #compradoPor').select2({
                 placeholder: 'Selecione uma opção',
-                allowClear: true
+                allowClear: true,
+                 dropdownAutoWidth: true
             });
 
-            // Carregar usuários do Firebase
-            async function loadUsers() {
-                try {
+            // Initialize Select2 for the modal's Countries field
+             $('#familyCountries').select2({
+                placeholder: 'Selecione os países',
+                allowClear: true,
+                dropdownParent: $('#familyModal'), // Attach dropdown to the modal
+                dropdownAutoWidth: true
+                // You might need to load country options here if they are dynamic
+                // For now, assuming static or you add them manually in HTML
+            });
+
+
+            // --- Load data for the MAIN form ---
+            async function loadUsers() { /* ... loadUsers code remains the same ... */
+                 try {
                     const querySnapshot = await getDocs(collection(db, 'users'));
                     const select = document.getElementById('compradoPor');
+                    // Clear previous options if any
+                    select.innerHTML = '<option value="">Selecione o comprador</option>';
                     querySnapshot.forEach((doc) => {
                         const data = doc.data();
-                        const option = new Option(data.nomeDeUsuario, data.nomeDeUsuario);
-                        select.appendChild(option);
+                        // Ensure user has a name before adding
+                        if (data.nomeDeUsuario) {
+                            const option = new Option(data.nomeDeUsuario, data.nomeDeUsuario);
+                            select.appendChild(option);
+                        }
                     });
+                    // Refresh Select2 if needed after dynamic loading
+                    $(select).trigger('change');
                 } catch (error) {
                     console.error("Erro ao carregar usuários: ", error);
                 }
             }
-
-            // Carregar famílias do Firebase
-            async function loadFamilias() {
+             async function loadFamiliasMainForm() { /* Renamed to avoid conflict */
                 try {
-                    const querySnapshot = await getDocs(collection(db, 'mitosgameItens'));
+                    const q = query(collection(db, 'mitosgameItens'), where("tipo", "==", "familia"));
+                    const querySnapshot = await getDocs(q);
                     const select = document.getElementById('familia');
+                     // Clear previous options if any
+                    select.innerHTML = '<option value="">Selecione a família</option>';
                     querySnapshot.forEach((doc) => {
                         const data = doc.data();
-                        if (data.tipo === 'familia') {
-                            const option = new Option(data.nome, data.nome);
-                            select.appendChild(option);
-                        }
-                    });
-                } catch (error) {
-                    console.error("Erro ao carregar famílias: ", error);
-                }
-            }
-
-            // Carregar equipes do Firebase
-            async function loadEquipes() {
-                try {
-                    const querySnapshot = await getDocs(collection(db, 'clubes'));
-                    const select = document.getElementById('equipes');
-                    querySnapshot.forEach((doc) => {
-                        const option = new Option(doc.data().nome, doc.data().nome);
+                         // Use doc.id as value if needed for reference
+                        const option = new Option(data.nome, data.nome); // Or use doc.id as value: new Option(data.nome, doc.id);
                         select.appendChild(option);
                     });
+                    // Refresh Select2
+                     $(select).trigger('change');
+                } catch (error) {
+                    console.error("Erro ao carregar famílias para formulário principal: ", error);
+                }
+            }
+            async function loadEquipes() { /* ... loadEquipes code remains the same ... */
+                 try {
+                    const querySnapshot = await getDocs(collection(db, 'clubes'));
+                    const select = document.getElementById('equipes');
+                     // Clear previous options if any
+                    select.innerHTML = ''; // Clear existing options before loading
+                    querySnapshot.forEach((doc) => {
+                        const data = doc.data();
+                         // Use doc.id or club identifier if names aren't unique/stable
+                        const option = new Option(data.nome, data.nome); // Or use doc.id: new Option(data.nome, doc.id)
+                        select.appendChild(option);
+                    });
+                    // Refresh Select2
+                     $(select).trigger('change');
                 } catch (error) {
                     console.error("Erro ao carregar equipes: ", error);
                 }
             }
 
-            loadFamilias();
+            loadFamiliasMainForm();
             loadEquipes();
             loadUsers();
         });
 
-        // Handle family form submission
-        document.getElementById('createFamilyForm').addEventListener('submit', async function(e) {
+        // ****** Handle MODAL Form Submission ******
+        createFamilyForm.addEventListener('submit', async function(e) {
             e.preventDefault();
-            
-            const familyData = {
+
+             // Simple validation check
+            let isModalValid = true;
+            const modalRequiredInputs = createFamilyForm.querySelectorAll('[required]');
+            modalRequiredInputs.forEach(input => {
+                 const formGroup = input.closest('.form-group');
+                 const errorDiv = formGroup ? formGroup.querySelector('.error-message') : null;
+                // Check value, considering Select2 potentially returning an array for multiple selects
+                let value = $(input).val(); // Use jQuery's val() for Select2 compatibility
+                 if ((!value || (Array.isArray(value) && value.length === 0)) && input.offsetParent !== null ) { // Check if element is visible
+                    isModalValid = false;
+                    if (errorDiv) errorDiv.style.display = 'block';
+                 } else {
+                    if (errorDiv) errorDiv.style.display = 'none';
+                }
+            });
+
+             if (!isModalValid) {
+                console.log("Modal validation failed.");
+                return; // Stop submission if modal is invalid
+            }
+
+            // Prepare data based on selected type
+            const itemType = familyTypeSelect.value;
+            const itemData = {
                 nome: document.getElementById('familyName').value,
-                tipo: document.getElementById('familyType').value,
-                paises: $('#familyCountries').val()
+                tipo: itemType,
+                imagem: document.getElementById('familyImage').value,
+                paises: $('#familyCountries').val() || [] // Get value from Select2
+                // Add timestamp or other default fields if needed
+                // createdAt: new Date()
             };
 
+            // If it's a 'casta', add the selected parent family ID
+            if (itemType === 'casta') {
+                const selectedFamilyId = castaFamilySelect.value;
+                if (selectedFamilyId) {
+                    // Storing the ID of the parent family document
+                    itemData.familiaId = selectedFamilyId;
+                } else {
+                    // Handle case where family wasn't selected for casta (should be caught by validation)
+                    console.error("Família não selecionada para a casta.");
+                    alert('Erro: Família não selecionada para a casta.');
+                    return;
+                }
+            }
+
+            console.log("Submitting Modal Data:", itemData); // Log data before sending
+
             try {
-                await addDoc(collection(db, 'mitosgameItens'), familyData);
-                alert('Família criada com sucesso!');
-                modal.style.display = "none";
-                this.reset();
-                $('#familyCountries').val(null).trigger('change');
+                const docRef = await addDoc(collection(db, 'mitosgameItens'), itemData);
+                console.log("Document written with ID: ", docRef.id);
+                alert('Item criado com sucesso!');
+                modal.style.display = "none"; // Close modal on success
+                // No need to reset form here, it's done when opening the modal
+                // Optionally, reload data in the main form if needed
+                 loadFamiliasMainForm(); // Reload families in main form dropdown
+
             } catch (error) {
-                console.error("Error creating family: ", error);
-                alert('Erro ao criar família. Por favor, tente novamente.');
+                console.error("Error creating item: ", error);
+                alert('Erro ao criar item. Verifique o console para detalhes.');
             }
         });
 
-        // Form submission
+        // ****** Handle MAIN Form Submission ******
         document.getElementById('createMitosForm').addEventListener('submit', async function(e) {
             e.preventDefault();
-            
-            // Validação do formulário
-            let isValid = true;
-            const form = this;
-            const requiredInputs = form.querySelectorAll('[required]');
-            
-            requiredInputs.forEach(input => {
-                if (!input.value.trim()) {
-                    isValid = false;
-                    input.nextElementSibling.style.display = 'block';
+
+            // Main form validation
+            let isMainFormValid = true;
+            const mainForm = this;
+            const mainRequiredInputs = mainForm.querySelectorAll('[required]');
+
+            mainRequiredInputs.forEach(input => {
+                const formGroup = input.closest('.form-group');
+                const errorDiv = formGroup ? formGroup.querySelector('.error-message') : null;
+                let value = $(input).val(); // Use jQuery for Select2 multi-select compatibility
+
+                if (!value || (Array.isArray(value) && value.length === 0)) {
+                    isMainFormValid = false;
+                    if (errorDiv) errorDiv.style.display = 'block';
                 } else {
-                    input.nextElementSibling.style.display = 'none';
+                     if (errorDiv) errorDiv.style.display = 'none';
                 }
             });
-            
-            if (isValid) {
+
+            if (isMainFormValid) {
                 try {
                     const formData = {
                         nome: document.getElementById('name').value,
+                        // Use the value directly from the select (assuming it's the name or ID needed)
                         familia: document.getElementById('familia').value,
                         honorario: document.getElementById('honorario').value,
                         descricao: document.getElementById('description').value,
-                        equipes: $('#equipes').val(),
-                        pontosGanhos: document.getElementById('pontosGanhos').value || 0,
-                        vitorias: document.getElementById('vitorias').value || 0,
-                        empates: document.getElementById('empates').value || 0,
-                        derrotas: document.getElementById('derrotas').value || 0,
+                        equipes: $('#equipes').val() || [], // Get array from Select2
+                        pontosGanhos: parseInt(document.getElementById('pontosGanhos').value) || 0,
+                        vitorias: parseInt(document.getElementById('vitorias').value) || 0,
+                        empates: parseInt(document.getElementById('empates').value) || 0,
+                        derrotas: parseInt(document.getElementById('derrotas').value) || 0,
                         ativo: document.getElementById('ativo').value === 'yes',
-                        tipo: document.getElementById('tipo').value,
+                        tipo: document.getElementById('tipo').value, // Main form type
                         imagem: document.getElementById('imagem').value,
                         compradoPor: document.getElementById('compradoPor').value
+                        // Add timestamp if needed
+                        // createdAt: new Date()
                     };
 
-                    await addDoc(collection(db, 'mitosgameItens'), formData);
+                    console.log("Submitting Main Form Data:", formData); // Log data
+
+                    const docRef = await addDoc(collection(db, 'mitosgameItens'), formData);
+                     console.log("Main form document written with ID: ", docRef.id);
                     alert('Mito criado com sucesso!');
-                    form.reset();
+                    mainForm.reset(); // Reset the main form
+                    // Reset Select2 fields in the main form
                     $('#equipes').val(null).trigger('change');
                     $('#familia').val(null).trigger('change');
+                     $('#compradoPor').val(null).trigger('change'); // Reset compradoPor too
+                     // Clear validation messages
+                    mainForm.querySelectorAll('.error-message').forEach(el => el.style.display = 'none');
+
                 } catch (error) {
                     console.error('Erro ao criar mito:', error);
-                    alert('Erro ao criar mito. Por favor, tente novamente.');
+                    alert('Erro ao criar mito. Verifique o console para detalhes.');
                 }
+            } else {
+                 console.log("Main form validation failed.");
             }
         });
     </script>
