@@ -69,6 +69,13 @@
                     <input type="text" id="familyImage" name="familyImage" required>
                      <div class="error-message">Por favor, insira um URL de imagem.</div>
                 </div>
+                <!-- ****** NEW FIELD START ****** -->
+                <div class="form-group">
+                    <label for="escudoImage">Escudo (URL):</label>
+                    <input type="text" id="escudoImage" name="escudoImage"> <!-- Added field -->
+                     <div class="error-message" style="display: none;">Por favor, insira um URL de escudo válido.</div> <!-- Added error message div -->
+                </div>
+                <!-- ****** NEW FIELD END ****** -->
                 <div class="form-group">
                     <label for="familyCountries">Países:</label>
                     <select id="familyCountries" name="familyCountries[]" multiple="multiple" required>
@@ -219,6 +226,7 @@
         const castaFamilySelectorGroup = document.getElementById('castaFamilySelectorGroup');
         const castaFamilySelect = document.getElementById('castaFamilySelect'); // Modal Parent Family Select
         const createFamilyForm = document.getElementById('createFamilyForm');
+        const escudoImageInput = document.getElementById('escudoImage'); // Added for convenience
 
         openBtn.onclick = function() {
             modal.style.display = "block";
@@ -271,12 +279,17 @@
             const familyNameInput = document.getElementById('familyName');
             const familyImageInput = document.getElementById('familyImage');
             const familyCountriesSelect = document.getElementById('familyCountries');
+            const escudoGroup = escudoImageInput.closest('.form-group'); // Get escudo group
 
             // Reset error messages
             this.closest('.form-group').querySelector('.error-message').style.display = 'none';
             familyNameInput.closest('.form-group').querySelector('.error-message').style.display = 'none';
             familyImageInput.closest('.form-group').querySelector('.error-message').style.display = 'none';
             familyCountriesSelect.closest('.form-group').querySelector('.error-message').style.display = 'none';
+             if (escudoGroup) { // Reset escudo error too
+                 const errorDiv = escudoGroup.querySelector('.error-message');
+                 if (errorDiv) errorDiv.style.display = 'none';
+             }
 
 
             if (selectedType === 'casta') {
@@ -452,42 +465,53 @@
         function validateModalForm() {
             let isValid = true;
             const type = familyTypeSelect.value;
-            const name = document.getElementById('familyName').value.trim();
-            const image = document.getElementById('familyImage').value.trim();
+            const nameInput = document.getElementById('familyName');
+            const name = nameInput.value.trim();
+            const imageInput = document.getElementById('familyImage');
+            const image = imageInput.value.trim();
             const countries = $('#familyCountries').val();
             const parentFamily = castaFamilySelect.value;
+            // Get Escudo Input/Value
+            const escudoInput = document.getElementById('escudoImage'); // Re-declared here for clarity
+            const escudoValue = escudoInput.value.trim();
+
+            // Reset all errors first
+            modal.querySelectorAll('.error-message').forEach(el => el.style.display = 'none');
 
             // Validate Type
             if (!type) {
                 isValid = false;
                 familyTypeSelect.closest('.form-group').querySelector('.error-message').style.display = 'block';
-            } else {
-                familyTypeSelect.closest('.form-group').querySelector('.error-message').style.display = 'none';
             }
 
             // Validate Name
             if (!name) {
                 isValid = false;
-                document.getElementById('familyName').closest('.form-group').querySelector('.error-message').style.display = 'block';
-            } else {
-                 document.getElementById('familyName').closest('.form-group').querySelector('.error-message').style.display = 'none';
+                nameInput.closest('.form-group').querySelector('.error-message').style.display = 'block';
             }
 
              // Validate Image URL (basic check)
+            const imageErrorDiv = imageInput.closest('.form-group').querySelector('.error-message');
             if (!image || !image.startsWith('http')) { // Simple URL check
                 isValid = false;
-                document.getElementById('familyImage').closest('.form-group').querySelector('.error-message').textContent = 'Por favor, insira um URL de imagem válido (começando com http/https).';
-                document.getElementById('familyImage').closest('.form-group').querySelector('.error-message').style.display = 'block';
-            } else {
-                 document.getElementById('familyImage').closest('.form-group').querySelector('.error-message').style.display = 'none';
+                imageErrorDiv.textContent = 'Por favor, insira um URL de imagem válido (começando com http/https).';
+                imageErrorDiv.style.display = 'block';
             }
+
+            // Validate Escudo URL (Optional Example: Check format if not empty)
+            const escudoErrorDiv = escudoInput.closest('.form-group').querySelector('.error-message');
+            if (escudoValue && !escudoValue.startsWith('http')) { // If a value is entered, check if it looks like a URL
+                isValid = false;
+                escudoErrorDiv.textContent = 'Por favor, insira um URL de escudo válido (começando com http/https).';
+                escudoErrorDiv.style.display = 'block';
+            }
+            // If you made escudo required in HTML, the check would be:
+            // if (!escudoValue || !escudoValue.startsWith('http')) { ... isValid = false; ...}
 
              // Validate Countries
             if (!countries || countries.length === 0) {
                 isValid = false;
                 document.getElementById('familyCountries').closest('.form-group').querySelector('.error-message').style.display = 'block';
-            } else {
-                 document.getElementById('familyCountries').closest('.form-group').querySelector('.error-message').style.display = 'none';
             }
 
 
@@ -496,8 +520,6 @@
                 if (!parentFamily) {
                     isValid = false;
                      castaFamilySelectorGroup.querySelector('.error-message').style.display = 'block';
-                } else {
-                     castaFamilySelectorGroup.querySelector('.error-message').style.display = 'none';
                 }
             }
 
@@ -519,6 +541,8 @@
                  nome: document.getElementById('familyName').value.trim(),
                  tipo: itemType,
                  imagem: document.getElementById('familyImage').value.trim(),
+                 // ****** ADDED ESCUDO URL ******
+                 escudoUrl: document.getElementById('escudoImage').value.trim(), // Get escudo URL
                  paises: $('#familyCountries').val() || []
              };
 
@@ -539,6 +563,11 @@
                  console.log("Document written with ID: ", docRef.id);
                  alert('Item (' + itemType + ') criado com sucesso!');
                  modal.style.display = "none";
+                 createFamilyForm.reset(); // Reset the form fields, including the new one
+                 $('#familyCountries').val(null).trigger('change'); // Explicitly reset select2
+                 // Hide error messages again after reset (redundant with openBtn but safe)
+                 modal.querySelectorAll('.error-message').forEach(el => el.style.display = 'none');
+
                  // Reload families in main form dropdown ONLY if a 'familia' was created
                  if (itemType === 'familia') {
                      loadFamiliasMainForm();
