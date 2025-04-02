@@ -9,7 +9,7 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <style>
-        /* --- Previous CSS styles remain the same --- */
+        /* --- CSS styles --- */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         .lab-icon { position: fixed; top: 80px; right: 20px; background-color: #2176ff; color: white; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.2); transition: transform 0.3s ease; z-index: 1500; }
         .lab-icon:hover { transform: scale(1.1); }
@@ -72,6 +72,7 @@
                 <div class="form-group">
                     <label for="familyCountries">Países:</label>
                     <select id="familyCountries" name="familyCountries[]" multiple="multiple" required>
+                        <!-- Add country options here if they are static, or load dynamically -->
                     </select>
                      <div class="error-message">Por favor, selecione pelo menos um país.</div>
                 </div>
@@ -94,16 +95,7 @@
         <div class="form-container">
             <h1>Criar Novo Jogo de Mitos</h1>
             <form id="createMitosForm">
-                <!-- Tipo -->
-                <div class="form-group">
-                    <label for="tipo">Tipo</label>
-                    <select id="tipo" name="tipo" required>
-                        <option value="familia">Família</option>
-                        <option value="casta">Casta</option>
-                         <!-- This might be redundant if the modal is the only way to create families/castas -->
-                         <!-- Consider if this field is still needed here or should be fixed based on context -->
-                    </select>
-                </div>
+                <!-- Tipo field REMOVED -->
 
                 <!-- Nome -->
                 <div class="form-group">
@@ -122,7 +114,7 @@
                     <div class="error-message">Por favor, selecione uma família.</div>
                 </div>
 
-                <!-- Casta (Previously Honorário) - Dynamic -->
+                <!-- Casta -->
                 <div class="form-group">
                     <label for="castaSelect">Casta</label>
                     <select id="castaSelect" name="casta" required disabled>
@@ -205,13 +197,14 @@
         // ****** Firebase Configuration ******
         const firebaseConfig = {
              // --- KEEP YOUR CONFIG HERE ---
-             apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0", // Example - Use your actual key
-             authDomain: "g-games-8a8fc.firebaseapp.com",
-             projectId: "g-games-8a8fc",
-             storageBucket: "g-games-8a8fc.firebasestorage.app",
-             messagingSenderId: "689897349449",
-             appId: "1:689897349449:web:536599794579901beb7a98",
-             measurementId: "G-GTTPJ6G5MD"
+             // Example - Replace with your actual configuration
+             apiKey: "YOUR_API_KEY",
+             authDomain: "YOUR_AUTH_DOMAIN",
+             projectId: "YOUR_PROJECT_ID",
+             storageBucket: "YOUR_STORAGE_BUCKET",
+             messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+             appId: "YOUR_APP_ID",
+             measurementId: "YOUR_MEASUREMENT_ID" // Optional
         };
 
         // ****** Firebase Initialization ******
@@ -227,14 +220,16 @@
         const castaFamilySelect = document.getElementById('castaFamilySelect'); // Modal Parent Family Select
         const createFamilyForm = document.getElementById('createFamilyForm');
 
-        openBtn.onclick = function() { /* ... modal open logic ... */
+        openBtn.onclick = function() {
             modal.style.display = "block";
             createFamilyForm.reset();
-            $('#familyCountries').val(null).trigger('change');
+            $('#familyCountries').val(null).trigger('change'); // Also reset countries
             castaFamilySelectorGroup.style.display = 'none';
             castaFamilySelect.required = false;
             castaFamilySelect.innerHTML = '<option value="">Carregando famílias...</option>';
             modal.querySelectorAll('.error-message').forEach(el => el.style.display = 'none');
+            // Maybe load countries here if dynamic
+            // loadCountriesModal();
         }
         closeBtn.onclick = function() { modal.style.display = "none"; }
         window.onclick = function(event) { if (event.target == modal) { modal.style.display = "none"; } }
@@ -273,7 +268,17 @@
         // ****** Event Listener for Tipo change in MODAL ******
         familyTypeSelect.addEventListener('change', function() {
             const selectedType = this.value;
-            // ... (rest of the modal type change logic remains the same) ...
+            const familyNameInput = document.getElementById('familyName');
+            const familyImageInput = document.getElementById('familyImage');
+            const familyCountriesSelect = document.getElementById('familyCountries');
+
+            // Reset error messages
+            this.closest('.form-group').querySelector('.error-message').style.display = 'none';
+            familyNameInput.closest('.form-group').querySelector('.error-message').style.display = 'none';
+            familyImageInput.closest('.form-group').querySelector('.error-message').style.display = 'none';
+            familyCountriesSelect.closest('.form-group').querySelector('.error-message').style.display = 'none';
+
+
             if (selectedType === 'casta') {
                 castaFamilySelectorGroup.style.display = 'block';
                 castaFamilySelect.required = true;
@@ -282,24 +287,28 @@
                 castaFamilySelectorGroup.style.display = 'none';
                 castaFamilySelect.required = false;
             }
+             // Hide error message for the casta family selector specifically
              castaFamilySelectorGroup.querySelector('.error-message').style.display = 'none';
         });
 
         // ****** Data Loading Functions for MAIN FORM ******
-        async function loadUsers() { /* ... loadUsers code ... */
+        async function loadUsers() {
              try {
                 const querySnapshot = await getDocs(collection(db, 'users'));
                 const select = document.getElementById('compradoPor');
                 select.innerHTML = '<option value="">Selecione o comprador</option>';
                 querySnapshot.forEach((doc) => {
                     const data = doc.data();
-                    if (data.nomeDeUsuario) {
-                        const option = new Option(data.nomeDeUsuario, data.nomeDeUsuario);
+                    if (data.nomeDeUsuario) { // Make sure the user has a username
+                        const option = new Option(data.nomeDeUsuario, data.nomeDeUsuario); // Use username as both text and value
                         select.appendChild(option);
                     }
                 });
                 $(select).trigger('change'); // Update Select2
-            } catch (error) { console.error("Erro ao carregar usuários: ", error); }
+            } catch (error) {
+                console.error("Erro ao carregar usuários: ", error);
+                document.getElementById('compradoPor').innerHTML = '<option value="">Erro ao carregar</option>';
+            }
         }
 
         async function loadFamiliasMainForm() {
@@ -326,19 +335,38 @@
             }
         }
 
-        async function loadEquipes() { /* ... loadEquipes code ... */
+        async function loadEquipes() {
             try {
                 const querySnapshot = await getDocs(collection(db, 'clubes'));
                 const select = document.getElementById('equipes');
                 select.innerHTML = ''; // Clear existing
                 querySnapshot.forEach((doc) => {
                     const data = doc.data();
-                    const option = new Option(data.nome, data.nome);
-                    select.appendChild(option);
+                    if(data.nome) { // Ensure club has a name
+                       const option = new Option(data.nome, data.nome); // Use name as both text and value
+                       select.appendChild(option);
+                    }
                 });
                 $(select).trigger('change'); // Update Select2
-            } catch (error) { console.error("Erro ao carregar equipes: ", error); }
+            } catch (error) {
+                 console.error("Erro ao carregar equipes: ", error);
+                 document.getElementById('equipes').innerHTML = ''; // Clear on error
+            }
         }
+
+        // Function to load Countries (Example - adapt if you load from Firestore)
+        function loadCountriesModal() {
+            const select = document.getElementById('familyCountries');
+            select.innerHTML = ''; // Clear existing
+            // Example static list - Replace with dynamic loading if needed
+            const countries = ["Brasil", "Portugal", "Espanha", "Argentina", "Itália"];
+            countries.forEach(country => {
+                const option = new Option(country, country);
+                select.appendChild(option);
+            });
+            $(select).trigger('change'); // Update Select2
+        }
+
 
         // ****** Function to load Castas into MAIN FORM based on selected Family ******
         async function loadCastasForSelectedFamily(familyId) {
@@ -364,15 +392,17 @@
 
                 if (querySnapshot.empty) {
                     castaSelectMain.innerHTML = '<option value="">Nenhuma casta encontrada para esta família</option>';
+                     castaSelectMain.disabled = true; // Keep disabled if no castas found
                 } else {
                     querySnapshot.forEach((doc) => {
                         const data = doc.data();
                         // Display Casta Name, use Casta Name as Value for the form submission
-                        const option = new Option(data.nome, data.nome);
+                        const option = new Option(data.nome, data.nome); // Use name as value
                         castaSelectMain.appendChild(option);
                     });
+                     castaSelectMain.disabled = false; // Enable dropdown ONLY if castas are found
                 }
-                 castaSelectMain.disabled = false; // Enable dropdown
+
             } catch (error) {
                 console.error(`Erro ao carregar castas para família ${familyId}: `, error);
                 castaSelectMain.innerHTML = '<option value="">Erro ao carregar castas</option>';
@@ -387,7 +417,11 @@
             const selectedFamilyId = this.value; // Get the selected family's Document ID
             loadCastasForSelectedFamily(selectedFamilyId);
             // Hide potential error message when family changes
-             castaSelectMain.closest('.form-group').querySelector('.error-message').style.display = 'none';
+             const castaGroup = castaSelectMain.closest('.form-group');
+             if (castaGroup) {
+                const errorDiv = castaGroup.querySelector('.error-message');
+                if (errorDiv) errorDiv.style.display = 'none';
+             }
         });
 
 
@@ -406,24 +440,85 @@
             loadFamiliasMainForm(); // Load families first
             loadEquipes();
             loadUsers();
-            // Initially disable casta dropdown
+            // Initially disable casta dropdown and set placeholder
             loadCastasForSelectedFamily(null); // Call with null to set initial disabled state
 
+            // Load countries for the modal (example)
+            loadCountriesModal(); // Load static countries or start dynamic loading
+
         });
+
+        // Basic modal form validation function
+        function validateModalForm() {
+            let isValid = true;
+            const type = familyTypeSelect.value;
+            const name = document.getElementById('familyName').value.trim();
+            const image = document.getElementById('familyImage').value.trim();
+            const countries = $('#familyCountries').val();
+            const parentFamily = castaFamilySelect.value;
+
+            // Validate Type
+            if (!type) {
+                isValid = false;
+                familyTypeSelect.closest('.form-group').querySelector('.error-message').style.display = 'block';
+            } else {
+                familyTypeSelect.closest('.form-group').querySelector('.error-message').style.display = 'none';
+            }
+
+            // Validate Name
+            if (!name) {
+                isValid = false;
+                document.getElementById('familyName').closest('.form-group').querySelector('.error-message').style.display = 'block';
+            } else {
+                 document.getElementById('familyName').closest('.form-group').querySelector('.error-message').style.display = 'none';
+            }
+
+             // Validate Image URL (basic check)
+            if (!image || !image.startsWith('http')) { // Simple URL check
+                isValid = false;
+                document.getElementById('familyImage').closest('.form-group').querySelector('.error-message').textContent = 'Por favor, insira um URL de imagem válido (começando com http/https).';
+                document.getElementById('familyImage').closest('.form-group').querySelector('.error-message').style.display = 'block';
+            } else {
+                 document.getElementById('familyImage').closest('.form-group').querySelector('.error-message').style.display = 'none';
+            }
+
+             // Validate Countries
+            if (!countries || countries.length === 0) {
+                isValid = false;
+                document.getElementById('familyCountries').closest('.form-group').querySelector('.error-message').style.display = 'block';
+            } else {
+                 document.getElementById('familyCountries').closest('.form-group').querySelector('.error-message').style.display = 'none';
+            }
+
+
+            // Validate Parent Family if type is Casta
+            if (type === 'casta') {
+                if (!parentFamily) {
+                    isValid = false;
+                     castaFamilySelectorGroup.querySelector('.error-message').style.display = 'block';
+                } else {
+                     castaFamilySelectorGroup.querySelector('.error-message').style.display = 'none';
+                }
+            }
+
+            return isValid;
+        }
+
 
         // ****** Handle MODAL Form Submission ******
         createFamilyForm.addEventListener('submit', async function(e) {
              e.preventDefault();
-             // ... (modal validation logic remains the same) ...
-              let isModalValid = true;
-              // ... validation checks ...
-              if (!isModalValid) return;
+
+             if (!validateModalForm()) {
+                 console.log("Modal validation failed.");
+                 return; // Stop submission if validation fails
+             }
 
              const itemType = familyTypeSelect.value;
              const itemData = {
-                 nome: document.getElementById('familyName').value,
+                 nome: document.getElementById('familyName').value.trim(),
                  tipo: itemType,
-                 imagem: document.getElementById('familyImage').value,
+                 imagem: document.getElementById('familyImage').value.trim(),
                  paises: $('#familyCountries').val() || []
              };
 
@@ -432,88 +527,130 @@
                  if (selectedFamilyId) {
                      itemData.familiaId = selectedFamilyId; // Store parent family ID
                  } else {
+                     // This case should be caught by validation, but double-check
                      alert('Erro: Família não selecionada para a casta.'); return;
                  }
              }
 
+             console.log("Submitting Modal Data:", itemData);
+
              try {
                  const docRef = await addDoc(collection(db, 'mitosgameItens'), itemData);
-                 alert('Item criado com sucesso!');
+                 console.log("Document written with ID: ", docRef.id);
+                 alert('Item (' + itemType + ') criado com sucesso!');
                  modal.style.display = "none";
-                 loadFamiliasMainForm(); // Reload families in main form dropdown after creating new item
+                 // Reload families in main form dropdown ONLY if a 'familia' was created
+                 if (itemType === 'familia') {
+                     loadFamiliasMainForm();
+                 }
              } catch (error) {
                  console.error("Error creating item: ", error);
                  alert('Erro ao criar item. Verifique o console para detalhes.');
              }
         });
 
+        // Basic main form validation function
+        function validateMainForm() {
+             let isValid = true;
+             const requiredInputs = mainForm.querySelectorAll('[required]:not([disabled])'); // Check only enabled required fields
+
+             mainForm.querySelectorAll('.error-message').forEach(el => el.style.display = 'none'); // Hide all errors first
+
+             requiredInputs.forEach(input => {
+                 const formGroup = input.closest('.form-group');
+                 const errorDiv = formGroup ? formGroup.querySelector('.error-message') : null;
+                 let value = $(input).val(); // Use jQuery val() for Select2 compatibility
+
+                 // Check if the field is visible and required
+                 if(input.offsetParent !== null) { // Basic visibility check
+                    if (!value || (Array.isArray(value) && value.length === 0)) {
+                        isValid = false;
+                        if (errorDiv) errorDiv.style.display = 'block';
+                    }
+                 }
+             });
+
+            // Specific validation for image URL
+            const imageUrlInput = document.getElementById('imagem');
+            const imageUrl = imageUrlInput.value.trim();
+            const imageErrorDiv = imageUrlInput.closest('.form-group').querySelector('.error-message');
+            if (!imageUrl || !imageUrl.startsWith('http')) {
+                isValid = false;
+                if (imageErrorDiv) {
+                    imageErrorDiv.textContent = 'Por favor, insira um URL de imagem válido (começando com http/https).';
+                    imageErrorDiv.style.display = 'block';
+                }
+            } else {
+                 if (imageErrorDiv) imageErrorDiv.style.display = 'none';
+            }
+
+
+             return isValid;
+        }
+
+
         // ****** Handle MAIN Form Submission ******
         mainForm.addEventListener('submit', async function(e) {
             e.preventDefault();
 
-            // Main form validation
-            let isMainFormValid = true;
-            const mainRequiredInputs = mainForm.querySelectorAll('[required]:not(:disabled)'); // Don't validate disabled fields initially
-
-            mainRequiredInputs.forEach(input => {
-                 const formGroup = input.closest('.form-group');
-                 const errorDiv = formGroup ? formGroup.querySelector('.error-message') : null;
-                 let value = $(input).val();
-
-                 if (!value || (Array.isArray(value) && value.length === 0)) {
-                     // Check if the element is actually visible and enabled before marking invalid
-                     if(input.offsetParent !== null && !input.disabled) {
-                        isMainFormValid = false;
-                        if (errorDiv) errorDiv.style.display = 'block';
-                    } else {
-                         if (errorDiv) errorDiv.style.display = 'none'; // Hide errors for non-relevant fields
-                    }
-                 } else {
-                      if (errorDiv) errorDiv.style.display = 'none';
-                 }
-            });
-
-            if (isMainFormValid) {
-                try {
-                    const formData = {
-                        nome: document.getElementById('name').value,
-                        // **** Get selected Family ID and Casta Name ****
-                        familia: familiaSelectMain.value, // Stores the Family Document ID
-                        casta: castaSelectMain.value,     // Stores the selected Casta Name
-                        //-----------------------------------------------
-                        descricao: document.getElementById('description').value,
-                        equipes: $('#equipes').val() || [],
-                        pontosGanhos: parseInt(document.getElementById('pontosGanhos').value) || 0,
-                        vitorias: parseInt(document.getElementById('vitorias').value) || 0,
-                        empates: parseInt(document.getElementById('empates').value) || 0,
-                        derrotas: parseInt(document.getElementById('derrotas').value) || 0,
-                        ativo: document.getElementById('ativo').value === 'yes',
-                        tipo: document.getElementById('tipo').value, // Main form type (might need review)
-                        imagem: document.getElementById('imagem').value,
-                        compradoPor: document.getElementById('compradoPor').value
-                    };
-
-                    console.log("Submitting Main Form Data:", formData);
-
-                    const docRef = await addDoc(collection(db, 'mitosgameItens'), formData);
-                    alert('Mito criado com sucesso!');
-                    mainForm.reset();
-                    // Reset Select2 fields
-                    $('#equipes').val(null).trigger('change');
-                    $('#familia').val(null).trigger('change'); // This will trigger the casta reset via its event listener
-                    $('#compradoPor').val(null).trigger('change');
-                    // Explicitly reset/disable casta select as well
-                    loadCastasForSelectedFamily(null);
-                    mainForm.querySelectorAll('.error-message').forEach(el => el.style.display = 'none');
-
-                } catch (error) {
-                    console.error('Erro ao criar mito:', error);
-                    alert('Erro ao criar mito. Verifique o console para detalhes.');
-                }
-            } else {
+            if (!validateMainForm()) {
                  console.log("Main form validation failed.");
+                 return; // Stop if validation fails
+            }
+
+            try {
+                // Prepare data for Firestore
+                 const formData = {
+                    nome: document.getElementById('name').value.trim(),
+                    familia: familiaSelectMain.value, // Stores the Family Document ID
+                    casta: castaSelectMain.value,     // Stores the selected Casta Name (or empty string if none selected/applicable)
+                    descricao: document.getElementById('description').value.trim(),
+                    equipes: $('#equipes').val() || [],
+                    pontosGanhos: parseInt(document.getElementById('pontosGanhos').value) || 0,
+                    vitorias: parseInt(document.getElementById('vitorias').value) || 0,
+                    empates: parseInt(document.getElementById('empates').value) || 0,
+                    derrotas: parseInt(document.getElementById('derrotas').value) || 0,
+                    ativo: document.getElementById('ativo').value === 'yes',
+                    // 'tipo' field removed from here
+                    imagem: document.getElementById('imagem').value.trim(),
+                    compradoPor: document.getElementById('compradoPor').value // Should be user's unique ID or username
+                };
+
+                // Determine the 'tipo' based on whether a 'casta' is selected
+                // This assumes that if a Casta is selected, the item *is* a Casta, otherwise it's a Familia-level item
+                // This might need adjustment based on your exact data model logic.
+                // If this form is *always* for creating something linked to Familia/Casta,
+                // you might need a different approach or reconsider removing the original Tipo field.
+                // For now, let's assume: if Casta has a value, it's a 'casta' type item being created/linked,
+                // otherwise, it's implicitly related to a 'familia' but maybe not a 'familia' itself.
+                // Let's add a 'mitoType' or similar field if needed, or infer based on 'casta'.
+                 formData.mitoType = formData.casta ? 'casta_item' : 'familia_item'; // Example derived type
+                 // OR, maybe the item created here *always* represents a specific 'player' or 'character'
+                 // that BELONGS TO a familia and potentially a casta. If so, 'tipo' might not be needed here.
+
+
+                console.log("Submitting Main Form Data:", formData);
+
+                // Add the document to the 'mitosgameItens' collection (or a different one if appropriate)
+                const docRef = await addDoc(collection(db, 'mitosgameItens'), formData);
+                console.log("Document written with ID: ", docRef.id);
+                alert('Mito criado com sucesso!');
+                mainForm.reset();
+
+                // Reset Select2 fields properly
+                $('#equipes').val(null).trigger('change');
+                $('#familia').val(null).trigger('change'); // This will trigger the casta reset via its event listener
+                $('#compradoPor').val(null).trigger('change');
+                // Explicitly reset/disable casta select as well
+                loadCastasForSelectedFamily(null); // Resets casta dropdown to initial state
+                mainForm.querySelectorAll('.error-message').forEach(el => el.style.display = 'none'); // Hide errors
+
+            } catch (error) {
+                console.error('Erro ao criar mito:', error);
+                alert('Erro ao criar mito. Verifique o console para detalhes.');
             }
         });
+
     </script>
 </body>
 </html>
