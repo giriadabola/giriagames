@@ -20,7 +20,7 @@
         h1 { color: #333; margin-bottom: 24px; font-size: 24px; }
         .form-group { margin-bottom: 20px; }
         label { display: block; margin-bottom: 8px; color: #333; font-weight: 500; }
-        input[type="text"], input[type="number"], textarea, select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; background-color: white; }
+        input[type="text"], input[type="number"], textarea, select, input[type="datetime-local"] { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; background-color: white; }
         select:disabled { background-color: #e9ecef; cursor: not-allowed;}
         textarea { height: 100px; resize: vertical; }
         .btn { background-color: #2176ff; color: white; border: none; padding: 12px 24px; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: 500; transition: background-color 0.3s ease; width: 100%; }
@@ -28,7 +28,7 @@
         .btn-danger { background-color: #dc3545; margin-top: 12px; }
         .btn-danger:hover { background-color: #c82333; }
         .error-message { color: #dc3545; font-size: 14px; margin-top: 4px; display: none; }
-        .games-list { list-style: none; margin-top: 16px; padding-left: 0; max-height: 200px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px;}
+        .games-list { list-style: none; margin-top: 16px; padding-left: 0; max-height: 200px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; display: none; }
         .game-item { background: #f8f9fa; border-bottom: 1px solid #ddd; padding: 12px; cursor: pointer; transition: background-color 0.2s ease; }
         .game-item:last-child { border-bottom: none; }
         .game-item:hover { background: #e9ecef; }
@@ -94,7 +94,7 @@
 
                 <!-- Equipes -->
                 <div class="form-group">
-                    <label for="equipes">Equipes</label>
+                    <label for="equipes">Equipas</label>
                     <select id="equipes" name="equipes[]" multiple="multiple" required>
                          <!-- Options loaded dynamically (assuming loadEquipes exists or is added) -->
                     </select>
@@ -145,6 +145,21 @@
                     </select>
                 </div>
 
+                <!-- Visível -->
+                <div class="form-group">
+                    <label for="visivel">Visível?</label>
+                    <select id="visivel" name="visivel" required>
+                        <option value="no">Não</option>
+                        <option value="yes">Sim</option>
+                    </select>
+                </div>
+
+                <!-- Data de Ativação -->
+                <div class="form-group">
+                    <label for="dataAtivacao">Data de Ativação (Opcional)</label>
+                    <input type="datetime-local" id="dataAtivacao" name="dataAtivacao">
+                </div>
+
                 <!-- Tipo (Readonly - Consider removing or making dynamic if needed) -->
                 <div class="form-group">
                     <label for="tipo">Tipo</label>
@@ -160,7 +175,7 @@
 
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-        import { getFirestore, collection, getDocs, doc, updateDoc, deleteDoc, query, where, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js'; // Added onSnapshot if real-time updates are desired
+        import { getFirestore, collection, getDocs, doc, updateDoc, deleteDoc, query, where, onSnapshot, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js'; // Import getDoc
 
         const firebaseConfig = {
              // --- KEEP YOUR CONFIG HERE ---
@@ -200,6 +215,21 @@
 
             // Disable Casta initially
             initializeCastaSelect();
+
+            const searchInput = document.getElementById('searchGame');
+            const gamesList = document.getElementById('gamesList');
+
+            // Mostra a lista quando o input de pesquisa recebe foco (clique ou tab)
+            searchInput.addEventListener('focus', function() {
+                gamesList.style.display = 'block';
+            });
+
+            // Opcional: Esconde a lista quando o input perde o foco (clica fora)
+            // searchInput.addEventListener('blur', function() {
+            //     setTimeout(() => {
+            //         gamesList.style.display = 'none';
+            //     }, 100);
+            // });
         });
 
         function initializeCastaSelect() {
@@ -213,7 +243,7 @@
             try {
                 const querySnapshot = await getDocs(collection(db, 'users'));
                 const select = document.getElementById('compradoPor');
-                select.innerHTML = '<option value="">Selecione o comprador</option>'; // Clear previous
+                select.innerHTML = '<option value="">Selecione o comprador</option>';
                 querySnapshot.forEach((doc) => {
                     const data = doc.data();
                     if (data.nomeDeUsuario) {
@@ -221,7 +251,7 @@
                         select.appendChild(option);
                     }
                 });
-                $(select).trigger('change.select2'); // Update select2
+                $(select).trigger('change.select2');
             } catch (error) {
                 console.error("Erro ao carregar usuários: ", error);
                  document.getElementById('compradoPor').innerHTML = '<option value="">Erro ao carregar</option>';
@@ -234,14 +264,14 @@
             try {
                 const q = query(collection(db, 'mitosgameItens'), where("tipo", "==", "familia"));
                 const querySnapshot = await getDocs(q);
-                familiaSelect.innerHTML = '<option value="">Selecione a família</option>'; // Clear previous
+                familiaSelect.innerHTML = '<option value="">Selecione a família</option>';
                 querySnapshot.forEach((doc) => {
                     const data = doc.data();
                     // **** Use Document ID as VALUE ****
                     const option = new Option(data.nome, doc.id);
                     familiaSelect.appendChild(option);
                 });
-                 $(familiaSelect).trigger('change.select2'); // Update select2
+                 $(familiaSelect).trigger('change.select2');
             } catch (error) {
                 console.error("Erro ao carregar famílias: ", error);
                  familiaSelect.innerHTML = '<option value="">Erro ao carregar</option>';
@@ -255,13 +285,13 @@
             try {
                 const querySnapshot = await getDocs(collection(db, 'clubes'));
                 const select = document.getElementById('equipes');
-                select.innerHTML = ''; // Clear existing
+                select.innerHTML = '';
                 querySnapshot.forEach((doc) => {
                     const data = doc.data();
-                    const option = new Option(data.nome, data.nome); // Or use ID if preferred
+                    const option = new Option(data.nome, data.nome);
                     select.appendChild(option);
                 });
-                 $(select).trigger('change.select2'); // Update select2
+                 $(select).trigger('change.select2');
             } catch (error) {
                 console.error("Erro ao carregar equipes: ", error);
             }
@@ -269,17 +299,13 @@
 
 
         // Carregar itens editáveis na lista de busca
-        // Consider which types should be editable here. Example: all except 'familia'.
         async function loadEditableItems() {
             try {
-                // Example: Load items that are NOT of type 'familia'. Adjust as needed.
-                const q = query(collection(db, 'mitosgameItens')); // Load all for now, filter later if needed
-                                // where("tipo", "!=", "familia")); // Example filter
+                const q = query(collection(db, 'mitosgameItens'));
 
-                // Use onSnapshot for real-time updates (optional)
                 onSnapshot(q, (querySnapshot) => {
-                    gamesListUl.innerHTML = ''; // Clear list
-                    allItemsCache = []; // Clear cache
+                    gamesListUl.innerHTML = '';
+                    allItemsCache = [];
                     if (querySnapshot.empty) {
                         gamesListUl.innerHTML = '<li>Nenhum item encontrado.</li>';
                         return;
@@ -287,16 +313,15 @@
                     querySnapshot.forEach((doc) => {
                         const data = doc.data();
                         const item = { id: doc.id, ...data };
-                        allItemsCache.push(item); // Add to cache
+                        allItemsCache.push(item);
 
                         const li = document.createElement('li');
                         li.className = 'game-item';
                         li.textContent = data.nome || `Item sem nome (ID: ${doc.id})`;
-                        li.dataset.id = doc.id; // Store id in dataset
-                        li.onclick = () => loadGameData(item); // Pass the whole item object
+                        li.dataset.id = doc.id;
+                        li.onclick = () => loadGameData(item);
                         gamesListUl.appendChild(li);
                     });
-                    // Apply initial search filter if any text is present
                     filterGamesList();
                 }, (error) => {
                      console.error("Erro ao carregar itens editáveis (real-time): ", error);
@@ -325,15 +350,15 @@
 
         // Function to load Castas based on selected Family ID (for Edit form)
         async function loadCastasForSelectedFamilyEdit(familyId) {
-             console.log(`Loading castas for family ID: ${familyId}`); // Debug
+             console.log(`Loading castas for family ID: ${familyId}`);
              if (!familyId) {
-                 initializeCastaSelect(); // Reset to initial disabled state
+                 initializeCastaSelect();
                  return;
              }
 
              castaSelect.disabled = true;
              castaSelect.innerHTML = '<option value="">Carregando castas...</option>';
-             $(castaSelect).trigger('change'); // Update Select2 appearance
+             $(castaSelect).trigger('change');
 
              try {
                  const q = query(collection(db, 'mitosgameItens'),
@@ -341,7 +366,7 @@
                                  where("familiaId", "==", familyId));
                  const querySnapshot = await getDocs(q);
 
-                 castaSelect.innerHTML = '<option value="">Selecione a casta</option>'; // Default prompt
+                 castaSelect.innerHTML = '<option value="">Selecione a casta</option>';
 
                  if (querySnapshot.empty) {
                      console.log("No castas found for this family.");
@@ -349,19 +374,18 @@
                  } else {
                      querySnapshot.forEach((doc) => {
                          const data = doc.data();
-                         // Use Casta Name as both Text and Value
                          const option = new Option(data.nome, data.nome);
                          castaSelect.appendChild(option);
-                         console.log(`Added casta option: ${data.nome}`); // Debug
+                         console.log(`Added casta option: ${data.nome}`);
                      });
                  }
-                 castaSelect.disabled = false; // Enable dropdown
+                 castaSelect.disabled = false;
              } catch (error) {
                  console.error(`Erro ao carregar castas (Edit) para família ${familyId}: `, error);
                  castaSelect.innerHTML = '<option value="">Erro ao carregar</option>';
                  castaSelect.disabled = true;
              } finally {
-                 $(castaSelect).trigger('change'); // Ensure Select2 updates appearance
+                 $(castaSelect).trigger('change');
              }
         }
 
@@ -370,8 +394,8 @@
         async function loadGameData(gameData) {
             if (!gameData || !gameData.id) {
                 console.error("Invalid game data provided to loadGameData");
-                editForm.reset(); // Reset form if data is bad
-                 initializeCastaSelect(); // Ensure casta is reset
+                editForm.reset();
+                 initializeCastaSelect();
                  $('#familia').val(null).trigger('change');
                  $('#equipes').val(null).trigger('change');
                  $('#compradoPor').val(null).trigger('change');
@@ -390,27 +414,26 @@
                 console.warn("Selected LI element not found in the list for ID:", gameData.id);
             }
 
-            // --- Populate standard fields ---
+            // --- Populate standard fields based on user mapping ---
             document.getElementById('name').value = gameData.nome || '';
-            document.getElementById('description').value = gameData.description || ''; // Changed from 'descricao' based on create form
-            document.getElementById('imagem').value = gameData.imagem || '';
+            document.getElementById('familia').value = gameData.familia || ''; // Assuming gameData.familia is the Family ID
+            document.getElementById('description').value = gameData.descricao || '';
+            $('#compradoPor').val(gameData.compradoPor || '').trigger('change');
             document.getElementById('pontosGanhos').value = gameData.pontosGanhos || 0;
             document.getElementById('vitorias').value = gameData.vitorias || 0;
             document.getElementById('empates').value = gameData.empates || 0;
             document.getElementById('derrotas').value = gameData.derrotas || 0;
-            document.getElementById('ativo').value = gameData.ativo ? 'yes' : 'no'; // Handle boolean 'ativo' from create form
-            document.getElementById('tipo').value = gameData.tipo || 'N/A'; // Display the actual type
-
-            // --- Handle Select2 fields (except Familia/Casta initially) ---
-            // Comprado Por
-             $('#compradoPor').val(gameData.compradoPor || '').trigger('change');
-             // Equipes
-             $('#equipes').val(gameData.equipes || []).trigger('change');
-
+            document.getElementById('ativo').value = gameData.ativo ? 'yes' : 'no';
+            document.getElementById('visivel').value = gameData.visivel === true ? 'yes' : 'no';
+            document.getElementById('dataAtivacao').value = gameData.dataAtivacao || '';
+            $('#equipes').val(gameData.equipes || []).trigger('change');
+            document.getElementById('imagem').value = gameData.imagem || '';
+            // Campo "Tipo" corrigido para usar gameData.mitoType
+            document.getElementById('tipo').value = gameData.mitoType || 'N/A';
 
             // --- Handle Familia and Casta (Asynchronously) ---
             const familyIdToSelect = gameData.familia || ''; // Should be the Family ID
-             const castaNameToSelect = gameData.casta || ''; // Should be the Casta Name
+            const castaIdToSelect = gameData.casta || ''; //  ID of the Casta
 
             console.log(`Attempting to select Family ID: ${familyIdToSelect}`);
              // Set Familia value
@@ -418,9 +441,25 @@
 
             // Wait for Castas to load based on the selected Familia
              if (familyIdToSelect) {
-                 await loadCastasForSelectedFamilyEdit(familyIdToSelect); // Wait here!
-                 console.log(`Castas loaded. Attempting to select Casta Name: ${castaNameToSelect}`);
-                 $('#castaSelect').val(castaNameToSelect).trigger('change'); // Set Casta value AFTER they are loaded
+                 await loadCastasForSelectedFamilyEdit(familyIdToSelect); // Wait for castas to load first
+
+                 let castaName = '';
+                 if (castaIdToSelect) {
+                     try {
+                         const castaDoc = await getDoc(doc(db, 'mitosgameItens', castaIdToSelect));
+                         if (castaDoc.exists()) {
+                             const castaData = castaDoc.data();
+                             castaName = castaData.nome || ''; // Get casta name from document
+                             console.log(`Fetched Casta Name: ${castaName} for ID: ${castaIdToSelect}`);
+                         } else {
+                             console.warn(`Casta document not found for ID: ${castaIdToSelect}`);
+                         }
+                     } catch (error) {
+                         console.error("Error fetching casta document: ", error);
+                     }
+                 }
+                 console.log(`Attempting to select Casta Name: ${castaName}`);
+                 $('#castaSelect').val(castaName).trigger('change'); // Set Casta value AFTER they are loaded and fetched
              } else {
                  // If no family was associated, ensure Casta is reset/disabled
                  initializeCastaSelect();
@@ -433,10 +472,7 @@
         familiaSelect.addEventListener('change', function() {
             const selectedFamilyId = this.value;
             console.log("Family changed in edit form to ID:", selectedFamilyId);
-            loadCastasForSelectedFamilyEdit(selectedFamilyId); // Load corresponding castas
-             // Optionally clear the casta selection when family changes manually
-             // $('#castaSelect').val(null).trigger('change');
-             // Hide potential error message when family changes
+            loadCastasForSelectedFamilyEdit(selectedFamilyId);
              castaSelect.closest('.form-group').querySelector('.error-message').style.display = 'none';
         });
 
@@ -455,8 +491,7 @@
                 const val = $(input).val();
                  if (!val || (Array.isArray(val) && val.length === 0)) {
                      isFormValid = false;
-                     // Show error message (assuming structure .form-group > .error-message)
-                    const errorDiv = input.closest('.form-group')?.querySelector('.error-message');
+                     const errorDiv = input.closest('.form-group')?.querySelector('.error-message');
                     if(errorDiv) errorDiv.style.display = 'block';
                  } else {
                      const errorDiv = input.closest('.form-group')?.querySelector('.error-message');
@@ -474,11 +509,9 @@
                 const gameRef = doc(db, 'mitosgameItens', currentGameId);
                 const formData = {
                     nome: document.getElementById('name').value,
-                    // **** Send Family ID and Casta Name ****
-                    familia: familiaSelect.value, // Sends the Family Document ID
-                    casta: castaSelect.value,     // Sends the selected Casta Name
-                    //---------------------------------------
-                    description: document.getElementById('description').value, // Changed from 'descricao'
+                    familia: familiaSelect.value,
+                    casta: castaSelect.value,
+                    description: document.getElementById('description').value,
                     equipes: $('#equipes').val() || [],
                     imagem: document.getElementById('imagem').value,
                     compradoPor: document.getElementById('compradoPor').value,
@@ -486,23 +519,22 @@
                     vitorias: parseInt(document.getElementById('vitorias').value) || 0,
                     empates: parseInt(document.getElementById('empates').value) || 0,
                     derrotas: parseInt(document.getElementById('derrotas').value) || 0,
-                    ativo: document.getElementById('ativo').value === 'yes', // Save as boolean
-                    tipo: document.getElementById('tipo').value // Keep existing type read from doc
+                    ativo: document.getElementById('ativo').value === 'yes',
+                    visivel: document.getElementById('visivel').value === 'yes',
+                    dataAtivacao: document.getElementById('dataAtivacao').value,
+                    tipo: document.getElementById('tipo').value // You can keep this as is, or use 'mitoType' if you prefer to send back the same field name
                 };
 
-                console.log("Updating item with data:", formData); // Debug submitted data
+                console.log("Updating item with data:", formData);
 
                 await updateDoc(gameRef, formData);
                 alert('Item atualizado com sucesso!');
-                // Optionally update the item in the list visually without full reload
                 const updatedItemIndex = allItemsCache.findIndex(item => item.id === currentGameId);
                  if (updatedItemIndex > -1) {
-                     allItemsCache[updatedItemIndex] = { id: currentGameId, ...formData }; // Update cache
+                     allItemsCache[updatedItemIndex] = { id: currentGameId, ...formData };
                      const li = gamesListUl.querySelector(`li[data-id='${currentGameId}']`);
-                     if(li) li.textContent = formData.nome; // Update list text
+                     if(li) li.textContent = formData.nome;
                  }
-                 // No need to call loadEditableItems if using onSnapshot, it updates automatically
-                 // If not using onSnapshot, uncomment: loadEditableItems();
             } catch (error) {
                 console.error("Erro ao atualizar item: ", error);
                 alert('Erro ao atualizar item. Verifique o console para detalhes.');
@@ -524,16 +556,14 @@
                 try {
                     await deleteDoc(doc(db, 'mitosgameItens', currentGameId));
                     alert(`"${itemName}" excluído com sucesso!`);
-                    editForm.reset(); // Reset form fields
-                    $('#familia').val(null).trigger('change'); // Reset selects
+                    editForm.reset();
+                    $('#familia').val(null).trigger('change');
                     $('#equipes').val(null).trigger('change');
                     $('#compradoPor').val(null).trigger('change');
-                    initializeCastaSelect(); // Reset casta select
-                    currentGameId = null; // Clear selected ID
-                    document.querySelectorAll('.game-item').forEach(item => item.classList.remove('selected')); // Remove highlight
+                    initializeCastaSelect();
+                    currentGameId = null;
+                    document.querySelectorAll('.game-item').forEach(item => item.classList.remove('selected'));
 
-                    // No need to call loadEditableItems if using onSnapshot
-                     // If not using onSnapshot, uncomment: loadEditableItems();
                 } catch (error) {
                     console.error("Erro ao excluir item: ", error);
                     alert('Erro ao excluir item. Verifique o console para detalhes.');
