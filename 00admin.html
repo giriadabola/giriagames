@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <title>Painel Administrativo</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 30px;
+      background: #f4f4f4;
+      max-width: 1200px;
+      margin: auto;
+    }
+
+    h1, h2 {
+      color: #2d89ef;
+    }
+
+    section {
+      background: white;
+      border-radius: 10px;
+      padding: 20px;
+      margin-bottom: 30px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.05);
+    }
+
+    input[type="text"], input[type="date"] {
+      padding: 8px;
+      margin: 8px 0;
+      width: 300px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+    }
+
+    button {
+      padding: 8px 16px;
+      background: #2d89ef;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      margin-top: 8px;
+    }
+
+    button:hover {
+      background: #1b5dbf;
+    }
+
+    ul {
+      list-style: none;
+      padding-left: 0;
+    }
+
+    ul li {
+      margin-bottom: 5px;
+    }
+
+    .calendar {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    .day {
+      background: #fff;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      padding: 10px 12px;
+      min-height: 100px;
+      min-width: 180px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    }
+
+    .day-header {
+  font-weight: bold;
+  color: #2d89ef;
+  margin-bottom: 6px;
+}
+
+    .primeiro-nome {
+      color: #333;
+      font-weight: normal;
+      font-size: 0.95em;
+    }
+
+    .month-header {
+      font-size: 1.2em;
+      font-weight: bold;
+      margin: 20px 0 10px;
+      color: #444;
+    }
+
+    .remove-btn {
+      background: #e74c3c;
+      color: white;
+      font-size: 0.8em;
+      padding: 4px 8px;
+      margin-left: 10px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .nomes {
+  margin-top: 5px;
+  padding-left: 0;
+}
+
+    .nomes li {
+  font-size: 0.9em;
+  color: #333;
+  list-style: none;
+}
+  </style>
+</head>
+<body>
+
+<h1>Painel Administrativo</h1>
+
+<section>
+  <h2>➕ Criar nova data de evento</h2>
+  <input type="date" id="novaData">
+  <button onclick="criarData()">Adicionar</button>
+  <div id="datasCriadas"></div>
+</section>
+
+<section>
+  <h2>📅 Calendário de confirmações</h2>
+  <div id="calendarioContainer"></div>
+</section>
+
+<section>
+  <h2>👥 Gerenciar nomes</h2>
+  <input type="text" id="novoNome" placeholder="Novo nome">
+  <button onclick="adicionarNome()">Adicionar nome</button>
+  <ul id="listaNomes"></ul>
+</section>
+
+<script>
+  // NOMES
+  function loadNomes() {
+    return JSON.parse(localStorage.getItem('nomesDisponiveis') || '[]');
+  }
+
+  function salvarNomes(nomes) {
+    localStorage.setItem('nomesDisponiveis', JSON.stringify(nomes));
+  }
+
+  function renderNomes() {
+    const nomes = loadNomes().sort();
+    const ul = document.getElementById('listaNomes');
+    ul.innerHTML = '';
+    nomes.forEach((nome, i) => {
+      const li = document.createElement('li');
+      li.innerHTML = `${nome} <button class="remove-btn" onclick="removerNome(${i})">Remover</button>`;
+      ul.appendChild(li);
+    });
+  }
+
+  function adicionarNome() {
+    const input = document.getElementById('novoNome');
+    const nome = input.value.trim();
+    if (!nome) return;
+
+    const nomes = loadNomes();
+    if (!nomes.includes(nome)) {
+      nomes.push(nome);
+      salvarNomes(nomes);
+      renderNomes();
+    }
+
+    input.value = '';
+  }
+
+  function removerNome(index) {
+    const nomes = loadNomes();
+    nomes.splice(index, 1);
+    salvarNomes(nomes);
+    renderNomes();
+  }
+
+  // DATAS
+  function loadDatas() {
+    return JSON.parse(localStorage.getItem('eventosDatas') || '[]');
+  }
+
+  function salvarDatas(datas) {
+    localStorage.setItem('eventosDatas', JSON.stringify(datas));
+  }
+
+  function criarData() {
+    const input = document.getElementById('novaData');
+    const data = input.value;
+    if (!data) return;
+
+    const datas = loadDatas();
+    if (!datas.includes(data)) {
+      datas.push(data);
+      salvarDatas(datas);
+      renderDatasCriadas();
+      renderCalendario();
+    }
+
+    input.value = '';
+  }
+
+  function removerData(index) {
+    const datas = loadDatas();
+    datas.splice(index, 1);
+    salvarDatas(datas);
+    renderDatasCriadas();
+    renderCalendario();
+  }
+
+  function renderDatasCriadas() {
+    const div = document.getElementById('datasCriadas');
+    const datas = loadDatas().sort();
+    div.innerHTML = '';
+
+    if (datas.length === 0) {
+      div.innerHTML = '<p>Nenhuma data criada ainda.</p>';
+      return;
+    }
+
+    const ul = document.createElement('ul');
+
+    datas.forEach((dataStr, index) => {
+      const data = new Date(dataStr);
+      const dataFormatada = data.toLocaleDateString('pt-PT', {
+        weekday: 'long',
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric'
+      });
+
+      const li = document.createElement('li');
+      li.innerHTML = `${dataFormatada} 
+        <button class="remove-btn" onclick="removerData(${index})">Remover</button>`;
+      ul.appendChild(li);
+    });
+
+    div.appendChild(ul);
+  }
+
+  // CALENDÁRIO
+  function renderCalendario() {
+  const datas = loadDatas();
+  const confirmacoes = JSON.parse(localStorage.getItem('disponibilidades') || '{}');
+
+  const container = document.getElementById('calendarioContainer');
+  container.innerHTML = '';
+
+  const datasPorMes = {};
+
+  datas.forEach(dataStr => {
+    const data = new Date(dataStr);
+    const anoMes = `${data.getFullYear()}-${data.getMonth() + 1}`;
+    if (!datasPorMes[anoMes]) datasPorMes[anoMes] = [];
+    datasPorMes[anoMes].push(dataStr);
+  });
+
+  Object.entries(datasPorMes).forEach(([anoMes, datasMes]) => {
+    const dataExemplo = new Date(datasMes[0]);
+    const nomeMes = dataExemplo.toLocaleDateString('pt-PT', { month: 'long', year: 'numeric' });
+
+    const tituloMes = document.createElement('div');
+    tituloMes.className = 'month-header';
+    tituloMes.textContent = nomeMes.charAt(0).toUpperCase() + nomeMes.slice(1);
+    container.appendChild(tituloMes);
+
+    const calendario = document.createElement('div');
+    calendario.className = 'calendar';
+
+    datasMes.sort().forEach(dataStr => {
+      const dia = new Date(dataStr);
+      const diaSemana = dia.toLocaleDateString('pt-PT', { weekday: 'short' });
+      const diaNum = dia.getDate();
+
+      const nomesConfirmados = confirmacoes[dataStr]
+        ? Object.keys(confirmacoes[dataStr])
+        : [];
+
+      const divDia = document.createElement('div');
+      divDia.className = 'day';
+
+      divDia.innerHTML = `<div class="day-header">${diaSemana} ${diaNum}</div>`;
+
+      if (nomesConfirmados.length > 0) {
+        const ul = document.createElement('ul');
+        ul.className = 'nomes';
+        nomesConfirmados.forEach(nome => {
+          const li = document.createElement('li');
+          li.textContent = nome;
+          ul.appendChild(li);
+        });
+        divDia.appendChild(ul);
+      }
+
+      calendario.appendChild(divDia);
+    });
+
+    container.appendChild(calendario);
+  });
+}
+
+  window.onload = function () {
+    renderNomes();
+    renderDatasCriadas();
+    renderCalendario();
+  };
+</script>
+
+</body>
+</html>
