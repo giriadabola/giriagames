@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <title>Confirmação de Disponibilidade</title>
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      margin: 0;
+      padding: 0;
+      background: linear-gradient(to right, #e0eafc, #cfdef3);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    header {
+      background: #2d89ef;
+      color: white;
+      width: 100%;
+      padding: 20px 0;
+      text-align: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 2em;
+    }
+
+    #cards-container, #selecao-container {
+      margin-top: 40px;
+      width: 100%;
+      max-width: 800px;
+      padding: 0 20px;
+    }
+
+    .grupo-semana {
+      margin-bottom: 40px;
+    }
+
+    .semana-titulo {
+      font-size: 1.1em;
+      font-weight: bold;
+      margin-bottom: 15px;
+      color: #333;
+    }
+
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+    }
+
+    .card {
+      background: white;
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      transition: transform 0.2s ease, background 0.3s ease;
+    }
+
+    .card:hover {
+      transform: translateY(-4px);
+    }
+
+    .card.confirmado {
+      background: #d4edda;
+      border: 2px solid #28a745;
+    }
+
+    .data-pequena {
+      font-size: 0.85em;
+      color: #555;
+      margin-bottom: 8px;
+    }
+
+    .dia-semana {
+      font-size: 1.4em;
+      font-weight: bold;
+      margin-bottom: 20px;
+      color: #2d89ef;
+    }
+
+    .btn-confirmar, .btn-continuar, .btn-voltar {
+      padding: 10px 20px;
+      background: #2d89ef;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      font-size: 1em;
+      cursor: pointer;
+      transition: background 0.2s ease;
+      margin-bottom: 10px;
+    }
+
+    .btn-confirmar:hover, .btn-continuar:hover, .btn-voltar:hover {
+      background: #1b5dbf;
+    }
+
+    select {
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      font-size: 1em;
+      margin-bottom: 20px;
+      width: 100%;
+      max-width: 300px;
+    }
+
+    .hidden {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Confirme sua disponibilidade</h1>
+</header>
+
+<!-- Seleção de nome -->
+<div id="selecao-container">
+  <h2>Escolha seu nome:</h2>
+  <select id="nomeSelect">
+    <option value="">-- Selecione seu nome --</option>
+  </select>
+  <br>
+  <button class="btn-continuar" onclick="continuar()">Continuar</button>
+</div>
+
+<!-- Cards -->
+<div id="cards-container" class="hidden">
+  <button class="btn-voltar" onclick="voltar()">⬅️ Trocar nome</button>
+  <h2 id="boasVindas"></h2>
+  <div id="cards-grupos"></div>
+</div>
+
+<script>
+  let usuarioAtual = "";
+
+  function loadNomes() {
+    return JSON.parse(localStorage.getItem('nomesDisponiveis') || '[]');
+  }
+
+  function loadDatas() {
+    return JSON.parse(localStorage.getItem('eventosDatas') || '[]');
+  }
+
+  function preencherDropdown() {
+    const select = document.getElementById("nomeSelect");
+    const nomes = loadNomes();
+    nomes.forEach(nome => {
+      const opt = document.createElement("option");
+      opt.value = nome;
+      opt.textContent = nome;
+      select.appendChild(opt);
+    });
+  }
+
+  function continuar() {
+    const nome = document.getElementById("nomeSelect").value;
+    if (!nome) {
+      alert("Por favor, selecione seu nome.");
+      return;
+    }
+
+    usuarioAtual = nome;
+    document.getElementById("selecao-container").classList.add("hidden");
+    document.getElementById("cards-container").classList.remove("hidden");
+    document.getElementById("boasVindas").textContent = `Olá, ${nome}! Selecione os dias que você pode.`;
+    renderCardsAgrupados();
+  }
+
+  function voltar() {
+    usuarioAtual = "";
+    document.getElementById("cards-container").classList.add("hidden");
+    document.getElementById("selecao-container").classList.remove("hidden");
+  }
+
+  function formatarData(dataStr) {
+    const data = new Date(dataStr);
+    const dia = data.getDate();
+    const mes = data.toLocaleDateString('pt-PT', { month: 'long' });
+    const ano = data.getFullYear();
+    const semana = data.toLocaleDateString('pt-PT', { weekday: 'long' }).toUpperCase();
+
+    return {
+      dataExtenso: `${dia} ${mes} ${ano}`,
+      diaSemana: semana,
+      data: data
+    };
+  }
+
+  function getSemanaRange(data) {
+    const inicio = new Date(data);
+    inicio.setDate(inicio.getDate() - (inicio.getDay() + 6) % 7); // segunda
+    const fim = new Date(inicio);
+    fim.setDate(inicio.getDate() + 6); // domingo
+
+    const inicioDia = inicio.getDate();
+    const fimDia = fim.getDate();
+    const mesNome = inicio.toLocaleDateString('pt-PT', { month: 'long' });
+
+    return `Semana ${inicioDia}–${fimDia} de ${mesNome}`;
+  }
+
+  function renderCardsAgrupados() {
+    const container = document.getElementById("cards-grupos");
+    container.innerHTML = "";
+
+    const datas = loadDatas();
+    const respostas = JSON.parse(localStorage.getItem("disponibilidades") || "{}");
+
+    const grupos = {};
+
+    datas.forEach(dataStr => {
+      const dataObj = formatarData(dataStr);
+      const semana = getSemanaRange(dataObj.data);
+      if (!grupos[semana]) grupos[semana] = [];
+      grupos[semana].push({ ...dataObj, raw: dataStr });
+    });
+
+    Object.entries(grupos).forEach(([semana, eventos]) => {
+      const grupo = document.createElement("div");
+      grupo.className = "grupo-semana";
+
+      const titulo = document.createElement("div");
+      titulo.className = "semana-titulo";
+      titulo.textContent = semana;
+      grupo.appendChild(titulo);
+
+      const grid = document.createElement("div");
+      grid.className = "cards-grid";
+
+      eventos.forEach(ev => {
+        const confirmado = respostas[ev.raw] && respostas[ev.raw][usuarioAtual];
+        const card = document.createElement("div");
+        card.className = "card";
+        if (confirmado) card.classList.add("confirmado");
+
+        card.innerHTML = `
+          <div class="data-pequena">${ev.dataExtenso}</div>
+          <div class="dia-semana">${ev.diaSemana}</div>
+          <button class="btn-confirmar" onclick="confirmar('${ev.raw}', this)">Eu posso</button>
+        `;
+        grid.appendChild(card);
+      });
+
+      grupo.appendChild(grid);
+      container.appendChild(grupo);
+    });
+  }
+
+  function confirmar(data, button) {
+    const respostas = JSON.parse(localStorage.getItem('disponibilidades') || '{}');
+    if (!respostas[data]) respostas[data] = {};
+    respostas[data][usuarioAtual] = true;
+    localStorage.setItem('disponibilidades', JSON.stringify(respostas));
+
+    const card = button.closest('.card');
+    card.classList.add('confirmado');
+
+    // 🎉 Explosão de emojis
+    for (let i = 0; i < 12; i++) {
+      const emoji = document.createElement('span');
+      emoji.textContent = '👍';
+      emoji.style.position = 'absolute';
+      emoji.style.fontSize = '24px';
+      emoji.style.pointerEvents = 'none';
+      emoji.style.zIndex = 1000;
+
+      const rect = button.getBoundingClientRect();
+      emoji.style.left = `${rect.left + rect.width / 2}px`;
+      emoji.style.top = `${rect.top + rect.height / 2}px`;
+
+      document.body.appendChild(emoji);
+
+      const angle = Math.random() * 2 * Math.PI;
+      const distance = 80 + Math.random() * 40;
+      const x = Math.cos(angle) * distance;
+      const y = Math.sin(angle) * distance;
+
+      emoji.animate([
+        { transform: 'translate(0, 0)', opacity: 1 },
+        { transform: `translate(${x}px, ${y}px)`, opacity: 0 }
+      ], {
+        duration: 800,
+        easing: 'ease-out'
+      });
+
+      setTimeout(() => emoji.remove(), 800);
+    }
+  }
+
+  window.onload = preencherDropdown;
+</script>
+
+</body>
+</html>
