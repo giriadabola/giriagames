@@ -625,8 +625,100 @@ body { min-height: 100vh; background: radial-gradient(ellipse at center, #1a1a2e
     }
         // --- FIM de fetchFamiliaData com logs adicionais ---
 
+        // --- Função para buscar imagens de clubes das competições ---
+        async function fetchClubImagesFromCompetitions(itemData) {
+            console.log("[fetchClubImagesFromCompetitions] Iniciando busca de imagens de clubes...");
+            if (!db || !itemData) {
+                console.error("[fetchClubImagesFromCompetitions] DB não inicializado ou itemData inválido.");
+                return [];
+            }
+            
+            // Obter IDs das competições do item (mito)
+            const competitionIds = [
+                itemData.competicao1Id,
+                itemData.competicao2Id,
+                itemData.competicao3Id,
+                itemData.competicao4Id
+            ].filter(id => id); // Filtra valores nulos/undefined
+            
+            console.log(`[fetchClubImagesFromCompetitions] IDs de competições encontrados: ${competitionIds.join(', ')}`);
+            
+            if (competitionIds.length === 0) {
+                console.warn("[fetchClubImagesFromCompetitions] Nenhum ID de competição encontrado no item.");
+                return [];
+            }
+            
+            const clubImages = [];
+            const usedClubIds = new Set(); // Para evitar repetições
+            
+            // Para cada competição, buscar seus clubes e selecionar um aleatoriamente
+            for (const competitionId of competitionIds) {
+                try {
+                    // Buscar documento da competição
+                    const competitionDoc = await getDoc(doc(db, 'competicoes', competitionId));
+                    
+                    if (!competitionDoc.exists()) {
+                        console.warn(`[fetchClubImagesFromCompetitions] Competição ${competitionId} não encontrada.`);
+                        continue;
+                    }
+                    
+                    const competitionData = competitionDoc.data();
+                    console.log(`[fetchClubImagesFromCompetitions] Competição ${competitionId} (${competitionData.nome}) encontrada.`);
+                    
+                    // Verificar se a competição tem clubes associados
+                    if (!competitionData.clubes || !Array.isArray(competitionData.clubes) || competitionData.clubes.length === 0) {
+                        console.warn(`[fetchClubImagesFromCompetitions] Competição ${competitionId} não tem clubes associados.`);
+                        continue;
+                    }
+                    
+                    // Filtrar clubes que já foram usados
+                    const availableClubs = competitionData.clubes.filter(clubId => !usedClubIds.has(clubId));
+                    
+                    if (availableClubs.length === 0) {
+                        console.warn(`[fetchClubImagesFromCompetitions] Todos os clubes da competição ${competitionId} já foram usados.`);
+                        continue;
+                    }
+                    
+                    // Selecionar um clube aleatoriamente
+                    const randomIndex = Math.floor(Math.random() * availableClubs.length);
+                    const selectedClubId = availableClubs[randomIndex];
+                    usedClubIds.add(selectedClubId); // Marcar como usado
+                    
+                    // Buscar dados do clube selecionado
+                    const clubDoc = await getDoc(doc(db, 'clubes', selectedClubId));
+                    
+                    if (!clubDoc.exists()) {
+                        console.warn(`[fetchClubImagesFromCompetitions] Clube ${selectedClubId} não encontrado.`);
+                        continue;
+                    }
+                    
+                    const clubData = clubDoc.data();
+                    
+                    // Verificar se o clube tem imagem
+                    if (clubData.imagem) {
+                        console.log(`[fetchClubImagesFromCompetitions] Imagem do clube ${selectedClubId} (${clubData.nome}): ${clubData.imagem}`);
+                        clubImages.push({
+                            id: selectedClubId,
+                            name: clubData.nome,
+                            image: clubData.imagem,
+                            competitionId: competitionId,
+                            competitionName: competitionData.nome
+                        });
+                    } else {
+                        console.warn(`[fetchClubImagesFromCompetitions] Clube ${selectedClubId} (${clubData.nome}) não tem imagem.`);
+                    }
+                    
+                } catch (error) {
+                    console.error(`[fetchClubImagesFromCompetitions] Erro ao buscar dados da competição ${competitionId}:`, error);
+                }
+            }
+            
+            console.log(`[fetchClubImagesFromCompetitions] Total de imagens de clubes encontradas: ${clubImages.length}`);
+            return clubImages;
+        }
+        
         // --- updateCardElements COM LOGS ADICIONAIS ---
-        function updateCardElements(itemData, familiaData) {
+        async function updateCardElements(itemData, familiaData) {
             console.log("[updateCardElements] Iniciando atualização dos elementos do card.");
             if (!dynamicCard || !cardMainImage || !cardBackgroundImage || !cardName || !cardDescription || !cardLevel || !cardStats) {
                 console.error("[updateCardElements] Elementos essenciais do card não encontrados na DOM!");
@@ -674,6 +766,27 @@ body { min-height: 100vh; background: radial-gradient(ellipse at center, #1a1a2e
                  case 'patamar 1': lvlColor = '#B8860B'; statsGrad = 'linear-gradient(to bottom, #FFD700, #A0522D)'; break;
             } }
             cardLevel.style.color = lvlColor; cardStats.style.background = statsGrad;
+            
+            // Buscar e atualizar imagens dos clubes para os ícones de estatísticas
+            try {
+                const clubImages = await fetchClubImagesFromCompetitions(itemData);
+                console.log("[updateCardElements] Imagens de clubes obtidas:", clubImages);
+                
+                // Atualizar os ícones de estatísticas com as imagens dos clubes
+                const statIcons = cardStats.querySelectorAll('.one-quarter img');
+                
+                // Para cada ícone de estatística, atribuir uma imagem de clube (se disponível)
+                for (let i = 0; i < statIcons.length && i < clubImages.length; i++) {
+                    if (clubImages[i] && clubImages[i].image) {
+                        statIcons[i].src = clubImages[i].image;
+                        statIcons[i].alt = clubImages[i].name;
+                        console.log(`[updateCardElements] Ícone ${i+1} atualizado com imagem do clube ${clubImages[i].name}`);
+                    }
+                }
+            } catch (error) {
+                console.error("[updateCardElements] Erro ao buscar imagens de clubes:", error);
+            }
+            
             console.log("[updateCardElements] Elementos atualizados para:", itemData?.nome || 'Item Desconhecido');
         }
         // --- FIM de updateCardElements com logs adicionais ---
@@ -703,7 +816,8 @@ body { min-height: 100vh; background: radial-gradient(ellipse at center, #1a1a2e
                 console.log(`[prepareDynamicCard] Resultado da busca da Família (fetchFamiliaData retornou):`, familiaData ? `ID ${familiaData.id}`: 'null');
 
                 console.log("[prepareDynamicCard] Passo 4: Atualizando Elementos...");
-                updateCardElements(selectedItem, familiaData); // Chama a versão com logs
+                // Agora updateCardElements é assíncrono, então precisamos aguardar sua conclusão
+                await updateCardElements(selectedItem, familiaData); // Chama a versão com logs
 
                 console.log("[prepareDynamicCard] Passo 5: Pré-carregando Imagens...");
                 // Passa o elemento específico onde o background foi definido para preloadImages
