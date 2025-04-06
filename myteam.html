@@ -653,8 +653,8 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getFirestore, doc, getDoc, collection, getDocs, query, orderBy, limit, setDoc, addDoc, FieldValue, where, serverTimestamp, updateDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-
-
+    
+    
         const firebaseConfig = {
             apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0",
             authDomain: "g-games-8a8fc.firebaseapp.com",
@@ -664,7 +664,7 @@
             appId: "1:689897349449:web:536599794579901beb7a98",
             measurementId: "G-GTTPJ6G5MD"
         };
-
+    
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const auth = getAuth(app);
@@ -681,21 +681,20 @@
                 addDoc: addDoc,
                 FieldValue: FieldValue,
                 where: where,
-                serverTimestamp: serverTimestamp, // ADDED serverTimestamp here for easier access if needed in future
+                serverTimestamp: serverTimestamp,
                 writeBatch: writeBatch
             }
         };
-
-
+    
+    
         const loadingScreen = document.getElementById('loading-screen');
         const content = document.querySelector('.content');
         let currentUserStatus = null;
         let currentUserUid = null;
-        let allPlayers = [];
-        let userPlayers = [];
+        let userOwnedPlayers = []; // Jogadores que o user *possui* (para a lista)
         let countries = {};
         let clubs = new Set();
-        let currentFormation = ''; // Initialize currentFormation to empty string
+        let currentFormation = '';
         let hasUnsavedChanges = false;
         const formationSelect = document.getElementById('formation-select');
         const pitchArea = document.querySelector('.pitch-area');
@@ -703,1127 +702,872 @@
         const playerSearchInput = document.getElementById('player-search');
         const countryFilterSelect = document.getElementById('country-filter');
         const clubFilterSelect = document.getElementById('club-filter');
-        const playerListModal = document.getElementById('playerListModal'); // Get the player list modal
-        const closePlayerListModalBtn = document.getElementById('closePlayerListModal'); // Get close button for player list modal
-        const playerCardListContainer = document.getElementById('playerCardList'); // Container for player cards in modal
-
-
-        let assignedPlayers = {}; // Declare assignedPlayers outside renderFormation scope
-
-
-        const formations = { // Keep formations for pitch rendering logic
-            '4-4-2': [
-                { position: 'GK', top: '90%', left: '47%', positionType: 'GK' },
-                { position: 'DL', top: '75%', left: '12%', positionType: 'DEF' },
-                { position: 'DC1', top: '75%', left: '32%', positionType: 'DEF' },
-                { position: 'DC2', top: '75%', left: '62%', positionType: 'DEF' },
-                { position: 'DR', top: '75%', left: '82%', positionType: 'DEF' },
-                { position: 'ML', top: '40%', left: '12%', positionType: 'MID' },
-                { position: 'MC1', top: '40%', left: '32%', positionType: 'MID' },
-                { position: 'MC2', top: '40%', left: '62%', positionType: 'MID' },
-                { position: 'MR', top: '40%', left: '82%', positionType: 'MID' },
-                { position: 'FW1', top: '10%', left: '32%', positionType: 'FWD' },
-                { position: 'FW2', top: '10%', left: '62%', positionType: 'FWD' }
-            ],
-            '4-3-3': [
-                { position: 'GK', top: '90%', left: '47%', positionType: 'GK' },
-                { position: 'DL', top: '75%', left: '12%', positionType: 'DEF' },
-                { position: 'DC1', top: '75%', left: '32%', positionType: 'DEF' },
-                { position: 'DC2', top: '75%', left: '62%', positionType: 'DEF' },
-                { position: 'DR', top: '75%', left: '82%', positionType: 'DEF' },
-                { position: 'MC1', top: '40%', left: '32%', positionType: 'MID' },
-                { position: 'MC2', top: '60%', left: '47%', positionType: 'MID' },
-                { position: 'MC3', top: '40%', left: '62%', positionType: 'MID' },
-                { position: 'AML', top: '10%', left: '25%', positionType: 'FWD' },
-                { position: 'AMC', top: '10%', left: '50%', positionType: 'FWD' },
-                { position: 'AMR', top: '10%', left: '75%', positionType: 'FWD' },
-            ],
-            '4-5-1': [
-                { position: 'GK', top: '90%', left: '47%', positionType: 'GK' },
-                { position: 'DL', top: '75%', left: '12%', positionType: 'DEF' },
-                { position: 'DC1', top: '75%', left: '32%', positionType: 'DEF' },
-                { position: 'DC2', top: '75%', left: '62%', positionType: 'DEF' },
-                { position: 'DR', top: '75%', left: '82%', positionType: 'DEF' },
-                { position: 'DML', top: '50%', left: '47%', positionType: 'MID' },
-                { position: 'MC1', top: '40%', left: '10%', positionType: 'MID' },
-                { position: 'AMC', top: '40%', left: '30%', positionType: 'MID' },
-                { position: 'MC2', top: '40%', left: '64%', positionType: 'MID' },
-                { position: 'DMR', top: '40%', left: '84%', positionType: 'MID' },
-                { position: 'FW', top: '10%', left: '47%', positionType: 'FWD' }
-            ],
-            '3-4-3': [
-                { position: 'GK', top: '90%', left: '47%', positionType: 'GK' },
-                { position: 'DC1', top: '75%', left: '20%', positionType: 'DEF' },
-                { position: 'DC2', top: '75%', left: '47%', positionType: 'DEF' },
-                { position: 'DC3', top: '75%', left: '77%', positionType: 'DEF' },
-                { position: 'ML', top: '40%', left: '12%', positionType: 'MID' },
-                { position: 'MC1', top: '40%', left: '32%', positionType: 'MID' },
-                { position: 'MC2', top: '40%', left: '62%', positionType: 'MID' },
-                { position: 'MR', top: '40%', left: '82%', positionType: 'MID' },
-                { position: 'AML', top: '10%', left: '25%', positionType: 'FWD' },
-                { position: 'AMC', top: '10%', left: '50%', positionType: 'FWD' },
-                { position: 'AMR', top: '10%', left: '75%', positionType: 'FWD' },
-            ],
-            '5-3-2': [
-                { position: 'GK', top: '90%', left: '47%', positionType: 'GK' },
-                { position: 'SW', top: '75%', left: '10%', positionType: 'DEF' },
-                { position: 'WBL', top: '75%', left: '30%', positionType: 'DEF' },
-                { position: 'DC1', top: '75%', left: '47%', positionType: 'DEF' },
-                { position: 'DC2', top: '75%', left: '64%', positionType: 'DEF' },
-                { position: 'WBR', top: '75%', left: '84%', positionType: 'DEF' },
-                { position: 'MC1', top: '40%', left: '30%', positionType: 'MID' },
-                { position: 'MC2', top: '55%', left: '47%', positionType: 'MID' },
-                { position: 'MC3', top: '40%', left: '64%', positionType: 'MID' },
-                { position: 'FW1', top: '10%', left: '30%', positionType: 'FWD' },
-                { position: 'FW2', top: '10%', left: '64%', positionType: 'FWD' }
-            ]
+        const playerListModal = document.getElementById('playerListModal');
+        const closePlayerListModalBtn = document.getElementById('closePlayerListModal');
+        const playerCardListContainer = document.getElementById('playerCardList');
+    
+        // Armazena { positionId: playerId } para a formação atual no relvado
+        let assignedPlayers = {};
+    
+        const formations = {
+            '4-4-2': [ { position: 'GK', top: '90%', left: '47%', positionType: 'GK' }, { position: 'DL', top: '75%', left: '12%', positionType: 'DEF' }, { position: 'DC1', top: '75%', left: '32%', positionType: 'DEF' }, { position: 'DC2', top: '75%', left: '62%', positionType: 'DEF' }, { position: 'DR', top: '75%', left: '82%', positionType: 'DEF' }, { position: 'ML', top: '40%', left: '12%', positionType: 'MID' }, { position: 'MC1', top: '40%', left: '32%', positionType: 'MID' }, { position: 'MC2', top: '40%', left: '62%', positionType: 'MID' }, { position: 'MR', top: '40%', left: '82%', positionType: 'MID' }, { position: 'FW1', top: '10%', left: '32%', positionType: 'FWD' }, { position: 'FW2', top: '10%', left: '62%', positionType: 'FWD' } ],
+            '4-3-3': [ { position: 'GK', top: '90%', left: '47%', positionType: 'GK' }, { position: 'DL', top: '75%', left: '12%', positionType: 'DEF' }, { position: 'DC1', top: '75%', left: '32%', positionType: 'DEF' }, { position: 'DC2', top: '75%', left: '62%', positionType: 'DEF' }, { position: 'DR', top: '75%', left: '82%', positionType: 'DEF' }, { position: 'MC1', top: '40%', left: '32%', positionType: 'MID' }, { position: 'MC2', top: '60%', left: '47%', positionType: 'MID' }, { position: 'MC3', top: '40%', left: '62%', positionType: 'MID' }, { position: 'AML', top: '10%', left: '25%', positionType: 'FWD' }, { position: 'AMC', top: '10%', left: '50%', positionType: 'FWD' }, { position: 'AMR', top: '10%', left: '75%', positionType: 'FWD' }, ],
+            '4-5-1': [ { position: 'GK', top: '90%', left: '47%', positionType: 'GK' }, { position: 'DL', top: '75%', left: '12%', positionType: 'DEF' }, { position: 'DC1', top: '75%', left: '32%', positionType: 'DEF' }, { position: 'DC2', top: '75%', left: '62%', positionType: 'DEF' }, { position: 'DR', top: '75%', left: '82%', positionType: 'DEF' }, { position: 'DML', top: '50%', left: '47%', positionType: 'MID' }, { position: 'MC1', top: '40%', left: '10%', positionType: 'MID' }, { position: 'AMC', top: '40%', left: '30%', positionType: 'MID' }, { position: 'MC2', top: '40%', left: '64%', positionType: 'MID' }, { position: 'DMR', top: '40%', left: '84%', positionType: 'MID' }, { position: 'FW', top: '10%', left: '47%', positionType: 'FWD' } ],
+            '3-4-3': [ { position: 'GK', top: '90%', left: '47%', positionType: 'GK' }, { position: 'DC1', top: '75%', left: '20%', positionType: 'DEF' }, { position: 'DC2', top: '75%', left: '47%', positionType: 'DEF' }, { position: 'DC3', top: '75%', left: '77%', positionType: 'DEF' }, { position: 'ML', top: '40%', left: '12%', positionType: 'MID' }, { position: 'MC1', top: '40%', left: '32%', positionType: 'MID' }, { position: 'MC2', top: '40%', left: '62%', positionType: 'MID' }, { position: 'MR', top: '40%', left: '82%', positionType: 'MID' }, { position: 'AML', top: '10%', left: '25%', positionType: 'FWD' }, { position: 'AMC', top: '10%', left: '50%', positionType: 'FWD' }, { position: 'AMR', top: '10%', left: '75%', positionType: 'FWD' }, ],
+            '5-3-2': [ { position: 'GK', top: '90%', left: '47%', positionType: 'GK' }, { position: 'SW', top: '75%', left: '10%', positionType: 'DEF' }, { position: 'WBL', top: '75%', left: '30%', positionType: 'DEF' }, { position: 'DC1', top: '75%', left: '47%', positionType: 'DEF' }, { position: 'DC2', top: '75%', left: '64%', positionType: 'DEF' }, { position: 'WBR', top: '75%', left: '84%', positionType: 'DEF' }, { position: 'MC1', top: '40%', left: '30%', positionType: 'MID' }, { position: 'MC2', top: '55%', left: '47%', positionType: 'MID' }, { position: 'MC3', top: '40%', left: '64%', positionType: 'MID' }, { position: 'FW1', top: '10%', left: '30%', positionType: 'FWD' }, { position: 'FW2', top: '10%', left: '64%', positionType: 'FWD' } ]
         };
-
-
-        async function saveFormation() {
-            hasUnsavedChanges = false;
-            if (!currentUserUid) {
-                console.log("Utilizador não autenticado.");
+        const posicaoMapping = { "Avançado": "FWD", "Defesa": "DEF", "Médio": "MID", "Guarda-Redes": "GK" };
+    
+    
+        // --- FUNÇÃO AUXILIAR COM LOG ---
+        // Função auxiliar para verificar se um jogador já está em alguma posição no relvado
+        function isPlayerAlreadyOnPitch(playerId) {
+            // Log do estado ANTES da verificação
+            console.log(`[Check isPlayerAlreadyOnPitch] Verificando ID: ${playerId}. Estado atual assignedPlayers: ${JSON.stringify(assignedPlayers)}`);
+            const isOnPitch = Object.values(assignedPlayers).includes(playerId);
+            console.log(`[Check isPlayerAlreadyOnPitch] Resultado para ${playerId}: ${isOnPitch}`);
+            return isOnPitch;
+        }
+    
+    
+        // --- FUNÇÕES DE DRAG AND DROP COM LOGS ---
+    
+        function handlePlayerCardDragStart(event) {
+            const playerCard = event.currentTarget;
+            const playerId = playerCard.dataset.playerId;
+            event.dataTransfer.setData('playerId', playerId);
+            event.dataTransfer.setData('source', 'list');
+            event.dataTransfer.effectAllowed = 'move';
+            console.log(`Dragging player ${playerId} from list`);
+        }
+    
+        function handlePositionDragStart(event) {
+            const positionElement = event.currentTarget;
+            const playerId = positionElement.dataset.assignedPlayerId;
+            const positionId = positionElement.dataset.position;
+            if (playerId && playerId !== 'null') {
+                event.dataTransfer.setData('playerId', playerId);
+                event.dataTransfer.setData('originalPositionId', positionId);
+                event.dataTransfer.setData('source', 'pitch');
+                event.dataTransfer.effectAllowed = 'move';
+                setTimeout(() => {
+                    const img = positionElement.querySelector('img');
+                    if (img) img.style.visibility = 'hidden';
+                }, 0);
+                console.log(`Dragging player ${playerId} from position ${positionId}`);
+            } else {
+                event.preventDefault();
+            }
+        }
+    
+        function handlePositionDragOver(event) {
+            event.preventDefault();
+            event.dataTransfer.dropEffect = 'move';
+        }
+    
+        // *** handlePositionDrop COM LOGS DETALHADOS ***
+        function handlePositionDrop(event) {
+            event.preventDefault();
+            const targetPositionElement = event.currentTarget;
+            const targetPositionId = targetPositionElement.dataset.position;
+            const targetPositionType = targetPositionElement.dataset.positionType;
+            const draggedPlayerId = event.dataTransfer.getData('playerId');
+            const source = event.dataTransfer.getData('source');
+            const originalPositionId = event.dataTransfer.getData('originalPositionId');
+    
+            console.log(`--- Drop Event Start ---`);
+            console.log(`Player ID: ${draggedPlayerId}, Source: ${source}, Target Pos: ${targetPositionId}, Original Pos: ${originalPositionId}`);
+            console.log(`Estado assignedPlayers ANTES do drop: ${JSON.stringify(assignedPlayers)}`);
+    
+            const draggedPlayer = userOwnedPlayers.find(p => p.id === draggedPlayerId);
+            if (!draggedPlayer) {
+                console.error("Drop Falhou: Jogador arrastado não encontrado nos dados locais.");
+                if (originalPositionId) {
+                    const originalPositionElement = pitchArea.querySelector(`.position[data-position="${originalPositionId}"]`);
+                    const img = originalPositionElement?.querySelector('img');
+                    if(img) img.style.visibility = 'visible';
+                }
+                console.log(`--- Drop Event End (Erro) ---`);
                 return;
             }
-
+    
+            // VERIFICAÇÃO PRINCIPAL (arrastar da lista)
+            if (source === 'list') {
+                if (isPlayerAlreadyOnPitch(draggedPlayerId)) { // Função auxiliar já tem log
+                    alert(`${draggedPlayer.nome} já está em campo!`);
+                    console.log(`Drop Bloqueado: Jogador ${draggedPlayerId} já existe em assignedPlayers.`);
+                    console.log(`--- Drop Event End (Bloqueado) ---`);
+                    return;
+                }
+            }
+    
+            // Mostra a imagem de volta na posição original (se veio do relvado)
+            if (originalPositionId) {
+                const originalPositionElement = pitchArea.querySelector(`.position[data-position="${originalPositionId}"]`);
+                const img = originalPositionElement?.querySelector('img');
+                if(img) img.style.visibility = 'visible';
+            }
+    
+    
+            // Validação de Tipo de Posição
+            const playerPosicaoIngles = posicaoMapping[draggedPlayer.posicao];
+            if (playerPosicaoIngles !== targetPositionType) {
+                alert(`Este jogador é ${draggedPlayer.posicao} e só pode ser colocado em posições de ${targetPositionType}`);
+                console.log(`Drop Bloqueado: Tipo de posição incompatível.`);
+                console.log(`--- Drop Event End (Bloqueado) ---`);
+                return;
+            }
+    
+            // --- Lógica de Colocação / Troca ---
+            const playerAlreadyInTargetPositionId = targetPositionElement.dataset.assignedPlayerId;
+    
+            // Caso 1: Drop na mesma posição de origem
+            if (originalPositionId === targetPositionId) {
+                console.log(`Drop Ignorado: Mesma posição de origem e destino.`);
+                console.log(`--- Drop Event End (Ignorado) ---`);
+                return; // Não faz nada
+            }
+    
+            // Variável para guardar temporariamente o ID a ser removido (se houver troca/substituição)
+            let idToRemoveFromTarget = null;
+            if (playerAlreadyInTargetPositionId && playerAlreadyInTargetPositionId !== 'null') {
+                idToRemoveFromTarget = playerAlreadyInTargetPositionId;
+            }
+    
+    
+            // Passo 1: Remover visualmente e do estado (se necessário)
+            // Remove da posição ORIGINAL (se veio do relvado)
+            if (originalPositionId) {
+                const originalPositionElement = pitchArea.querySelector(`.position[data-position="${originalPositionId}"]`);
+                if (originalPositionElement) {
+                    console.log(`Removendo ${draggedPlayerId} da posição original ${originalPositionId}`);
+                    removePlayerFromPositionDOM(originalPositionElement); // Remove visual e listeners
+                    delete assignedPlayers[originalPositionId]; // Remove do estado
+                    console.log(`Estado após remover da origem: ${JSON.stringify(assignedPlayers)}`);
+                }
+            }
+            // Remove da posição ALVO (se estava ocupada)
+            if (idToRemoveFromTarget) {
+                console.log(`Removendo ${idToRemoveFromTarget} da posição alvo ${targetPositionId} (antes de colocar/trocar)`);
+                removePlayerFromPositionDOM(targetPositionElement); // Remove visualmente quem estava lá
+                // Não remove de assignedPlayers ainda, pois pode ser necessário para a troca
+            }
+    
+    
+            // Passo 2: Adicionar/Trocar
+            // Caso 2a: Substituir (veio da lista, alvo ocupado)
+            if (source === 'list' && idToRemoveFromTarget) {
+                console.log(`Substituindo ${idToRemoveFromTarget} por ${draggedPlayerId} (da lista) em ${targetPositionId}`);
+                addPlayerToPositionDOM(targetPositionElement, draggedPlayer);
+                assignedPlayers[targetPositionId] = draggedPlayerId; // Sobrescreve no estado
+                console.log(`Estado após substituir: ${JSON.stringify(assignedPlayers)}`);
+                hasUnsavedChanges = true;
+            }
+            // Caso 2b: Trocar (veio do relvado, alvo ocupado)
+            else if (source === 'pitch' && originalPositionId && idToRemoveFromTarget) {
+                console.log(`Trocando ${draggedPlayerId} (origem ${originalPositionId}) com ${idToRemoveFromTarget} (alvo ${targetPositionId})`);
+                const originalPositionElement = pitchArea.querySelector(`.position[data-position="${originalPositionId}"]`);
+                const playerOriginallyInTarget = userOwnedPlayers.find(p => p.id === idToRemoveFromTarget); // Usa o ID guardado
+    
+                if (originalPositionElement && playerOriginallyInTarget) {
+                    // Coloca o jogador que estava no alvo na posição original
+                    console.log(`Colocando ${idToRemoveFromTarget} na posição original ${originalPositionId}`);
+                    addPlayerToPositionDOM(originalPositionElement, playerOriginallyInTarget);
+                    assignedPlayers[originalPositionId] = idToRemoveFromTarget; // Atualiza estado da origem
+                    console.log(`Estado após colocar alvo na origem: ${JSON.stringify(assignedPlayers)}`);
+    
+                    // Coloca o jogador arrastado na posição de destino
+                    console.log(`Colocando ${draggedPlayerId} na posição alvo ${targetPositionId}`);
+                    addPlayerToPositionDOM(targetPositionElement, draggedPlayer);
+                    assignedPlayers[targetPositionId] = draggedPlayerId; // Atualiza estado do alvo
+                    console.log(`Estado após colocar arrastado no alvo: ${JSON.stringify(assignedPlayers)}`);
+                    hasUnsavedChanges = true;
+                } else {
+                    console.error("Falha na Troca: Elemento original ou dados do jogador alvo não encontrados.");
+                    // Tentar reverter (pode ser complexo) - no mínimo, logar o erro.
+                    // Colocar o jogador arrastado de volta na origem se possível
+                    if (originalPositionId && originalPositionElement) {
+                        console.log("Revertendo: Colocando jogador arrastado de volta na origem.");
+                        addPlayerToPositionDOM(originalPositionElement, draggedPlayer);
+                        assignedPlayers[originalPositionId] = draggedPlayerId;
+                        console.log(`Estado após reverter: ${JSON.stringify(assignedPlayers)}`);
+                    }
+                }
+            }
+            // Caso 3: Colocar em posição vazia (veio da lista ou relvado)
+            else if (!idToRemoveFromTarget) {
+                console.log(`Colocando ${draggedPlayerId} na posição vazia ${targetPositionId}`);
+                addPlayerToPositionDOM(targetPositionElement, draggedPlayer);
+                assignedPlayers[targetPositionId] = draggedPlayerId; // Adiciona ao estado
+                console.log(`Estado após colocar em vazio: ${JSON.stringify(assignedPlayers)}`);
+                // Se veio do relvado, marca a posição original como vazia permanentemente no DOM
+                if (originalPositionId) {
+                    const originalPositionElement = pitchArea.querySelector(`.position[data-position="${originalPositionId}"]`);
+                    // Só adiciona '+' se estiver realmente vazia e não for a posição alvo (evita duplo '+')
+                    if(originalPositionElement && !originalPositionElement.querySelector('img') && originalPositionElement !== targetPositionElement) {
+                        originalPositionElement.innerHTML = '+';
+                    }
+                }
+                hasUnsavedChanges = true;
+            }
+    
+            console.log(`--- Drop Event End ---`);
+        }
+    
+        function handlePositionDragEnd(event) {
+            // Garante que a imagem original (se escondida) volta a ser visível
+            // É importante fazer isso mesmo se o drop não foi bem sucedido
+            const positionElement = event.currentTarget; // O elemento de onde o drag começou
+            const img = positionElement?.querySelector('img'); // Usa optional chaining
+            if (img) {
+                img.style.visibility = 'visible';
+            }
+            console.log("Drag ended for position:", positionElement?.dataset?.position); // Log mais seguro
+        }
+    
+    
+        // --- FUNÇÕES AUXILIARES PARA MANIPULAÇÃO DO DOM E ESTADO ---
+    
+        function addPlayerToPositionDOM(positionElement, player) {
+            if (!positionElement || !player) return;
+            positionElement.innerHTML = '';
+            const playerImg = document.createElement('img');
+            playerImg.src = player.imagem || 'placeholder_image_url.png';
+            playerImg.alt = player.nome;
+            playerImg.style.visibility = 'visible';
+            positionElement.appendChild(playerImg);
+            positionElement.dataset.assignedPlayerId = player.id;
+            positionElement.draggable = true;
+            positionElement.addEventListener('dragstart', handlePositionDragStart);
+            positionElement.addEventListener('dragend', handlePositionDragEnd);
+        }
+    
+        function removePlayerFromPositionDOM(positionElement) {
+            if (!positionElement) return;
+            positionElement.innerHTML = '';
+            positionElement.dataset.assignedPlayerId = null;
+            positionElement.draggable = false;
+            positionElement.removeEventListener('dragstart', handlePositionDragStart);
+            positionElement.removeEventListener('dragend', handlePositionDragEnd);
+        }
+    
+        // *** handlePositionClick COM LOGS DETALHADOS ***
+        function handlePositionClick(event) {
+            const positionElement = event.currentTarget;
+            const assignedPlayerId = positionElement.dataset.assignedPlayerId;
+            const positionId = positionElement.dataset.position;
+    
+            console.log(`--- Click Event Start ---`);
+            console.log(`Click na posição ${positionId}. Jogador atribuído (DOM): ${assignedPlayerId}.`);
+            console.log(`Estado assignedPlayers ANTES do click: ${JSON.stringify(assignedPlayers)}`);
+    
+    
+            if (assignedPlayerId && assignedPlayerId !== "null") {
+                console.log(`Removendo ${assignedPlayerId} de ${positionId} via click.`);
+                removePlayerFromPositionDOM(positionElement); // Limpa DOM/listeners
+                positionElement.innerHTML = '+'; // Adiciona '+'
+                delete assignedPlayers[positionId]; // ATUALIZA ESTADO
+                console.log(`Estado assignedPlayers APÓS remover por click: ${JSON.stringify(assignedPlayers)}`);
+                hasUnsavedChanges = true;
+            } else {
+                console.log(`Posição ${positionId} vazia. Abrindo modal.`);
+                showPlayerListModal(positionElement.dataset.positionType, positionElement); // Função com logs
+            }
+            console.log(`--- Click Event End ---`);
+        }
+    
+    
+        // --- Funções de Inicialização, Fetch, Renderização (maioria inalterada) ---
+    
+        async function saveFormation() {
+            if (!currentUserUid) { console.log("Utilizador não autenticado."); return; }
             try {
-                // Get the latest season from palpites collection
                 const palpitesRef = collection(db, 'palpites');
                 const palpitesQuery = query(palpitesRef, orderBy('temporada', 'desc'), limit(1));
                 const palpitesSnapshot = await getDocs(palpitesQuery);
                 let latestSeason = '';
-
-                if (!palpitesSnapshot.empty) {
-                    latestSeason = palpitesSnapshot.docs[0].data().temporada;
-                } else {
-                    console.error('No seasons found in palpites collection');
-                    return;
-                }
-
-                // Check for existing formation in planteis
+                if (!palpitesSnapshot.empty) { latestSeason = palpitesSnapshot.docs[0].data().temporada; }
+                else { console.error('No seasons found.'); alert("Erro: Temporada não encontrada."); return; }
+    
+                if (!currentFormation) { alert("Por favor, selecione uma formação."); return; }
+    
                 const planteisRef = collection(db, 'planteis');
-                const planteisQuery = query(
-                    planteisRef,
-                    where('userId', '==', currentUserUid),
-                    where('formacao', '==', currentFormation),
-                    where('temporada', '==', latestSeason)
-                );
+                const planteisQuery = query( planteisRef, where('userId', '==', currentUserUid), where('formacao', '==', currentFormation), where('temporada', '==', latestSeason) );
                 const planteisSnapshot = await getDocs(planteisQuery);
-
-                // Create position data from assignedPlayers
-                const positionData = {};
-                const positions = document.querySelectorAll('.position');
-                positions.forEach(positionElement => {
-                    const positionId = positionElement.dataset.position;
-                    const playerId = positionElement.dataset.assignedPlayerId;
-                    positionData[positionId] = playerId || null;
-                });
-
-                const plantelData = {
-                    ...positionData,
-                    userId: currentUserUid,
-                    formacao: currentFormation,
-                    temporada: latestSeason,
-                    estado: 'ativo',
-                    dataDeEdicao: serverTimestamp()
-                };
-
+    
+                const plantelData = { userId: currentUserUid, formacao: currentFormation, temporada: latestSeason, estado: 'desativo', dataDeEdicao: serverTimestamp() };
+                const formationPositions = formations[currentFormation]?.map(p => p.position) || [];
+                formationPositions.forEach(posId => { plantelData[posId] = assignedPlayers[posId] || null; });
+    
                 if (!planteisSnapshot.empty) {
-                    // Update existing formation
                     const docRef = planteisSnapshot.docs[0].ref;
+                    const currentData = planteisSnapshot.docs[0].data();
+                    plantelData.estado = currentData.estado || 'desativo'; // Mantem estado
                     await updateDoc(docRef, plantelData);
+                    console.log("Formação atualizada!");
                 } else {
-                    // Create new formation
                     await addDoc(planteisRef, plantelData);
+                    console.log("Nova formação guardada!");
                 }
-
-                // Reset unsaved changes flag
                 hasUnsavedChanges = false;
-                console.log("Formação guardada com sucesso!");
-
-                // Show confirmation icon
+                // Feedback visual
                 const saveBtn = document.getElementById('saveFormationBtn');
                 const confirmIcon = document.createElement('i');
-                confirmIcon.classList.add('fas', 'fa-check');
-                confirmIcon.style.color = '#4CAF50';
-                confirmIcon.style.marginLeft = '10px';
+                confirmIcon.classList.add('fas', 'fa-check'); confirmIcon.style.color = '#4CAF50'; confirmIcon.style.marginLeft = '10px';
                 saveBtn.parentNode.insertBefore(confirmIcon, saveBtn.nextSibling);
-
-                // Remove confirmation icon after 3 seconds
-                setTimeout(() => {
-                    confirmIcon.remove();
-                }, 3000);
-
-            } catch (error) {
-                console.error("Erro ao guardar formação:", error);
-                alert("Erro ao guardar formação.");
-            }
+                setTimeout(() => confirmIcon.remove(), 3000);
+            } catch (error) { console.error("Erro ao guardar formação:", error); alert("Erro ao guardar formação."); }
         }
-
-
+    
+    
         function renderFormation(formationName) {
-            // Completely reset the formation and assigned players
-            currentFormation = formationName;
             assignedPlayers = {};
-            pitchArea.querySelectorAll('.position').forEach(pos => pos.remove()); // Remove all position elements
-
-            currentFormation = formationName; // Update current formation
-
+            pitchArea.innerHTML = '<div class="center-circle"></div>';
+            if (!formationName || !formations[formationName]) {
+                console.warn(`Formação "${formationName}" inválida.`);
+                return;
+            }
+            currentFormation = formationName;
             const currentFormationPositions = formations[formationName];
-            pitchArea.innerHTML = '<div class="center-circle"></div>'; // Re-add the center circle
-
             currentFormationPositions.forEach(pos => {
                 const positionElement = document.createElement('div');
                 positionElement.classList.add('position');
                 positionElement.dataset.position = pos.position;
                 positionElement.style.top = pos.top;
                 positionElement.style.left = pos.left;
-                positionElement.textContent = '+'; // Set back to '+' as default text
-                positionElement.dataset.playerId = null;
                 positionElement.dataset.positionType = pos.positionType;
-
-                positionElement.addEventListener('dragover', (event) => {
-                    event.preventDefault();
-                });
+                positionElement.innerHTML = '+';
+                positionElement.draggable = false;
+                positionElement.dataset.assignedPlayerId = null;
+                positionElement.addEventListener('dragover', handlePositionDragOver);
                 positionElement.addEventListener('drop', handlePositionDrop);
-
-                // *** MODIFIED CLICK EVENT LISTENER - DEBUGGING - CORRECTED NULL CHECK ***
-                positionElement.addEventListener('click', () => {
-                    const assignedPlayerId = positionElement.dataset.assignedPlayerId;
-                    console.log(`Click on position ${positionElement.dataset.position}, assignedPlayerId: ${assignedPlayerId}, typeof assignedPlayerId: ${typeof assignedPlayerId}`); // DEBUG LOG - TYPE OF
-                    if (assignedPlayerId && assignedPlayerId !== "null") { // CORRECTED IF CONDITION
-                        console.log("Player ID found (corrected check), calling removePlayerFromPosition"); // DEBUG LOG - CORRECTED CHECK
-                        // If player is assigned, remove them
-                        removePlayerFromPosition(positionElement, assignedPlayerId, positionElement.dataset.position);
-                        hasUnsavedChanges = true; // Marcar que há alterações não salvas
-                    } else {
-                        console.log("No Player ID found (corrected check), calling showPlayerListModal"); // DEBUG LOG - CORRECTED CHECK
-                        // If no player is assigned, show player list modal
-                        showPlayerListModal(positionElement.dataset.positionType, positionElement); // PASS positionType and positionElement
-                    }
-                });
-
-
+                positionElement.addEventListener('click', handlePositionClick);
                 pitchArea.appendChild(positionElement);
             });
-
-
-            // Não reposicionar jogadores automaticamente ao mudar de formação
-            // Deixamos a formação limpa para o utilizador adicionar jogadores manualmente
-            // ou carregar a formação guardada do Firebase
+            console.log(`Rendered empty formation: ${formationName}`);
         }
-
+    
+    
         function showPlayerListModal(positionType, positionElement) {
-            playerListModal.classList.add('active'); // Show the modal
-            playerCardListContainer.innerHTML = '<p>A carregar jogadores...</p>'; // Reset and show loading message
-            populatePlayerCardList(positionType, positionElement); // Call function to populate player cards
+            playerListModal.classList.add('active');
+            playerCardListContainer.innerHTML = '<p>A carregar jogadores...</p>';
+            populatePlayerCardList(positionType, positionElement); // Função com logs
         }
-
+    
+        // *** populatePlayerCardList COM LOGS DETALHADOS ***
         async function populatePlayerCardList(positionType, positionElement) {
             try {
-                // 1. Filter players based on positionType and ownership
-                const filteredPlayers = allPlayers.filter(player => {
-                    const playerPosicaoIngles = { // Mapping Português -> Inglês
-                        "Avançado": "FWD",
-                        "Defesa": "DEF",
-                        "Médio": "MID",
-                        "Guarda-Redes": "GK"
-                    }[player.posicao];
-                    return playerPosicaoIngles === positionType && player.compradopor === currentUserUid;
+                const positionTypePortugues = Object.keys(posicaoMapping).find(key => posicaoMapping[key] === positionType);
+    
+                console.log(`--- Modal Populate Start ---`);
+                console.log(`Filtrando jogadores para ${positionType} (${positionTypePortugues}).`);
+                console.log(`Estado assignedPlayers ANTES de filtrar modal: ${JSON.stringify(assignedPlayers)}`);
+    
+                const filteredByPosition = userOwnedPlayers.filter(player =>
+                    player.posicao === positionTypePortugues
+                );
+    
+                const assignedIds = Object.values(assignedPlayers).filter(id => id !== null);
+                console.log(`IDs atualmente no relvado: [${assignedIds.join(', ')}]`);
+    
+                const availablePlayers = filteredByPosition.filter(player => {
+                    const alreadyAssigned = assignedIds.includes(player.id);
+                    if (alreadyAssigned) {
+                        console.log(`Excluindo do modal: ${player.id} (${player.nome}) - Já está no relvado.`);
+                    }
+                    return !alreadyAssigned;
                 });
-
-                // 2. Exclude already assigned players
-                const availablePlayers = filteredPlayers.filter(player => {
-                    return !isPlayerAssigned(player.id); // Use the isPlayerAssigned function
-                });
-
-                playerCardListContainer.innerHTML = ''; // Clear "Loading..." message
-
+    
+                playerCardListContainer.innerHTML = '';
+    
                 if (availablePlayers.length === 0) {
-                    playerCardListContainer.innerHTML = '<p>Sem jogadores disponíveis para esta posição.</p>';
-                    return;
-                }
-
-                // 3. Render player cards in the modal
-                availablePlayers.forEach(player => {
-                    const playerCard = document.createElement('div');
-                    playerCard.classList.add('player-card');
-                    playerCard.classList.add('modal-player-card'); // Add a class to distinguish modal cards if needed
-                    // === PASTE YOUR PLAYER CARD CREATION LOGIC FROM renderPlayerResults HERE ===
-                    // Make sure to adapt it if necessary for the modal context
-                    if (player.casta) {
-                        const castaMap = {
-                            'Jogador Ouro': 'golden',
-                            'Jogador Prata': 'silver',
-                            'Jogador Bronze': 'bronze',
-                            'Jogador Platina': 'platina',
-                            'Jogador Diamante': 'diamond'
-                        };
-
-                        const castaClass = castaMap[player.casta];
-                        if (castaClass) {
-                            playerCard.classList.add(castaClass);
-                        }
-                    }
-
-                    // Add country flag to the top right corner of the card
-                    if (player.paisId && countries[player.paisId]) {
-                        const flagImg = document.createElement('img');
-                        flagImg.src = countries[player.paisId].imagem || 'placeholder_flag_url.png';
-                        flagImg.alt = countries[player.paisId].nome;
-                        flagImg.classList.add('country-flag');
-                        playerCard.appendChild(flagImg);
-                    }
-
-                    const img = document.createElement('img');
-                    img.src = player.imagem || 'placeholder_image_url.png';
-                    img.alt = player.nome;
-                    playerCard.appendChild(img);
-
-                    const playerInfo = document.createElement('div');
-                    playerInfo.classList.add('player-info');
-
-                    const playerName = document.createElement('span');
-                    playerName.classList.add('player-name');
-                    playerName.textContent = player.nome;
-                    playerInfo.appendChild(playerName);
-
-                    const playerPosition = document.createElement('span');
-                    playerPosition.classList.add('player-position');
-                    playerPosition.textContent = player.posicao;
-                    playerInfo.appendChild(playerPosition);
-
-                    // Add competition logo using two-step fetch process - adapt if needed for modal
-                    if (player.clube) {
-                        const clubesRef = collection(db, 'clubes');
-                        const clubQuery = query(clubesRef, where('nome', '==', player.clube));
-                        getDocs(clubQuery).then(clubSnapshot => {
-                            if (!clubSnapshot.empty) {
-                                const clubData = clubSnapshot.docs[0].data();
-                                if (clubData.competicaoId) {
-                                    const competicaoRef = doc(db, 'competicoes', clubData.competicaoId);
-                                    getDoc(competicaoRef).then(competicaoDoc => {
-                                        if (competicaoDoc.exists()) {
-                                            const competicaoData = competicaoDoc.data();
-                                            const competicaoLogo = document.createElement('img');
-                                            competicaoLogo.src = competicaoData.imagem;
-                                            competicaoLogo.alt = competicaoData.nome;
-                                            competicaoLogo.classList.add('competition-logo');
-                                            playerInfo.appendChild(competicaoLogo);
-                                        }
-                                    });
-                                }
-                            }
-                        });
-                    }
-
-
-                    // 4. Add "ADICIONAR" button to each card
-                    const addButton = document.createElement('button');
-                    addButton.textContent = 'ADICIONAR';
-                    addButton.classList.add('btn-confirm', 'add-player-btn'); // Style the button
-                    addButton.addEventListener('click', () => {
-                        // Logic to add player to position and close modal
-                        assignPlayerToPosition(player, positionElement);
-                        playerListModal.classList.remove('active'); // Close the modal after adding
-                    });
-                    playerCard.appendChild(addButton);
-
-                    playerCardListContainer.appendChild(playerCard);
-                });
-
-
-            } catch (error) {
-                console.error("Error populating player card list:", error);
-                playerCardListContainer.innerHTML = '<p>Erro ao carregar jogadores.</p>';
-            }
-        }
-
-        function assignPlayerToPosition(player, positionElement) {
-            // Similar logic to handlePositionDrop, but triggered by "ADICIONAR" button
-            const playerId = player.id;
-            const positionId = positionElement.dataset.position;
-
-            // Clear '+' text and add player image to the position
-            positionElement.innerHTML = '';
-            const playerImg = document.createElement('img');
-            playerImg.src = player.imagem || 'placeholder_image_url.png';
-            playerImg.alt = player.nome;
-            positionElement.appendChild(playerImg);
-            positionElement.dataset.assignedPlayerId = playerId;
-            assignedPlayers[positionId] = playerId;
-            hasUnsavedChanges = true; // Mark that there are unsaved changes
-            console.log(`Jogador ${player.nome} adicionado à posição ${positionId} via popup.`);
-        }
-
-
-        closePlayerListModalBtn.addEventListener('click', () => {
-            playerListModal.classList.remove('active'); // Hide the player list modal
-        });
-
-
-        function repositionPlayers(previousFormationName, previousAssignedPlayers, currentFormationName) {
-            const currentFormationPositions = formations[currentFormationName];
-            const availablePositions = currentFormationPositions.reduce((acc, pos) => { // Criar um mapa de posições disponíveis por tipo
-                acc[pos.positionType] = acc[pos.positionType] || [];
-                acc[pos.positionType].push(pos.position);
-                return acc;
-            }, {});
-
-            for (const positionId in previousAssignedPlayers) {
-                const playerId = previousAssignedPlayers[positionId];
-                if (!playerId) continue; // Skip if no player assigned to this previous position
-                const player = allPlayers.find(p => p.id === playerId);
-                if (!player) continue;
-
-                const playerPosicaoIngles = { // Mapeamento para Português -> Inglês (igual ao handlePositionDrop)
-                    "Avançado": "FWD",
-                    "Defesa": "DEF",
-                    "Médio": "MID",
-                    "Guarda-Redes": "GK"
-                }[player.posicao];
-
-                if (availablePositions[playerPosicaoIngles] && availablePositions[playerPosicaoIngles].length > 0) {
-                    const newPositionId = availablePositions[playerPosicaoIngles].shift(); // Obter e remover a primeira posição disponível deste tipo
-                    const positionElement = document.querySelector(`.position[data-position="${newPositionId}"]`);
-                    if (positionElement) {
-                        positionElement.innerHTML = ''; // Clear '+' text
-                        const playerImg = document.createElement('img');
-                        playerImg.src = player.imagem || 'placeholder_image_url.png';
-                        playerImg.alt = player.nome;
-                        positionElement.appendChild(playerImg);
-                        positionElement.dataset.assignedPlayerId = playerId;
-                        assignedPlayers[newPositionId] = playerId; // Update assignedPlayers for the new formation
-                        hasUnsavedChanges = true; // Mark that there are unsaved changes when repositioning players
-                        console.log(`Jogador ${player.nome} reposicionado de ${previousFormationName} para ${currentFormationName} na posição ${newPositionId}`);
-                    }
+                    playerCardListContainer.innerHTML = '<p>Sem jogadores disponíveis para esta posição (ou já estão em campo).</p>';
+                    console.log(`Nenhum jogador disponível encontrado para o modal.`);
                 } else {
-                    console.log(`Não foi possível reposicionar ${player.nome} de ${previousFormationName} para ${currentFormationName}. Sem posições ${playerPosicaoIngles} disponíveis.`);
-                    // Jogador não pode ser reposicionado - pode querer fazer algo mais aqui (ex: colocar numa "banca")
+                    console.log(`Jogadores disponíveis para o modal (${availablePlayers.length}): ${availablePlayers.map(p=>p.id).join(', ')}`);
+                    availablePlayers.forEach(player => {
+                        const playerCard = createPlayerCardElement(player, false);
+                        const addButton = document.createElement('button');
+                        addButton.textContent = 'ADICIONAR';
+                        addButton.classList.add('btn-confirm', 'add-player-btn');
+                        addButton.style.marginTop = '5px';
+                        addButton.onclick = () => {
+                            assignPlayerToPosition(player, positionElement); // Função com logs
+                            playerListModal.classList.remove('active');
+                        };
+                        playerCard.appendChild(addButton);
+                        playerCardListContainer.appendChild(playerCard);
+                    });
                 }
+                console.log(`--- Modal Populate End ---`);
+    
+            } catch (error) {
+                console.error("Erro ao popular lista de jogadores no modal:", error);
+                playerCardListContainer.innerHTML = '<p>Erro ao carregar jogadores.</p>';
+                console.log(`--- Modal Populate End (Erro) ---`);
             }
         }
-
-
-        function handlePositionDrop(event) {
-            event.preventDefault();
-            const playerId = event.dataTransfer.getData('playerId');
-            const positionElement = event.currentTarget;
+    
+        // *** assignPlayerToPosition COM LOGS DETALHADOS ***
+        function assignPlayerToPosition(player, positionElement) {
             const positionId = positionElement.dataset.position;
-            const positionType = positionElement.dataset.positionType;
-            const originalPositionId = event.dataTransfer.getData('originalPositionId'); // Obter a posição de origem se for uma troca
-
-            const player = allPlayers.find(p => p.id === playerId);
-            if (!player) return;
-
-            const posicaoMapping = {
-                "Avançado": "FWD",
-                "Defesa": "DEF",
-                "Médio": "MID",
-                "Guarda-Redes": "GK"
-            };
-            const playerPosicaoIngles = posicaoMapping[player.posicao];
-
-            if (playerPosicaoIngles !== positionType) {
-                alert(`Este jogador é ${player.posicao} e só pode ser colocado em posições de ${positionType}`);
+            console.log(`--- Modal Add Start ---`);
+            console.log(`Tentando adicionar ${player.nome} (ID: ${player.id}) à posição ${positionId}.`);
+            console.log(`Estado assignedPlayers ANTES da adição modal: ${JSON.stringify(assignedPlayers)}`);
+    
+    
+            // VERIFICAÇÃO PRINCIPAL
+            if (isPlayerAlreadyOnPitch(player.id)) { // Função auxiliar já tem log
+                alert(`${player.nome} já está em campo noutra posição!`);
+                console.log(`Adição Modal Bloqueada: Jogador ${player.id} já existe em assignedPlayers.`);
+                console.log(`--- Modal Add End (Bloqueado) ---`);
                 return;
             }
-
-            // Verificar se o jogador já está atribuído a OUTRA posição
-            const alreadyAssignedPosition = Object.keys(assignedPlayers).find(pos => assignedPlayers[pos] === playerId);
-            if (alreadyAssignedPosition && alreadyAssignedPosition !== positionId) {
-                // Remover jogador da posição anterior
-                const previousPositionElement = document.querySelector(`.position[data-position="${alreadyAssignedPosition}"]`);
-                if (previousPositionElement) {
-                    removePlayerFromPosition(previousPositionElement, playerId, alreadyAssignedPosition);
-                }
+    
+            // Verifica se a posição foi ocupada enquanto o modal estava aberto
+            if (positionElement.dataset.assignedPlayerId && positionElement.dataset.assignedPlayerId !== 'null') {
+                alert("Esta posição já foi ocupada enquanto escolhia. Tente novamente.");
+                console.log(`Adição Modal Bloqueada: Posição ${positionId} ocupada (race condition?).`);
+                console.log(`--- Modal Add End (Bloqueado) ---`);
+                return;
             }
-
-
-            // Verificar se já existe um jogador na posição de destino
-            const existingPlayerId = positionElement.dataset.assignedPlayerId;
-
-            if (existingPlayerId) {
-                // Trocar jogadores
-                if (existingPlayerId === playerId) { // Impedir troca consigo mesmo
-                    return;
-                }
-
-                const originalPositionElement = originalPositionId ? document.querySelector(`.position[data-position="${originalPositionId}"]`) : null;
-
-                if (originalPositionElement) {
-                    // Remover jogador arrastado da posição original
-                    originalPositionElement.innerHTML = '+';
-                    originalPositionElement.dataset.assignedPlayerId = null;
-                    delete assignedPlayers[originalPositionId]; // Remover do assignedPlayers
-
-                    // Colocar jogador arrastado na nova posição
-                    positionElement.innerHTML = '';
-                    const playerImg = document.createElement('img');
-                    playerImg.src = player.imagem || 'placeholder_image_url.png';
-                    playerImg.alt = player.nome;
-                    positionElement.appendChild(playerImg);
-                    positionElement.dataset.assignedPlayerId = playerId;
-                    assignedPlayers[positionId] = playerId;
-
-                    // Encontrar o jogador existente (que estava na posição de destino)
-                    const playerExistente = allPlayers.find(p => p.id === existingPlayerId);
-                    if (playerExistente) {
-                        // Colocar o jogador existente DE VOLTA na posição de ORIGEM do jogador arrastado
-
-                        originalPositionElement.innerHTML = ''; // Limpar texto '+'
-                        const playerExistenteImg = document.createElement('img');
-                        playerExistenteImg.src = playerExistente.imagem || 'placeholder_image_url.png';
-                        playerExistenteImg.alt = playerExistente.nome;
-                        originalPositionElement.appendChild(playerExistenteImg);
-                        originalPositionElement.dataset.assignedPlayerId = existingPlayerId;
-                        assignedPlayers[originalPositionId] = existingPlayerId; // Reatribuir jogador existente à posição original
-
-                        console.log(`Jogadores trocados: ${player.nome} trocado com ${playerExistente.nome}`);
-                        hasUnsavedChanges = true; // Marcar que há alterações não salvas
-                        return; // Troca completa, sair da função
-                    }
-                } else {
-                    // Se não há posição original (jogador arrastado da lista), substitui o jogador existente
-                    positionElement.innerHTML = '';
-                    const playerImg = document.createElement('img');
-                    playerImg.src = player.imagem || 'placeholder_image_url.png';
-                    playerImg.alt = player.nome;
-                    positionElement.appendChild(playerImg);
-                    positionElement.dataset.assignedPlayerId = playerId;
-                    assignedPlayers[positionId] = playerId;
-                    console.log(`Jogador ${player.nome} substituiu o jogador na posição ${positionId}`);
-                    hasUnsavedChanges = true; // Marcar que há alterações não salvas
-                }
-
-
-            } else {
-                // Se não havia jogador na posição de destino (ou se a troca falhou por algum motivo),
-                // Lógica normal de "drop" (colocar jogador na posição vazia) - a mesma de antes
-                positionElement.innerHTML = ''; // Clear '+' text
-                const playerImg = document.createElement('img');
-                playerImg.src = player.imagem || 'placeholder_image_url.png';
-                playerImg.alt = player.nome;
-                positionElement.appendChild(playerImg);
-                positionElement.dataset.assignedPlayerId = playerId;
-                assignedPlayers[positionId] = playerId;
-                console.log(`Jogador ${player.nome} colocado na posição ${positionId}`);
-                hasUnsavedChanges = true; // Marcar que há alterações não salvas
-            }
+    
+            console.log(`Adicionando ${player.id} a ${positionId} via modal.`);
+            removePlayerFromPositionDOM(positionElement); // Limpa DOM
+            addPlayerToPositionDOM(positionElement, player); // Adiciona DOM
+            assignedPlayers[positionId] = player.id; // ATUALIZA ESTADO
+            console.log(`Estado assignedPlayers APÓS adição modal: ${JSON.stringify(assignedPlayers)}`);
+            hasUnsavedChanges = true;
+            console.log(`--- Modal Add End ---`);
         }
-
-
-        function removePlayerFromPosition(positionElement, playerId, positionId) {
-            console.log("LOG 3: removePlayerFromPosition function started for playerId:", playerId, "positionId:", positionId);
-            try {
-                positionElement.innerHTML = '+'; // Set back to '+' text
-                positionElement.dataset.assignedPlayerId = null;
-                delete assignedPlayers[positionId];
-                console.log('assignedPlayers após remover:', JSON.stringify(assignedPlayers));
-                positionElement.removeEventListener('dragover', handlePositionDragOver); // Remover event listeners para evitar acumulação
-                positionElement.removeEventListener('drop', handlePositionDrop);
-                positionElement.addEventListener('dragover', (event) => {
-                    event.preventDefault();
-                });
-                positionElement.addEventListener('drop', handlePositionDrop);
-                console.log(`Player ${playerId} removed from position ${positionId}`);
-                hasUnsavedChanges = true; // Mark that there are unsaved changes when removing a player
-                console.log("LOG 4: removePlayerFromPosition function finished for playerId:", playerId, "positionId:", positionId);
-            } catch (error) {
-                console.error("Erro interno em removePlayerFromPosition:", error);
-            }
-        }
-
-        function handlePositionDragOver(event) {
-            event.preventDefault();
-        }
-
-        function isPlayerAssigned(playerId) {
-            console.log("isPlayerAssigned called for playerId:", playerId);
-            console.log("Current assignedPlayers:", JSON.stringify(assignedPlayers));
-            for (const position in assignedPlayers) {
-                if (assignedPlayers[position] === playerId) {
-                    console.log(`Player ${playerId} is already assigned to position ${position}`);
-                    return true;
-                }
-            }
-            console.log(`Player ${playerId} is NOT assigned.`);
-            return false;
-        }
-
-
-        formationSelect.addEventListener('change', async (e) => {
-            const newFormation = e.target.value;
-            if (!newFormation) return; // Prevent rendering if formation is empty (default option)
-
-            if (hasUnsavedChanges) {
-                console.log("Inside if (hasUnsavedChanges) - value is:", hasUnsavedChanges); // ADDED CONSOLE LOG
-                showConfirmationModal(
-                    'Quer guardar as alterações feitas?',
-                    async () => {
-                        // User clicked 'Sim'
-                        await saveFormation();
-                        currentFormation = newFormation;
-                        renderFormation(currentFormation);
-                        await loadFormation();
-                    },
-                    () => {
-                        // User clicked 'Não'
-                        hasUnsavedChanges = false;
-                        currentFormation = newFormation;
-                        renderFormation(currentFormation);
-                        loadFormation();
-                    }
-                );
-            } else {
-                console.log("Inside else (hasUnsavedChanges) - value is:", hasUnsavedChanges); // ADDED CONSOLE LOG
-                currentFormation = newFormation;
-                renderFormation(currentFormation);
-                await loadFormation();
-            }
+    
+    
+        closePlayerListModalBtn.addEventListener('click', () => {
+            playerListModal.classList.remove('active');
         });
-
-        // Função para mostrar o modal de confirmação personalizado
+    
         function showConfirmationModal(message, confirmCallback, cancelCallback) {
+            const existingModal = document.querySelector('.confirmation-modal-overlay');
+            if (existingModal) document.body.removeChild(existingModal);
             console.log("showConfirmationModal function called");
-            console.log("Confirmation modal message:", message);
-
-            // Criar o overlay do modal
             const modalOverlay = document.createElement('div');
-            modalOverlay.classList.add('modal-overlay');
-
-            // Criar o conteúdo do modal
+            modalOverlay.classList.add('modal-overlay', 'confirmation-modal-overlay');
             const modalContent = document.createElement('div');
             modalContent.classList.add('modal-content');
-
-            // Adicionar a mensagem
             const messageElement = document.createElement('p');
             messageElement.textContent = message;
             modalContent.appendChild(messageElement);
-
-            // Criar os botões
             const buttonsContainer = document.createElement('div');
             buttonsContainer.classList.add('modal-buttons');
-
-            // Botão Sim
             const confirmButton = document.createElement('button');
-            confirmButton.classList.add('btn-confirm');
-            confirmButton.textContent = 'Sim';
-            confirmButton.onclick = () => {
-                document.body.removeChild(modalOverlay);
-                if (confirmCallback) confirmCallback();
-            };
-
-            // Botão Não
+            confirmButton.classList.add('btn-confirm'); confirmButton.textContent = 'Sim';
+            confirmButton.onclick = () => { document.body.removeChild(modalOverlay); if (confirmCallback) confirmCallback(); };
             const cancelButton = document.createElement('button');
-            cancelButton.classList.add('btn-cancel');
-            cancelButton.textContent = 'Não';
-            cancelButton.onclick = () => {
-                document.body.removeChild(modalOverlay);
-                if (cancelCallback) cancelCallback();
-            };
-
-            // Adicionar botões ao container
-            buttonsContainer.appendChild(confirmButton);
-            buttonsContainer.appendChild(cancelButton);
+            cancelButton.classList.add('btn-cancel'); cancelButton.textContent = 'Não';
+            cancelButton.onclick = () => { document.body.removeChild(modalOverlay); if (cancelCallback) cancelCallback(); };
+            buttonsContainer.appendChild(confirmButton); buttonsContainer.appendChild(cancelButton);
             modalContent.appendChild(buttonsContainer);
-
-            // Adicionar o conteúdo ao overlay e o overlay ao body
             modalOverlay.appendChild(modalContent);
             document.body.appendChild(modalOverlay);
-
-            modalOverlay.classList.add('active'); // ADICIONE ESTA LINHA!
-            console.log("Modal overlay element created and appended:", modalOverlay);
-            console.log("Modal content element created and appended:", modalContent);
+            modalOverlay.classList.add('active');
+            console.log("Confirmation modal displayed");
         }
-
-
-        async function fetchPlayers() {
+    
+        async function fetchUserOwnedPlayers() {
+            if (!currentUserUid) return;
             const playersRef = collection(db, 'jogadores');
-            // Create a query to filter players where compradopor equals currentUserUid
-            const playersQuery = query(playersRef, where('compradopor', '==', currentUserUid));
-            const playersSnap = await getDocs(playersQuery);
-            const fetchedPlayers = [];
-            playersSnap.forEach(doc => {
-                const playerData = doc.data();
-                fetchedPlayers.push({...playerData, id: doc.id, posicao: playerData.posicao});
-                clubs.add(playerData.clube);
-            });
-            allPlayers = fetchedPlayers;
-            populateClubFilter();
-            renderPlayerResults(allPlayers);
-        }
-
-        async function fetchUserPlayers(userId) {
-            const userPlayersRef = collection(db, 'users', userId, 'jogadores'); // This path seems incorrect, should be just 'jogadores' collection for all players bought by users
-            const userPlayersSnap = await getDocs(userPlayersRef);
+            const q = query(playersRef, where('compradopor', '==', currentUserUid));
+            const querySnapshot = await getDocs(q);
             const fetchedUserPlayers = [];
-            userPlayersSnap.forEach(doc => {
-                fetchedUserPlayers.push({...doc.data(), id: doc.id});
+            const uniqueClubs = new Set();
+            const uniqueCountryIds = new Set();
+            querySnapshot.forEach((doc) => {
+                const playerData = doc.data();
+                fetchedUserPlayers.push({ ...playerData, id: doc.id });
+                if (playerData.clube) uniqueClubs.add(playerData.clube);
+                if (playerData.paisId) uniqueCountryIds.add(playerData.paisId);
             });
-            userPlayers = fetchedUserPlayers;
-            console.log('User players fetched:', userPlayers);
+            userOwnedPlayers = fetchedUserPlayers;
+            clubs = uniqueClubs;
+            console.log(`Fetched ${userOwnedPlayers.length} players owned by user ${currentUserUid}`);
+            populateClubFilter();
+            renderPlayerResults(userOwnedPlayers);
         }
-
+    
+    
         async function fetchCountries() {
             const countriesRef = collection(db, 'paises');
             const countriesSnap = await getDocs(countriesRef);
-            const fetchedCountries = {};
-            countriesSnap.forEach(doc => {
-                fetchedCountries[doc.id] = doc.data();
-            });
-            countries = fetchedCountries;
+            countries = {}; // Reset before fetching
+            countriesSnap.forEach(doc => { countries[doc.id] = doc.data(); });
             populateCountryFilter();
         }
-
-
+    
+    
         function populateCountryFilter() {
             countryFilterSelect.innerHTML = '<option value="">País (Todos)</option>';
-            for (const countryId in countries) {
-                const country = countries[countryId];
+            const sortedCountries = Object.entries(countries).sort(([, a], [, b]) => a.nome.localeCompare(b.nome));
+            sortedCountries.forEach(([countryId, countryData]) => {
                 const option = document.createElement('option');
-                option.value = countryId;
-                option.textContent = country.nome;
+                option.value = countryId; option.textContent = countryData.nome;
                 countryFilterSelect.appendChild(option);
-            }
+            });
         }
-
+    
+    
         function populateClubFilter() {
             clubFilterSelect.innerHTML = '<option value="">Clube (Todos)</option>';
-            clubs.forEach(clubName => {
+            const sortedClubs = [...clubs].sort((a, b) => a.localeCompare(b));
+            sortedClubs.forEach(clubName => {
                 const option = document.createElement('option');
-                option.value = clubName;
-                option.textContent = clubName;
+                option.value = clubName; option.textContent = clubName;
                 clubFilterSelect.appendChild(option);
             });
         }
-
-
-        function renderPlayerResults(players) {
-            // Sort players by position in the specified order: Guarda-Redes, Defesa, Médio, Avançado
-            const positionOrder = {
-                'Guarda-Redes': 1,
-                'Defesa': 2,
-                'Médio': 3,
-                'Avançado': 4
-            };
-
-            // Create a sorted copy of the players array
-            const sortedPlayers = [...players].sort((a, b) => {
-                const posA = positionOrder[a.posicao] || 999; // Default high value for unknown positions
-                const posB = positionOrder[b.posicao] || 999;
-                return posA - posB;
-            });
-
-            playerResultsContainer.innerHTML = '';
-            if (sortedPlayers.length === 0) {
-                playerResultsContainer.textContent = 'No data available in table';
-                return;
-            }
-
-            sortedPlayers.forEach(player => {
-                const playerCard = document.createElement('div');
-                playerCard.classList.add('player-card');
+    
+        function createPlayerCardElement(player, isDraggable) {
+            const playerCard = document.createElement('div');
+            playerCard.classList.add('player-card');
+            playerCard.dataset.playerId = player.id;
+            if (isDraggable) {
                 playerCard.draggable = true;
-                playerCard.dataset.playerId = player.id;
-
-                // Add casta-based class for styling
-                if (player.casta) {
-                    const castaMap = {
-                        'Jogador Ouro': 'golden',
-                        'Jogador Prata': 'silver',
-                        'Jogador Bronze': 'bronze',
-                        'Jogador Platina': 'platina',
-                        'Jogador Diamante': 'diamond'
-                    };
-
-                    const castaClass = castaMap[player.casta];
-                    if (castaClass) {
-                        playerCard.classList.add(castaClass);
+                playerCard.addEventListener('dragstart', handlePlayerCardDragStart);
+            }
+            const castaMap = { 'Jogador Ouro': 'golden', 'Jogador Prata': 'silver', 'Jogador Bronze': 'bronze', 'Jogador Platina': 'platina', 'Jogador Diamante': 'diamond' };
+            const castaClass = castaMap[player.casta];
+            if (castaClass) playerCard.classList.add(castaClass);
+    
+            if (player.paisId && countries[player.paisId]) {
+                const flagImg = document.createElement('img');
+                flagImg.src = countries[player.paisId].imagem || 'placeholder_flag_url.png';
+                flagImg.alt = countries[player.paisId].nome;
+                flagImg.classList.add('country-flag');
+                playerCard.appendChild(flagImg);
+            }
+            const img = document.createElement('img');
+            img.src = player.imagem || 'placeholder_image_url.png'; img.alt = player.nome;
+            playerCard.appendChild(img);
+            const playerInfo = document.createElement('div'); playerInfo.classList.add('player-info');
+            const playerName = document.createElement('span'); playerName.classList.add('player-name'); playerName.textContent = player.nome; playerInfo.appendChild(playerName);
+            const playerPosition = document.createElement('span'); playerPosition.classList.add('player-position'); playerPosition.textContent = player.posicao; playerInfo.appendChild(playerPosition);
+            playerCard.appendChild(playerInfo);
+    
+            if (player.clube) {
+                fetchCompetitionLogo(player.clube).then(logoData => {
+                    if (logoData) {
+                        const competicaoLogo = document.createElement('img');
+                        competicaoLogo.src = logoData.imagem; competicaoLogo.alt = logoData.nome;
+                        competicaoLogo.classList.add('competition-logo');
+                        playerInfo.appendChild(competicaoLogo);
                     }
-                }
-
-                // Add country flag to the top right corner of the card
-                if (player.paisId && countries[player.paisId]) {
-                    const flagImg = document.createElement('img');
-                    flagImg.src = countries[player.paisId].imagem || 'placeholder_flag_url.png';
-                    flagImg.alt = countries[player.paisId].nome;
-                    flagImg.classList.add('country-flag');
-                    playerCard.appendChild(flagImg);
-                }
-
-                const img = document.createElement('img');
-                img.src = player.imagem || 'placeholder_image_url.png';
-                img.alt = player.nome;
-                playerCard.appendChild(img);
-
-                const playerInfo = document.createElement('div');
-                playerInfo.classList.add('player-info');
-
-                const playerName = document.createElement('span');
-                playerName.classList.add('player-name');
-                playerName.textContent = player.nome;
-                playerInfo.appendChild(playerName);
-
-                const playerPosition = document.createElement('span');
-                playerPosition.classList.add('player-position');
-                playerPosition.textContent = player.posicao;
-                playerInfo.appendChild(playerPosition);
-
-                // Add competition logo using two-step fetch process
-                if (player.clube) {
-                    const clubesRef = collection(db, 'clubes');
-                    const clubQuery = query(clubesRef, where('nome', '==', player.clube));
-                    getDocs(clubQuery).then(clubSnapshot => {
-                        if (!clubSnapshot.empty) {
-                            const clubData = clubSnapshot.docs[0].data();
-                            if (clubData.competicaoId) {
-                                const competicaoRef = doc(db, 'competicoes', clubData.competicaoId);
-                                getDoc(competicaoRef).then(competicaoDoc => {
-                                    if (competicaoDoc.exists()) {
-                                        const competicaoData = competicaoDoc.data();
-                                        const competicaoLogo = document.createElement('img');
-                                        competicaoLogo.src = competicaoData.imagem;
-                                        competicaoLogo.alt = competicaoData.nome;
-                                        competicaoLogo.classList.add('competition-logo');
-                                        playerInfo.appendChild(competicaoLogo);
-                                    }
-                                });
-                            }
-                        }
-                    });
-                }
-
-                playerCard.appendChild(playerInfo);
-
-                playerCard.addEventListener('dragstart', (event) => {
-                    event.dataTransfer.setData('playerId', player.id);
                 });
-
-                playerResultsContainer.appendChild(playerCard);
+            }
+            return playerCard;
+        }
+    
+        async function fetchCompetitionLogo(clubName) {
+            try {
+                const clubesRef = collection(db, 'clubes');
+                const clubQuery = query(clubesRef, where('nome', '==', clubName), limit(1));
+                const clubSnapshot = await getDocs(clubQuery);
+                if (!clubSnapshot.empty) {
+                    const clubData = clubSnapshot.docs[0].data();
+                    if (clubData.competicaoId) {
+                        const competicaoRef = doc(db, 'competicoes', clubData.competicaoId);
+                        const competicaoDoc = await getDoc(competicaoRef);
+                        if (competicaoDoc.exists()) return competicaoDoc.data();
+                    }
+                } return null;
+            } catch (error) { console.error(`Erro logo ${clubName}:`, error); return null; }
+        }
+    
+        function renderPlayerResults(playersToRender) {
+            playerResultsContainer.innerHTML = '';
+            if (playersToRender.length === 0) { playerResultsContainer.innerHTML = '<p>Nenhum jogador encontrado.</p>'; return; }
+            const positionOrder = { 'Guarda-Redes': 1, 'Defesa': 2, 'Médio': 3, 'Avançado': 4 };
+            playersToRender.sort((a, b) => {
+                const posA = positionOrder[a.posicao] || 99; const posB = positionOrder[b.posicao] || 99;
+                if (posA !== posB) return posA - posB;
+                return a.nome.localeCompare(b.nome);
+            });
+            playersToRender.forEach(player => {
+                const playerCardElement = createPlayerCardElement(player, true);
+                playerResultsContainer.appendChild(playerCardElement);
             });
         }
-
-
+    
+    
         function filterPlayers() {
             const searchTerm = playerSearchInput.value.toLowerCase();
             const selectedCountryId = countryFilterSelect.value;
             const selectedClub = clubFilterSelect.value;
-
-            const filteredPlayers = allPlayers.filter(player => {
+            const filtered = userOwnedPlayers.filter(player => {
                 const nameMatch = player.nome.toLowerCase().includes(searchTerm);
-                const countryMatch = selectedCountryId ? player.paisId === selectedCountryId : true;
-                const clubMatch = selectedClub ? player.clube === selectedClub : true;
-                const userMatch = player.compradopor === currentUserUid; // Only show players bought by current user
-
-                return nameMatch && countryMatch && clubMatch && userMatch;
+                const countryMatch = !selectedCountryId || player.paisId === selectedCountryId;
+                const clubMatch = !selectedClub || player.clube === selectedClub;
+                return nameMatch && countryMatch && clubMatch;
             });
-            renderPlayerResults(filteredPlayers);
+            renderPlayerResults(filtered);
         }
-
-
+    
+    
         playerSearchInput.addEventListener('input', filterPlayers);
         countryFilterSelect.addEventListener('change', filterPlayers);
         clubFilterSelect.addEventListener('change', filterPlayers);
-
+    
         const saveFormationButton = document.getElementById('saveFormationBtn');
         saveFormationButton.addEventListener('click', saveFormation);
-
+    
         const chooseBtn = document.getElementById('chooseBtn');
-
         chooseBtn.addEventListener('click', async () => {
-            if (!currentUserUid) {
-                console.log("User ID not available");
-                return;
-            }
-
+            if (!currentUserUid) return;
+            if (!currentFormation) { alert("Selecione uma formação."); return; }
+            if (hasUnsavedChanges) { alert("Guarde as alterações antes de escolher."); return; }
             try {
-                // Get the latest season from palpites collection
                 const palpitesRef = collection(db, 'palpites');
                 const palpitesQuery = query(palpitesRef, orderBy('temporada', 'desc'), limit(1));
                 const palpitesSnapshot = await getDocs(palpitesQuery);
-
-                if (palpitesSnapshot.empty) {
-                    console.error('No seasons found in palpites collection');
-                    return;
-                }
-
+                if (palpitesSnapshot.empty) throw new Error('Temporada não encontrada.');
                 const latestSeason = palpitesSnapshot.docs[0].data().temporada;
-
-                // Query all planteis for current user and season
+    
                 const planteisRef = collection(db, 'planteis');
-                const allPlanteisQuery = query(
-                    planteisRef,
-                    where('userId', '==', currentUserUid),
-                    where('temporada', '==', latestSeason)
-                );
-
+                const currentFormationQuery = query( planteisRef, where('userId', '==', currentUserUid), where('formacao', '==', currentFormation), where('temporada', '==', latestSeason), limit(1) );
+                const currentFormationSnap = await getDocs(currentFormationQuery);
+                if (currentFormationSnap.empty) { alert(`A formação ${currentFormation} não está guardada. Guarde-a primeiro.`); return; }
+                const currentFormationDocRef = currentFormationSnap.docs[0].ref;
+    
+                const allPlanteisQuery = query( planteisRef, where('userId', '==', currentUserUid), where('temporada', '==', latestSeason) );
                 const allPlanteisSnapshot = await getDocs(allPlanteisQuery);
-
-                // Update estado for all formations
-                const batch = firebase.firestore.writeBatch(db);
-
-                allPlanteisSnapshot.forEach(doc => {
-                    const formation = doc.data().formacao;
-                    // Set estado based on whether it matches current formation
-                    const newEstado = formation === currentFormation ? 'ativo' : 'desativo';
-                    batch.update(doc.ref, { estado: newEstado });
-                });
-
-                // Commit all updates
+                const batch = writeBatch(db);
+                allPlanteisSnapshot.forEach(doc => { batch.update(doc.ref, { estado: 'desativo' }); });
+                batch.update(currentFormationDocRef, { estado: 'ativo' }); // Ativa a selecionada
                 await batch.commit();
-
-                // Show confirmation icon
+    
+                // Feedback visual
                 const confirmIcon = document.createElement('i');
-                confirmIcon.classList.add('fas', 'fa-check');
-                confirmIcon.style.color = '#4CAF50';
-                confirmIcon.style.marginLeft = '10px';
+                confirmIcon.classList.add('fas', 'fa-check'); confirmIcon.style.color = '#4CAF50'; confirmIcon.style.marginLeft = '10px';
                 chooseBtn.parentNode.insertBefore(confirmIcon, chooseBtn.nextSibling);
-
-                // Remove the confirmation icon after 2 seconds
-                setTimeout(() => {
-                    confirmIcon.remove();
-                }, 2000);
-
-                console.log('Formation set as active successfully');
-            } catch (error) {
-                console.error('Error setting active formation:', error);
-            }
+                setTimeout(() => confirmIcon.remove(), 2000);
+                console.log(`Formação ${currentFormation} definida como ativa.`);
+            } catch (error) { console.error('Erro ao definir formação ativa:', error); alert('Erro: ' + error.message); }
         });
-
-
+    
+    
         async function getUserStatus(userId) {
             const userDoc = doc(db, 'users', userId);
             const docSnap = await getDoc(userDoc);
-            if (docSnap.exists() && docSnap.data().aceite === "Yes") {
-                return docSnap.data().estatuto;
-            } else {
-                return null;
-            }
+            if (docSnap.exists() && docSnap.data().aceite === "Yes") { return docSnap.data().estatuto; }
+            else { return null; }
         }
-
+    
         async function fetchFormationsFromFirestore() {
-            if (!currentUserUid) {
-                console.log("currentUserUid não definido ao buscar formações.");
-                return []; // Retorna um array vazio se não houver utilizador
-            }
+            if (!currentUserUid) return [];
             try {
-                const userDocRef = firebase.firestore.doc(db, 'users', currentUserUid); // Referência ao documento do utilizador atual
-                const userDocSnap = await firebase.firestore.getDoc(userDocRef);
-
+                const userDocRef = doc(db, 'users', currentUserUid);
+                const userDocSnap = await getDoc(userDocRef);
                 if (userDocSnap.exists()) {
                     const userData = userDocSnap.data();
-                    const táticaString = userData.tática; // Assume que o campo se chama 'tática'
-
-                    if (táticaString) {
-                        // Processa a string para criar um array de formações
-                        const formationNames = táticaString.split(' '); // Divide a string por espaços
-                        return formationNames.map(name => ({ value: name, label: name })); // Cria objetos com value e label
-                    } else {
-                        console.log("Campo 'tática' está vazio ou não existe no documento do utilizador.");
-                        return []; // Retorna array vazio se o campo 'tática' estiver vazio
-                    }
-                } else {
-                    console.log("Documento do utilizador não encontrado.");
-                    return []; // Retorna array vazio se o documento do utilizador não existir
+                    const táticaString = userData.tática;
+                    if (táticaString) { return táticaString.split(' ').filter(name => name.trim() !== '').map(name => ({ value: name, label: name })); }
                 }
-            } catch (error) {
-                console.error("Erro ao buscar formações do Firestore:", error);
-                return []; // Retorna array vazio em caso de erro
-            }
+                console.log("Campo 'tática' vazio ou user não encontrado."); return [];
+            } catch (error) { console.error("Erro ao buscar formações:", error); return []; }
         }
-
+    
         async function fetchActiveFormationFromPlanteis() {
-            if (!currentUserUid) {
-                console.log("currentUserUid não definido ao buscar formação ativa em planteis.");
-                return null;
-            }
+            if (!currentUserUid) return null;
             try {
-                const planteisRef = collection(db, 'planteis');
-                const activePlanteisQuery = query(
-                    planteisRef,
-                    where('userId', '==', currentUserUid),
-                    where('estado', '==', 'ativo'),
-                    limit(1) // Assumindo que só existe um plantel ativo por utilizador
-                );
-                const activePlanteisSnapshot = await getDocs(activePlanteisQuery);
-
-                if (!activePlanteisSnapshot.empty) {
-                    const plantelData = activePlanteisSnapshot.docs[0].data();
-                    return plantelData.formacao; // Retorna a formação ativa
-                } else {
-                    console.log("Nenhum plantel ativo encontrado para o utilizador.");
-                    return null; // Retorna null se não encontrar plantel ativo
-                }
-            } catch (error) {
-                console.error("Erro ao buscar formação ativa do planteis:", error);
-                return null; // Retorna null em caso de erro
-            }
-        }
-
-
-        async function populateFormationDropdownFromFirestore() {
-            const formations = await fetchFormationsFromFirestore();
-            const formationSelect = document.getElementById('formation-select');
-
-            // Limpa as opções existentes antes de adicionar novas
-            formationSelect.innerHTML = '';
-            const defaultOption = document.createElement('option');
-            defaultOption.value = "";
-            defaultOption.disabled = true;
-            defaultOption.selected = true;
-            defaultOption.textContent = "Selecionar Formação";
-            formationSelect.appendChild(defaultOption);
-
-
-            formations.forEach(formation => {
-                const option = document.createElement('option');
-                option.value = formation.value;
-                option.textContent = formation.label;
-                formationSelect.appendChild(option);
-            });
-        }
-
-
-        async function loadFormation() {
-            if (!currentUserUid) {
-                console.log("currentUserUid não definido ao carregar formação. Aguardando autenticação...");
-                return;
-            }
-
-            // Clear all positions and assigned players before loading
-            pitchArea.querySelectorAll('.position img').forEach(img => img.remove());
-            const positions = document.querySelectorAll('.position');
-            positions.forEach(positionElement => {
-                positionElement.textContent = '+';
-                positionElement.dataset.assignedPlayerId = null;
-            });
-            assignedPlayers = {};
-
-            try {
-                // Get the latest season from palpites collection
                 const palpitesRef = collection(db, 'palpites');
                 const palpitesQuery = query(palpitesRef, orderBy('temporada', 'desc'), limit(1));
                 const palpitesSnapshot = await getDocs(palpitesQuery);
-                let latestSeason = '';
-
-                if (!palpitesSnapshot.empty) {
-                    latestSeason = palpitesSnapshot.docs[0].data().temporada;
-                } else {
-                    console.error('No seasons found in palpites collection');
-                    return;
-                }
-
-                // Query planteis for the current user's formation
+                if (palpitesSnapshot.empty) { console.warn("Temporada não encontrada."); return null; }
+                const latestSeason = palpitesSnapshot.docs[0].data().temporada;
+    
                 const planteisRef = collection(db, 'planteis');
-                const planteisQuery = query(planteisRef, where('userId', '==', currentUserUid), where('formacao', '==', currentFormation), where('temporada', '==', latestSeason));
-                const planteisSnapshot = await getDocs(planteisQuery);
-
-                if (!planteisSnapshot.empty) {
-                    const plantelData = planteisSnapshot.docs[0].data();
-
-                    // Clear current formation
-                    pitchArea.querySelectorAll('.position img').forEach(img => img.remove());
-                    assignedPlayers = {};
-
-                    // Load players into positions
-                    const positions = document.querySelectorAll('.position');
-                    positions.forEach(positionElement => {
-                        const positionId = positionElement.dataset.position;
+                const activePlanteisQuery = query( planteisRef, where('userId', '==', currentUserUid), where('estado', '==', 'ativo'), where('temporada', '==', latestSeason), limit(1) );
+                const activePlanteisSnapshot = await getDocs(activePlanteisQuery);
+                if (!activePlanteisSnapshot.empty) { return activePlanteisSnapshot.docs[0].data().formacao; }
+                return null;
+            } catch (error) { console.error("Erro ao buscar formação ativa:", error); return null; }
+        }
+    
+    
+        async function populateFormationDropdownFromFirestore() {
+            const formationsFromUser = await fetchFormationsFromFirestore();
+            formationSelect.innerHTML = '';
+            const defaultOption = document.createElement('option');
+            defaultOption.value = ""; defaultOption.disabled = true; defaultOption.selected = true;
+            defaultOption.textContent = "Selecionar Formação";
+            formationSelect.appendChild(defaultOption);
+            if (formationsFromUser.length > 0) {
+                formationsFromUser.forEach(formation => {
+                    const option = document.createElement('option');
+                    option.value = formation.value; option.textContent = formation.label;
+                    formationSelect.appendChild(option);
+                });
+            } else { console.warn("Nenhuma formação encontrada para o utilizador."); }
+        }
+    
+    
+        async function loadFormation() {
+            if (!currentUserUid || !currentFormation) {
+                console.log("Utilizador ou formação atual não definidos. Não carrega.");
+                renderFormation(null); // Renderiza campo vazio se não há formação selecionada
+                return;
+            }
+            console.log(`Tentando carregar ${currentFormation} para user ${currentUserUid}`);
+            // Limpa campo antes de carregar
+            pitchArea.querySelectorAll('.position').forEach(pos => { removePlayerFromPositionDOM(pos); pos.innerHTML = '+'; });
+            assignedPlayers = {};
+    
+            try {
+                const palpitesRef = collection(db, 'palpites');
+                const palpitesQuery = query(palpitesRef, orderBy('temporada', 'desc'), limit(1));
+                const palpitesSnapshot = await getDocs(palpitesQuery);
+                if (palpitesSnapshot.empty) throw new Error("Temporada não encontrada.");
+                const latestSeason = palpitesSnapshot.docs[0].data().temporada;
+    
+                const planteisRef = collection(db, 'planteis');
+                const q = query( planteisRef, where('userId', '==', currentUserUid), where('formacao', '==', currentFormation), where('temporada', '==', latestSeason), limit(1) );
+                const querySnapshot = await getDocs(q);
+    
+                if (!querySnapshot.empty) {
+                    const plantelData = querySnapshot.docs[0].data();
+                    console.log("Plantel encontrado:", plantelData);
+                    const currentFormationPositions = formations[currentFormation];
+                    if (!currentFormationPositions) { console.error(`Definições para ${currentFormation} não encontradas.`); return; }
+    
+                    let playersFoundCount = 0;
+                    currentFormationPositions.forEach(posInfo => {
+                        const positionId = posInfo.position;
                         const playerId = plantelData[positionId];
-
                         if (playerId) {
-                            const player = allPlayers.find(p => p.id === playerId);
-                            if (player) {
-                                positionElement.innerHTML = '';
-                                const playerImg = document.createElement('img');
-                                playerImg.src = player.imagem || 'placeholder_image_url.png';
-                                playerImg.alt = player.nome;
-                                positionElement.appendChild(playerImg);
-                                positionElement.dataset.assignedPlayerId = playerId;
+                            const positionElement = pitchArea.querySelector(`.position[data-position="${positionId}"]`);
+                            const player = userOwnedPlayers.find(p => p.id === playerId);
+                            if (positionElement && player) {
+                                addPlayerToPositionDOM(positionElement, player);
                                 assignedPlayers[positionId] = playerId;
-                            }
+                                playersFoundCount++;
+                            } else { console.warn(`Jogador ${playerId} ou elemento ${positionId} não encontrado ao carregar.`); }
                         }
                     });
-                    console.log('Formation loaded successfully');
+                    console.log(`Formação ${currentFormation} carregada com ${playersFoundCount} jogadores.`);
+                    hasUnsavedChanges = false;
                 } else {
-                    console.log('No saved formation found for current user and formation type');
+                    console.log(`Nenhuma formação ${currentFormation} guardada encontrada para ${latestSeason}.`);
+                    hasUnsavedChanges = false;
                 }
-            } catch (error) {
-                console.error("Error loading formation:", error);
-            }
+            } catch (error) { console.error("Erro ao carregar formação:", error); }
         }
-
+    
+        // --- Event Listener para mudança de Formação ---
+        formationSelect.addEventListener('change', async (e) => {
+            const newFormation = e.target.value;
+            if (!newFormation) return;
+            console.log(`Formation changed to: ${newFormation}. Unsaved changes: ${hasUnsavedChanges}`);
+    
+            if (hasUnsavedChanges) {
+                showConfirmationModal(
+                    'Existem alterações não guardadas. Quer guardá-las antes de mudar?',
+                    async () => { // Sim (Guardar)
+                        await saveFormation(); // Guarda a anterior
+                        currentFormation = newFormation;
+                        renderFormation(currentFormation); // Renderiza nova vazia
+                        await loadFormation(); // Carrega dados da nova
+                    },
+                    async () => { // Não (Descartar)
+                        hasUnsavedChanges = false;
+                        currentFormation = newFormation;
+                        renderFormation(currentFormation); // Renderiza nova vazia
+                        await loadFormation(); // Carrega dados da nova
+                    }
+                );
+            } else {
+                currentFormation = newFormation;
+                renderFormation(currentFormation); // Renderiza nova vazia
+                await loadFormation(); // Carrega dados da nova
+            }
+        });
+    
+    
+        // --- Inicialização e Autenticação ---
         onAuthStateChanged(auth, async (user) => {
             if (user) {
                 currentUserUid = user.uid;
                 currentUserStatus = await getUserStatus(user.uid);
                 if (currentUserStatus !== null) {
-                    console.log(`User is logged in on team.html with status: ${currentUserStatus}`);
-                    await fetchUserPlayers(user.uid);
-                    await fetchPlayers();
-                    await fetchCountries();
-                    await populateFormationDropdownFromFirestore(); // Populate dropdown from Firestore
-
-                    const activeFormation = await fetchActiveFormationFromPlanteis(); // Fetch active formation from planteis
-                    const formationOptions = await fetchFormationsFromFirestore(); // Fetch formations again to get the list
-
-                    if (activeFormation) {
-                        currentFormation = activeFormation; // Set currentFormation to the active one
-                        formationSelect.value = activeFormation; // Set dropdown to the active formation
-                    } else if (formationOptions.length > 0) {
-                        currentFormation = formationOptions[0].value; // Fallback to the first from 'tática' if no active plantel, if available
-                        formationSelect.value = currentFormation; // Ensure dropdown is set even if no active plantel
-                    } else {
-                        currentFormation = '4-4-2'; // Default to 4-4-2 if no formations anywhere, or handle as needed
-                        formationSelect.value = '4-4-2'; // Set dropdown to default as well
-                    }
-
-
-                    renderFormation(currentFormation); // Render initial formation *after* loading dropdown and setting currentFormation
-                    await loadFormation(); // Load saved formation after players are fetched
-                    loadingScreen.style.display = 'none';
-                    content.style.display = 'block';
+                    console.log(`User ${currentUserUid} logged in with status: ${currentUserStatus}`);
+                    loadingScreen.style.display = 'flex'; // Mostrar loading antes de carregar dados
+    
+                    try {
+                        await fetchCountries();
+                        await populateFormationDropdownFromFirestore();
+                        await fetchUserOwnedPlayers(); // Carrega jogadores DEPOIS de países e formações
+    
+                        const activeFormation = await fetchActiveFormationFromPlanteis();
+                        // Não precisa buscar de novo `formationOptions`, já foi usado em populate
+    
+                        let initialFormationToLoad = null;
+                        if (activeFormation && formationSelect.querySelector(`option[value="${activeFormation}"]`)) {
+                            initialFormationToLoad = activeFormation;
+                            formationSelect.value = activeFormation;
+                        } else if (formationSelect.options.length > 1) { // Se há opções além do placeholder
+                            initialFormationToLoad = formationSelect.options[1].value;
+                            formationSelect.value = initialFormationToLoad;
+                        } else {
+                            console.log("Nenhuma formação ativa ou definida encontrada.");
+                        }
+    
+                        currentFormation = initialFormationToLoad;
+                        renderFormation(currentFormation); // Renderiza estrutura
+    
+                        if (currentFormation) {
+                            await loadFormation(); // Carrega dados se houver formação inicial
+                        }
+                     } catch(error) {
+                          console.error("Erro durante a inicialização:", error);
+                          // Poderia mostrar uma mensagem de erro mais amigável aqui
+                     } finally {
+                          loadingScreen.style.display = 'none'; // Esconder loading após tudo
+                          content.style.display = 'block';
+                     }
+    
                 } else {
-                    console.log('User is not accepted');
+                    console.log('User is not accepted.');
+                    loadingScreen.style.display = 'none';
                     window.location.href = '404.html';
                 }
             } else {
-                console.log('No user is logged in on team.html');
+                console.log('No user is logged in.');
                 loadingScreen.style.display = 'none';
                 window.location.href = 'index.html';
             }
         });
-
-
-        // Add event listener for page navigation
+    
+    
+        // --- Prevenção de Perda de Dados ---
         window.addEventListener('beforeunload', (e) => {
             if (hasUnsavedChanges) {
-                e.preventDefault();
-                e.returnValue = '';
+                const message = 'Tem alterações não guardadas que serão perdidas.';
+                e.preventDefault(); e.returnValue = message; return message;
             }
         });
-
-        // Add event listeners for navigation menu items
+    
         document.querySelectorAll('.menu-item').forEach(item => {
             item.addEventListener('click', async (e) => {
-                if (hasUnsavedChanges) {
+                const destination = item.href;
+                // Verifica se tem alterações E se o destino é válido e diferente da página atual
+                if (hasUnsavedChanges && destination && !destination.endsWith('#') && destination !== window.location.href) {
                     e.preventDefault();
                     showConfirmationModal(
-                        'Quer guardar as alterações feitas?',
-                        async () => {
-                            await saveFormation();
-                            window.location.href = item.href;
-                        },
-                        () => {
-                            hasUnsavedChanges = false;
-                            window.location.href = item.href;
-                        }
+                        'Tem alterações não guardadas. Quer guardá-las antes de sair?',
+                        async () => { await saveFormation(); window.location.href = destination; }, // Sim
+                        () => { hasUnsavedChanges = false; window.location.href = destination; } // Não
                     );
                 }
             });
         });
+    
     </script>
 </body>
 </html>
