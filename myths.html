@@ -634,11 +634,32 @@ body { min-height: 100vh; background: radial-gradient(ellipse at center, #1a1a2e
             }
             
             // Obter IDs das competições do item (mito)
+            // Verificar o nível do mito para determinar quais competições mostrar
+            const nivel = itemData.nivel || 'Nivel 1';
+            console.log(`[fetchClubImagesFromCompetitions] Nível do mito: ${nivel}`);
+            
+            // Imagem placeholder para substituir imagens não disponíveis pelo nível
+            const placeholderImage = 'https://lh3.googleusercontent.com/pw/AP1GczPiqT86eHKMxOqxzkXTF1sOZkH3NuWtELu04zT0ANLpdA9MHuPdguJHyYoRgSKSbiM0el-8UZ8qZuEQbWT8heJR2GPglnZdJRfnVqjdFUItX2deOQVy9RPgqTa02vXF36nUz2iM3oDD7EjuI0HOwps1=w880-h880-s-no-gm?authuser=1';
+            
+            // Aplicar lógica condicional baseada no nível
+            let competicao3Id = null;
+            let competicao4Id = null;
+            
+            // Competição 3 só aparece se nível for 2 ou 3
+            if (nivel === 'Nivel 2' || nivel === 'Nivel 3') {
+                competicao3Id = itemData.competicao3Id;
+            }
+            
+            // Competição 4 só aparece se nível for 3
+            if (nivel === 'Nivel 3') {
+                competicao4Id = itemData.competicao4Id;
+            }
+            
             const competitionIds = [
                 itemData.competicao1Id,
                 itemData.competicao2Id,
-                itemData.competicao3Id,
-                itemData.competicao4Id
+                competicao3Id,
+                competicao4Id
             ].filter(id => id); // Filtra valores nulos/undefined
             
             console.log(`[fetchClubImagesFromCompetitions] IDs de competições encontrados: ${competitionIds.join(', ')}`);
@@ -650,6 +671,32 @@ body { min-height: 100vh; background: radial-gradient(ellipse at center, #1a1a2e
             
             const clubImages = [];
             const usedClubIds = new Set(); // Para evitar repetições
+            
+            // Verificar quais clubes já estão no mercado
+            async function checkClubInMarket(clubId) {
+                try {
+                    console.log(`[checkClubInMarket] Verificando se clube ${clubId} está no mercado...`);
+                    const mercadoRef = collection(db, 'mitosgameMercado');
+                    const q1 = query(mercadoRef, where('competicao1Id', '==', clubId));
+                    const q2 = query(mercadoRef, where('competicao2Id', '==', clubId));
+                    const q3 = query(mercadoRef, where('competicao3Id', '==', clubId));
+                    const q4 = query(mercadoRef, where('competicao4Id', '==', clubId));
+                    
+                    const [snap1, snap2, snap3, snap4] = await Promise.all([
+                        getDocs(q1),
+                        getDocs(q2),
+                        getDocs(q3),
+                        getDocs(q4)
+                    ]);
+                    
+                    const isInMarket = !snap1.empty || !snap2.empty || !snap3.empty || !snap4.empty;
+                    console.log(`[checkClubInMarket] Clube ${clubId} ${isInMarket ? 'está' : 'não está'} no mercado.`);
+                    return isInMarket;
+                } catch (error) {
+                    console.error(`[checkClubInMarket] Erro ao verificar clube ${clubId} no mercado:`, error);
+                    return false; // Em caso de erro, assumimos que não está no mercado
+                }
+            }
             
             // Para cada competição, buscar seus clubes e selecionar um aleatoriamente
             for (const competitionId of competitionIds) {
@@ -679,23 +726,44 @@ body { min-height: 100vh; background: radial-gradient(ellipse at center, #1a1a2e
                         continue;
                     }
                     
-                    // Selecionar um clube aleatoriamente
-                    const randomIndex = Math.floor(Math.random() * availableClubs.length);
-                    const selectedClubId = availableClubs[randomIndex];
-                    usedClubIds.add(selectedClubId); // Marcar como usado
+                    // Tentar encontrar um clube que não esteja no mercado
+                    let selectedClubId = null;
+                    let clubData = null;
                     
-                    // Buscar dados do clube selecionado
-                    const clubDoc = await getDoc(doc(db, 'clubes', selectedClubId));
+                    // Embaralhar a lista de clubes disponíveis para seleção aleatória
+                    const shuffledClubs = [...availableClubs].sort(() => Math.random() - 0.5);
                     
-                    if (!clubDoc.exists()) {
-                        console.warn(`[fetchClubImagesFromCompetitions] Clube ${selectedClubId} não encontrado.`);
-                        continue;
+                    for (const clubId of shuffledClubs) {
+                        // Verificar se o clube já está no mercado
+                        const isInMarket = await checkClubInMarket(clubId);
+                        
+                        if (isInMarket) {
+                            console.log(`[fetchClubImagesFromCompetitions] Clube ${clubId} já está no mercado, tentando outro...`);
+                            continue;
+                        }
+                        
+                        // Buscar dados do clube selecionado
+                        const clubDoc = await getDoc(doc(db, 'clubes', clubId));
+                        
+                        if (!clubDoc.exists()) {
+                            console.warn(`[fetchClubImagesFromCompetitions] Clube ${clubId} não encontrado.`);
+                            continue;
+                        }
+                        
+                        clubData = clubDoc.data();
+                        
+                        // Verificar se o clube tem imagem
+                        if (clubData.imagem) {
+                            selectedClubId = clubId;
+                            usedClubIds.add(selectedClubId); // Marcar como usado
+                            break; // Encontramos um clube válido, sair do loop
+                        } else {
+                            console.warn(`[fetchClubImagesFromCompetitions] Clube ${clubId} (${clubData.nome}) não tem imagem.`);
+                        }
                     }
                     
-                    const clubData = clubDoc.data();
-                    
-                    // Verificar se o clube tem imagem
-                    if (clubData.imagem) {
+                    // Se encontramos um clube válido, adicionar à lista de imagens
+                    if (selectedClubId && clubData && clubData.imagem) {
                         console.log(`[fetchClubImagesFromCompetitions] Imagem do clube ${selectedClubId} (${clubData.nome}): ${clubData.imagem}`);
                         clubImages.push({
                             id: selectedClubId,
@@ -705,7 +773,7 @@ body { min-height: 100vh; background: radial-gradient(ellipse at center, #1a1a2e
                             competitionName: competitionData.nome
                         });
                     } else {
-                        console.warn(`[fetchClubImagesFromCompetitions] Clube ${selectedClubId} (${clubData.nome}) não tem imagem.`);
+                        console.warn(`[fetchClubImagesFromCompetitions] Não foi possível encontrar um clube válido para a competição ${competitionId}.`);
                     }
                     
                 } catch (error) {
@@ -775,12 +843,51 @@ body { min-height: 100vh; background: radial-gradient(ellipse at center, #1a1a2e
                 // Atualizar os ícones de estatísticas com as imagens dos clubes
                 const statIcons = cardStats.querySelectorAll('.one-quarter img');
                 
+                // Imagem placeholder para substituir imagens não disponíveis pelo nível
+                const placeholderImage = 'https://lh3.googleusercontent.com/pw/AP1GczPiqT86eHKMxOqxzkXTF1sOZkH3NuWtELu04zT0ANLpdA9MHuPdguJHyYoRgSKSbiM0el-8UZ8qZuEQbWT8heJR2GPglnZdJRfnVqjdFUItX2deOQVy9RPgqTa02vXF36nUz2iM3oDD7EjuI0HOwps1=w880-h880-s-no-gm?authuser=1';
+                
+                // Verificar o nível do mito
+                const nivel = itemData.nivel || 'Nivel 1';
+                console.log(`[updateCardElements] Nível do mito para exibição de imagens: ${nivel}`);
+                
                 // Para cada ícone de estatística, atribuir uma imagem de clube (se disponível)
-                for (let i = 0; i < statIcons.length && i < clubImages.length; i++) {
-                    if (clubImages[i] && clubImages[i].image) {
-                        statIcons[i].src = clubImages[i].image;
-                        statIcons[i].alt = clubImages[i].name;
-                        console.log(`[updateCardElements] Ícone ${i+1} atualizado com imagem do clube ${clubImages[i].name}`);
+                for (let i = 0; i < statIcons.length; i++) {
+                    // Verificar condições especiais para os ícones 3 e 4
+                    if (i === 2) { // Ícone 3 (índice 2)
+                        if (nivel === 'Nivel 2' || nivel === 'Nivel 3') {
+                            // Mostrar imagem do clube se disponível
+                            if (i < clubImages.length && clubImages[i] && clubImages[i].image) {
+                                statIcons[i].src = clubImages[i].image;
+                                statIcons[i].alt = clubImages[i].name;
+                                console.log(`[updateCardElements] Ícone ${i+1} atualizado com imagem do clube ${clubImages[i].name}`);
+                            }
+                        } else {
+                            // Mostrar placeholder para Nivel 1
+                            statIcons[i].src = placeholderImage;
+                            statIcons[i].alt = 'Bloqueado';
+                            console.log(`[updateCardElements] Ícone ${i+1} bloqueado (nível insuficiente)`);
+                        }
+                    } else if (i === 3) { // Ícone 4 (índice 3)
+                        if (nivel === 'Nivel 3') {
+                            // Mostrar imagem do clube se disponível
+                            if (i < clubImages.length && clubImages[i] && clubImages[i].image) {
+                                statIcons[i].src = clubImages[i].image;
+                                statIcons[i].alt = clubImages[i].name;
+                                console.log(`[updateCardElements] Ícone ${i+1} atualizado com imagem do clube ${clubImages[i].name}`);
+                            }
+                        } else {
+                            // Mostrar placeholder para Nivel 1 e 2
+                            statIcons[i].src = placeholderImage;
+                            statIcons[i].alt = 'Bloqueado';
+                            console.log(`[updateCardElements] Ícone ${i+1} bloqueado (nível insuficiente)`);
+                        }
+                    } else {
+                        // Ícones 1 e 2 sempre mostram a imagem do clube se disponível
+                        if (i < clubImages.length && clubImages[i] && clubImages[i].image) {
+                            statIcons[i].src = clubImages[i].image;
+                            statIcons[i].alt = clubImages[i].name;
+                            console.log(`[updateCardElements] Ícone ${i+1} atualizado com imagem do clube ${clubImages[i].name}`);
+                        }
                     }
                 }
             } catch (error) {
