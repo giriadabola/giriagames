@@ -988,6 +988,14 @@
         .slider.round:before {
             border-radius: 50%;
         }
+
+        #gcoinsPopup .popup-content {
+    max-width: 700px; /* Ou outro valor desejado, ex: 600px, 800px */
+    width: 90%;      /* Mantém a responsividade em telas menores */
+    text-align: left; /* Opcional: Alinhar texto à esquerda pode ficar melhor com mais largura */
+}
+
+
     </style>
 </head>
 <body>
@@ -1023,8 +1031,6 @@
             <div class="popup-content">
                 <h2>Transações</h2>
                 <div id="gcoinsTransactions">
-                    <div class="transactions-loading-spinner" id="transactionsLoadingSpinner"></div>
-                    <p id="transactionsLoadingText">A carregar transações...</p>
                 </div>
                 <button class="popup-btn popup-btn-icon" id="closeGcoinsPopupIcon">
                     <i class="fas fa-times"></i>
@@ -1501,17 +1507,31 @@
 
         // loadTransactions function (remains the same)
         async function loadTransactions() {
-            // ... (keep existing function code)
-            const loadingSpinner = document.getElementById('transactionsLoadingSpinner');
-            const loadingText = document.getElementById('transactionsLoadingText');
+            // Limpa qualquer conteúdo anterior (lista ou indicadores de carregamento antigos)
             gcoinsTransactionsList.innerHTML = '';
+
+            // --- NOVO: Criar indicadores de carregamento dinamicamente ---
+            const loadingSpinner = document.createElement('div');
+            loadingSpinner.className = 'transactions-loading-spinner'; // Usa a classe CSS existente
+            loadingSpinner.style.display = 'block'; // Garante visibilidade
+
+            const loadingText = document.createElement('p');
+            loadingText.textContent = 'A carregar transações...';
+            loadingText.style.textAlign = 'center'; // Melhora a aparência
+            loadingText.style.padding = '20px'; // Adiciona espaço
+            loadingText.style.display = 'block'; // Garante visibilidade
+
+            // Adiciona os novos indicadores à lista (que estava vazia)
             gcoinsTransactionsList.appendChild(loadingSpinner);
             gcoinsTransactionsList.appendChild(loadingText);
-            loadingSpinner.style.display = 'block';
-            loadingText.style.display = 'block';
+            // --- FIM NOVO ---
 
             const user = auth.currentUser;
-            if (!user) return;
+            if (!user) {
+                // Limpa indicadores e mostra mensagem se não houver utilizador
+                gcoinsTransactionsList.innerHTML = '<p style="text-align:center; padding: 20px;">Utilizador não autenticado.</p>';
+                return;
+            }
 
             try {
                 const seasonsQuery = query(collection(db, 'palpites'), orderBy('temporada', 'desc'), limit(1));
@@ -1529,10 +1549,9 @@
                 const movementsSnapshot = await getDocs(movementsQuery);
 
                 if (movementsSnapshot.empty) {
-                    gcoinsTransactionsList.innerHTML = '<p>Sem transações registadas.</p>';
-                    loadingSpinner.style.display = 'none';
-                    loadingText.style.display = 'none';
-                    return;
+                    // Limpa indicadores e mostra mensagem se não houver transações
+                    gcoinsTransactionsList.innerHTML = '<p style="text-align:center; padding: 20px;">Sem transações registadas.</p>';
+                    return; // Sai da função aqui
                 }
 
                 const transactionsHTML = document.createElement('ul');
@@ -1543,7 +1562,11 @@
                     const transaction = docSnapshot.data();
                     const listItem = document.createElement('li');
                     let itemName = '';
-                    if (transaction.nomeJogo) {
+                    // --- Lógica para itemName (com a modificação anterior) ---
+                     if (transaction.empireTipo) {
+                        const itemEmpireValue = transaction.itemEmpire || '';
+                        itemName = transaction.empireTipo + " " + itemEmpireValue;
+                    } else if (transaction.nomeJogo) {
                         itemName = transaction.nomeJogo;
                     } else if (transaction.jogadorId) {
                         try {
@@ -1556,6 +1579,8 @@
                     } else {
                         itemName = 'N/A';
                     }
+                    // --- Fim da lógica itemName ---
+
                     const date = transaction.movimentoData ? transaction.movimentoData.toDate().toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: '2-digit' }) : 'Data Indisponível';
                     let valorReal = transaction.valorreal !== undefined ? transaction.valorreal : 0;
                     let valorRealColor = 'black';
@@ -1570,17 +1595,17 @@
                     `;
                     transactionsHTML.appendChild(listItem);
                 }
-                gcoinsTransactionsList.innerHTML = ''; // Clear loading spinners
+
+                // Limpa os indicadores de carregamento ANTES de adicionar a lista final
+                gcoinsTransactionsList.innerHTML = '';
                 gcoinsTransactionsList.appendChild(transactionsHTML);
 
-                loadingSpinner.style.display = 'none';
-                loadingText.style.display = 'none';
+                // NÃO PRECISA MAIS de esconder spinner/text aqui, pois foram limpos pelo innerHTML
 
             } catch (error) {
                 console.error('Error loading transactions:', error);
-                loadingSpinner.style.display = 'none';
-                loadingText.style.display = 'none';
-                gcoinsTransactionsList.innerHTML = '<p>Erro ao carregar transações. Tente novamente.</p>';
+                // Limpa indicadores e mostra mensagem de erro
+                gcoinsTransactionsList.innerHTML = '<p style="text-align:center; padding: 20px;">Erro ao carregar transações. Tente novamente.</p>';
             }
         }
 
