@@ -22,6 +22,29 @@
             color: #e0d2b4;
         }
 
+        /* Loading Screen Styles */
+        #loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #0a0a14; /* Adaptado para o tema escuro do empire.html */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1001; /* Above content but below popup */
+            opacity: 1;
+            transition: opacity 0.5s ease-out;
+        }
+
+        .loading-percentage { margin-top: 15px; font-size: 18px; font-weight: bold; color: #c9a959; } /* Adaptado para o tema dourado */
+        .progress-bar-container { width: 200px; height: 10px; background-color: #1a1a3a; border-radius: 5px; margin-top: 10px; overflow: hidden; }
+        .progress-bar { height: 100%; width: 0%; background: linear-gradient(135deg, #c9a959 0%, #e6c675 100%); border-radius: 5px; transition: width 0.3s ease-in-out; }
+        .loading-spinner { border: 16px solid #1a1a3a; border-top: 16px solid #c9a959; border-radius: 50%; width: 120px; height: 120px; animation: spin 2s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
         .bottom-menu {
             position: fixed;
             bottom: 0;
@@ -276,29 +299,47 @@
 
     </style>
 </head>
+
+
+
+
 <body>
-    <!-- Container for Filosofias (if user needs to choose) -->
-    <div id="filosofias-container" style="display: none; padding: 20px; margin-bottom: 80px;">
-        <h2 style="text-align: center; margin-bottom: 30px; font-size: 32px; color: #c9a959;">Escolha sua Filosofia</h2>
-        <div id="filosofias-list" style="display: flex; flex-wrap: wrap; justify-content: center; gap: 10px;"></div>
+    <!-- Loading Screen -->
+    <div id="loading-screen">
+        <div class="loading-spinner"></div>
+        <div class="loading-percentage">0%</div>
+        <div class="progress-bar-container">
+            <div class="progress-bar"></div>
+        </div>
     </div>
 
-    <!-- Main Popup (for Filosofia items) -->
+    <!-- Container for Filosofias (if choosing) or Estadios (if chosen) -->
+    <div id="filosofias-container" style="display: none; padding: 20px; margin-bottom: 80px;"> <!-- Initial display:none controlled by JS -->
+        <h2 style="text-align: center; margin-bottom: 30px; font-size: 32px; color: #c9a959;">Carregando...</h2> <!-- Title updated by JS -->
+        <div id="filosofias-list" style="display: flex; flex-wrap: wrap; justify-content: center; gap: 20px;"> <!-- Increased gap -->
+            <!-- Content (Filosofia cards or Estadio cards) loaded here by JS -->
+        </div>
+    </div>
+
+    <!-- Main Popup (for Filosofia details/selection) -->
     <div id="popup-overlay" class="popup-overlay">
         <div class="popup-content">
-            <h3 class="popup-title"></h3>
-            <div class="items-grid"></div>
+            <!-- Close Button 'X' -->
+            <button class="close-button" onclick="closePopup()">×</button>
+            <h3 class="popup-title"></h3> <!-- Title set by JS -->
+            <div class="items-grid">
+                <!-- Filosofia's attached items loaded here by JS -->
+            </div>
             <div class="popup-buttons">
-                <button class="popup-button" onclick="closePopup()">Fechar</button>
-                <!-- Only show Escolher button if it's the filosofia selection -->
+                <!-- "Fechar" button removed -->
                 <button id="escolher-filosofia-btn" class="popup-button" onclick="showConfirmation()">Escolher Filosofia</button>
             </div>
         </div>
     </div>
 
-    <!-- Confirmation Popup -->
+    <!-- Filosofia Confirmation Popup -->
     <div id="confirmation-popup" class="popup-overlay confirmation-popup">
-        <div class="popup-content" style="width: 400px;"> <!-- Smaller confirmation box -->
+        <div class="popup-content" style="width: 400px;">
             <h3 class="popup-title">Confirmar Escolha</h3>
             <p style="text-align: center; color: #e0d2b4; margin-bottom: 20px;">Tem certeza que deseja escolher esta filosofia?</p>
             <div class="popup-buttons">
@@ -308,13 +349,56 @@
         </div>
     </div>
 
-    <!-- Nested Popup (for items attached to items) -->
+    <!-- Nested Popup (for items attached to items OTHER than stadiums/filosofias) -->
     <div id="nested-popup" class="popup-overlay nested-popup-overlay">
         <div class="popup-content">
             <button class="close-button" onclick="closeNestedPopup()">×</button>
-            <h3 class="popup-title"></h3>
-            <div class="items-grid"></div>
-            <!-- No action buttons needed here, just the close button -->
+            <h3 class="popup-title"></h3> <!-- Title set by JS -->
+            <div class="items-grid">
+                 <!-- Nested items loaded here by JS -->
+            </div>
+            <!-- No action buttons needed here -->
+        </div>
+    </div>
+
+    <!-- Stadium Details Popup (MODIFIED - Only shows attached items) -->
+    <div id="stadium-details-popup" class="popup-overlay nested-popup-overlay">
+        <div class="popup-content">
+            <button class="close-button" onclick="closeStadiumDetailsPopup()">×</button>
+            <!-- Title will be set dynamically by JS to indicate which stadium's items are shown -->
+            <h3 class="popup-title">Itens Anexados</h3>
+            <!-- Removed stadium-info div -->
+            <!-- Removed h4 separator -->
+            <div class="items-grid" id="stadium-attached-items-grid">
+                <!-- Stadium's attached items loaded here by JS -->
+            </div>
+            <!-- Removed popup-buttons div -->
+        </div>
+    </div>
+
+
+    <!-- Stadium Purchase Confirmation Popup (Still needed if purchase initiated elsewhere, but not from stadium-details-popup) -->
+    <div id="stadium-confirmation-popup" class="popup-overlay confirmation-popup">
+        <div class="popup-content" style="width: 450px;">
+            <h3 class="popup-title">Confirmar Compra</h3>
+            <p id="stadium-confirmation-text" style="text-align: center; color: #e0d2b4; margin-bottom: 20px;">
+                Tem certeza que deseja adquirir o estádio <strong id="confirm-stadium-name"></strong> por <strong id="confirm-stadium-price"></strong> GCoins?
+            </p>
+            <div class="popup-buttons">
+                <button class="popup-button" onclick="confirmStadiumPurchase(false)">Não</button>
+                <button class="popup-button" onclick="confirmStadiumPurchase(true)">Sim</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Simple Info/Error Popup -->
+    <div id="info-popup" class="popup-overlay confirmation-popup">
+        <div class="popup-content" style="width: 400px;">
+            <h3 id="info-popup-title" class="popup-title">Informação</h3>
+            <p id="info-popup-message" style="text-align: center; color: #e0d2b4; margin-bottom: 20px;"></p>
+            <div class="popup-buttons">
+                <button class="popup-button" onclick="closeInfoPopup()">OK</button>
+            </div>
         </div>
     </div>
 
@@ -330,6 +414,8 @@
         <a href="team.html" class="menu-item">
             <i class="fas fa-users"></i>
         </a>
+        <!-- Ensure this 'active' class is dynamically handled if needed,
+             but for now, assume empire.html is the current page -->
         <a href="empire.html" class="menu-item active">
             <i class="fas fa-landmark empire-icon"></i>
         </a>
@@ -339,15 +425,33 @@
         <a href="profile.html" class="menu-item">
             <i class="fas fa-user"></i>
         </a>
+        <!-- Add other menu items like bank if applicable -->
+        <!-- <a href="bank.html" class="menu-item"><i class="fas fa-piggy-bank"></i></a> -->
     </nav>
+
+
+
+
+
+
+
+
+
+
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, doc, getDoc, collection, query, where, getDocs, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        // IMPORTS CORRIGIDOS E COMPLETOS: Incluindo addDoc, orderBy, arrayUnion
+        import { getFirestore, doc, getDoc, collection, query, where, getDocs, updateDoc, runTransaction, serverTimestamp, writeBatch, orderBy, addDoc, arrayUnion } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        // IMPORTS CORRIGIDOS E COMPLETOS: Incluindo getAuth, onAuthStateChanged
         import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
+        // --- START LOG ---
+        console.log("Empire Page Script: Module loading initiated.");
+        // --- END LOG ---
+
         const firebaseConfig = {
-            apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0", // IMPORTANT: Hide in production
+            apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0", // IMPORTANTE: Esconder em produção
             authDomain: "g-games-8a8fc.firebaseapp.com",
             projectId: "g-games-8a8fc",
             storageBucket: "g-games-8a8fc.firebasestorage.app",
@@ -356,365 +460,999 @@
             measurementId: "G-GTTPJ6G5MD"
         };
 
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-        const auth = getAuth(app);
+        // --- START LOG ---
+        console.log("Empire Page Script: Initializing Firebase app...");
+        // --- END LOG ---
+        let app, db, auth;
+        try {
+            app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app); // <<< Certificar que getAuth está importado
+            // --- START LOG ---
+            console.log("Empire Page Script: Firebase initialized successfully.");
+            // --- END LOG ---
+        } catch (error) {
+             // --- START LOG ---
+            console.error("Empire Page Script: CRITICAL ERROR initializing Firebase:", error);
+             // --- END LOG ---
+             const loadingScreen = document.getElementById('loading-screen');
+             if(loadingScreen) loadingScreen.innerHTML = '<p style="color: red; text-align: center; padding: 20px;">Erro Crítico ao inicializar. Verifique a consola.</p>';
+             throw new Error("Firebase initialization failed");
+        }
 
-        let currentUser = null; // Store user globally within the module
-        let selectedFilosofia = null; // Store selected filosofia for confirmation
+        let currentUser = null;
+        let selectedFilosofia = null;
+        let selectedStadiumForPurchase = null; // Usado para iniciar confirmação, definido no clique do card
 
-        // --- Utility Functions ---
+        // --- Funções Utilitárias ---
         async function getUserStatus(userId) {
+            console.log(`getUserStatus: Fetching status for user ID: ${userId}`);
+            if (!userId) {
+                 console.error("getUserStatus: No userId provided.");
+                 return null;
+            }
             const userDocRef = doc(db, 'users', userId);
-            const docSnap = await getDoc(userDocRef);
-            if (docSnap.exists() && docSnap.data().aceite === "Yes") {
-                const userData = docSnap.data();
-                return {
-                    uid: userId, // Store UID
-                    estatuto: userData.estatuto,
-                    filosofia: userData.filosofia || null
-                };
-            } else {
-                console.log('User document not found or not accepted.');
+            try {
+                const docSnap = await getDoc(userDocRef);
+                if (docSnap.exists() && docSnap.data().aceite === "Yes") {
+                    const userData = docSnap.data();
+                    const status = {
+                        uid: userId,
+                        estatuto: userData.estatuto,
+                        filosofia: userData.filosofia || null,
+                        estadio: userData.estadio || null,
+                        data: userData // Armazena todos os dados do utilizador
+                    };
+                    console.log("getUserStatus: User found and accepted.", status);
+                    return status;
+                } else if (docSnap.exists()) {
+                    console.log(`getUserStatus: User document found for ${userId} but user not accepted (aceite != "Yes").`, docSnap.data());
+                    return null;
+                } else {
+                    console.log(`getUserStatus: User document not found for ${userId}.`);
+                    return null;
+                }
+            } catch (error) {
+                console.error(`getUserStatus: Error fetching user document for ${userId}:`, error);
                 return null;
             }
         }
 
+        // --- Popup Simples de Informação ---
+        function showInfoPopup(title, message) {
+            console.log(`showInfoPopup: Title: "${title}", Message: "${message}"`);
+            const popup = document.getElementById('info-popup');
+            const titleEl = document.getElementById('info-popup-title');
+            const msgEl = document.getElementById('info-popup-message');
+            if (popup && titleEl && msgEl) {
+                titleEl.textContent = title;
+                msgEl.textContent = message;
+                popup.classList.add('active');
+            } else {
+                 console.error("showInfoPopup: Info popup elements not found.");
+            }
+        }
+        function closeInfoPopup() {
+            console.log("closeInfoPopup: Closing info popup.");
+            const popup = document.getElementById('info-popup');
+            if (popup) popup.classList.remove('active');
+        }
+
+        // --- Funções do Ecrã de Carregamento ---
+        function updateLoadingProgress(percentage) {
+            const percEl = document.querySelector('.loading-percentage');
+            const barEl = document.querySelector('.progress-bar');
+            if (percEl) percEl.textContent = `${Math.round(percentage)}%`;
+            if (barEl) barEl.style.width = `${percentage}%`;
+        }
+
+        function hideLoadingScreen() {
+            console.log("hideLoadingScreen: Attempting to hide loading screen.");
+            const loadingScreen = document.getElementById('loading-screen');
+            if (loadingScreen && loadingScreen.style.display !== 'none') {
+                loadingScreen.style.opacity = '0';
+                setTimeout(() => {
+                    const currentLoadingScreen = document.getElementById('loading-screen');
+                    if (currentLoadingScreen) currentLoadingScreen.style.display = 'none';
+                    console.log("hideLoadingScreen: Loading screen hidden via display: none.");
+                }, 500);
+            } else if (!loadingScreen) {
+                 console.warn("hideLoadingScreen: Loading screen element not found.");
+            } else {
+                 console.log("hideLoadingScreen: Loading screen already hidden or hiding.");
+            }
+        }
+
         async function getMenuSettings() {
+            console.log("getMenuSettings: Fetching menu settings...");
             const paineisMenuRef = doc(db, 'paineis', 'paineismenu');
-            const docSnap = await getDoc(paineisMenuRef);
-            return docSnap.exists() ? docSnap.data() : null;
+            try {
+                const docSnap = await getDoc(paineisMenuRef);
+                const settings = docSnap.exists() ? docSnap.data() : null;
+                console.log("getMenuSettings: Settings fetched:", settings);
+                return settings;
+            } catch (error) {
+                console.error("getMenuSettings: Error fetching menu settings:", error);
+                return null;
+            }
         }
 
         async function checkPageAccess(userStatus, menuSettings) {
+            console.log("checkPageAccess: Checking access for user:", userStatus, "with settings:", menuSettings);
             if (!menuSettings || menuSettings['empire'] !== 'on') {
+                console.log("checkPageAccess: Empire page is OFF in settings or settings missing.");
                 if (!userStatus || userStatus.estatuto !== 'ruler') {
+                    console.log("checkPageAccess: User is not ruler. Redirecting to 404.");
                     window.location.href = '404.html';
                     return false;
+                } else {
+                    console.log("checkPageAccess: User IS ruler, granting access despite page setting.");
                 }
             }
+            console.log("checkPageAccess: Access granted.");
             return true;
         }
 
         function updateMenuVisibility(menuSettings) {
-            if (!menuSettings) return;
-            
+            console.log("updateMenuVisibility: Updating menu based on settings:", menuSettings);
+            if (!menuSettings) {
+                 console.warn("updateMenuVisibility: No menu settings provided. Skipping menu update.");
+                 return;
+            }
             const menuItems = {
-                '1x': document.querySelector('a[href="1x.html"]'),
-                'bank': document.querySelector('a[href="bank.html"]'),
-                'empire': document.querySelector('a[href="empire.html"]'),
-                'market': document.querySelector('a[href="market.html"]'),
-                'profile': document.querySelector('a[href="profile.html"]'),
-                'rankings': document.querySelector('a[href="rankings.html"]'),
-                'team': document.querySelector('a[href="team.html"]')
+                 '1x': document.querySelector('a[href="1x.html"]'),
+                 'bank': document.querySelector('a[href="bank.html"]'),
+                 'empire': document.querySelector('a[href="empire.html"]'),
+                 'market': document.querySelector('a[href="market.html"]'),
+                 'profile': document.querySelector('a[href="profile.html"]'),
+                 'rankings': document.querySelector('a[href="rankings.html"]'),
+                 'team': document.querySelector('a[href="team.html"]')
             };
-
             for (const [key, element] of Object.entries(menuItems)) {
                 if (element && menuSettings[key] === 'off') {
-                    element.style.display = 'none';
+                     console.log(`updateMenuVisibility: Hiding menu item '${key}'.`);
+                     element.style.display = 'none';
+                } else if (element && menuSettings[key] !== 'off') {
+                     element.style.display = '';
                 }
             }
         }
 
-        // --- Popup Logic ---
+
+        // --- Lógica do Popup (Seleção de Filosofia) ---
         function showPopup(filosofia) {
-            selectedFilosofia = filosofia; // Store filosofia for potential confirmation
+            console.log("showPopup: Showing popup for filosofia selection:", filosofia);
+            selectedFilosofia = filosofia;
             const popup = document.getElementById('popup-overlay');
-            const popupTitle = popup.querySelector('.popup-title');
-            const itemsGrid = popup.querySelector('.items-grid');
+            const popupTitle = popup ? popup.querySelector('.popup-title') : null;
+            const itemsGrid = popup ? popup.querySelector('.items-grid') : null;
             const escolherButton = document.getElementById('escolher-filosofia-btn');
 
-            popupTitle.textContent = filosofia.nome;
-            itemsGrid.innerHTML = ''; // Clear previous items
-            escolherButton.style.display = 'inline-block'; // Show confirmation button
+            if (!popup || !popupTitle || !itemsGrid || !escolherButton) {
+                 console.error("showPopup: Essential elements for filosofia popup not found.");
+                 return;
+            }
 
-            const itemsQuery = query(
+            popupTitle.textContent = filosofia.nome || 'Escolha a Filosofia';
+            itemsGrid.innerHTML = '<p style="color: #a99a7c; text-align: center; grid-column: 1 / -1;">A carregar itens...</p>';
+            escolherButton.style.display = 'inline-block';
+
+            const filosofiaItemsQuery = query(
                 collection(db, 'empireitens'),
                 where('anexadoItemId', '==', filosofia.id),
-                where('noMercado', '==', true)
+                where('noMercado', '==', true),
+                orderBy('ordem', 'asc')
             );
+            console.log("showPopup: Querying items for filosofia ID:", filosofia.id);
 
-            getDocs(itemsQuery).then((snapshot) => {
+            getDocs(filosofiaItemsQuery).then((snapshot) => {
+                console.log(`showPopup: Found ${snapshot.size} items for filosofia ${filosofia.id}`);
                 const itemsByType = {};
-                let totalItems = 0; // For animation delay calculation
-
+                let totalItems = 0;
                 snapshot.forEach((doc) => {
-                    // Add document ID to the item object
                     const item = { id: doc.id, ...doc.data() };
                     const tipo = item.tipo || 'Outros';
-                    if (!itemsByType[tipo]) {
-                        itemsByType[tipo] = [];
-                    }
+                    if (!itemsByType[tipo]) itemsByType[tipo] = [];
                     itemsByType[tipo].push(item);
                     totalItems++;
                 });
 
-                 // Sort types alphabetically, or custom order if needed
                  const sortedTypes = Object.keys(itemsByType).sort();
                  let itemIndex = 0;
-                 
-                 // Sort items by 'ordem' field within each type
-                 for (const tipo in itemsByType) {
-                     itemsByType[tipo].sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
-                 }
-
-                 sortedTypes.forEach(tipo => {
-                    // Create header for the type
-                    const typeHeader = document.createElement('div');
-                    typeHeader.className = 'type-header';
-                    typeHeader.textContent = tipo;
-                    itemsGrid.appendChild(typeHeader);
-
-                    // Add items for this type
-                    itemsByType[tipo].forEach((item) => {
-                        const itemCard = document.createElement('div');
-                        itemCard.className = 'item-card';
-                        itemCard.innerHTML = `
-                            <img src="${item.imagem}" alt="${item.nome}" class="item-image">
-                            <div class="item-name">${item.nome}</div>
-                            <div class="item-nota">${item.nota || 'N/A'}</div>
-                        `;
-                        // --- Add click listener for nested popup ---
-                        itemCard.addEventListener('click', () => window.showNestedPopup(item)); // Use window. prefix
-
-                        itemsGrid.appendChild(itemCard);
-
-                        // Staggered animation
-                        setTimeout(() => {
-                            itemCard.classList.add('visible');
-                        }, itemIndex * 100); // Delay based on overall item index
-                        itemIndex++;
-                    });
-                 });
+                 itemsGrid.innerHTML = '';
 
                  if (totalItems === 0) {
-                     itemsGrid.innerHTML = '<p style="color: #a99a7c; text-align: center; grid-column: 1 / -1;">Nenhum item associado encontrado.</p>';
+                    itemsGrid.innerHTML = '<p style="color: #a99a7c; text-align: center; grid-column: 1 / -1;">Nenhum item associado encontrado.</p>';
+                 } else {
+                     sortedTypes.forEach(tipo => {
+                        const typeHeader = document.createElement('div');
+                        typeHeader.className = 'type-header';
+                        typeHeader.textContent = tipo;
+                        itemsGrid.appendChild(typeHeader);
+                        itemsByType[tipo].forEach((item) => {
+                            const itemCard = document.createElement('div');
+                            itemCard.className = 'item-card';
+                            itemCard.innerHTML = `
+                                <img src="${item.imagem || 'placeholder.png'}" alt="${item.nome || ''}" class="item-image">
+                                <div class="item-name">${item.nome || 'Item sem nome'}</div>
+                                <div class="item-nota">${item.nota || 'N/A'}</div>
+                            `;
+                            itemCard.addEventListener('click', () => window.showNestedPopup(item));
+                            itemsGrid.appendChild(itemCard);
+                            requestAnimationFrame(() => {
+                                setTimeout(() => { itemCard.classList.add('visible'); }, itemIndex * 100);
+                            });
+                            itemIndex++;
+                        });
+                     });
                  }
-
             }).catch(error => {
-                console.error("Error fetching items for popup:", error);
+                console.error(`showPopup: Error fetching items for filosofia ${filosofia.id}:`, error);
                 itemsGrid.innerHTML = '<p style="color: #ff6b6b; text-align: center; grid-column: 1 / -1;">Erro ao carregar itens.</p>';
             });
-
             popup.classList.add('active');
         }
 
+        // Chamado pelo botão 'X' no popup da filosofia
         function closePopup() {
-            document.getElementById('popup-overlay').classList.remove('active');
-            selectedFilosofia = null; // Clear selection when closing
+            console.log("closePopup: Closing filosofia selection popup.");
+            const popup = document.getElementById('popup-overlay');
+            if (popup) popup.classList.remove('active');
+            selectedFilosofia = null;
         }
 
+        // Chamado pelo botão "Escolher Filosofia"
         function showConfirmation() {
-             if (!selectedFilosofia) return; // Should not happen if button is visible
-             document.getElementById('confirmation-popup').classList.add('active');
+             if (!selectedFilosofia) { console.warn("showConfirmation called without selectedFilosofia."); return; }
+             console.log("showConfirmation: Showing filosofia confirmation for:", selectedFilosofia);
+             const popup = document.getElementById('confirmation-popup');
+             if (popup) popup.classList.add('active');
         }
 
+        // Chamado pelo botão "Não" na confirmação
         function closeConfirmation() {
-             document.getElementById('confirmation-popup').classList.remove('active');
+             console.log("closeConfirmation: Closing filosofia confirmation popup.");
+             const popup = document.getElementById('confirmation-popup');
+             if (popup) popup.classList.remove('active');
         }
 
+        // --- confirmChoice (Escolha de Filosofia) ---
+        // Chamado pelo botão "Sim" na confirmação
         async function confirmChoice(confirmed) {
-            closeConfirmation(); // Close confirmation box regardless of choice
-            if (confirmed && selectedFilosofia && currentUser) {
-                try {
-                    console.log(`Updating user ${currentUser.uid} filosofia to ${selectedFilosofia.id}`);
-                    await updateDoc(doc(db, 'users', currentUser.uid), {
-                        filosofia: selectedFilosofia.id
-                    });
-                    console.log('User filosofia updated successfully.');
-                    closePopup(); // Close the main popup
-                    document.getElementById('filosofias-container').style.display = 'none'; // Hide selection screen
-                    // Optionally: Reload or update UI to reflect the chosen filosofia immediately
-                } catch (error) {
-                    console.error('Error updating user philosophy:', error);
-                    alert('Erro ao salvar a escolha. Tente novamente.'); // User feedback
-                }
-            } else {
-                 console.log('Filosofia choice cancelled or data missing.');
-            }
-        }
+             console.log(`confirmChoice: User action - confirmed: ${confirmed}`);
+             closeConfirmation(); // Fecha o popup de confirmação de qualquer maneira
 
-        // --- Nested Popup Logic ---
-        window.showNestedPopup = function(parentItem) { // Attach to window
+             if (!confirmed) {
+                 console.log("confirmChoice: Choice cancelled.");
+                 return;
+             }
+
+             if (!selectedFilosofia || !currentUser) {
+                 console.error("confirmChoice: Missing filosofia or user data.");
+                 showInfoPopup("Erro", "Dados em falta para confirmar a escolha.");
+                 return;
+             }
+
+             // Feedback imediato
+             console.log("confirmChoice: Showing processing popup.");
+             showInfoPopup("Processando...", "A gravar a sua escolha...");
+
+             try {
+                 // 1. Atualizar Documento do Utilizador com Filosofia escolhida
+                 console.log(`confirmChoice: Updating user ${currentUser.uid} filosofia to ${selectedFilosofia.id}`);
+                 const userDocRef = doc(db, 'users', currentUser.uid);
+                 await updateDoc(userDocRef, {
+                      filosofia: selectedFilosofia.id
+                 });
+                 console.log('confirmChoice: User filosofia updated successfully.');
+
+                 // 2. Criar Registo de Movimento
+                 try { // try/catch separado para criação do movimento
+                     console.log("confirmChoice: Attempting to create movement record...");
+                     const latestSeason = await getLatestSeason(); // Usa função CORRIGIDA
+                     if (!latestSeason) {
+                         console.warn("confirmChoice: Could not determine latest season. Skipping movement record.");
+                     } else {
+                         const precoFilosofia = selectedFilosofia.valor !== undefined && selectedFilosofia.valor !== null ? selectedFilosofia.valor : 0;
+                         const valorRealFilosofia = -precoFilosofia; // 0 se preço for 0 ou indefinido/null
+
+                         const movimentoData = {
+                             de: currentUser.uid,
+                             estado: "Comprado", // Ou "Escolhido"?
+                             itemEmpire: selectedFilosofia.nome || "Filosofia Desconhecida",
+                             temporada: latestSeason, // Usa temporada CORRIGIDA
+                             movimentoData: serverTimestamp(),
+                             preco: precoFilosofia,
+                             tipo: "Empire", // Tipo geral da operação
+                             userID: currentUser.uid,
+                             valorreal: valorRealFilosofia,
+                             empireTipo: selectedFilosofia.tipo || "Filosofia" // Guarda o tipo específico
+                         };
+
+                         console.log("confirmChoice: Creating movement data:", movimentoData);
+                         const movRef = await addDoc(collection(db, 'movimentos'), movimentoData);
+                         console.log("confirmChoice: Movement record created successfully with ID:", movRef.id);
+                     }
+                 } catch (movError) {
+                      console.error("confirmChoice: Error creating movement record:", movError);
+                      showInfoPopup("Aviso", "Escolha salva, mas erro ao registar movimento. A atualizar...");
+                      await new Promise(resolve => setTimeout(resolve, 1500)); // Delay para mostrar aviso
+                 }
+
+                 // 3. Fechar Popups e Atualizar
+                 console.log('confirmChoice: Closing popups and refreshing page...');
+                 closePopup(); // Fecha o popup principal da filosofia
+                 closeInfoPopup(); // Fecha a mensagem "Processando" ou "Aviso"
+
+                 location.reload(); // Atualiza a página
+
+             } catch (error) { // Apanha erros primariamente da atualização do utilizador
+                 console.error('confirmChoice: Error updating user philosophy:', error);
+                 closeInfoPopup(); // Fecha mensagem de processamento
+                 showInfoPopup('Erro', 'Erro ao salvar a escolha da filosofia. Tente novamente.');
+             }
+         }
+        // --- END confirmChoice ---
+
+
+        // --- Lógica do Popup Aninhado (Genérico) ---
+        window.showNestedPopup = function(parentItem) {
+            console.log("showNestedPopup: Showing nested popup for parent item:", parentItem);
             if (!parentItem || !parentItem.id) {
-                console.error("Invalid item data provided for nested popup.");
+                console.error("showNestedPopup: Invalid parentItem data provided:", parentItem);
                 return;
             }
+
             const nestedPopup = document.getElementById('nested-popup');
-            const popupTitle = nestedPopup.querySelector('.popup-title');
-            const itemsGrid = nestedPopup.querySelector('.items-grid');
+            const popupTitle = nestedPopup ? nestedPopup.querySelector('.popup-title') : null;
+            const itemsGrid = nestedPopup ? nestedPopup.querySelector('.items-grid') : null;
+             if (!nestedPopup || !popupTitle || !itemsGrid) {
+                 console.error("showNestedPopup: Essential elements for nested popup not found.");
+                 return;
+             }
 
-            popupTitle.textContent = `Itens anexados a: ${parentItem.nome}`;
-            itemsGrid.innerHTML = ''; // Clear previous items
+            popupTitle.textContent = `Itens anexados a: ${parentItem.nome || 'Item'}`;
+            itemsGrid.innerHTML = '<p style="color: #a99a7c; text-align: center; grid-column: 1 / -1;">A carregar itens...</p>';
 
-            console.log(`Fetching items where anexadoItemId == ${parentItem.id}`);
+            console.log(`showNestedPopup: Fetching items where anexadoItemId == ${parentItem.id}`);
             const itemsQuery = query(
                 collection(db, 'empireitens'),
                 where('anexadoItemId', '==', parentItem.id),
-                where('noMercado', '==', true)
+                where('noMercado', '==', true),
+                orderBy('ordem', 'asc')
             );
 
             getDocs(itemsQuery).then((snapshot) => {
+                console.log(`showNestedPopup: Found ${snapshot.size} nested items for parent ${parentItem.id}`);
                 const itemsByType = {};
                 let totalItems = 0;
-
                 snapshot.forEach((doc) => {
-                    const item = { id: doc.id, ...doc.data() }; // Include ID for potential further nesting
+                    const item = { id: doc.id, ...doc.data() };
                     const tipo = item.tipo || 'Outros';
-                    if (!itemsByType[tipo]) {
-                        itemsByType[tipo] = [];
-                    }
+                    if (!itemsByType[tipo]) itemsByType[tipo] = [];
                     itemsByType[tipo].push(item);
                     totalItems++;
                 });
 
                 const sortedTypes = Object.keys(itemsByType).sort();
                 let itemIndex = 0;
-                
-                // Sort items by 'ordem' field within each type
-                for (const tipo in itemsByType) {
-                    itemsByType[tipo].sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
-                }
+                itemsGrid.innerHTML = '';
 
-                sortedTypes.forEach(tipo => {
-                    const typeHeader = document.createElement('div');
-                    typeHeader.className = 'type-header';
-                    typeHeader.textContent = tipo;
-                    itemsGrid.appendChild(typeHeader);
-
-                    itemsByType[tipo].forEach((item) => {
-                        const itemCard = document.createElement('div');
-                        itemCard.className = 'item-card';
-                         // Ensure nota is handled if null/undefined
-                        const notaDisplay = item.nota !== null && item.nota !== undefined ? item.nota : 'N/A';
-                        itemCard.innerHTML = `
-                            <img src="${item.imagem || 'placeholder.png'}" alt="${item.nome || 'Item sem nome'}" class="item-image">
-                            <div class="item-name">${item.nome || 'Item sem nome'}</div>
-                            <div class="item-nota">${notaDisplay}</div>
-                        `;
-
-                        // Add click listener for potentially *deeper* nesting
-                        itemCard.addEventListener('click', () => window.showNestedPopup(item)); // Recursive call
-
-                        itemsGrid.appendChild(itemCard);
-
-                        // Staggered animation
-                        setTimeout(() => {
-                            itemCard.classList.add('visible');
-                        }, itemIndex * 100);
-                        itemIndex++;
-                    });
-                });
-
-                 if (totalItems === 0) {
+                if (totalItems === 0) {
                      itemsGrid.innerHTML = '<p style="color: #a99a7c; text-align: center; grid-column: 1 / -1;">Nenhum item anexado encontrado.</p>';
+                } else {
+                     sortedTypes.forEach(tipo => {
+                        const typeHeader = document.createElement('div');
+                        typeHeader.className = 'type-header';
+                        typeHeader.textContent = tipo;
+                        itemsGrid.appendChild(typeHeader);
+                        itemsByType[tipo].forEach((item) => {
+                            const itemCard = document.createElement('div');
+                            itemCard.className = 'item-card';
+                            itemCard.innerHTML = `
+                                <img src="${item.imagem || 'placeholder.png'}" alt="${item.nome || ''}" class="item-image">
+                                <div class="item-name">${item.nome || 'Item sem nome'}</div>
+                                <div class="item-nota">${item.nota || 'N/A'}</div>
+                            `;
+                            // Permite clicar nos itens aninhados para ver os *seus* anexos
+                            itemCard.addEventListener('click', () => window.showNestedPopup(item));
+                            itemsGrid.appendChild(itemCard);
+                            requestAnimationFrame(() => {
+                                setTimeout(() => { itemCard.classList.add('visible'); }, itemIndex * 100);
+                            });
+                            itemIndex++;
+                        });
+                     });
                  }
 
             }).catch(error => {
-                console.error("Error fetching items for nested popup:", error);
-                 itemsGrid.innerHTML = '<p style="color: #ff6b6b; text-align: center; grid-column: 1 / -1;">Erro ao carregar itens anexados.</p>';
+                console.error(`showNestedPopup: Error fetching nested items for parent ${parentItem.id}:`, error);
+                itemsGrid.innerHTML = '<p style="color: #ff6b6b; text-align: center; grid-column: 1 / -1;">Erro ao carregar itens anexados.</p>';
             });
-
             nestedPopup.classList.add('active');
+        };
+        window.closeNestedPopup = function() {
+             console.log("closeNestedPopup: Closing nested popup.");
+             const popup = document.getElementById('nested-popup');
+             if (popup) popup.classList.remove('active');
+        };
+
+
+        // --- Lógica do Popup de Detalhes do Estádio (MODIFICADO - Mostra apenas itens anexados) ---
+        async function showStadiumDetailsPopup(stadium) {
+            console.log("showStadiumDetailsPopup: Showing ATTACHED ITEMS for stadium:", stadium);
+
+            const popup = document.getElementById('stadium-details-popup');
+            const title = popup ? popup.querySelector('.popup-title') : null;
+            const itemsGrid = document.getElementById('stadium-attached-items-grid');
+
+             if (!popup || !title || !itemsGrid ) {
+                 console.error("showStadiumDetailsPopup: Essential elements for stadium attached items popup not found.");
+                 return;
+             }
+
+            // Preenche o título do popup dinamicamente
+            title.textContent = `Itens Anexados a: ${stadium.nome || 'Estádio'}`;
+
+            // Carrega itens anexados (Lógica permanece a mesma)
+            itemsGrid.innerHTML = '<p style="color: #a99a7c; text-align: center; grid-column: 1 / -1;">A carregar itens anexados...</p>';
+            const attachedItemsQuery = query(
+                collection(db, 'empireitens'),
+                where('anexadoItemId', '==', stadium.id),
+                where('noMercado', '==', true),
+                orderBy('ordem', 'asc')
+            );
+            console.log("showStadiumDetailsPopup: Querying attached items for stadium ID:", stadium.id);
+            try {
+                const snapshot = await getDocs(attachedItemsQuery);
+                console.log(`showStadiumDetailsPopup: Found ${snapshot.size} items attached to stadium ${stadium.id}`);
+                const itemsByType = {};
+                let totalItems = 0;
+                snapshot.forEach(doc => {
+                    const item = { id: doc.id, ...doc.data() };
+                    const tipo = item.tipo || 'Outros';
+                    if (!itemsByType[tipo]) itemsByType[tipo] = [];
+                    itemsByType[tipo].push(item);
+                    totalItems++;
+                });
+
+                const sortedTypes = Object.keys(itemsByType).sort();
+                itemsGrid.innerHTML = '';
+
+                if (totalItems === 0) {
+                    itemsGrid.innerHTML = '<p style="color: #a99a7c; text-align: center; grid-column: 1 / -1;">Nenhum item anexado encontrado.</p>';
+                } else {
+                    let itemIndex = 0;
+                    sortedTypes.forEach(tipo => {
+                        const typeHeader = document.createElement('div');
+                        typeHeader.className = 'type-header';
+                        typeHeader.textContent = tipo;
+                        itemsGrid.appendChild(typeHeader);
+                        itemsByType[tipo].forEach(item => {
+                            const itemCard = document.createElement('div');
+                            itemCard.className = 'item-card';
+                            itemCard.innerHTML = `
+                                <img src="${item.imagem || 'placeholder.png'}" alt="${item.nome || ''}" class="item-image">
+                                <div class="item-name">${item.nome || 'Item sem nome'}</div>
+                                <div class="item-nota">${item.nota || 'N/A'}</div>
+                            `;
+                            itemCard.addEventListener('click', () => window.showNestedPopup(item));
+                            itemsGrid.appendChild(itemCard);
+                             requestAnimationFrame(() => {
+                                 setTimeout(() => { itemCard.classList.add('visible'); }, itemIndex * 100);
+                             });
+                            itemIndex++;
+                        });
+                    });
+                }
+            } catch (error) {
+                console.error(`showStadiumDetailsPopup: Error loading attached items for stadium ${stadium.id}:`, error);
+                itemsGrid.innerHTML = '<p style="color: #ff6b6b; text-align: center; grid-column: 1 / -1;">Erro ao carregar itens anexados.</p>';
+            }
+
+            popup.classList.add('active');
         }
 
-        window.closeNestedPopup = function() { // Attach to window
-            document.getElementById('nested-popup').classList.remove('active');
+
+        function closeStadiumDetailsPopup() {
+            console.log("closeStadiumDetailsPopup: Closing stadium attached items popup.");
+            const popup = document.getElementById('stadium-details-popup');
+            if (popup) popup.classList.remove('active');
         }
 
-         // Make confirmation functions global too, if called from HTML
+
+        // --- Lógica de Confirmação de Compra do Estádio ---
+        // Chamada a partir do handler de clique do card do estádio em loadEstadios
+        function showStadiumConfirmation() {
+            // Verifica se selectedStadiumForPurchase foi definido ANTES de chamar esta função
+            if (!selectedStadiumForPurchase || selectedStadiumForPurchase.valor === undefined) {
+                console.error("showStadiumConfirmation: No stadium selected or stadium has no value. This should be set before calling.");
+                showInfoPopup("Erro", "Estádio inválido para compra.");
+                return;
+            }
+            if (currentUser && currentUser.estadio) {
+                 console.warn("showStadiumConfirmation: User already has a stadium, purchase blocked.");
+                 showInfoPopup("Informação", `Você já possui o estádio: ${currentUser.estadio}.`);
+                 return;
+            }
+
+            console.log("showStadiumConfirmation: Showing confirmation for stadium:", selectedStadiumForPurchase);
+            const nameEl = document.getElementById('confirm-stadium-name');
+            const priceEl = document.getElementById('confirm-stadium-price');
+            const popup = document.getElementById('stadium-confirmation-popup');
+
+            if(nameEl) nameEl.textContent = selectedStadiumForPurchase.nome || 'este estádio';
+            if(priceEl) priceEl.textContent = selectedStadiumForPurchase.valor;
+            if(popup) popup.classList.add('active');
+        }
+
+        function closeStadiumConfirmation() {
+            console.log("closeStadiumConfirmation: Closing stadium purchase confirmation.");
+            const popup = document.getElementById('stadium-confirmation-popup');
+            if (popup) popup.classList.remove('active');
+        }
+
+
+        async function calculateGCoinsFromMovimentos(userId) {
+    // Log atualizado para refletir que usa o campo 'userId'
+    console.log(`calculateGCoinsFromMovimentos: A calcular saldo TOTAL para o utilizador ${userId} (todos os movimentos, usando campo 'userId')`);
+    let totalGCoins = 0;
+    let docCount = 0;
+
+    // --- A Consulta CORRIGIDA ---
+    // Filtra pelo campo padronizado 'userId' (minúsculas)
+    const movimentosQuery = query(
+        collection(db, 'movimentos'),
+        where('userId', '==', userId) // <<< ALTERADO AQUI para 'userId'
+    );
+
+    try {
+        const querySnapshot = await getDocs(movimentosQuery);
+        // Log atualizado
+        console.log(`calculateGCoinsFromMovimentos: Encontrados ${querySnapshot.size} documentos TOTAIS para o userID ${userId} (usando campo 'userId').`);
+
+        querySnapshot.forEach((doc) => {
+            docCount++;
+            const data = doc.data();
+            // Log atualizado
+            console.log(`calculateGCoinsFromMovimentos: Processando doc TOTAL #${docCount}, ID: ${doc.id}, Data:`, data);
+
+            if (data.valorreal !== undefined && typeof data.valorreal === 'number') {
+                totalGCoins += data.valorreal;
+            } else {
+                console.warn(`calculateGCoinsFromMovimentos: Documento ${doc.id} não tem 'valorreal' ou não é numérico. Ignorando.`);
+            }
+        });
+
+        console.log(`calculateGCoinsFromMovimentos: Saldo final TOTAL calculado (${docCount} documentos processados) para ${userId} é ${totalGCoins}`);
+        return totalGCoins;
+
+    } catch (error) {
+        // Log atualizado
+        console.error(`calculateGCoinsFromMovimentos: Erro ao buscar TODOS os movimentos para o utilizador ${userId} (usando campo 'userId'):`, error);
+        throw new Error("Erro ao calcular saldo total de GCoins a partir dos movimentos.");
+    }
+}
+
+
+
+
+      // --- confirmStadiumPurchase (Compra de Estádio - MODIFICADO) ---
+      async function confirmStadiumPurchase(confirmed) {
+    console.log(`confirmStadiumPurchase: Ação do utilizador - confirmado: ${confirmed}`);
+    closeStadiumConfirmation();
+
+    if (!confirmed) {
+        console.log("confirmStadiumPurchase: Compra cancelada pelo utilizador.");
+        selectedStadiumForPurchase = null;
+        return;
+    }
+    if (!selectedStadiumForPurchase || !selectedStadiumForPurchase.id || selectedStadiumForPurchase.valor === undefined || !selectedStadiumForPurchase.tipo || !currentUser ) {
+        console.error("confirmStadiumPurchase: Verificação pré-transação falhou.", { stadium: selectedStadiumForPurchase, user: currentUser });
+        showInfoPopup("Erro", "Não é possível iniciar a compra. Dados inválidos.");
+        selectedStadiumForPurchase = null;
+        return;
+    }
+
+    console.log(`confirmStadiumPurchase: A processar compra para ${selectedStadiumForPurchase.nome} (Tipo: ${selectedStadiumForPurchase.tipo})`);
+    showInfoPopup("Processando", "A verificar saldo e processar compra...");
+
+    const stadiumToPurchase = selectedStadiumForPurchase;
+    const stadiumPrice = stadiumToPurchase.valor;
+    const userDocRef = doc(db, 'users', currentUser.uid);
+    const empireItemRef = doc(db, 'empireitens', stadiumToPurchase.id);
+    let latestSeason;
+    let currentGCoinsBalance; // Para guardar o saldo ANTES da compra
+
+    try {
+        // --- PASSO 1: Calcular Saldo ANTES da Transação ---
+        // Garanta que calculateGCoinsFromMovimentos usa 'userId'
+        currentGCoinsBalance = await calculateGCoinsFromMovimentos(currentUser.uid);
+        console.log(`confirmStadiumPurchase: Saldo GCoins (antes da compra) calculado a partir dos movimentos: ${currentGCoinsBalance}`);
+
+        // --- PASSO 2: Obter Temporada (para o nome do campo e registo) ---
+        latestSeason = await getLatestSeason();
+        if (!latestSeason) throw new Error("Não foi possível determinar a temporada atual.");
+        console.log("confirmStadiumPurchase: Última temporada determinada:", latestSeason);
+        const gcoinsField = `${latestSeason}GCoins`; // Define o nome do campo a atualizar
+        console.log(`confirmStadiumPurchase: Campo GCoins a ser atualizado no user: ${gcoinsField}`);
+
+        // --- PASSO 3: Iniciar Transação ---
+        await runTransaction(db, async (transaction) => {
+            console.log(`confirmStadiumPurchase: Transação iniciada para o utilizador ${currentUser.uid}`);
+
+            // 3a. Obter Doc do Utilizador
+            const userDocSnap = await transaction.get(userDocRef);
+            if (!userDocSnap.exists()) throw new Error("Documento do usuário não encontrado na transação.");
+            const userData = userDocSnap.data();
+            console.log("confirmStadiumPurchase: Dados do utilizador lidos dentro da transação.");
+
+            // 3b. Verificar Posse do Estádio
+            if (userData.estadio) {
+                console.error("confirmStadiumPurchase: Utilizador já possui um estádio (verificado na transação). Estádio:", userData.estadio);
+                throw new Error("Usuário já possui um estádio (verificado na transação).");
+            }
+
+            // 3c. Verificar Fundos (Usando saldo calculado ANTES da transação)
+            console.log(`confirmStadiumPurchase: A verificar fundos. Necessário: ${stadiumPrice}, Calculado Disponível: ${currentGCoinsBalance}`);
+            if (currentGCoinsBalance < stadiumPrice) {
+                 console.error(`confirmStadiumPurchase: Fundos insuficientes. Necessário: ${stadiumPrice}, Calculado: ${currentGCoinsBalance}`);
+                 throw new Error(`Saldo de GCoins (${currentGCoinsBalance}, calculado a partir dos movimentos) insuficiente.`);
+            }
+
+            // 3d. Calcular Novo Saldo
+            const newGCoinsBalanceAfterPurchase = currentGCoinsBalance - stadiumPrice;
+            console.log(`confirmStadiumPurchase: Novo saldo GCoins calculado para atualização: ${newGCoinsBalanceAfterPurchase}`);
+
+            // 3e. Preparar Atualizações
+            console.log("confirmStadiumPurchase: Fundos suficientes. A preparar atualizações...");
+
+            // 3e.1. Atualizar Doc do Utilizador (estadio E GCoins)
+            transaction.update(userDocRef, {
+                estadio: stadiumToPurchase.nome,
+                [gcoinsField]: newGCoinsBalanceAfterPurchase // <<< RE-ADICIONADO: Atualiza o campo GCoins da temporada mais recente
+            });
+            console.log(`confirmStadiumPurchase: Atualização do documento do utilizador preparada (estadio e ${gcoinsField}).`);
+
+            // 3e.2. Criar Doc de Movimentos (com userId)
+            const movimentoDocRef = doc(collection(db, 'movimentos'));
+            const movimentoData = {
+                de: currentUser.uid, estado: "Comprado", itemEmpire: stadiumToPurchase.nome, temporada: latestSeason, movimentoData: serverTimestamp(), preco: stadiumPrice, tipo: "Empire", userId: currentUser.uid, // Garante que usa userId
+                valorreal: -stadiumPrice, empireTipo: stadiumToPurchase.tipo
+            };
+            transaction.set(movimentoDocRef, movimentoData);
+            console.log("confirmStadiumPurchase: Novo documento de movimento preparado com userId e valorreal:", -stadiumPrice);
+
+            // 3e.3. Atualizar o Documento do Item Empire
+            transaction.update(empireItemRef, { compradoPorUids: arrayUnion(currentUser.uid) });
+            console.log(`confirmStadiumPurchase: Atualização do documento do item Empire (${stadiumToPurchase.id}) preparada.`);
+
+            console.log("confirmStadiumPurchase: Todas as atualizações da transação preparadas com sucesso.");
+        }); // Fim da Transação
+
+        // --- PASSO 4: Pós-Transação com Sucesso ---
+        console.log("confirmStadiumPurchase: Transação concluída com sucesso!");
+        closeInfoPopup();
+        showInfoPopup("Sucesso!", `Estádio ${stadiumToPurchase.nome} adquirido com sucesso!`);
+        selectedStadiumForPurchase = null;
+
+        console.log("confirmStadiumPurchase: A recarregar a página para refletir as alterações.");
+        location.reload();
+
+    } catch (error) {
+         // --- PASSO 5: Falha na Transação ou Erro ---
+         console.error("confirmStadiumPurchase: Transação falhou ou ocorreu um erro:", error);
+         closeInfoPopup();
+         const displayError = error.message.includes("insufficiente") ? error.message : `Falha na Compra: ${error.message}`;
+         showInfoPopup("Erro na Compra", displayError);
+         selectedStadiumForPurchase = null;
+    }
+} // Fim de confirmStadiumPurchase
+
+
+
+
+
+        // --- Função auxiliar para obter a última temporada (CORRIGIDA) ---
+        async function getLatestSeason() {
+             console.log("getLatestSeason: Fetching seasons from 'jogos' collection...");
+             // *** CAMINHO CORRIGIDO: Query direta à coleção 'jogos' ***
+             const jogosCollectionRef = collection(db, 'jogos');
+             // *** NOME DO CAMPO CORRIGIDO: Campo dentro de cada doc de jogo que contém a string da temporada ***
+             const fieldNameHoldingSeasonString = 'temporada'; // ex: "2025/2026"
+
+             try {
+                // Não é necessário orderBy aqui, iteraremos por todos os docs de jogo
+                const querySnapshot = await getDocs(jogosCollectionRef);
+                let latestSeasonVal = "0"; // Usa o ano final (ex: 2026) para comparação
+                let latestFormattedSeason = null; // Armazena o formato "YYYYYYYY" (ex: "20252026")
+
+                console.log(`getLatestSeason: Found ${querySnapshot.size} documents in 'jogos' collection.`);
+
+                querySnapshot.forEach((doc) => {
+                    const gameData = doc.data();
+                    const seasonString = gameData[fieldNameHoldingSeasonString]; // Obtém o campo 'temporada'
+                    // console.log(`getLatestSeason: Checking doc ${doc.id}, temporada: ${seasonString}`); // Log detalhado se necessário
+
+                    if (seasonString && typeof seasonString === 'string') {
+                         // Valida o formato YYYY/YYYY
+                         const parts = seasonString.split('/');
+                         if (parts.length === 2 && parts[0].length === 4 && parts[1].length === 4 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+                             const startYear = parts[0];
+                             const endYear = parts[1];
+                             const sortableVal = endYear; // Compara com base no ano final
+                             const formatted = startYear + endYear; // Formato de saída desejado
+
+                             // Verifica se esta temporada é posterior à última encontrada até agora
+                             if (sortableVal > latestSeasonVal) {
+                                 console.log(`getLatestSeason: Found newer season: ${formatted} (from ${seasonString}) (was ${latestFormattedSeason})`);
+                                 latestSeasonVal = sortableVal; // Atualiza o último ano final encontrado
+                                 latestFormattedSeason = formatted; // Atualiza a última temporada formatada
+                             }
+                         } else {
+                             console.warn(`getLatestSeason: Invalid season string format: "${seasonString}" in doc ${doc.id}`);
+                         }
+                    } else {
+                         // Regista se o campo 'temporada' está em falta ou não é string num doc específico
+                         // console.warn(`getLatestSeason: Missing or invalid '${fieldNameHoldingSeasonString}' field in doc ${doc.id}`);
+                    }
+                });
+
+                if (latestFormattedSeason) {
+                    console.log("getLatestSeason: Latest season determined:", latestFormattedSeason);
+                    return latestFormattedSeason; // Retorna o formato YYYYYYYY
+                } else {
+                    // Este erro significa que NENHUM campo 'temporada' válido foi encontrado em qualquer doc 'jogos'
+                    console.error("getLatestSeason: Could not determine latest season from any documents found in 'jogos'. Check if 'temporada' fields exist and are formatted correctly (YYYY/YYYY).");
+                    return null;
+                }
+            } catch (error) {
+                  console.error("getLatestSeason: Error fetching documents from 'jogos' collection:", error);
+                  return null;
+             }
+        }
+
+
+         // Torna funções globalmente acessíveis para botões HTML
          window.closePopup = closePopup;
          window.showConfirmation = showConfirmation;
          window.confirmChoice = confirmChoice;
+         window.showStadiumDetailsPopup = showStadiumDetailsPopup; // Mostra popup de itens anexados
+         window.closeStadiumDetailsPopup = closeStadiumDetailsPopup;
+         window.showStadiumConfirmation = showStadiumConfirmation; // Mostra confirmação de compra
+         window.closeStadiumConfirmation = closeStadiumConfirmation;
+         window.confirmStadiumPurchase = confirmStadiumPurchase; // Lida com lógica de compra
+         window.closeInfoPopup = closeInfoPopup;
+         // Funções de popup aninhado já são globais via prefixo window.
 
 
-        // --- Initial Loading Logic ---
-        async function loadFilosofias() {
-            const filosofiasQuery = query(
+        // --- Lógica de Carregamento Inicial ---
+
+        // Função para carregar ESCOLHAS de Filosofia
+        async function loadFilosofiasParaEscolha() {
+             console.log("loadFilosofiasParaEscolha: Starting...");
+             let container, list, title;
+             try {
+                 container = document.getElementById('filosofias-container');
+                 list = document.getElementById('filosofias-list');
+                 title = container.querySelector('h2');
+                 if (!container || !list || !title) throw new Error("Essential elements not found!");
+                 list.innerHTML = '<p style="color: #a99a7c; text-align: center;">A carregar filosofias...</p>';
+                 title.textContent = 'Escolha sua Filosofia';
+                 container.style.display = 'block';
+             } catch (domError) {
+                 console.error("loadFilosofiasParaEscolha: ERROR during initial DOM access:", domError);
+                 return;
+             }
+
+             if (!db) { console.error("loadFilosofiasParaEscolha: Firestore db object is invalid!"); if(list) list.innerHTML = '<p style="color: red;">Erro crítico.</p>'; return; }
+
+             const filosofiasQuery = query(
                 collection(db, 'empireitens'),
                 where('tipo', '==', 'Filosofia'),
-                where('noMercado', '==', true)
-            );
+                where('noMercado', '==', true),
+                orderBy('ordem', 'asc')
+             );
+             console.log("loadFilosofiasParaEscolha: Query defined. Attempting getDocs...");
 
             try {
                 const querySnapshot = await getDocs(filosofiasQuery);
+                console.log(`loadFilosofiasParaEscolha: getDocs finished. Found ${querySnapshot.size} filosofias.`);
                 const filosofias = [];
-                querySnapshot.forEach((doc) => {
-                    filosofias.push({ id: doc.id, ...doc.data() });
-                });
+                querySnapshot.forEach((doc) => { filosofias.push({ id: doc.id, ...doc.data() }); });
 
-                // Sort filosofias by 'ordem' field
-                filosofias.sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
+                list.innerHTML = '';
+                if (filosofias.length === 0) {
+                     list.innerHTML = '<p style="color: #a99a7c; text-align: center;">Nenhuma filosofia disponível.</p>';
+                     return;
+                }
 
-                const container = document.getElementById('filosofias-list');
-                container.innerHTML = ''; // Clear previous
-
+                console.log(`loadFilosofiasParaEscolha: Rendering ${filosofias.length} cards.`);
                 for (let i = 0; i < filosofias.length; i++) {
                     const filosofia = filosofias[i];
                     const card = document.createElement('div');
-                    card.className = 'filosofia-card'; // Assign the CSS class
-
-                    // --- JS MODIFICATION: Inline styles removed, using CSS class now ---
-
-                    card.innerHTML = `
-                        <img src="${filosofia.imagem}" alt="${filosofia.nome}" style="width: 300px; height: 300px; object-fit: contain; pointer-events: none;">
-                    `; // Basic img styles kept for size/fit
-
-                    // Add click listener to show the main popup with this filosofia's items
+                    card.className = 'filosofia-card'; card.style.opacity = 0; card.style.transform = 'translateY(10px)';
+                    card.innerHTML = `<img src="${filosofia.imagem}" alt="${filosofia.nome}" style="width: 300px; height: 300px; object-fit: contain; pointer-events: none;">`;
+                    // Clicar abre o popup com detalhes E o botão 'Escolher'
                     card.addEventListener('click', () => showPopup(filosofia));
-
-                    container.appendChild(card);
-
-                    // Animate card appearance using opacity/transform from CSS class
-                    requestAnimationFrame(() => {
-                        setTimeout(() => {
-                            card.style.opacity = '1';
-                            card.style.transform = 'translateY(0)';
-                        }, (i + 1) * 200); // Staggered animation
-                    });
+                    list.appendChild(card);
+                    requestAnimationFrame(() => { setTimeout(() => { card.style.opacity = '1'; card.style.transform = 'translateY(0)'; }, (i + 1) * 200); });
                 }
-                document.getElementById('filosofias-container').style.display = 'block'; // Show container after loading
-
+                console.log("loadFilosofiasParaEscolha: Finished rendering filosofia choices.");
             } catch (error) {
-                console.error("Error loading filosofias:", error);
-                document.getElementById('filosofias-container').innerHTML = '<p style="color: #ff6b6b; text-align: center;">Erro ao carregar as filosofias.</p>';
-                document.getElementById('filosofias-container').style.display = 'block';
+                console.error("loadFilosofiasParaEscolha: ERROR caught:", error);
+                if(list) list.innerHTML = `<p style="color: #ff6b6b; text-align: center;">Erro ao carregar filosofias: ${error.message}</p>`;
             }
         }
 
-        // --- Authentication Listener ---
-        onAuthStateChanged(auth, async (user) => {
-            if (user) {
-                currentUser = await getUserStatus(user.uid); // Store user status globally
-                const menuSettings = await getMenuSettings(); // Get menu settings
+        // Função para Carregar Estádios (Handler de clique MODIFICADO)
+        async function loadEstadios(filosofiaId) {
+             console.log(`loadEstadios: Starting for filosofia ID: ${filosofiaId}`);
+             let container, list, title;
+             try {
+                container = document.getElementById('filosofias-container');
+                list = document.getElementById('filosofias-list');
+                title = container.querySelector('h2');
+                if (!container || !list || !title) throw new Error("Essential elements not found!");
+                list.innerHTML = '<p style="color: #a99a7c; text-align: center;">A carregar império...</p>';
+                title.textContent = 'Seu Império'; // Título quando mostra estádios
+                container.style.display = 'block';
+             } catch (domError) {
+                 console.error("loadEstadios: ERROR during initial DOM access:", domError);
+                 return;
+             }
 
-                // Check page access based on menu settings and user status
-                const hasAccess = await checkPageAccess(currentUser, menuSettings);
-                if (!hasAccess) return; // Exit if no access
+             const estadiosQuery = query(
+                collection(db, 'empireitens'),
+                where('tipo', '==', 'Estádio'),
+                where('anexadoItemId', '==', filosofiaId),
+                where('noMercado', '==', true),
+                orderBy('ordem', 'asc')
+             );
+             console.log("loadEstadios: Query defined. Attempting getDocs...");
 
-                // Update menu visibility based on settings
-                updateMenuVisibility(menuSettings);
+            try {
+                const querySnapshot = await getDocs(estadiosQuery);
+                console.log(`loadEstadios: getDocs finished. Found ${querySnapshot.size} estadios.`);
+                const estadios = [];
+                querySnapshot.forEach((doc) => { estadios.push({ id: doc.id, ...doc.data() }); });
 
-                if (currentUser === null) {
-                    console.log('User is not accepted or not found.');
-                    window.location.href = '404.html';
-                } else {
-                    console.log(`User ${currentUser.uid} is logged in with status: ${currentUser.estatuto}`);
-                    if (!currentUser.filosofia) {
-                        console.log('User needs to choose a filosofia.');
-                        await loadFilosofias(); // Load and display filosofia choices
+                list.innerHTML = ''; // Limpa carregamento apenas após query bem-sucedida
+                if (estadios.length === 0) {
+                    list.innerHTML = '<p style="color: #a99a7c; text-align: center;">Nenhum estádio encontrado para sua filosofia.</p>';
+                    return;
+                }
+
+                console.log(`loadEstadios: Rendering ${estadios.length} estadio cards.`);
+                for (let i = 0; i < estadios.length; i++) {
+                    const estadio = estadios[i];
+                    const card = document.createElement('div');
+                    card.className = 'item-card'; card.style.opacity = 0; card.style.transform = 'translateY(20px)';
+
+                    let cardContent = `
+                        <img src="${estadio.imagem || 'placeholder.png'}" alt="${estadio.nome || ''}" class="item-image" style="width: 150px; height: 150px;">
+                        <div class="item-name">${estadio.nome || 'Estádio sem nome'}</div>
+                        <div class="item-nota">${estadio.nota || 'N/A'}</div>
+                    `;
+
+                    const isOwned = currentUser && currentUser.estadio === estadio.nome;
+                    let clickHandler = null;
+
+                    if (isOwned) {
+                        // Utilizador possui ESTE estádio
+                        cardContent += `<div class="item-nota" style="color: lightgreen; font-weight: bold;">Possuído</div>`;
+                        // Clicar no estádio possuído mostra itens anexados
+                        clickHandler = () => window.showStadiumDetailsPopup(estadio);
+                    } else if (currentUser && currentUser.estadio) {
+                        // Utilizador possui um estádio DIFERENTE
+                         cardContent += `<div class="item-nota" style="color: grey;">${estadio.valor !== undefined ? estadio.valor + ' GCoins' : ''}</div>`;
+                         card.style.cursor = 'not-allowed';
+                         card.style.filter = 'grayscale(80%)';
+                         // Clicar mostra itens anexados mesmo assim
+                         clickHandler = () => window.showStadiumDetailsPopup(estadio);
+                    } else if (estadio.valor !== undefined && estadio.valor !== null) {
+                        // Estádio é comprável por este utilizador
+                        cardContent += `<div class="item-nota" style="color: #c9a959; font-weight: bold; cursor: pointer;">${estadio.valor} GCoins - Comprar</div>`;
+                        // ***CLIQUE MODIFICADO***: Define estádio selecionado e mostra confirmação de COMPRA diretamente
+                        clickHandler = () => {
+                            selectedStadiumForPurchase = estadio; // Define a variável global
+                            window.showStadiumConfirmation(); // Inicia confirmação de compra
+                        };
+                         card.style.cursor = 'pointer';
                     } else {
-                        console.log(`User has already chosen filosofia: ${currentUser.filosofia}`);
-                        document.getElementById('filosofias-container').style.display = 'none';
-                        // --------> ADD CODE HERE LATER to display the chosen empire details <--------
+                        // Estádio existe mas não tem valor / não é comprável
+                        cardContent += `<div class="item-nota" style="color: grey;">Indisponível</div>`;
+                        // Clicar mostra itens anexados
+                        clickHandler = () => window.showStadiumDetailsPopup(estadio);
                     }
+
+                    card.innerHTML = cardContent;
+                    if (clickHandler) {
+                        card.addEventListener('click', clickHandler);
+                    }
+
+                    list.appendChild(card);
+                    requestAnimationFrame(() => { setTimeout(() => { card.style.opacity = '1'; card.style.transform = 'translateY(0)'; card.classList.add('visible'); }, (i + 1) * 150); });
+                }
+                 console.log("loadEstadios: Finished rendering estadios.");
+            } catch (error) {
+                console.error("loadEstadios: ERROR caught:", error);
+                if(list) list.innerHTML = `<p style="color: #ff6b6b; text-align: center;">Erro ao carregar estádios: ${error.message}</p>`;
+            }
+        }
+
+
+        // --- Listener de Autenticação ---
+        console.log("Empire Page Script: Setting up onAuthStateChanged listener...");
+        onAuthStateChanged(auth, async (user) => { // Certificar que onAuthStateChanged está importado
+            console.log("onAuthStateChanged: Listener triggered.");
+            updateLoadingProgress(10);
+
+            if (user) {
+                console.log(`onAuthStateChanged: User detected. UID: ${user.uid}`);
+                try {
+                    console.log("onAuthStateChanged: Attempting to get user status...");
+                    currentUser = await getUserStatus(user.uid);
+                    updateLoadingProgress(30);
+                    console.log("onAuthStateChanged: User status received:", currentUser);
+
+                    if (!currentUser) {
+                        console.warn('onAuthStateChanged: User status is null. Redirecting to 404.');
+                        window.location.href = '404.html';
+                        hideLoadingScreen();
+                        return;
+                    }
+
+                    console.log("onAuthStateChanged: Attempting to get menu settings...");
+                    const menuSettings = await getMenuSettings();
+                    updateLoadingProgress(50);
+                    console.log("onAuthStateChanged: Menu settings received:", menuSettings);
+
+                    console.log("onAuthStateChanged: Checking page access...");
+                    const hasAccess = await checkPageAccess(currentUser, menuSettings);
+                    if (!hasAccess) {
+                        console.log("onAuthStateChanged: Access check failed. Redirect should have occurred.");
+                       hideLoadingScreen();
+                       return;
+                    }
+                    console.log("onAuthStateChanged: Access check passed.");
+
+                    console.log("onAuthStateChanged: Updating menu visibility...");
+                    updateMenuVisibility(menuSettings);
+                    updateLoadingProgress(70);
+                    console.log("onAuthStateChanged: Menu visibility updated.");
+                    console.log(`onAuthStateChanged: Checking user filosofia: ${currentUser.filosofia}`);
+                    console.log(`onAuthStateChanged: Checking user estadio: ${currentUser.estadio}`);
+
+                    // *** Lógica de Decisão ***
+                    if (!currentUser.filosofia) {
+                        console.log('onAuthStateChanged: User has NO filosofia. Calling loadFilosofiasParaEscolha().');
+                        await loadFilosofiasParaEscolha(); // Mostra escolhas de filosofia
+                    } else {
+                        console.log(`onAuthStateChanged: User HAS filosofia (${currentUser.filosofia}). Calling loadEstadios().`);
+                        await loadEstadios(currentUser.filosofia); // Mostra lista de estádios (com opções de compra/visualização)
+                    }
+                    console.log("onAuthStateChanged: Content loading function finished execution.");
+
+                    updateLoadingProgress(100);
+                    console.log("onAuthStateChanged: Hiding loading screen after successful load completion.");
+                    hideLoadingScreen();
+
+                } catch (error) {
+                     console.error('onAuthStateChanged: CRITICAL ERROR during initialization or data loading:', error);
+                     const container = document.getElementById('filosofias-container');
+                     if(container) { container.innerHTML = '<h2 style="text-align: center; color: red;">Erro Crítico</h2><p style="color: red; text-align: center;">Ocorreu um erro grave ao carregar a página. Verifique a consola.</p>'; container.style.display='block';}
+                     console.log("onAuthStateChanged: Hiding loading screen after error.");
+                     hideLoadingScreen();
                 }
             } else {
-                console.log('No user is logged in.');
-                currentUser = null; // Clear user data
+                console.log('onAuthStateChanged: No user is logged in. Redirecting to index.html.');
+                currentUser = null;
+                hideLoadingScreen();
                 window.location.href = 'index.html';
             }
         });
+        console.log("Empire Page Script: onAuthStateChanged listener set up.");
 
     </script>
 </body>
