@@ -704,8 +704,21 @@
             }
 
             /** Shows a simple informational popup */
-            function showInfoPopup(title, message) {
-                 console.log(`showInfoPopup: Title: "${title}", Message: "${message}"`); const popup = document.getElementById('info-popup'); const titleEl = document.getElementById('info-popup-title'); const msgEl = document.getElementById('info-popup-message'); if (popup && titleEl && msgEl) { titleEl.textContent = title; msgEl.textContent = message; popup.classList.add('active'); } else { console.error("showInfoPopup: Info popup elements not found."); }
+            function showInfoPopup(title, message, persistent = false) { // Added persistent flag
+                 console.log(`showInfoPopup: Title: "${title}", Message: "${message}", Persistent: ${persistent}`);
+                 const popup = document.getElementById('info-popup');
+                 const titleEl = document.getElementById('info-popup-title');
+                 const msgEl = document.getElementById('info-popup-message');
+                 const okButton = popup?.querySelector('.popup-button'); // Find the OK button
+
+                 if (popup && titleEl && msgEl && okButton) {
+                     titleEl.textContent = title;
+                     msgEl.innerHTML = message; // Use innerHTML in case message needs basic formatting
+                     okButton.style.display = persistent ? 'none' : 'flex'; // Hide button if persistent
+                     popup.classList.add('active');
+                 } else {
+                     console.error("showInfoPopup: Info popup elements (popup, title, message, or button) not found.");
+                 }
             }
 
             /** Closes the simple informational popup */
@@ -1053,9 +1066,12 @@
                  console.log("closeItemConfirmation: Closing item confirmation."); const popup = document.getElementById('item-confirmation-popup'); if (popup) popup.classList.remove('active');
             }
              /** Handles the confirmation (Yes/No) for purchasing an item from the shop - COM REGRA NÍVEL 2 e GRAVAÇÃO DE NÍVEL */
+     
+     
+            /** Handles the confirmation (Yes/No) for purchasing an item from the shop - USES PERSISTENT PROCESSING PANEL */
             async function confirmItemPurchase(confirmed) {
                  console.log(`confirmItemPurchase: User action - confirmed: ${confirmed}`);
-                 closeItemConfirmation();
+                 closeItemConfirmation(); // Close the Yes/No confirmation popup
 
                  if (!confirmed) { console.log("confirmItemPurchase: Purchase cancelled."); selectedItemForPurchase = null; return; }
                  if (!selectedItemForPurchase?.id || selectedItemForPurchase.valor === undefined || !selectedItemForPurchase.tipo || !currentUser) { console.error("confirmItemPurchase: Pre-check failed.", { item: selectedItemForPurchase, user: currentUser }); showInfoPopup("Erro", "Dados inválidos."); selectedItemForPurchase = null; return; }
@@ -1066,7 +1082,8 @@
                  const empireItemRef = doc(db, 'empireitens', itemToPurchase.id);
 
                  console.log(`confirmItemPurchase: Processing purchase for ${itemToPurchase.nome} (Nível: ${itemToPurchase.nivel || 'N/A'})`);
-                 showInfoPopup("Processando", "A verificar regras...");
+                 // *** CHANGED: Show persistent processing message ***
+                 showInfoPopup("Processando", "A processar compra, por favor aguarde...", true); // true = persistent
 
                  let latestSeason;
 
@@ -1117,40 +1134,20 @@
                       // --- Transação ---
                       await runTransaction(db, async (transaction) => {
                           console.log(`confirmItemPurchase: Transaction started.`);
-                          // 1. Obter User Doc DENTRO da transação
                           const userDocSnap = await transaction.get(userDocRef);
                           if (!userDocSnap.exists()) throw new Error("User doc not found in transaction.");
                           const userData = userDocSnap.data();
-
-                          // 2. Verificar Fundos DENTRO da transação
                           const currentUserGCoins = userData[gcoinsFieldCheck] || 0;
                           if (currentUserGCoins < itemPrice) {
                               throw new Error(`Saldo insuficiente na transação (${currentUserGCoins} ${gcoinsFieldCheck}).`);
                           }
                           console.log("confirmItemPurchase: Funds check OK inside transaction.");
-
-                          // 3. Criar Movimento (com o novo campo 'nivel')
                           const movimentoDocRef = doc(collection(db, 'movimentos'));
-                          const movimentoData = {
-                              estado: "Comprado",
-                              itemEmpire: itemToPurchase.nome,
-                              temporada: latestSeason,
-                              movimentoData: serverTimestamp(),
-                              preco: itemPrice,
-                              tipo: "Empire",                  // Tipo do movimento (sempre 'Empire' aqui)
-                              userId: currentUser.uid,
-                              valorreal: -itemPrice,
-                              empireTipo: itemToPurchase.tipo, // Tipo do *item* comprado
-                              nivel: itemToPurchase.nivel || 'Nível 1' // *** NOVO CAMPO ADICIONADO *** (Default 'Nível 1' se ausente no item)
-                          };
+                          const movimentoData = { estado: "Comprado", itemEmpire: itemToPurchase.nome, temporada: latestSeason, movimentoData: serverTimestamp(), preco: itemPrice, tipo: "Empire", userId: currentUser.uid, valorreal: -itemPrice, empireTipo: itemToPurchase.tipo, nivel: itemToPurchase.nivel || 'Nível 1' };
                           transaction.set(movimentoDocRef, movimentoData);
                           console.log("confirmItemPurchase: Movement prepared with nivel:", movimentoData.nivel);
-
-                          // 4. Atualizar Item Comprado (arrayUnion)
                           transaction.update(empireItemRef, { compradoPorUids: arrayUnion(currentUser.uid) });
                           console.log("confirmItemPurchase: Empire item update prepared.");
-
-                          // 5. GCoins NÃO são atualizados diretamente aqui para usar o recálculo total
                           console.log("confirmItemPurchase: Transaction updates prepared (GCoins will be recalculated).");
                       });
                       console.log("confirmItemPurchase: Transaction OK!");
@@ -1164,28 +1161,30 @@
                            await updateDoc(userDocRef, { [finalGcoinsField]: totalValorReal }); console.log(`confirmItemPurchase: User GCoins (${finalGcoinsField}) updated.`);
                       } catch (recalcError) {
                           console.error("confirmItemPurchase: ERROR GCoins recalc:", recalcError);
-                          // Informa sobre a compra parcial
-                          closeInfoPopup();
-                          showInfoPopup("Compra Parcial", `Item ${itemToPurchase.nome} adquirido, mas ocorreu um erro ao recalcular seu saldo. Contacte o suporte se necessário.`);
+                          // *** CHANGED: Show partial success with OK button ***
+                          showInfoPopup("Compra Parcial", `Item ${itemToPurchase.nome} adquirido, mas ocorreu um erro ao recalcular seu saldo. Contacte o suporte se necessário.`); // persistent = false (default)
                           selectedItemForPurchase = null;
-                          // Continua para recarregar a página mesmo com erro no recálculo
                           closeEmpireShopPopup(); console.log("confirmItemPurchase: Reloading page after partial success (recalc error)..."); setTimeout(() => location.reload(), 2500); // Tempo maior para ler o aviso
                           return; // Sai da função principal após o erro de recálculo
                       }
 
                       // --- Finalizar (se recálculo foi bem sucedido) ---
-                      closeInfoPopup(); showInfoPopup("Sucesso!", `Item ${itemToPurchase.nome} adquirido!`); selectedItemForPurchase = null;
-                      closeEmpireShopPopup(); console.log("confirmItemPurchase: Reloading page..."); setTimeout(() => location.reload(), 1500);
+                      // *** CHANGED: Removed Success Popup - Persistent "Processando" stays until reload ***
+                      selectedItemForPurchase = null;
+                      closeEmpireShopPopup(); // Close the shop behind the persistent processing message
+                      console.log("confirmItemPurchase: Purchase successful. Reloading page...");
+                      setTimeout(() => location.reload(), 1500); // Reload happens, clearing the processing message
 
-                 } catch (error) {
-                      console.error("confirmItemPurchase: Purchase failed:", error); closeInfoPopup();
-                      // Mensagem de erro mais específica para a nova regra
+                 } catch (error) { // This is the main catch block for the whole purchase process
+                      console.error("confirmItemPurchase: Purchase failed:", error);
+                      // *** CHANGED: Show error with OK button (ensure persistent is closed implicitly) ***
                       const displayError = error.message.includes("insufficiente") || error.message.includes("disponível") || error.message.includes("Limite Diário") || error.message.includes("Requisito: Nível 1")
                           ? error.message
                           : `Falha: ${error.message || 'Tente novamente.'}`;
-                      showInfoPopup("Erro na Compra", displayError); selectedItemForPurchase = null;
-                 }
-            }
+                      showInfoPopup("Erro na Compra", displayError); // persistent = false (default)
+                      selectedItemForPurchase = null;
+                 } // Closes the catch (error) block
+            } // Closes the async function confirmItemPurchase(confirmed)
 
 
             // --- State Loading Functions ---
