@@ -773,20 +773,32 @@ document.addEventListener('DOMContentLoaded', async () => {
             const clubs = await searchClubs(searchTerm);
             clubeList.innerHTML = '';
             clubs.forEach(club => {
-                const div = document.createElement('div');
-                div.className = 'search-option';
-                div.textContent = `${club.nome} (${club.pais})`;
-                clubeInput.value = club.nome;
-                div.addEventListener('click', () => {
-                    clubeInput.value = club.nome;
-                    selectedClubeId = club.id;
-                    clubeList.innerHTML = '';
-                });
-                clubeList.appendChild(div);
-            });
+    const div = document.createElement('div');
+    div.className = 'search-option';
+    div.textContent = `${club.nome} (${club.pais})`;
+    // A linha problemática foi removida daqui.
+    div.addEventListener('click', () => {
+        clubeInput.value = club.nome; // Mantenha esta linha, pois ela é acionada pelo clique.
+        selectedClubeId = club.id;
+        clubeList.innerHTML = '';
+    });
+    clubeList.appendChild(div);
+});
         } catch (error) {
             console.error('Erro ao buscar clubes:', error);
         }
+    });
+
+    // Add event listeners to mini game checkboxes to show/hide price inputs
+    document.querySelectorAll('.mini-game-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            const priceDiv = this.closest('.mini-game-option').querySelector('.mini-game-price');
+            if (this.checked) {
+                priceDiv.style.display = 'inline-block';
+            } else {
+                priceDiv.style.display = 'none';
+            }
+        });
     });
 
     form.addEventListener('submit', async (e) => {
@@ -800,6 +812,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         const precoJogador = parseInt(document.getElementById('preco-jogador').value) || null;
         const compradorJogadorId = document.getElementById('comprador-jogador').value || null;
         const estatisticasJogador = document.getElementById('estatisticas-jogador').value;
+        
+        // Get mini games selections
+        const miniGamesCheckboxes = document.querySelectorAll('input[name="mini-games"]:checked');
+        const miniGames = Array.from(miniGamesCheckboxes).map(checkbox => checkbox.value);
+        
+        // Get mini games prices
+        const miniGamesPrices = {};
+        miniGamesCheckboxes.forEach(checkbox => {
+            const miniGameValue = checkbox.value;
+            const priceInput = document.querySelector(`input[name="${miniGameValue}-preco"]`);
+            if (priceInput && priceInput.value) {
+                miniGamesPrices[`${miniGameValue}preco`] = priceInput.value;
+            }
+        });
 
 
         if (!selectedPaisId) {
@@ -825,6 +851,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 preco: precoJogador,
                 compradopor: compradorJogadorId,
                 estatisticas: estatisticasJogador,
+                miniGames: miniGames.length > 0 ? miniGames : null,
                 dataCriacao: new Date()
             };
             const jogadorRef = await addDoc(collection(db, 'jogadores'), jogadorData);
@@ -1639,6 +1666,23 @@ h1 {
                         <option value="false" selected>Não</option>
                         <option value="true">Sim</option>
                     </select>
+                </div>
+                <div class="form-group">
+                    <label>Mini Games? (Opcional)</label>
+                    <div class="checkbox-group">
+                        <div class="mini-game-option">
+                            <label><input type="checkbox" name="mini-games" value="world26" class="mini-game-checkbox"> Euro26</label>
+                            <div class="mini-game-price" style="display: none;">
+                                <input type="text" name="world26-preco" maxlength="5" placeholder="Preço" class="mini-game-price-input">
+                            </div>
+                        </div>
+                        <div class="mini-game-option">
+                            <label><input type="checkbox" name="mini-games" value="whowins" class="mini-game-checkbox"> WhoWins</label>
+                            <div class="mini-game-price" style="display: none;">
+                                <input type="text" name="whowins-preco" maxlength="5" placeholder="Preço" class="mini-game-price-input">
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label for="preco-jogador">Preço</label>
