@@ -583,112 +583,156 @@
     </nav>
 
     <script type="module">
-      import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getFirestore, doc, getDoc, addDoc, collection, serverTimestamp, getDocs, query, where, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, doc, getDoc, addDoc, collection, serverTimestamp, getDocs, query, where, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
-const firebaseConfig = {
-    apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0", // Atenção: Considere proteger esta chave
-    authDomain: "g-games-8a8fc.firebaseapp.com",
-    projectId: "g-games-8a8fc",
-    storageBucket: "g-games-8a8fc.firebasestorage.app",
-    messagingSenderId: "689897349449",
-    appId: "1:689897349449:web:536599794579901beb7a98",
-    measurementId: "G-GTTPJ6G5MD"
-};
+        const firebaseConfig = {
+            apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0", // Atenção: Considere proteger esta chave
+            authDomain: "g-games-8a8fc.firebaseapp.com",
+            projectId: "g-games-8a8fc",
+            storageBucket: "g-games-8a8fc.firebasestorage.app",
+            messagingSenderId: "689897349449",
+            appId: "1:689897349449:web:536599794579901beb7a98",
+            measurementId: "G-GTTPJ6G5MD"
+        };
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-const auth = getAuth(app);
-let countdownInterval;
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+        let countdownInterval;
 
-const loadingScreen = document.getElementById('loading-screen');
-const content = document.querySelector('.content');
-let currentUserStatus = null;
-let currentPredictionInput = null; // Track currently focused input for dropdown logic
-let categoryDropdown = null; // Track the main category dropdown menu
-let currentGame = null; // Store current game data globally
+        const loadingScreen = document.getElementById('loading-screen');
+        const content = document.querySelector('.content');
+        let currentUserStatus = null;
+        let currentPredictionInput = null; // Track currently focused input for dropdown logic
+        let categoryDropdown = null; // Track the main category dropdown menu
+        let currentGame = null; // Store current game data globally
 
-// --- Helper Functions ---
+        // --- ADICIONADO PARA CONTROLE DO MENU ---
+        // Seleção dos elementos do menu inferior
+        const bottomMenuHome = document.querySelector('.bottom-menu a[href="1x.html"]');
+        const bottomMenuMarket = document.querySelector('.bottom-menu a[href="market.html"]');
+        const bottomMenuTeam = document.querySelector('.bottom-menu a[href="team.html"]');
+        const bottomMenuEmpire = document.querySelector('.bottom-menu a[href="empire.html"]');
+        const bottomMenuRankings = document.querySelector('.bottom-menu a[href="rankings.html"]');
+        const bottomMenuProfile = document.querySelector('.bottom-menu a[href="profile.html"]');
+        // --- FIM DA ADIÇÃO ---
 
-async function getUserStatus(userId) {
-    try {
-        const userDoc = doc(db, 'users', userId);
-        const docSnap = await getDoc(userDoc);
-        if (docSnap.exists()) {
-            return docSnap.data().estatuto;
-        } else {
-            console.warn("User document not found for status:", userId);
-            return null;
+
+        // --- Helper Functions ---
+
+        // --- ADICIONADO PARA CONTROLE DO MENU ---
+        // Função para buscar as configurações de visibilidade do menu no Firebase
+        async function fetchMenuSettings() {
+            try {
+                const menuSettingsDocRef = doc(db, 'paineis', 'paineis menu');
+                const docSnap = await getDoc(menuSettingsDocRef);
+                if (docSnap.exists()) {
+                    return docSnap.data();
+                } else {
+                    console.warn("Menu settings document ('paineis/paineismenu') not found!");
+                    // Retorna configurações padrão (tudo desligado) se o documento não for encontrado
+                    return { '1x': 'off', bank: 'off', empire: 'off', market: 'off', profile: 'off', rankings: 'off', team: 'off' };
+                }
+            } catch (error) {
+                console.error("Error fetching menu settings:", error);
+                // Retorna configurações padrão (tudo desligado) em caso de erro
+                return { '1x': 'off', bank: 'off', empire: 'off', market: 'off', profile: 'off', rankings: 'off', team: 'off' };
+            }
         }
-    } catch (error) {
-        console.error("Error getting user status:", error);
-        return null;
-    }
-}
 
-function showErrorPopup(message) {
-    const popup = document.getElementById('error-popup');
-    if (!popup) { console.error("Error popup element not found!"); return; }
-    const popupMessage = popup.querySelector('.popup-message');
-    if (!popupMessage) { console.error("Error popup message element not found!"); return; }
-    popupMessage.textContent = message;
-    popup.style.display = 'block';
-}
+        // Função para aplicar a visibilidade aos itens do menu com base nas configurações
+        function applyMenuVisibility(menuSettings) {
+            console.log("Applying menu visibility:", menuSettings);
+            if (bottomMenuHome) bottomMenuHome.style.display = menuSettings['1x'] === 'on' ? 'flex' : 'none';
+            if (bottomMenuMarket) bottomMenuMarket.style.display = menuSettings.market === 'on' ? 'flex' : 'none';
+            if (bottomMenuTeam) bottomMenuTeam.style.display = menuSettings.team === 'on' ? 'flex' : 'none';
+            if (bottomMenuEmpire) bottomMenuEmpire.style.display = menuSettings.empire === 'on' ? 'flex' : 'none';
+            if (bottomMenuRankings) bottomMenuRankings.style.display = menuSettings.rankings === 'on' ? 'flex' : 'none';
+            if (bottomMenuProfile) bottomMenuProfile.style.display = menuSettings.profile === 'on' ? 'flex' : 'none';
+        }
+        // --- FIM DA ADIÇÃO ---
 
-// Example success popup (can be styled better)
-function showSuccessPopup(message) {
-    // You can replace this with a more styled popup later
-    alert(message);
-}
+        async function getUserStatus(userId) {
+            try {
+                const userDoc = doc(db, 'users', userId);
+                const docSnap = await getDoc(userDoc);
+                if (docSnap.exists()) {
+                    return docSnap.data().estatuto;
+                } else {
+                    console.warn("User document not found for status:", userId);
+                    return null;
+                }
+            } catch (error) {
+                console.error("Error getting user status:", error);
+                return null;
+            }
+        }
 
-// Function to show confirmation popup
-function showConfirmationPopup(predictions) {
-    const confirmationPopup = document.getElementById('confirmation-popup');
-    const confirmationPredictions = document.getElementById('confirmation-predictions');
-    if (!confirmationPopup || !confirmationPredictions) {
-        console.error("Confirmation popup elements not found!");
-        showErrorPopup("Erro ao mostrar confirmação.");
-        return;
-    }
-    let predictionsHtml = '<div style="text-align: center;">';
-    predictions.forEach((prediction, index) => {
-        predictionsHtml += `<p style="margin: 5px 0;">Palpite ${index + 1}: <strong>${prediction}</strong></p>`;
-    });
-    predictionsHtml += '</div>';
-    confirmationPredictions.innerHTML = predictionsHtml;
-    confirmationPopup.style.display = 'block';
-}
+        // ... (resto das suas funções helper: showErrorPopup, showSuccessPopup, etc.)
+        function showErrorPopup(message) {
+            const popup = document.getElementById('error-popup');
+            if (!popup) { console.error("Error popup element not found!"); return; }
+            const popupMessage = popup.querySelector('.popup-message');
+            if (!popupMessage) { console.error("Error popup message element not found!"); return; }
+            popupMessage.textContent = message;
+            popup.style.display = 'block';
+        }
 
-// Function to close confirmation popup
-window.closeConfirmationPopup = function() {
-    const confirmationPopup = document.getElementById('confirmation-popup');
-    if (confirmationPopup) {
-        confirmationPopup.style.display = 'none';
-    }
-}
+        // Example success popup (can be styled better)
+        function showSuccessPopup(message) {
+            // You can replace this with a more styled popup later
+            alert(message);
+        }
 
-// Close error popup
-const errorPopupCloseButton = document.querySelector('#error-popup .close-popup');
-if (errorPopupCloseButton) {
-    errorPopupCloseButton.addEventListener('click', function() {
-        const errorPopup = document.getElementById('error-popup');
-        if (errorPopup) errorPopup.style.display = 'none';
-    });
-} else {
-    console.warn("Error popup close button not found");
-}
+        // Function to show confirmation popup
+        function showConfirmationPopup(predictions) {
+            const confirmationPopup = document.getElementById('confirmation-popup');
+            const confirmationPredictions = document.getElementById('confirmation-predictions');
+            if (!confirmationPopup || !confirmationPredictions) {
+                console.error("Confirmation popup elements not found!");
+                showErrorPopup("Erro ao mostrar confirmação.");
+                return;
+            }
+            let predictionsHtml = '<div style="text-align: center;">';
+            predictions.forEach((prediction, index) => {
+                predictionsHtml += `<p style="margin: 5px 0;">Palpite ${index + 1}: <strong>${prediction}</strong></p>`;
+            });
+            predictionsHtml += '</div>';
+            confirmationPredictions.innerHTML = predictionsHtml;
+            confirmationPopup.style.display = 'block';
+        }
 
-// Close confirmation popup (using the X button)
-const confirmationPopupCloseButton = document.querySelector('#confirmation-popup .close-popup');
-if (confirmationPopupCloseButton) {
-    confirmationPopupCloseButton.addEventListener('click', closeConfirmationPopup);
-} else {
-    console.warn("Confirmation popup close button not found");
-}
+        // Function to close confirmation popup
+        window.closeConfirmationPopup = function() {
+            const confirmationPopup = document.getElementById('confirmation-popup');
+            if (confirmationPopup) {
+                confirmationPopup.style.display = 'none';
+            }
+        }
 
+        // Close error popup
+        const errorPopupCloseButton = document.querySelector('#error-popup .close-popup');
+        if (errorPopupCloseButton) {
+            errorPopupCloseButton.addEventListener('click', function() {
+                const errorPopup = document.getElementById('error-popup');
+                if (errorPopup) errorPopup.style.display = 'none';
+            });
+        } else {
+            console.warn("Error popup close button not found");
+        }
 
-// --- Firestore Data Fetching ---
+        // Close confirmation popup (using the X button)
+        const confirmationPopupCloseButton = document.querySelector('#confirmation-popup .close-popup');
+        if (confirmationPopupCloseButton) {
+            confirmationPopupCloseButton.addEventListener('click', closeConfirmationPopup);
+        } else {
+            console.warn("Confirmation popup close button not found");
+        }
+
+        // ... (resto do seu código JavaScript existente)
+        // --- Firestore Data Fetching ---
 
 async function fetchCategories() {
     try {
@@ -1587,29 +1631,34 @@ document.addEventListener('click', function(event) {
 });
 
 
-// --- Authentication State Change Listener ---
-onAuthStateChanged(auth, async (user) => {
-    if (user) {
-        console.log(`User ${user.uid} is logged in on palpite.html.`);
-        currentUserStatus = await getUserStatus(user.uid);
-        console.log(`User status: ${currentUserStatus}`);
-        await loadGameDetails(); // Load game details after user is confirmed
-        // Loading screen hidden inside loadGameDetails success/error
-    } else {
-        console.log('No user is logged in on palpite.html. Redirecting to index.');
-        // Clear potential sensitive data if needed
-        currentGame = null;
-        clearInterval(countdownInterval);
-        loadingScreen.style.display = 'none'; // Ensure loading is hidden
-        window.location.href = 'index.html';
-    }
-});
+        // --- Authentication State Change Listener ---
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                // --- ADICIONADO PARA CONTROLE DO MENU ---
+                // Busca e aplica as configurações de visibilidade do menu assim que o utilizador é autenticado
+                const menuSettings = await fetchMenuSettings();
+                applyMenuVisibility(menuSettings);
+                // --- FIM DA ADIÇÃO ---
 
-// --- Cleanup on page unload ---
-window.addEventListener('beforeunload', () => {
-    clearInterval(countdownInterval);
-});
+                console.log(`User ${user.uid} is logged in on palpite.html.`);
+                currentUserStatus = await getUserStatus(user.uid);
+                console.log(`User status: ${currentUserStatus}`);
+                await loadGameDetails(); // Carrega os detalhes do jogo depois de verificar o utilizador
+                // O ecrã de carregamento é ocultado dentro de loadGameDetails
+            } else {
+                console.log('No user is logged in on palpite.html. Redirecting to index.');
+                // Limpa dados potencialmente sensíveis se necessário
+                currentGame = null;
+                clearInterval(countdownInterval);
+                loadingScreen.style.display = 'none'; // Garante que o carregamento seja ocultado
+                window.location.href = 'index.html';
+            }
+        });
+
+        // --- Cleanup on page unload ---
+        window.addEventListener('beforeunload', () => {
+            clearInterval(countdownInterval);
+        });
     </script>
 </body>
 </html>
-
