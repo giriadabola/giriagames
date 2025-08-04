@@ -361,7 +361,7 @@
         const categoriaPaiSubcategoriaSelect = document.getElementById('categoriaPaiSubcategoria');
         const categoriaPaiTerceiraCategoriaSelect = document.getElementById('categoriaPaiTerceiraCategoria');
         const subcategoriaPaiTerceiraCategoriaSelect = document.getElementById('subcategoriaPaiTerceiraCategoria');
-
+        const iconInput = document.getElementById('icon');
 
         competicoesSelect.select2({
             placeholder: 'Pesquisar e selecionar competições', allowClear: true, width: '100%', language: 'pt',
@@ -369,6 +369,31 @@
             minimumInputLength: 0, templateResult: formatCompeticao, templateSelection: formatCompeticao,
             minimumResultsForSearch: -1, closeOnSelect: false,
         });
+
+           async function preencherIconePelaCategoriaPai(categoriaId) {
+            // Limpa o campo se nenhuma categoria for selecionada
+            if (!categoriaId) {
+                iconInput.value = '';
+                return;
+            }
+            try {
+                const docSnap = await db.collection('oddcategorias').doc(categoriaId).get();
+                if (docSnap.exists) {
+                    // Preenche o campo de ícone com o valor do documento pai
+                    const iconValue = docSnap.data().icon;
+                    if (iconValue) {
+                        iconInput.value = iconValue;
+                    } else {
+                        iconInput.value = ''; // Limpa se o campo 'icon' não existir no pai
+                    }
+                } else {
+                    iconInput.value = ''; // Limpa se o documento pai não for encontrado
+                }
+            } catch (error) {
+                console.error("Erro ao buscar ícone da categoria pai:", error);
+                iconInput.value = ''; // Limpa em caso de erro
+            }
+        }
 
         function formatCompeticao(competicao) {
             if (!competicao.id) return competicao.text;
@@ -472,12 +497,14 @@
             }
         }
 
-        tipoCategoriaSelect.addEventListener('change', function() {
+       tipoCategoriaSelect.addEventListener('change', function() {
             const tipoSelecionado = this.value;
             [categoriaNomeDiv, subcategoriaDropdownDiv, subcategoriaNomeDiv, terceiraCategoriaDropdownDiv, 
              terceiraCategoriaDropdownSubcategoriaDiv, terceiraCategoriaNomeDiv, modosSectionDiv].forEach(el => el.style.display = 'none');
             criarModoSimNaoCheckbox.checked = false; 
             criarModoVencedorCheckbox.checked = false; // Always reset checkboxes when type changes
+
+            iconInput.value = ''; // MUDANÇA: Limpa o campo do ícone ao trocar de tipo
 
             if (tipoSelecionado !== 'subcategoria') categoriaPaiSubcategoriaSelect.value = '';
             if (tipoSelecionado !== '3cat') {
@@ -502,13 +529,22 @@
             atualizarSugestaoOrdem();
         });
 
-        categoriaPaiSubcategoriaSelect.addEventListener('change', () => { if (tipoCategoriaSelect.value === 'subcategoria') atualizarSugestaoOrdem(); });
-        categoriaPaiTerceiraCategoriaSelect.addEventListener('change', async function() {
-            subcategoriaPaiTerceiraCategoriaSelect.innerHTML = '<option value="">Selecione a Subcategoria Pai</option>';
-            if (this.value) await popularDropdownSubcategorias(this.value);
-            else if (tipoCategoriaSelect.value === '3cat') atualizarSugestaoOrdem();
+      categoriaPaiSubcategoriaSelect.addEventListener('change', function() {
+            if (tipoCategoriaSelect.value === 'subcategoria') {
+                atualizarSugestaoOrdem();
+                preencherIconePelaCategoriaPai(this.value); // MUDANÇA: Chama a função para preencher o ícone
+            }
         });
-        subcategoriaPaiTerceiraCategoriaSelect.addEventListener('change', () => { if (tipoCategoriaSelect.value === '3cat') atualizarSugestaoOrdem(); });
+      categoriaPaiTerceiraCategoriaSelect.addEventListener('change', async function() {
+            subcategoriaPaiTerceiraCategoriaSelect.innerHTML = '<option value="">Selecione a Subcategoria Pai</option>';
+            preencherIconePelaCategoriaPai(this.value); // MUDANÇA: Chama a função para preencher o ícone
+
+            if (this.value) {
+                await popularDropdownSubcategorias(this.value);
+            } else if (tipoCategoriaSelect.value === '3cat') {
+                atualizarSugestaoOrdem();
+            }
+        });
 
         popularDropdownCategorias().then(() => { atualizarSugestaoOrdem(); });
 
