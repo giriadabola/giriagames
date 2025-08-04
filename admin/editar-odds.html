@@ -574,6 +574,34 @@
                .popup-content { padding: 20px; }
                .popup-buttons button { padding: 8px 15px; font-size: 14px; }
           }
+
+          .odds-tree-view-area .delete-tree-item-btn {
+    flex-grow: 0;
+    flex-shrink: 0;
+    flex-basis: auto;
+    padding: 3px 6px !important;
+    font-size: 10px !important;
+    line-height: 1.2 !important;
+    background-color: #dc3545 !important; /* Cor vermelha para perigo */
+    color: white !important;
+    border: none !important;
+    border-radius: 3px !important;
+    cursor: pointer !important;
+    white-space: nowrap !important;
+    width: auto !important;
+    margin-top: 0 !important;
+    margin-left: 5px; /* Espaçamento entre o botão Editar e Eliminar */
+}
+.odds-tree-view-area .delete-tree-item-btn:hover {
+    background-color: #c82333 !important; /* Vermelho mais escuro ao passar o mouse */
+}
+/* END: CSS para o botão Eliminar na árvore */
+
+/* Adicione esta regra dentro da sua media query para telas pequenas */
+@media (max-width: 480px) {
+   .odds-tree-view-area .delete-tree-item-btn { font-size: 9px !important; padding: 2px 4px !important; }
+}
+
     </style>
 </head>
 <body>
@@ -767,6 +795,7 @@
 
         let selectedOddId = null;
         let allCompeticoesData = [];
+        let oddIdToDelete = null;
 
         // ------------- Helper Functions -------------
         async function loadSubcategorias() {
@@ -1011,148 +1040,151 @@
             }
         }
 
-        async function renderOddsTree() {
-            if (!oddsTreeViewDiv) {
-                console.error("DEBUG: oddsTreeViewDiv não foi encontrado no DOM!");
+       async function renderOddsTree() {
+        if (!oddsTreeViewDiv) {
+            console.error("DEBUG: oddsTreeViewDiv não foi encontrado no DOM!");
+            return;
+        }
+        oddsTreeViewDiv.innerHTML = '<p class="loading-text">Carregando estrutura de odds...</p>';
+        try {
+            const snapshot = await db.collection('oddcategorias').get();
+            if (snapshot.empty) {
+                oddsTreeViewDiv.innerHTML = '<p class="loading-text">Nenhuma odd encontrada para exibir na estrutura.</p>';
                 return;
             }
-            console.log("DEBUG: renderOddsTree foi chamada.");
-            oddsTreeViewDiv.innerHTML = '<p class="loading-text">Carregando estrutura de odds...</p>';
-            try {
-                console.log("DEBUG: Buscando dados de 'oddcategorias' no Firebase...");
-                const snapshot = await db.collection('oddcategorias').get();
-                console.log("DEBUG: Snapshot do Firebase recebido. Vazio?", snapshot.empty);
 
-                if (snapshot.empty) {
-                    console.warn("DEBUG: Nenhum documento encontrado na coleção 'oddcategorias'.");
-                    oddsTreeViewDiv.innerHTML = '<p class="loading-text">Nenhuma odd encontrada para exibir na estrutura.</p>';
-                    return;
-                }
+            const allOdds = [];
+            snapshot.forEach(doc => allOdds.push({ id: doc.id, ...doc.data() }));
 
-                const allOdds = [];
-                snapshot.forEach(doc => allOdds.push({ id: doc.id, ...doc.data() }));
-                console.log(`DEBUG: Total de odds buscadas: ${allOdds.length}.`);
+            const parseOrder = (item) => {
+                const order = parseInt(item.ordem);
+                return !isNaN(order) ? order : Infinity;
+            };
 
-                const parseOrder = (item) => {
-                    const order = parseInt(item.ordem);
-                    return !isNaN(order) ? order : Infinity;
-                };
+            const categorias = allOdds.filter(odd => odd.categoria_subcategoria_3cat === 'categoria').sort((a, b) => parseOrder(a) - parseOrder(b));
+            const subcategorias = allOdds.filter(odd => odd.categoria_subcategoria_3cat === 'subcategoria').sort((a, b) => parseOrder(a) - parseOrder(b));
+            const terceirasCategorias = allOdds.filter(odd => odd.categoria_subcategoria_3cat === '3cat').sort((a, b) => parseOrder(a) - parseOrder(b));
 
-                const categorias = allOdds.filter(odd => odd.categoria_subcategoria_3cat === 'categoria').sort((a, b) => parseOrder(a) - parseOrder(b));
-                const subcategorias = allOdds.filter(odd => odd.categoria_subcategoria_3cat === 'subcategoria').sort((a, b) => parseOrder(a) - parseOrder(b));
-                const terceirasCategorias = allOdds.filter(odd => odd.categoria_subcategoria_3cat === '3cat').sort((a, b) => parseOrder(a) - parseOrder(b));
-
-                if (categorias.length === 0 && subcategorias.length === 0 && terceirasCategorias.length === 0 && allOdds.length > 0) {
-                    console.warn("DEBUG: Dados foram buscados, mas nenhum item correspondeu aos tipos 'categoria', 'subcategoria', ou '3cat'. Verifique os valores do campo 'categoria_subcategoria_3cat'.");
-                }
-
-                if (categorias.length === 0 && allOdds.filter(odd => odd.categoria_subcategoria_3cat === 'categoria' || odd.categoria_subcategoria_3cat === 'subcategoria' || odd.categoria_subcategoria_3cat === '3cat').length === 0) {
-                     oddsTreeViewDiv.innerHTML = '<p class="loading-text">Nenhuma odd categorizada (categoria, subcategoria, 3cat) encontrada para exibir na estrutura. Verifique se os dados no Firebase possuem o campo `categoria_subcategoria_3cat` preenchido corretamente.</p>';
-                     return;
-                }
-
-                let treeHtml = '<ul>';
-                for (const cat of categorias) {
-                    const childSubcategorias = subcategorias.filter(sub => sub.categoriapai === cat.id);
-                    const hasChildren = childSubcategorias.length > 0;
-                    const toggleableClass = hasChildren ? 'toggleable' : '';
-                    const noToggleIconClass = !hasChildren ? 'no-toggle' : '';
-
-                    treeHtml += `<li>
-                                    <div class="tree-item">
-                                        <div class="tree-item-content">
-                                            <span class="tree-item-name-container ${toggleableClass}" data-item-id="${cat.id}">
-                                                <i class="fas fa-caret-right tree-toggle-icon ${noToggleIconClass}"></i>
-                                                <span class="tree-item-name categoria">${cat.nomecategoria || `[Categoria ID: ${cat.id} sem nome]`}</span>
-                                            </span>
-                                            <span class="tree-item-details">(Ordem: ${cat.ordem !== undefined ? cat.ordem : 'N/A'})</span>
-                                        </div>
-                                        <button class="edit-tree-item-btn" data-id="${cat.id}">Editar</button>
-                                    </div>`;
-
-                    if (hasChildren) {
-                        treeHtml += '<ul class="sub-list">';
-                        for (const subCat of childSubcategorias) {
-                            const childTerceirasCategorias = terceirasCategorias.filter(
-                                ter => ter.categoriapai === cat.id && ter.subcategoriapai === subCat.id
-                            );
-                            const hasGrandChildren = childTerceirasCategorias.length > 0;
-                            const subToggleableClass = hasGrandChildren ? 'toggleable' : '';
-                            const subNoToggleIconClass = !hasGrandChildren ? 'no-toggle' : '';
-
-                            treeHtml += `<li>
-                                            <div class="tree-item">
-                                                <div class="tree-item-content">
-                                                    <span class="tree-item-name-container ${subToggleableClass}" data-item-id="${subCat.id}">
-                                                        <i class="fas fa-caret-right tree-toggle-icon ${subNoToggleIconClass}"></i>
-                                                        <span class="tree-item-name subcategoria">${subCat.nomesubcategoria || `[Subcat ID: ${subCat.id} sem nome]`}</span>
-                                                    </span>
-                                                    <span class="tree-item-details">(Ordem: ${subCat.ordem !== undefined ? subCat.ordem : 'N/A'})</span>
-                                                </div>
-                                                <button class="edit-tree-item-btn" data-id="${subCat.id}">Editar</button>
-                                            </div>`;
-
-                            if (hasGrandChildren) {
-                                treeHtml += '<ul class="sub-sub-list">';
-                                for (const terCat of childTerceirasCategorias) {
-                                    treeHtml += `<li>
-                                                    <div class="tree-item">
-                                                        <div class="tree-item-content">
-                                                             <span class="tree-item-name-container" data-item-id="${terCat.id}">
-                                                                <i class="fas fa-minus tree-toggle-icon no-toggle"></i>
-                                                                <span class="tree-item-name terceira-categoria">${terCat.nome3categoria || `[3aCat ID: ${terCat.id} sem nome]`}</span>
-                                                            </span>
-                                                            <span class="tree-item-details">(Ordem: ${terCat.ordem !== undefined ? terCat.ordem : 'N/A'})</span>
-                                                        </div>
-                                                        <button class="edit-tree-item-btn" data-id="${terCat.id}">Editar</button>
-                                                    </div>
-                                                </li>`;
-                                }
-                                treeHtml += '</ul>';
-                            }
-                            treeHtml += '</li>';
-                        }
-                        treeHtml += '</ul>';
-                    }
-                    treeHtml += '</li>';
-                }
-                treeHtml += '</ul>';
-                
-                oddsTreeViewDiv.innerHTML = treeHtml;
-                console.log("DEBUG: Árvore renderizada no DOM.");
-
-                oddsTreeViewDiv.querySelectorAll('.edit-tree-item-btn').forEach(button => {
-                    button.addEventListener('click', function() {
-                        const oddId = this.dataset.id;
-                        console.log("DEBUG: Botão Editar na árvore clicado. ID:", oddId);
-                        preencherFormulario(oddId);
-                        if (toggleTreeViewButton && oddsTreeViewDiv && oddsTreeViewDiv.style.display === 'block') {
-                            oddsTreeViewDiv.style.display = 'none';
-                            toggleTreeViewButton.classList.remove('open');
-                            const mainIcon = toggleTreeViewButton.querySelector('.toggle-icon');
-                            if (mainIcon) {
-                                mainIcon.classList.remove('fa-chevron-up');
-                                mainIcon.classList.add('fa-chevron-down');
-                            }
-                            toggleTreeViewButton.setAttribute('aria-expanded', 'false');
-                        }
-                    });
-                });
-
-                oddsTreeViewDiv.querySelectorAll('.tree-item-name-container.toggleable').forEach(toggleElement => {
-                    toggleElement.addEventListener('click', function(event) {
-                        const parentLi = this.closest('li');
-                        if (parentLi) {
-                            parentLi.classList.toggle('expanded');
-                        }
-                    });
-                });
-
-            } catch (error) {
-                console.error("DEBUG: Erro CRÍTICO ao renderizar árvore de odds:", error);
-                if (oddsTreeViewDiv) oddsTreeViewDiv.innerHTML = `<p class="error-text">Erro ao carregar estrutura. Verifique o console para detalhes técnicos. Mensagem: ${error.message}</p>`;
+            if (categorias.length === 0 && allOdds.filter(odd => odd.categoria_subcategoria_3cat === 'categoria' || odd.categoria_subcategoria_3cat === 'subcategoria' || odd.categoria_subcategoria_3cat === '3cat').length === 0) {
+                 oddsTreeViewDiv.innerHTML = '<p class="loading-text">Nenhuma odd categorizada (categoria, subcategoria, 3cat) encontrada para exibir na estrutura.</p>';
+                 return;
             }
+
+            let treeHtml = '<ul>';
+            for (const cat of categorias) {
+                const childSubcategorias = subcategorias.filter(sub => sub.categoriapai === cat.id);
+                const hasChildren = childSubcategorias.length > 0;
+                const toggleableClass = hasChildren ? 'toggleable' : '';
+                const noToggleIconClass = !hasChildren ? 'no-toggle' : '';
+
+                treeHtml += `<li>
+                                <div class="tree-item">
+                                    <div class="tree-item-content">
+                                        <span class="tree-item-name-container ${toggleableClass}" data-item-id="${cat.id}">
+                                            <i class="fas fa-caret-right tree-toggle-icon ${noToggleIconClass}"></i>
+                                            <span class="tree-item-name categoria">${cat.nomecategoria || `[Categoria ID: ${cat.id} sem nome]`}</span>
+                                        </span>
+                                        <span class="tree-item-details">(Ordem: ${cat.ordem !== undefined ? cat.ordem : 'N/A'})</span>
+                                    </div>
+                                    <button class="edit-tree-item-btn" data-id="${cat.id}">Editar</button>
+                                    <button class="delete-tree-item-btn" data-id="${cat.id}">Eliminar</button>  <!-- BOTÃO ADICIONADO -->
+                                </div>`;
+
+                if (hasChildren) {
+                    treeHtml += '<ul class="sub-list">';
+                    for (const subCat of childSubcategorias) {
+                        const childTerceirasCategorias = terceirasCategorias.filter(
+                            ter => ter.categoriapai === cat.id && ter.subcategoriapai === subCat.id
+                        );
+                        const hasGrandChildren = childTerceirasCategorias.length > 0;
+                        const subToggleableClass = hasGrandChildren ? 'toggleable' : '';
+                        const subNoToggleIconClass = !hasGrandChildren ? 'no-toggle' : '';
+
+                        treeHtml += `<li>
+                                        <div class="tree-item">
+                                            <div class="tree-item-content">
+                                                <span class="tree-item-name-container ${subToggleableClass}" data-item-id="${subCat.id}">
+                                                    <i class="fas fa-caret-right tree-toggle-icon ${subNoToggleIconClass}"></i>
+                                                    <span class="tree-item-name subcategoria">${subCat.nomesubcategoria || `[Subcat ID: ${subCat.id} sem nome]`}</span>
+                                                </span>
+                                                <span class="tree-item-details">(Ordem: ${subCat.ordem !== undefined ? subCat.ordem : 'N/A'})</span>
+                                            </div>
+                                            <button class="edit-tree-item-btn" data-id="${subCat.id}">Editar</button>
+                                            <button class="delete-tree-item-btn" data-id="${subCat.id}">Eliminar</button>  <!-- BOTÃO ADICIONADO -->
+                                        </div>`;
+
+                        if (hasGrandChildren) {
+                            treeHtml += '<ul class="sub-sub-list">';
+                            for (const terCat of childTerceirasCategorias) {
+                                treeHtml += `<li>
+                                                <div class="tree-item">
+                                                    <div class="tree-item-content">
+                                                         <span class="tree-item-name-container" data-item-id="${terCat.id}">
+                                                            <i class="fas fa-minus tree-toggle-icon no-toggle"></i>
+                                                            <span class="tree-item-name terceira-categoria">${terCat.nome3categoria || `[3aCat ID: ${terCat.id} sem nome]`}</span>
+                                                        </span>
+                                                        <span class="tree-item-details">(Ordem: ${terCat.ordem !== undefined ? terCat.ordem : 'N/A'})</span>
+                                                    </div>
+                                                    <button class="edit-tree-item-btn" data-id="${terCat.id}">Editar</button>
+                                                    <button class="delete-tree-item-btn" data-id="${terCat.id}">Eliminar</button>  <!-- BOTÃO ADICIONADO -->
+                                                </div>
+                                            </li>`;
+                            }
+                            treeHtml += '</ul>';
+                        }
+                        treeHtml += '</li>';
+                    }
+                    treeHtml += '</ul>';
+                }
+                treeHtml += '</li>';
+            }
+            treeHtml += '</ul>';
+            
+            oddsTreeViewDiv.innerHTML = treeHtml;
+
+            // Anexar event listener para os botões EDITAR
+            oddsTreeViewDiv.querySelectorAll('.edit-tree-item-btn').forEach(button => {
+                button.addEventListener('click', function() {
+                    const oddId = this.dataset.id;
+                    preencherFormulario(oddId);
+                    // Ocultar a árvore após clicar em editar para focar no formulário
+                    if (toggleTreeViewButton && oddsTreeViewDiv.style.display === 'block') {
+                         oddsTreeViewDiv.style.display = 'none';
+                         toggleTreeViewButton.classList.remove('open');
+                         const mainIcon = toggleTreeViewButton.querySelector('.toggle-icon');
+                         if (mainIcon) {
+                             mainIcon.classList.remove('fa-chevron-up');
+                             mainIcon.classList.add('fa-chevron-down');
+                         }
+                         toggleTreeViewButton.setAttribute('aria-expanded', 'false');
+                     }
+                });
+            });
+
+            // Anexar event listener para os NOVOS botões ELIMINAR
+            oddsTreeViewDiv.querySelectorAll('.delete-tree-item-btn').forEach(button => {
+                button.addEventListener('click', function(event) {
+                    event.stopPropagation(); // Impede que o clique expanda/recolha o item da árvore
+                    oddIdToDelete = this.dataset.id; // Define o ID a ser deletado
+                    if (deleteConfirmPopup) {
+                        deleteConfirmPopup.style.display = 'flex'; // Mostra o popup de confirmação
+                    }
+                });
+            });
+
+            // Anexar event listener para expandir/recolher
+            oddsTreeViewDiv.querySelectorAll('.tree-item-name-container.toggleable').forEach(toggleElement => {
+                toggleElement.addEventListener('click', function() {
+                    this.closest('li').classList.toggle('expanded');
+                });
+            });
+
+        } catch (error) {
+            console.error("DEBUG: Erro CRÍTICO ao renderizar árvore de odds:", error);
+            if (oddsTreeViewDiv) oddsTreeViewDiv.innerHTML = `<p class="error-text">Erro ao carregar estrutura. Verifique o console para detalhes técnicos. Mensagem: ${error.message}</p>`;
         }
+    }
+
 
 
         // ------------- Event Listeners -------------
@@ -1260,48 +1292,56 @@
         }
 
         // START: Event Listeners for Delete Functionality
-        if (deleteOddButton) {
-            deleteOddButton.addEventListener('click', () => {
-                if (selectedOddId) {
-                    if (deleteConfirmPopup) deleteConfirmPopup.style.display = 'flex';
-                } else {
-                    alert("Nenhuma odd está carregada para ser excluída. Por favor, selecione uma odd primeiro.");
-                }
-            });
-        }
+       if (deleteOddButton) {
+        deleteOddButton.addEventListener('click', () => {
+            // Este botão flutuante agora usa a variável 'selectedOddId' do formulário
+            if (selectedOddId) {
+                oddIdToDelete = selectedOddId; // Define o ID do item carregado no formulário
+                if (deleteConfirmPopup) deleteConfirmPopup.style.display = 'flex';
+            } else {
+                alert("Nenhuma odd está carregada no formulário para ser excluída.");
+            }
+        });
+    }
 
-        if (cancelDeleteBtn) {
-            cancelDeleteBtn.addEventListener('click', () => {
+    if (cancelDeleteBtn) {
+        cancelDeleteBtn.addEventListener('click', () => {
+            if (deleteConfirmPopup) deleteConfirmPopup.style.display = 'none';
+            oddIdToDelete = null; // Limpa a variável ao cancelar
+        });
+    }
+
+    if (confirmDeleteBtn) {
+        confirmDeleteBtn.addEventListener('click', async () => {
+            // A lógica agora usa a variável 'oddIdToDelete' que pode ser definida
+            // tanto pelo botão na árvore quanto pelo botão flutuante.
+            if (!oddIdToDelete) {
+                alert("Erro: Nenhuma odd selecionada para exclusão.");
                 if (deleteConfirmPopup) deleteConfirmPopup.style.display = 'none';
-            });
-        }
+                return;
+            }
 
-        if (confirmDeleteBtn) {
-            confirmDeleteBtn.addEventListener('click', async () => {
-                if (!selectedOddId) {
-                    alert("Erro: Nenhuma odd selecionada para exclusão.");
-                    if (deleteConfirmPopup) deleteConfirmPopup.style.display = 'none';
-                    return;
-                }
+            confirmDeleteBtn.disabled = true;
+            if (cancelDeleteBtn) cancelDeleteBtn.disabled = true;
+            confirmDeleteBtn.textContent = 'Removendo...';
 
-                confirmDeleteBtn.disabled = true;
-                if (cancelDeleteBtn) cancelDeleteBtn.disabled = true;
-                confirmDeleteBtn.textContent = 'Removendo...';
-
-                try {
-                    await db.collection('oddcategorias').doc(selectedOddId).delete();
-                    alert('Odd removida com sucesso!');
-                    window.location.reload(); // Refresh the page
-                } catch (error) {
-                    console.error('Erro ao remover a odd:', error);
-                    alert(`Erro ao remover a odd: ${error.message}`);
-                    if (deleteConfirmPopup) deleteConfirmPopup.style.display = 'none';
-                    confirmDeleteBtn.disabled = false;
-                    if (cancelDeleteBtn) cancelDeleteBtn.disabled = false;
-                    confirmDeleteBtn.textContent = 'Sim, Remover';
-                }
-            });
-        }
+            try {
+                await db.collection('oddcategorias').doc(oddIdToDelete).delete();
+                alert('Odd removida com sucesso!');
+                window.location.reload(); // Recarrega a página para atualizar tudo
+            } catch (error) {
+                console.error('Erro ao remover a odd:', error);
+                alert(`Erro ao remover a odd: ${error.message}`);
+                // Reabilita os botões em caso de erro
+                if (deleteConfirmPopup) deleteConfirmPopup.style.display = 'none';
+                confirmDeleteBtn.disabled = false;
+                if (cancelDeleteBtn) cancelDeleteBtn.disabled = false;
+                confirmDeleteBtn.textContent = 'Sim, Remover';
+            } finally {
+                oddIdToDelete = null; // Limpa a variável após a operação
+            }
+        });
+    }
         // END: Event Listeners for Delete Functionality
 
 
