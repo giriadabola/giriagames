@@ -301,9 +301,15 @@
 
                 <!-- MODOS SECTION - START -->
                 <div class="form-group" id="modosSection">
-                    <label for="criarModoSimNao">Modos</label>
-                    <input type="checkbox" id="criarModoSimNao" name="criarModoSimNao">
-                    <span style="font-size: 0.9em; color: #777;">Criar Modo Sim/Não</span>
+                    <label>Modos de Criação Automática</label>
+                    <div>
+                        <input type="checkbox" id="criarModoSimNao" name="criarModoSimNao">
+                        <span style="font-size: 0.9em; color: #777;">Criar Modo Sim/Não</span>
+                    </div>
+                    <div style="margin-top: 5px;">
+                        <input type="checkbox" id="criarModoVencedor" name="criarModoVencedor">
+                        <span style="font-size: 0.9em; color: #777;">Criar Modo Win1/Draw/Win2/1X/12/X2</span>
+                    </div>
                 </div>
                 <!-- MODOS SECTION - END -->
 
@@ -349,6 +355,8 @@
         // MODOS SECTION ELEMENTS
         const modosSectionDiv = document.getElementById('modosSection');
         const criarModoSimNaoCheckbox = document.getElementById('criarModoSimNao');
+        // NOVO ELEMENTO
+        const criarModoVencedorCheckbox = document.getElementById('criarModoVencedor');
 
         const categoriaPaiSubcategoriaSelect = document.getElementById('categoriaPaiSubcategoria');
         const categoriaPaiTerceiraCategoriaSelect = document.getElementById('categoriaPaiTerceiraCategoria');
@@ -468,7 +476,8 @@
             const tipoSelecionado = this.value;
             [categoriaNomeDiv, subcategoriaDropdownDiv, subcategoriaNomeDiv, terceiraCategoriaDropdownDiv, 
              terceiraCategoriaDropdownSubcategoriaDiv, terceiraCategoriaNomeDiv, modosSectionDiv].forEach(el => el.style.display = 'none');
-            criarModoSimNaoCheckbox.checked = false; // Always reset checkbox when type changes
+            criarModoSimNaoCheckbox.checked = false; 
+            criarModoVencedorCheckbox.checked = false; // Always reset checkboxes when type changes
 
             if (tipoSelecionado !== 'subcategoria') categoriaPaiSubcategoriaSelect.value = '';
             if (tipoSelecionado !== '3cat') {
@@ -505,14 +514,16 @@
 
         document.getElementById('categoriaForm').addEventListener('submit', async function(event) {
             event.preventDefault();
-            const tipoCategoriaAtual = tipoCategoriaSelect.value; // Store the type for use after reset
-            const criarModoSimNaoIsChecked = criarModoSimNaoCheckbox.checked; // Store checkbox state
+            const tipoCategoriaAtual = tipoCategoriaSelect.value;
+            const criarModoSimNaoIsChecked = criarModoSimNaoCheckbox.checked;
+            // NOVA VARIÁVEL
+            const criarModoVencedorIsChecked = criarModoVencedorCheckbox.checked;
 
             const competicoesSelecionadas = competicoesSelect.val();
             const isAtivado = document.getElementById('ativado').checked;
             const ordemValue = parseInt(ordemInput.value);
             const indiceInglesValue = document.getElementById('indiceIngles').value;
-            const iconValue = document.getElementById('icon').value; // Get icon value for Sim/Nao modes
+            const iconValue = document.getElementById('icon').value;
 
             let formData = {
                 competicoes: competicoesSelecionadas || [],
@@ -530,16 +541,16 @@
             if (!formData.icon.trim()) { alert("Icon / Emoji é obrigatório."); return; }
 
 
-            let categoriaPaiParaSimNao = ''; // To store parent category ID for Sim/Nao modes
+            let categoriaPaiId = '';
 
             if (tipoCategoriaAtual === 'categoria') {
                 if (!document.getElementById('nomeCategoriaInput').value.trim()) { alert("Nome da Categoria é obrigatório."); return; }
                 formData.nomecategoria = document.getElementById('nomeCategoriaInput').value;
             } else if (tipoCategoriaAtual === 'subcategoria') {
-                categoriaPaiParaSimNao = categoriaPaiSubcategoriaSelect.value; // Store for Sim/Nao
-                if (!categoriaPaiParaSimNao) { alert("Categoria Pai para Subcategoria é obrigatória."); return; }
+                categoriaPaiId = categoriaPaiSubcategoriaSelect.value;
+                if (!categoriaPaiId) { alert("Categoria Pai para Subcategoria é obrigatória."); return; }
                 if (!document.getElementById('nomeSubcategoriaInput').value.trim()) { alert("Nome da Subcategoria é obrigatório."); return; }
-                formData.categoriapai = categoriaPaiParaSimNao;
+                formData.categoriapai = categoriaPaiId;
                 formData.nomesubcategoria = document.getElementById('nomeSubcategoriaInput').value;
             } else if (tipoCategoriaAtual === '3cat') {
                  if (!categoriaPaiTerceiraCategoriaSelect.value) { alert("Categoria Pai para 3ª Categoria é obrigatória."); return; }
@@ -555,65 +566,79 @@
                 console.log("Documento principal escrito com ID: ", docRef.id);
                 let mainAlertMessage = "Odd principal criada com sucesso!";
 
+                const novaSubcategoriaId = docRef.id;
+                const todasCompeticoes = [];
+                $('#competicoes > option').each(function() {
+                    todasCompeticoes.push(this.value);
+                });
+
+
                 // --- START: Create Sim/Nao Modes if applicable ---
                 if (tipoCategoriaAtual === 'subcategoria' && criarModoSimNaoIsChecked) {
-                    const novaSubcategoriaId = docRef.id;
-                    const todasCompeticoes = [];
-                    $('#competicoes > option').each(function() {
-                        todasCompeticoes.push(this.value); // 'this.value' is the value of the option
+                    const modoSimData = {
+                        categoria_subcategoria_3cat: "3cat", categoriapai: categoriaPaiId, subcategoriapai: novaSubcategoriaId,
+                        nome3categoria: "Sim", indiceIngles: "Yes", breveDescricao: " ", ordem: 1,
+                        competicoes: todasCompeticoes, icon: iconValue, ativado: true
+                    };
+                    const modoNaoData = { ...modoSimData, nome3categoria: "Não", indiceIngles: "No", ordem: 2 };
+
+                    await Promise.all([
+                        db.collection("oddcategorias").add(modoSimData),
+                        db.collection("oddcategorias").add(modoNaoData)
+                    ]);
+                    console.log("Modos Sim/Não criados com sucesso para subcategoria ID:", novaSubcategoriaId);
+                    mainAlertMessage += "\nModos Sim/Não criados automaticamente.";
+                }
+                
+                // --- START: NOVO BLOCO PARA MODO VENCEDOR ---
+                if (tipoCategoriaAtual === 'subcategoria' && criarModoVencedorIsChecked) {
+                    const modosVencedor = [
+                        { nome: "Equipa da Casa Ganha", indice: "Win1", ordem: 1 },
+                        { nome: "Empate", indice: "Draw", ordem: 2 },
+                        { nome: "Equipa B Ganha", indice: "Win2", ordem: 3 },
+                        { nome: "Equipa da casa Ganha ou Empata", indice: "1X", ordem: 4 },
+                        { nome: "Não há Empate", indice: "12", ordem: 5 },
+                        { nome: "Equipa visitante Ganha ou Empata", indice: "X2", ordem: 6 }
+                    ];
+
+                    const creationPromises = modosVencedor.map(modo => {
+                        const modoData = {
+                            categoria_subcategoria_3cat: "3cat",
+                            categoriapai: categoriaPaiId,
+                            subcategoriapai: novaSubcategoriaId,
+                            nome3categoria: modo.nome,
+                            indiceIngles: modo.indice,
+                            breveDescricao: "", // Vazio conforme pedido
+                            ordem: modo.ordem,
+                            competicoes: todasCompeticoes, // Selecionar todas
+                            icon: "⏱", // Ícone específico
+                            ativado: true // Ativado
+                        };
+                        return db.collection("oddcategorias").add(modoData);
                     });
 
-                    const modoSimData = {
-                        categoria_subcategoria_3cat: "3cat",
-                        categoriapai: categoriaPaiParaSimNao,
-                        subcategoriapai: novaSubcategoriaId,
-                        nome3categoria: "Sim",
-                        indiceIngles: "Yes",
-                        breveDescricao: " ",
-                        ordem: 1,
-                        competicoes: todasCompeticoes,
-                        icon: iconValue, // Same icon as parent subcategory
-                        ativado: true
-                    };
-                    const modoNaoData = {
-                        ...modoSimData, // Spread common properties
-                        nome3categoria: "Não",
-                        indiceIngles: "No",
-                        ordem: 2
-                    };
-
-                    try {
-                        await Promise.all([
-                            db.collection("oddcategorias").add(modoSimData),
-                            db.collection("oddcategorias").add(modoNaoData)
-                        ]);
-                        console.log("Modos Sim/Não criados com sucesso para subcategoria ID:", novaSubcategoriaId);
-                        mainAlertMessage += "\nModos Sim/Não criados automaticamente.";
-                    } catch (modoError) {
-                        console.error("Erro ao criar modos Sim/Não:", modoError);
-                        mainAlertMessage += "\nErro ao criar modos Sim/Não. Verifique a console.";
-                    }
+                    await Promise.all(creationPromises);
+                    console.log("Modos Vencedor/Dupla Chance criados com sucesso para subcategoria ID:", novaSubcategoriaId);
+                    mainAlertMessage += "\nModos Vencedor/Dupla Chance (1X2) criados automaticamente.";
                 }
-                // --- END: Create Sim/Nao Modes ---
+                // --- END: NOVO BLOCO PARA MODO VENCEDOR ---
 
                 alert(mainAlertMessage);
 
                 this.reset(); 
                 competicoesSelect.val(null).trigger('change');
                 
-                tipoCategoriaSelect.value = ""; // Explicitly set to empty
-                // Manually trigger change to reset visibility and dependent fields
+                tipoCategoriaSelect.value = ""; 
                 tipoCategoriaSelect.dispatchEvent(new Event('change')); 
                 
-                // Repopulate and update suggestion (awaiting ensures dropdowns are ready before suggesting order)
                 await popularDropdownCategorias(); 
-                atualizarSugestaoOrdem(); // This will now run based on empty 'tipoCategoriaSelect'
+                atualizarSugestaoOrdem(); 
                 
                 window.scrollTo(0, 0);
 
             } catch (error) {
-                console.error("Erro ao adicionar documento principal: ", error);
-                alert("Erro ao criar Odd principal. Veja a console para mais detalhes.");
+                console.error("Erro durante o processo de criação: ", error);
+                alert("Ocorreu um erro. Veja a console para mais detalhes.");
             }
         });
     </script>
