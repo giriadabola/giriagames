@@ -686,6 +686,28 @@
             alert(message);
         }
 
+      
+
+        // --- NOVA FUNÇÃO AUXILIAR ---
+        function replaceTeamPlaceholders(text) {
+            // Retorna o texto original se não houver dados para substituir
+            if (!text || !currentGame || !currentGame.equipaCasa || !currentGame.equipaFora) {
+                return text;
+            }
+
+            // Usamos expressões regulares com 'gi' para substituir todas as ocorrências, ignorando maiúsculas/minúsculas
+            let modifiedText = text;
+            modifiedText = modifiedText.replace(/Equipa da Casa/gi, currentGame.equipaCasa);
+            modifiedText = modifiedText.replace(/Equipa A/gi, currentGame.equipaCasa);
+
+            modifiedText = modifiedText.replace(/Equipa Visitante/gi, currentGame.equipaFora);
+            modifiedText = modifiedText.replace(/Equipa de Fora/gi, currentGame.equipaFora);
+            modifiedText = modifiedText.replace(/Equipa B/gi, currentGame.equipaFora);
+
+            return modifiedText;
+        }
+
+
         // Function to show confirmation popup
         function showConfirmationPopup(predictions) {
             const confirmationPopup = document.getElementById('confirmation-popup');
@@ -1163,9 +1185,10 @@ async function loadGameDetails() {
             const placeholderText = isReadOnly ? '' : `Escolhe o teu palpite ${predictionNumber}`;
 
             // Generate category list items
-            const categoryListItems = categories.map(category => {
+         const categoryListItems = categories.map(category => {
+                const displayName = replaceTeamPlaceholders(category.nomecategoria);
                 return `<li data-category-id="${category.id}" data-category-name="${category.nomecategoria}">
-                            <span style="margin-right: 8px;">${category.icon}</span>${category.nomecategoria}
+                            <span style="margin-right: 8px;">${category.icon}</span>${displayName}
                         </li>`;
             }).join('');
 
@@ -1430,20 +1453,23 @@ function displaySubcategoryDropdown(subcategories, predictionNumber, parentCateg
         input.parentNode.appendChild(subcategoryDropdown); // Append within the container
     }
 
-    const subcategoryList = subcategoryDropdown.querySelector('ul');
+      const subcategoryList = subcategoryDropdown.querySelector('ul');
     subcategoryList.innerHTML = ''; // Clear previous items
 
     subcategories.forEach(subcategory => {
         const subcategoryItem = document.createElement('li');
         subcategoryItem.dataset.subcategoryName = subcategory.nomesubcategoria;
         subcategoryItem.dataset.subcategoryId = subcategory.id;
-        subcategoryItem.textContent = subcategory.nomesubcategoria;
+        
+        // Alteração: Usa a função para substituir os nomes das equipas no texto de exibição
+        const displayName = replaceTeamPlaceholders(subcategory.nomesubcategoria);
+        subcategoryItem.textContent = displayName;
 
         subcategoryItem.addEventListener('click', async (event) => {
              event.stopPropagation(); // Prevent global close
             if (!currentPredictionInput) return; // Safety check
 
-            const selectedSubcategoryName = subcategory.nomesubcategoria;
+            const selectedSubcategoryName = subcategory.nomesubcategoria; // Original name for path
             const selectedSubcategoryId = subcategory.id;
 
             // Clear lower-level data
@@ -1484,13 +1510,17 @@ function displaySubcategoryDropdown(subcategories, predictionNumber, parentCateg
                 displayThirdLevelDropdown(thirdLevelCategories, predictionNumber, parentCategoryName, selectedSubcategoryName);
             } else {
                 // Stop at subcategory level
-                currentPredictionInput.value = `${parentCategoryName} - ${selectedSubcategoryName}`; // Set value
+                // Alteração: Usa a função no valor final para garantir a substituição
+                const finalValue = replaceTeamPlaceholders(`${parentCategoryName} - ${selectedSubcategoryName}`);
+                currentPredictionInput.value = finalValue; // Set value
                  // currentPredictionInput = null; // DEFERRED
                  categoryDropdown = null;
             }
         });
         subcategoryList.appendChild(subcategoryItem);
     });
+
+
 
     // Position and display
     positionDropdown(subcategoryDropdown, input);
@@ -1513,29 +1543,18 @@ function displayThirdLevelDropdown(thirdLevelCategories, predictionNumber, paren
         input.parentNode.appendChild(thirdLevelDropdown);
     }
 
-    const thirdLevelList = thirdLevelDropdown.querySelector('ul');
+   const thirdLevelList = thirdLevelDropdown.querySelector('ul');
     thirdLevelList.innerHTML = ''; // Clear previous items
 
     thirdLevelCategories.forEach(thirdLevelCategory => {
         const thirdLevelItem = document.createElement('li');
         thirdLevelItem.dataset.cat3Id = thirdLevelCategory.id;
 
-        // Replace team placeholders
-        let displayName = thirdLevelCategory.nome3categoria;
-        if (displayName) { // Check if displayName is defined
-             if (displayName.includes('Equipa A') && currentGame.equipaCasa) {
-                 displayName = displayName.replace('Equipa A', currentGame.equipaCasa);
-             }
-             if (displayName.includes('Equipa B') && currentGame.equipaFora) {
-                 displayName = displayName.replace('Equipa B', currentGame.equipaFora);
-             }
-        } else {
-             displayName = "Opção Inválida"; // Fallback
-             console.warn("Missing nome3categoria for ID:", thirdLevelCategory.id);
-        }
+        // Alteração: Usa a nova função para substituir os placeholders.
+        // O código fica mais limpo e cobre todos os casos definidos na função.
+        const displayName = replaceTeamPlaceholders(thirdLevelCategory.nome3categoria);
 
-
-        thirdLevelItem.textContent = displayName;
+        thirdLevelItem.textContent = displayName || "Opção Inválida";
 
         thirdLevelItem.addEventListener('click', (event) => {
              event.stopPropagation(); // Prevent global close
@@ -1562,9 +1581,10 @@ function displayThirdLevelDropdown(thirdLevelCategories, predictionNumber, paren
                 currentPredictionInput.removeAttribute('data-cat3-indice');
             }
 
-
             // Set final input value with full path
-            const finalValue = `${parentCategoryName} - ${parentSubcategoryName} - ${displayName}`;
+            // Alteração: Usa a função no valor final para garantir que toda a string seja processada.
+            // Usamos os nomes originais aqui para construir o caminho completo antes da substituição.
+            const finalValue = replaceTeamPlaceholders(`${parentCategoryName} - ${parentSubcategoryName} - ${thirdLevelCategory.nome3categoria}`);
             currentPredictionInput.value = finalValue;
 
             thirdLevelDropdown.style.display = 'none'; // Hide this dropdown
