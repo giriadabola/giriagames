@@ -560,6 +560,43 @@
             }
         }
 
+
+
+        async function fetchOverallLimits() {
+    const docRef = doc(db, 'paineis', 'paineis overall');
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+        return docSnap.data();
+    } else {
+        console.warn("Documento 'paineis overall' não encontrado no Firebase. A Casta não será preenchida automaticamente.");
+        return null;
+    }
+}
+
+function determineCastaFromOverall(overall, limits) {
+    if (!limits) return "";
+
+    const [platinaLimit] = limits.Platina || [null];
+    const [ouroLower, ouroUpper] = limits.Ouro || [null, null];
+    const [prataLower, prataUpper] = limits.Prata || [null, null];
+    const [bronzeLimit] = limits.Bronze || [null];
+
+    if (platinaLimit !== null && overall >= platinaLimit) {
+        return "Jogador Platina";
+    }
+    if (ouroLower !== null && ouroUpper !== null && overall >= ouroLower && overall <= ouroUpper) {
+        return "Jogador Ouro";
+    }
+    if (prataLower !== null && prataUpper !== null && overall >= prataLower && overall <= prataUpper) {
+        return "Jogador Prata";
+    }
+    if (bronzeLimit !== null && overall <= bronzeLimit) {
+        return "Jogador Bronze";
+    }
+
+    return "";
+}
+
         async function selectPlayer(player) {
             selectedPlayerId = player.id;
             document.getElementById('playerName').value = player.nome;
@@ -921,23 +958,24 @@
         }
 
         // Function to display firebase data in the coeficientes table
-        async function displayFirebaseData(selectedPosition, selectedCasta, estatisticasText) {
+      async function displayFirebaseData(selectedPosition, selectedCasta, estatisticasText) {
+    const firebaseDataDisplay = document.getElementById('firebase-data-display');
+    firebaseDataDisplay.innerHTML = ''; // Limpa a tabela anterior
 
+    if (!selectedPosition) {
+        return;
+    }
 
-const firebaseDataDisplay = document.getElementById('firebase-data-display');
-    const loadingIndicator = document.getElementById('loading-indicator'); // *** Obter referência ao indicador de carregamento ***
-    firebaseDataDisplay.innerHTML = '';
+    // Busca ambos os conjuntos de dados em paralelo para maior eficiência
+    const [paineisCoeficienteData, overallLimitsData] = await Promise.all([
+        fetchPaineisCoefficients(),
+        fetchOverallLimits()
+    ]);
 
-            if (!selectedPosition) {
-                return;
-            }
-
-            const paineisCoeficienteData = await fetchPaineisCoefficients();
 
             if (paineisCoeficienteData) {
-                // Create table structure
-                const table = document.createElement('table');
-                table.className = 'coeficientes-table';
+        const table = document.createElement('table');
+        table.className = 'coeficientes-table';
 
                 // Create table header
                 const thead = document.createElement('thead');
@@ -1041,88 +1079,93 @@ const firebaseDataDisplay = document.getElementById('firebase-data-display');
 
                 // Sort rows alphabetically by subcategory name (first cell text)
                 rows.sort((rowA, rowB) => {
-                    const subcategoriaA = rowA.cells[0].textContent.toLowerCase();
-                    const subcategoriaB = rowB.cells[0].textContent.toLowerCase();
-                    return subcategoriaA.localeCompare(subcategoriaB);
-                });
-
-                // Append sorted data rows to table body
-                rows.forEach(row => {
-                    tbody.appendChild(row);
-                });
+            const subcategoriaA = rowA.cells[0].textContent.toLowerCase();
+            const subcategoriaB = rowB.cells[0].textContent.toLowerCase();
+            return subcategoriaA.localeCompare(subcategoriaB);
+        });
+        rows.forEach(row => {
+            tbody.appendChild(row);
+        });
 
                 // Create and append "Total" row
                 const totalRow = document.createElement('tr');
-                const tdTotalLabel = document.createElement('td');
-                tdTotalLabel.textContent = 'Total';
-                tdTotalLabel.style.fontWeight = 'bold'; // Make "Total" bold
-                const tdTotalCoefficient = document.createElement('td');
-                tdTotalCoefficient.textContent = '-'; // Or leave it empty
-                const tdTotalStatistic = document.createElement('td'); // Changed name to avoid conflict
-                tdTotalStatistic.textContent = totalSum.toFixed(2); // Display total sum, formatted to 2 decimal places
-                tdTotalStatistic.style.fontWeight = 'bold'; // Make total sum bold
+        const tdTotalLabel = document.createElement('td');
+        tdTotalLabel.textContent = 'Total';
+        tdTotalLabel.style.fontWeight = 'bold';
+        const tdTotalCoefficient = document.createElement('td');
+        tdTotalCoefficient.textContent = '-';
+        const tdTotalStatistic = document.createElement('td');
+        tdTotalStatistic.textContent = totalSum.toFixed(2);
+        tdTotalStatistic.style.fontWeight = 'bold';
+        totalRow.appendChild(tdTotalLabel);
+        totalRow.appendChild(tdTotalCoefficient);
+        totalRow.appendChild(tdTotalStatistic);
+        tbody.appendChild(totalRow);
 
-                totalRow.appendChild(tdTotalLabel);
-                totalRow.appendChild(tdTotalCoefficient);
-                totalRow.appendChild(tdTotalStatistic);
-                tbody.appendChild(totalRow);
+ // --- LÓGICA DE ATUALIZAÇÃO AUTOMÁTICA DA CASTA ---
+        let castaFinal = selectedCasta; // Usa o valor original como fallback
+        if (overallLimitsData && overallLimitsData[selectedPosition]) {
+            const limitsForPosition = overallLimitsData[selectedPosition];
+            const castaDeterminada = determineCastaFromOverall(totalSum, limitsForPosition);
+            
+            // Atualiza o dropdown e a variável local
+            document.getElementById('playerTier').value = castaDeterminada;
+            castaFinal = castaDeterminada;
+        }
+        // --- FIM DA LÓGICA DE ATUALIZAÇÃO ---
+
 
                 // Create and append "Coeficiente" row
                 const coeficienteRow = document.createElement('tr');
-                const tdCoeficienteLabel = document.createElement('td');
-                tdCoeficienteLabel.textContent = 'Coeficiente';
-                tdCoeficienteLabel.style.fontWeight = 'bold';
+        const tdCoeficienteLabel = document.createElement('td');
+        tdCoeficienteLabel.textContent = 'Coeficiente';
+        tdCoeficienteLabel.style.fontWeight = 'bold';
 
-                const tdCastaValue = document.createElement('td');
-                let coeficienteCastaValue = '-'; // Default value if not found
+        const tdCastaValue = document.createElement('td');
+        let coeficienteCastaValue = '-';
 
                 if (paineisCoeficienteData && paineisCoeficienteData['Coeficiente'] && paineisCoeficienteData['Coeficiente']['Coeficiente']) {
-                    const coeficienteSubcategory = paineisCoeficienteData['Coeficiente']['Coeficiente'];
-                    if (coeficienteSubcategory.casta) {
-                        for (const castaItem of coeficienteSubcategory.casta) {
-                            if (castaItem.name === selectedCasta) {
-                                coeficienteCastaValue = castaItem.text || '-';
-                                break; // Found the matching casta, exit loop
-                            }
-                        }
+            const coeficienteSubcategory = paineisCoeficienteData['Coeficiente']['Coeficiente'];
+            if (coeficienteSubcategory.casta) {
+                for (const castaItem of coeficienteSubcategory.casta) {
+                    // Usa a variável 'castaFinal' que foi determinada pela nossa lógica
+                    if (castaItem.name === castaFinal) {
+                        coeficienteCastaValue = castaItem.text || '-';
+                        break;
                     }
                 }
-                tdCastaValue.textContent = coeficienteCastaValue;
-                tdCastaValue.style.fontWeight = 'bold';
-
-                // Calculate and set the value for "Estatística" column in "Coeficiente" row
-                let coeficienteStatisticValue = '-';
-                const totalStatisticCell = totalRow.querySelector('td:nth-child(3)'); // Get the 3rd cell (Estatística) of the "Total" row
-                if (totalStatisticCell) {
-                    const totalStatistic = parseFloat(totalStatisticCell.textContent.replace(',', '.'));
-                    const coefficientValueForCalculation = parseFloat(coeficienteCastaValue.replace(',', '.')); // Use the coefficient value itself
-                    if (!isNaN(coefficientValueForCalculation) && !isNaN(totalStatistic)) {
-                        coeficienteStatisticValue = Math.round(coefficientValueForCalculation * totalStatistic); // Rounded to nearest integer
-                    }
-                }
-
-                const tdEmptyStatistic = document.createElement('td');
-                tdEmptyStatistic.textContent = coeficienteStatisticValue;
-
-                coeficienteRow.appendChild(tdCoeficienteLabel);
-                coeficienteRow.appendChild(tdCastaValue);
-                coeficienteRow.appendChild(tdEmptyStatistic);
-                tbody.appendChild(coeficienteRow);
-
-                // Update player overall value if available
-                if (coeficienteStatisticValue !== '-') {
-                    document.getElementById('playerOverall').value = coeficienteStatisticValue;
-                }
-
-                // Add table body to table
-                table.appendChild(tbody);
-
-                // Add table to display
-                firebaseDataDisplay.appendChild(table);
-            } else {
-                console.log("No paineis coeficiente data found");
             }
         }
+        tdCastaValue.textContent = coeficienteCastaValue;
+        tdCastaValue.style.fontWeight = 'bold';
+
+                // Calculate and set the value for "Estatística" column in "Coeficiente" row
+             let coeficienteStatisticValue = '-';
+        const totalStatistic = parseFloat(totalSum.toFixed(2));
+        const coefficientValueForCalculation = parseFloat(coeficienteCastaValue.replace(',', '.'));
+        if (!isNaN(coefficientValueForCalculation) && !isNaN(totalStatistic)) {
+            coeficienteStatisticValue = Math.round(coefficientValueForCalculation * totalStatistic);
+        }
+
+        const tdEmptyStatistic = document.createElement('td');
+        tdEmptyStatistic.textContent = coeficienteStatisticValue;
+
+        coeficienteRow.appendChild(tdCoeficienteLabel);
+        coeficienteRow.appendChild(tdCastaValue);
+        coeficienteRow.appendChild(tdEmptyStatistic);
+        tbody.appendChild(coeficienteRow);
+
+        // Atualiza o campo "Overall"
+        if (coeficienteStatisticValue !== '-') {
+            document.getElementById('playerOverall').value = coeficienteStatisticValue;
+        }
+
+        table.appendChild(tbody);
+        firebaseDataDisplay.appendChild(table);
+    } else {
+        console.log("No paineis coeficiente data found");
+    }
+}
 
         // Close dropdowns when clicking outside
         document.addEventListener('click', (e) => {
