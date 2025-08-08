@@ -202,7 +202,7 @@
             background-color: #1a5cc4;
         }
 
-        .market-time-menu {
+        .market-time-menu, .multi-change-menu {
             display: none;
             position: fixed;
             top: 50%;
@@ -217,11 +217,11 @@
             max-width: 500px;
         }
 
-        .market-time-menu.active {
+        .market-time-menu.active, .multi-change-menu.active {
             display: block;
         }
 
-        .market-time-menu h2 {
+        .market-time-menu h2, .multi-change-menu h2 {
             margin-bottom: 20px;
             color: #333;
         }
@@ -247,6 +247,46 @@
 
         .market-time-field input[type="checkbox"] {
             margin-right: 8px;
+        }
+        
+        .position-toggle {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        .position-toggle:last-of-type {
+            border-bottom: none;
+        }
+
+        .position-toggle span {
+            font-size: 16px;
+            color: #333;
+        }
+        
+        .toggle-action-button {
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            font-size: 14px;
+            cursor: pointer;
+            margin-left: 8px;
+            color: white;
+            transition: background-color 0.2s;
+        }
+        .toggle-action-button[data-action="activate"] {
+            background-color: #4CAF50; /* Green */
+        }
+        .toggle-action-button[data-action="activate"]:hover {
+            background-color: #45a049;
+        }
+        .toggle-action-button[data-action="deactivate"] {
+            background-color: #ff4444; /* Red */
+        }
+        .toggle-action-button[data-action="deactivate"]:hover {
+            background-color: #e33030;
         }
 
         .player-search {
@@ -341,6 +381,7 @@
     <main class="content">
         <h1>Gerenciar Jogadores</h1>
         <div style="display: flex; justify-content: flex-end; margin-bottom: 20px;">
+            <button id="multiChangeButton" class="market-time-button">Mudar Vários</button>
             <button id="marketTimeButton" class="market-time-button">Hora Mercado</button>
             <button id="saveChanges" class="save-button">Salvar</button>
         </div>
@@ -350,6 +391,7 @@
     </main>
 
     <div class="overlay" id="overlay"></div>
+    
     <div class="market-time-menu" id="marketTimeMenu">
         <h2>Configurar Hora do Mercado</h2>
         <div class="market-time-field">
@@ -373,9 +415,43 @@
         </div>
         <button class="save-button" style="margin-top: 20px;" id="saveMarketTime">Salvar</button>
     </div>
+
+    <div class="multi-change-menu" id="multiChangeMenu">
+        <h2>Ativar/Desativar Posições</h2>
+        <div class="position-toggle">
+            <span>Guarda-Redes</span>
+            <div>
+                <button class="toggle-action-button" data-position="Guarda-Redes" data-action="activate">Ativar</button>
+                <button class="toggle-action-button" data-position="Guarda-Redes" data-action="deactivate">Desativar</button>
+            </div>
+        </div>
+        <div class="position-toggle">
+            <span>Defesa</span>
+            <div>
+                <button class="toggle-action-button" data-position="Defesa" data-action="activate">Ativar</button>
+                <button class="toggle-action-button" data-position="Defesa" data-action="deactivate">Desativar</button>
+            </div>
+        </div>
+        <div class="position-toggle">
+            <span>Médio</span>
+            <div>
+                <button class="toggle-action-button" data-position="Médio" data-action="activate">Ativar</button>
+                <button class="toggle-action-button" data-position="Médio" data-action="deactivate">Desativar</button>
+            </div>
+        </div>
+        <div class="position-toggle">
+            <span>Avançado</span>
+            <div>
+                <button class="toggle-action-button" data-position="Avançado" data-action="activate">Ativar</button>
+                <button class="toggle-action-button" data-position="Avançado" data-action="deactivate">Desativar</button>
+            </div>
+        </div>
+        <button class="save-button" style="margin-top: 20px; background-color: #6c757d;" id="closeMultiChange">Fechar</button>
+    </div>
+
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, collection, getDocs, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getFirestore, collection, getDocs, doc, updateDoc, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0",
@@ -437,16 +513,10 @@
                 const jogadoresRef = collection(db, 'jogadores');
                 const snapshot = await getDocs(jogadoresRef);
 
-                // Create position groups
                 const positionOrder = ['Guarda-Redes', 'Defesa', 'Médio', 'Avançado'];
                 const playersByPosition = {};
+                positionOrder.forEach(pos => { playersByPosition[pos] = []; });
 
-                // Initialize position groups
-                positionOrder.forEach(pos => {
-                    playersByPosition[pos] = [];
-                });
-
-                // Group players by position
                 snapshot.forEach(doc => {
                     const player = doc.data();
                     if (positionOrder.includes(player.posicao)) {
@@ -454,13 +524,10 @@
                     }
                 });
 
-                // Clear existing content
                 playersGrid.innerHTML = '';
 
-                // Create sections for each position
                 positionOrder.forEach(position => {
                     if (playersByPosition[position].length > 0) {
-                        // Add position header
                         const header = document.createElement('h2');
                         header.textContent = position;
                         header.style.color = '#333';
@@ -469,7 +536,6 @@
                         header.style.fontSize = '24px';
                         playersGrid.appendChild(header);
 
-                        // Add players in this position
                         playersByPosition[position].forEach(player => {
                             const playerCard = createPlayerCard(player, player.id);
                             playersGrid.appendChild(playerCard);
@@ -483,10 +549,16 @@
 
         async function saveChanges() {
             try {
+                if (changedPlayers.size === 0) {
+                    alert('Nenhuma alteração para salvar.');
+                    return;
+                }
+                const batch = [];
                 for (const [playerId, noMercado] of changedPlayers) {
                     const playerRef = doc(db, 'jogadores', playerId);
-                    await updateDoc(playerRef, { noMercado });
+                    batch.push(updateDoc(playerRef, { noMercado }));
                 }
+                await Promise.all(batch);
                 changedPlayers.clear();
                 alert('Alterações salvas com sucesso!');
             } catch (error) {
@@ -495,61 +567,104 @@
             }
         }
 
-        // Load players when the page loads
         loadPlayers();
-
-        // Add save button event listener
         document.getElementById('saveChanges').addEventListener('click', saveChanges);
 
-        // Market Time Menu Functionality
+        // --- All Menu and Overlay Logic ---
+        const overlay = document.getElementById('overlay');
+        
+        // Market Time Menu
         const marketTimeButton = document.getElementById('marketTimeButton');
         const marketTimeMenu = document.getElementById('marketTimeMenu');
-        const overlay = document.getElementById('overlay');
         const playerSearch = document.getElementById('playerSearch');
         const searchResults = document.getElementById('searchResults');
         const selectedPlayers = document.getElementById('selectedPlayers');
         const applyToAll = document.getElementById('applyToAll');
         const saveMarketTime = document.getElementById('saveMarketTime');
-
         let selectedPlayersList = new Set();
+        
+        // Multi-Change Menu
+        const multiChangeButton = document.getElementById('multiChangeButton');
+        const multiChangeMenu = document.getElementById('multiChangeMenu');
+        const closeMultiChange = document.getElementById('closeMultiChange');
 
+        // Show/Hide Logic
         marketTimeButton.addEventListener('click', () => {
             marketTimeMenu.classList.add('active');
             overlay.classList.add('active');
         });
 
-        overlay.addEventListener('click', () => {
+        multiChangeButton.addEventListener('click', () => {
+            multiChangeMenu.classList.add('active');
+            overlay.classList.add('active');
+        });
+        
+        const closeAllMenus = () => {
             marketTimeMenu.classList.remove('active');
+            multiChangeMenu.classList.remove('active');
             overlay.classList.remove('active');
+        };
+
+        overlay.addEventListener('click', closeAllMenus);
+        closeMultiChange.addEventListener('click', closeAllMenus);
+
+        // --- Multi-Change Functionality ---
+        async function updatePlayersByPosition(position, activate) {
+            const actionText = activate ? 'ativar' : 'desativar';
+            const confirmation = confirm(`Tem certeza que deseja ${actionText} todos os jogadores da posição "${position}"?`);
+            if (!confirmation) return;
+
+            try {
+                const jogadoresRef = collection(db, 'jogadores');
+                const q = query(jogadoresRef, where("posicao", "==", position));
+                const querySnapshot = await getDocs(q);
+
+                if (querySnapshot.empty) {
+                    alert(`Nenhum jogador encontrado na posição ${position}.`);
+                    return;
+                }
+
+                const batch = [];
+                querySnapshot.forEach((doc) => {
+                    batch.push(updateDoc(doc.ref, { noMercado: activate }));
+                });
+
+                await Promise.all(batch);
+                alert(`Jogadores da posição ${position} foram atualizados com sucesso! A lista será recarregada.`);
+                await loadPlayers(); // Reload player list to show changes
+                closeAllMenus();
+            } catch (error) {
+                console.error(`Erro ao atualizar jogadores da posição ${position}:`, error);
+                alert(`Ocorreu um erro ao atualizar. Por favor, tente novamente.`);
+            }
+        }
+        
+        document.querySelectorAll('.toggle-action-button').forEach(button => {
+            button.addEventListener('click', (e) => {
+                const position = e.target.dataset.position;
+                const activate = e.target.dataset.action === 'activate';
+                updatePlayersByPosition(position, activate);
+            });
         });
 
+        // --- Market Time Menu Functionality ---
         playerSearch.addEventListener('input', async (e) => {
             const searchTerm = e.target.value.toLowerCase();
             if (searchTerm.length < 2) {
                 searchResults.innerHTML = '';
                 return;
             }
-
             try {
                 const jogadoresRef = collection(db, 'jogadores');
                 const snapshot = await getDocs(jogadoresRef);
                 const results = [];
-
                 snapshot.forEach(doc => {
                     const player = doc.data();
                     if (player.nome.toLowerCase().includes(searchTerm)) {
                         results.push({ id: doc.id, ...player });
                     }
                 });
-
-                searchResults.innerHTML = results
-                    .map(player => `
-                        <div class="search-result-item" data-id="${player.id}" data-name="${player.nome}">
-                            ${player.nome}
-                        </div>
-                    `)
-                    .join('');
-
+                searchResults.innerHTML = results.map(player => `<div class="search-result-item" data-id="${player.id}" data-name="${player.nome}">${player.nome}</div>`).join('');
                 searchResults.querySelectorAll('.search-result-item').forEach(item => {
                     item.addEventListener('click', () => {
                         const playerId = item.dataset.id;
@@ -558,12 +673,8 @@
                             selectedPlayersList.add(playerId);
                             const playerTag = document.createElement('div');
                             playerTag.className = 'selected-player';
-                            playerTag.innerHTML = `
-                                ${playerName}
-                                <button data-id="${playerId}">×</button>
-                            `;
+                            playerTag.innerHTML = `${playerName} <button data-id="${playerId}">×</button>`;
                             selectedPlayers.appendChild(playerTag);
-
                             playerTag.querySelector('button').addEventListener('click', () => {
                                 selectedPlayersList.delete(playerId);
                                 playerTag.remove();
@@ -577,8 +688,7 @@
         });
 
         applyToAll.addEventListener('change', (e) => {
-            const searchSection = document.querySelector('.player-search');
-            searchSection.style.display = e.target.checked ? 'none' : 'block';
+            document.querySelector('.player-search').style.display = e.target.checked ? 'none' : 'block';
             if (e.target.checked) {
                 selectedPlayersList.clear();
                 selectedPlayers.innerHTML = '';
@@ -588,46 +698,31 @@
         saveMarketTime.addEventListener('click', async () => {
             const openTime = document.getElementById('marketOpenTime').value;
             const closeTime = document.getElementById('marketCloseTime').value;
-
             if (!openTime || !closeTime) {
                 alert('Por favor, preencha os horários de abertura e fechamento.');
                 return;
             }
-
             try {
                 const marketTimes = {
                     abertura: new Date(openTime).toISOString(),
                     fechamento: new Date(closeTime).toISOString()
                 };
-
                 if (applyToAll.checked) {
-                    const jogadoresRef = collection(db, 'jogadores');
-                    const snapshot = await getDocs(jogadoresRef);
-                    const batch = [];
-
-                    snapshot.forEach(doc => {
-                        batch.push(updateDoc(doc.ref, { marketTimes }));
-                    });
-
+                    const snapshot = await getDocs(collection(db, 'jogadores'));
+                    const batch = snapshot.docs.map(doc => updateDoc(doc.ref, { marketTimes }));
                     await Promise.all(batch);
                 } else if (selectedPlayersList.size > 0) {
-                    const batch = Array.from(selectedPlayersList).map(playerId => {
-                        const playerRef = doc(db, 'jogadores', playerId);
-                        return updateDoc(playerRef, { marketTimes });
-                    });
-
+                    const batch = Array.from(selectedPlayersList).map(playerId => updateDoc(doc(db, 'jogadores', playerId), { marketTimes }));
                     await Promise.all(batch);
                 } else {
                     alert('Por favor, selecione jogadores ou marque "Aplicar para todos os jogadores".');
                     return;
                 }
-
                 alert('Horários do mercado atualizados com sucesso!');
-                marketTimeMenu.classList.remove('active');
-                overlay.classList.remove('active');
+                closeAllMenus();
             } catch (error) {
                 console.error('Error saving market times:', error);
-                alert('Erro ao salvar horários do mercado. Por favor, tente novamente.');
+                alert('Erro ao salvar horários do mercado.');
             }
         });
     </script>
