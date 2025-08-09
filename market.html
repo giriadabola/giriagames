@@ -435,30 +435,30 @@
     </div>
 
     <div style="display: flex; justify-content: flex-end; margin-bottom: 20px;">
-        <button id="toggleAllSections" class="toggle-all-button">
-            <span class="toggle-open active">Abre</span>
-            <span class="toggle-close">Fecha</span>
-        </button>
+       <button id="toggleAllSections" class="toggle-all-button active">
+    <span class="toggle-open">Abre</span>
+    <span class="toggle-close active">Fecha</span>
+</button>
     </div>
 
         <div class="market-section" id="guarda-redes-section">
-            <h2 class="section-title">GUARDA-REDES</h2>
-            <div class="players-grid" id="guarda-redes-grid"></div>
+            <h2 class="section-title collapsed">GUARDA-REDES</h2>
+            <div class="players-grid collapsed" id="guarda-redes-grid"></div>
         </div>
 
         <div class="market-section" id="defesas-section">
-            <h2 class="section-title">DEFESAS</h2>
-            <div class="players-grid" id="defesas-grid"></div>
+            <h2 class="section-title collapsed">DEFESAS</h2>
+            <div class="players-grid collapsed" id="defesas-grid"></div>
         </div>
 
         <div class="market-section" id="medios-section">
-            <h2 class="section-title">MÉDIOS</h2>
-            <div class="players-grid" id="medios-grid"></div>
+            <h2 class="section-title collapsed">MÉDIOS</h2>
+            <div class="players-grid collapsed" id="medios-grid"></div>
         </div>
 
         <div class="market-section" id="avancados-section">
-            <h2 class="section-title">AVANÇADOS</h2>
-            <div class="players-grid" id="avancados-grid"></div>
+            <h2 class="section-title collapsed">AVANÇADOS</h2>
+            <div class="players-grid collapsed" id="avancados-grid"></div>
         </div>
         <!-- Message for no players will be added here by JS -->
     </div>
@@ -1039,7 +1039,8 @@
                  });
 
 
-                setupSectionToggles();
+               updateSectionCounts(); // <-- 1. Chame a função de contagem primeiro
+                setupSectionToggles(); //
 
             } catch (error) {
                 console.error("Error loading players:", error);
@@ -1050,28 +1051,35 @@
         }
 
 
+
+
+
+
+
         /**
          * Sets up event listeners for section title toggles and the main toggle button.
          */
-        function setupSectionToggles() {
+      function setupSectionToggles() {
             const toggleButton = document.getElementById('toggleAllSections');
             if (!toggleButton) return;
 
             const openSpan = toggleButton.querySelector('.toggle-open');
             const closeSpan = toggleButton.querySelector('.toggle-close');
 
+            // Função que ATUALIZA o estado do botão
             const updateToggleButtonState = () => {
                 const allTitles = document.querySelectorAll('.section-title');
-                if (allTitles.length === 0) return; // No sections, do nothing
+                if (allTitles.length === 0) return; 
 
                 const allCollapsed = Array.from(allTitles).every(t => t.classList.contains('collapsed'));
-                const collapseState = allCollapsed; // True if all collapsed, false otherwise
+                const collapseState = allCollapsed; 
 
                 toggleButton.classList.toggle('active', collapseState);
                 if (openSpan) openSpan.classList.toggle('active', !collapseState);
                 if (closeSpan) closeSpan.classList.toggle('active', collapseState);
             };
 
+            // Função que ABRE/FECHA as secções
             function toggleAllSections(collapse) {
                 document.querySelectorAll('.section-title').forEach(title => {
                     const grid = title.parentElement?.querySelector('.players-grid');
@@ -1080,7 +1088,7 @@
                         grid.classList.toggle('collapsed', collapse);
                     }
                 });
-                updateToggleButtonState();
+                updateToggleButtonState(); // Esta chamada aqui está correta
             }
 
             if (!toggleButton.dataset.listenerAttached) {
@@ -1096,19 +1104,18 @@
                     title.addEventListener('click', () => {
                         const grid = title.parentElement?.querySelector('.players-grid');
                         if (grid) {
-                            // Toggle the specific section clicked
                             const isCollapsing = !title.classList.contains('collapsed');
                             title.classList.toggle('collapsed', isCollapsing);
                             grid.classList.toggle('collapsed', isCollapsing);
-                            // Update the main button based on the overall state
-                            updateToggleButtonState();
+                            updateToggleButtonState(); // Atualiza o botão principal
                         }
                     });
                     title.dataset.listenerAttached = 'true';
                 }
             });
-            // Initial check
-            updateToggleButtonState();
+
+            // CORRETO: Chame a função aqui para definir o estado inicial UMA VEZ.
+            toggleAllSections(true); 
         }
 
         // --- Loading Progress ---
@@ -1168,6 +1175,39 @@
             return true;
         }
 
+
+
+
+function updateSectionCounts() {
+            // Um mapa que liga o ID da secção ao seu texto base
+            const sections = {
+                'guarda-redes-section': 'GUARDA-REDES',
+                'defesas-section': 'DEFESAS',
+                'medios-section': 'MÉDIOS',
+                'avancados-section': 'AVANÇADOS'
+            };
+
+            // Itera sobre cada entrada do mapa
+            for (const [sectionId, baseTitle] of Object.entries(sections)) {
+                const sectionElement = document.getElementById(sectionId);
+                if (sectionElement) {
+                    const titleElement = sectionElement.querySelector('.section-title');
+                    const gridElement = sectionElement.querySelector('.players-grid');
+                    
+                    if (titleElement && gridElement) {
+                        // Conta quantos '.player-card' existem dentro da grelha da secção
+                        const count = gridElement.querySelectorAll('.player-card').length;
+                        // Atualiza o texto do título para incluir a contagem
+                        titleElement.textContent = `${baseTitle} (${count})`;
+                    }
+                }
+            }
+        }
+
+
+
+
+        
         /**
          * Updates visibility of menu items based on settings.
          */
