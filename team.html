@@ -436,6 +436,50 @@
            max-height: 400px; /* Adjust max-height as needed */
            overflow-y: auto;
        }
+
+       @media (max-width: 767px) {
+    .team-section {
+        flex-direction: column;
+        align-items: center;
+        padding: 10px; /* Reduz o padding geral em mobile */
+    }
+
+    .pitch-side {
+        width: 100%; /* Ocupa a largura toda */
+        max-width: 400px; /* Limita o tamanho máximo do campo */
+        margin-bottom: 20px;
+    }
+
+    .player-selection-side {
+        display: flex;
+        flex-direction: row; /* Força as secções a ficarem lado a lado */
+        justify-content: space-between; /* Distribui o espaço */
+        width: 100%;
+        gap: 10px; /* Espaçamento menor entre as colunas */
+    }
+
+    .starting-eleven-section, .substitutes-section {
+        flex: 1; /* Faz com que ambas as secções partilhem o espaço igualmente */
+        max-width: none; /* Remove a limitação de 45% */
+        padding: 10px;
+        margin-top: 0; /* Remove a margem de cima */
+    }
+
+    .starting-eleven-section h2, .substitutes-section h2 {
+        font-size: 1.1em; /* Reduz o tamanho do título para caber melhor */
+        margin-bottom: 10px;
+    }
+
+    .player-card .player-name {
+        font-size: 0.9em; /* Ajusta o nome do jogador */
+    }
+
+    .player-card img {
+        width: 40px; /* Imagem do jogador um pouco menor */
+        height: 40px;
+    }
+}
+
     </style>
 </head>
 <body>
@@ -1249,52 +1293,58 @@
 
 
                     // Populates the user selection dropdown
-                    async function loadUsers() {
-                       /* ... (loadUsers function - logic largely unchanged, ensure it calls loadUserTeam on change) ... */
-                         try {
-                            const usersRef = collection(db, 'users');
-                             // Add query to filter for accepted users if needed: query(usersRef, where('aceite', '==', 'Yes'))
-                            const querySnapshot = await getDocs(usersRef);
-                            const userSelect = document.getElementById('user-select');
+                 async function loadUsers() {
+    try {
+        const usersRef = collection(db, 'users');
+        const querySnapshot = await getDocs(usersRef);
+        const userSelect = document.getElementById('user-select');
 
-                            // Clear existing options except the placeholder
-                            while (userSelect.options.length > 1) {
-                                userSelect.remove(1);
-                            }
+        // Limpa opções existentes
+        while (userSelect.options.length > 1) {
+            userSelect.remove(1);
+        }
 
-                            const users = [];
-                            querySnapshot.forEach((doc) => {
-                                const userData = doc.data();
-                                // Ensure user has a username and optionally filter by 'aceite' status if required
-                                if (userData.nomeDeUsuario /* && userData.aceite === 'Yes' */) {
-                                    users.push({
-                                        id: doc.id,
-                                        username: userData.nomeDeUsuario
-                                    });
-                                }
-                            });
+        const users = [];
+        querySnapshot.forEach((doc) => {
+            const userData = doc.data();
+            if (userData.nomeDeUsuario) {
+                users.push({
+                    id: doc.id,
+                    username: userData.nomeDeUsuario
+                });
+            }
+        });
 
-                            // Sort users alphabetically by username
-                            users.sort((a, b) => a.username.localeCompare(b.username));
+        // Ordena por nome de utilizador
+        users.sort((a, b) => a.username.localeCompare(b.username));
 
-                            // Add sorted users to the dropdown
-                            users.forEach(user => {
-                                const option = document.createElement('option');
-                                option.value = user.id;
-                                option.textContent = user.username;
-                                userSelect.appendChild(option);
-                            });
-                             console.log("User dropdown populated.");
+        // Adiciona utilizadores ao dropdown
+        users.forEach(user => {
+            const option = document.createElement('option');
+            option.value = user.id;
+            option.textContent = user.username;
+            userSelect.appendChild(option);
+        });
 
-                             // Add event listener for user selection change
-                            userSelect.removeEventListener('change', handleUserSelectionChange); // Remove previous listener if any
-                            userSelect.addEventListener('change', handleUserSelectionChange);
+        console.log("User dropdown populated.");
 
+        // Adiciona o listener para futuras mudanças
+        userSelect.removeEventListener('change', handleUserSelectionChange);
+        userSelect.addEventListener('change', handleUserSelectionChange);
 
-                        } catch (error) {
-                            console.error('Error loading users:', error);
-                        }
-                    }
+        // --- ALTERAÇÃO PRINCIPAL ---
+        // Se houver utilizadores na lista, seleciona o primeiro e carrega a sua equipa.
+        // Isto garante que o carregamento inicial funcione em todos os dispositivos.
+        if (userSelect.options.length > 1) {
+            userSelect.selectedIndex = 1; // Seleciona o primeiro utilizador (índice 0 é "Selecione...")
+            // Simula um evento de 'change' para acionar o carregamento da equipa
+            await handleUserSelectionChange({ target: userSelect });
+        }
+
+    } catch (error) {
+        console.error('Error loading users:', error);
+    }
+}
 
                     // Handles the change event for the user select dropdown
                      async function handleUserSelectionChange(event) {
