@@ -794,6 +794,7 @@
         // END: New DOM Elements
 
         let selectedOddId = null;
+         let originalOddData = null;
         let allCompeticoesData = [];
         let oddIdToDelete = null;
 
@@ -858,22 +859,21 @@
             }
         }
 
-        function resetForm() {
-            if (editarOddForm) editarOddForm.reset();
-            if (typeof competicoesSelect.val === 'function') competicoesSelect.val(null).trigger('change');
-            if (tipoCategoriaSelect) tipoCategoriaSelect.value = "";
-            selectedOddId = null;
-            if (searchInput) searchInput.value = '';
-            toggleCategoryFields();
-            if (submitButton) {
-                submitButton.disabled = false;
-                submitButton.textContent = 'Salvar Alterações';
-            }
-            if(typeof loadCategorias === "function") loadCategorias();
-            // START: Hide delete button on reset
-            if (deleteOddButton) deleteOddButton.style.display = 'none';
-            // END: Hide delete button on reset
-        }
+     function resetForm() {
+    if (editarOddForm) editarOddForm.reset();
+    if (typeof competicoesSelect.val === 'function') competicoesSelect.val(null).trigger('change');
+    if (tipoCategoriaSelect) tipoCategoriaSelect.value = "";
+    selectedOddId = null;
+    originalOddData = null; // <-- ADICIONE ESTA LINHA
+    if (searchInput) searchInput.value = '';
+    toggleCategoryFields();
+    if (submitButton) {
+        submitButton.disabled = false;
+        submitButton.textContent = 'Salvar Alterações';
+    }
+    if(typeof loadCategorias === "function") loadCategorias();
+    if (deleteOddButton) deleteOddButton.style.display = 'none';
+}
 
         function toggleCategoryFields() {
             if (!tipoCategoriaSelect || !categoriaNomeDiv || !subcategoriaNomeDiv || !terceiraCategoriaNomeDiv || !document.getElementById('subcategoriaDropdown') || !categoriaDropdown || !subcategoriaPaiSelect) {
@@ -957,88 +957,87 @@
             }
         }
 
-        async function preencherFormulario(oddId) {
-             selectedOddId = oddId;
-             if (submitButton) {
-                submitButton.disabled = true;
-                submitButton.textContent = 'Carregando Dados...';
-             }
-             if (editarOddForm) editarOddForm.reset(); // resetForm also hides delete button
-             if (typeof competicoesSelect.val === 'function') competicoesSelect.val(null).trigger('change');
+      async function preencherFormulario(oddId) {
+     selectedOddId = oddId;
+     if (submitButton) {
+        submitButton.disabled = true;
+        submitButton.textContent = 'Carregando Dados...';
+     }
+     if (editarOddForm) editarOddForm.reset(); 
+     if (typeof competicoesSelect.val === 'function') competicoesSelect.val(null).trigger('change');
 
-             try {
-                const docSnap = await db.collection('oddcategorias').doc(oddId).get();
-                if (!docSnap.exists) throw new Error(`Documento com ID ${oddId} não encontrado.`);
-                const data = docSnap.data();
+     try {
+        const docSnap = await db.collection('oddcategorias').doc(oddId).get();
+        if (!docSnap.exists) throw new Error(`Documento com ID ${oddId} não encontrado.`);
+        
+        const data = docSnap.data();
+        originalOddData = { ...data, id: docSnap.id }; // <-- ADICIONE ESTA LINHA para guardar os dados originais
 
-                if (tipoCategoriaSelect) tipoCategoriaSelect.value = data.categoria_subcategoria_3cat || '';
-                toggleCategoryFields();
+        if (tipoCategoriaSelect) tipoCategoriaSelect.value = data.categoria_subcategoria_3cat || '';
+        toggleCategoryFields();
 
-                if (indiceInglesInput) indiceInglesInput.value = data.indiceIngles || '';
-                if (breveDescricaoInput) breveDescricaoInput.value = data.breveDescricao || '';
-                if (ordemInput) ordemInput.value = data.ordem !== undefined ? data.ordem : '';
-                if (iconInput) iconInput.value = data.icon || '';
-                if (ativadoCheckbox) ativadoCheckbox.checked = data.ativado === true;
+        if (indiceInglesInput) indiceInglesInput.value = data.indiceIngles || '';
+        if (breveDescricaoInput) breveDescricaoInput.value = data.breveDescricao || '';
+        if (ordemInput) ordemInput.value = data.ordem !== undefined ? data.ordem : '';
+        if (iconInput) iconInput.value = data.icon || '';
+        if (ativadoCheckbox) ativadoCheckbox.checked = data.ativado === true;
 
-                if (data.categoria_subcategoria_3cat === 'categoria') {
-                    if (nomeCategoriaInput) nomeCategoriaInput.value = data.nomecategoria || '';
-                    if (categoriaDropdown) categoriaDropdown.value = '';
-                } else if (data.categoria_subcategoria_3cat === 'subcategoria') {
-                    if (nomeSubcategoriaInput) nomeSubcategoriaInput.value = data.nomesubcategoria || '';
-                    if (data.categoriapai && categoriaDropdown) {
-                        await loadCategorias();
-                        categoriaDropdown.value = data.categoriapai;
-                    } else if (categoriaDropdown) {
-                        categoriaDropdown.value = '';
-                    }
-                } else if (data.categoria_subcategoria_3cat === '3cat') {
-                    if (nomeTerceiraCategoriaInput) nomeTerceiraCategoriaInput.value = data.nome3categoria || '';
-                    if (data.categoriapai && categoriaDropdown) {
-                        await loadCategorias();
-                        categoriaDropdown.value = data.categoriapai;
-                    } else if (categoriaDropdown) {
-                        categoriaDropdown.value = '';
-                    }
-                    if (data.subcategoriapai && subcategoriaPaiSelect) {
-                        await loadSubcategorias();
-                        subcategoriaPaiSelect.value = data.subcategoriapai;
-                    } else if (subcategoriaPaiSelect) {
-                        subcategoriaPaiSelect.value = '';
-                    }
-                }
-
-                 if (data.competicoes && Array.isArray(data.competicoes) && typeof competicoesSelect.val === 'function') {
-                    const validCompeticoes = data.competicoes.filter(compValue =>
-                        allCompeticoesData.some(option => option.id === compValue)
-                    );
-                    competicoesSelect.val(validCompeticoes).trigger('change');
-                 } else if (typeof competicoesSelect.val === 'function') {
-                    competicoesSelect.val(null).trigger('change');
-                 }
-
-                let displayText = data.indiceIngles || 'Odd Selecionada';
-                 if (data.categoria_subcategoria_3cat === 'categoria' && data.nomecategoria) displayText = data.nomecategoria;
-                 else if (data.categoria_subcategoria_3cat === 'subcategoria' && data.nomesubcategoria) displayText = data.nomesubcategoria;
-                 else if (data.categoria_subcategoria_3cat === '3cat' && data.nome3categoria) displayText = data.nome3categoria;
-                 
-                 if (searchInput) searchInput.value = `${displayText} (${data.categoria_subcategoria_3cat || 'Tipo Desconhecido'})`;
-                 if (searchResults) searchResults.style.display = 'none';
-
-                 // START: Show delete button if odd is loaded
-                 if (deleteOddButton) deleteOddButton.style.display = 'flex';
-                 // END: Show delete button
-
-            } catch (error) {
-                console.error("Erro ao preencher formulário:", error);
-                alert(`Erro ao carregar dados da odd para edição: ${error.message}`);
-                resetForm(); // This will hide the delete button as well
-            } finally {
-                 if (submitButton) {
-                    submitButton.disabled = false;
-                    submitButton.textContent = 'Salvar Alterações';
-                 }
+        if (data.categoria_subcategoria_3cat === 'categoria') {
+            if (nomeCategoriaInput) nomeCategoriaInput.value = data.nomecategoria || '';
+            if (categoriaDropdown) categoriaDropdown.value = '';
+        } else if (data.categoria_subcategoria_3cat === 'subcategoria') {
+            if (nomeSubcategoriaInput) nomeSubcategoriaInput.value = data.nomesubcategoria || '';
+            if (data.categoriapai && categoriaDropdown) {
+                await loadCategorias();
+                categoriaDropdown.value = data.categoriapai;
+            } else if (categoriaDropdown) {
+                categoriaDropdown.value = '';
+            }
+        } else if (data.categoria_subcategoria_3cat === '3cat') {
+            if (nomeTerceiraCategoriaInput) nomeTerceiraCategoriaInput.value = data.nome3categoria || '';
+            if (data.categoriapai && categoriaDropdown) {
+                await loadCategorias();
+                categoriaDropdown.value = data.categoriapai;
+            } else if (categoriaDropdown) {
+                categoriaDropdown.value = '';
+            }
+            if (data.subcategoriapai && subcategoriaPaiSelect) {
+                await loadSubcategorias();
+                subcategoriaPaiSelect.value = data.subcategoriapai;
+            } else if (subcategoriaPaiSelect) {
+                subcategoriaPaiSelect.value = '';
             }
         }
+
+         if (data.competicoes && Array.isArray(data.competicoes) && typeof competicoesSelect.val === 'function') {
+            const validCompeticoes = data.competicoes.filter(compValue =>
+                allCompeticoesData.some(option => option.id === compValue)
+            );
+            competicoesSelect.val(validCompeticoes).trigger('change');
+         } else if (typeof competicoesSelect.val === 'function') {
+            competicoesSelect.val(null).trigger('change');
+         }
+
+        let displayText = data.indiceIngles || 'Odd Selecionada';
+         if (data.categoria_subcategoria_3cat === 'categoria' && data.nomecategoria) displayText = data.nomecategoria;
+         else if (data.categoria_subcategoria_3cat === 'subcategoria' && data.nomesubcategoria) displayText = data.nomesubcategoria;
+         else if (data.categoria_subcategoria_3cat === '3cat' && data.nome3categoria) displayText = data.nome3categoria;
+         
+         if (searchInput) searchInput.value = `${displayText} (${data.categoria_subcategoria_3cat || 'Tipo Desconhecido'})`;
+         if (searchResults) searchResults.style.display = 'none';
+         if (deleteOddButton) deleteOddButton.style.display = 'flex';
+
+    } catch (error) {
+        console.error("Erro ao preencher formulário:", error);
+        alert(`Erro ao carregar dados da odd para edição: ${error.message}`);
+        resetForm();
+    } finally {
+         if (submitButton) {
+            submitButton.disabled = false;
+            submitButton.textContent = 'Salvar Alterações';
+         }
+    }
+}
 
        async function renderOddsTree() {
         if (!oddsTreeViewDiv) {
@@ -1346,83 +1345,126 @@
 
 
         // ------------- Form Submission -------------
-        if (editarOddForm) {
-            editarOddForm.addEventListener('submit', async function(e) {
-                e.preventDefault();
-                if (!selectedOddId) {
-                    alert('Por favor, pesquise e selecione uma odd da lista ou da estrutura antes de salvar.');
-                    if (searchInput) searchInput.focus();
-                    return;
-                }
-
-                if (!submitButton) return;
-                submitButton.disabled = true;
-                submitButton.textContent = 'Salvando...';
-
-                try {
-                    const tipoCategoria = tipoCategoriaSelect.value;
-                    if (!tipoCategoria) throw new Error("O campo 'Tipo de Categoria' é obrigatório.");
-
-                    const formData = {
-                        categoria_subcategoria_3cat: tipoCategoria,
-                        indiceIngles: indiceInglesInput ? indiceInglesInput.value.trim() : '',
-                        breveDescricao: breveDescricaoInput ? breveDescricaoInput.value.trim() : '',
-                        ordem: ordemInput ? parseInt(ordemInput.value) : null,
-                        icon: iconInput ? iconInput.value.trim() : '',
-                        competicoes: (typeof competicoesSelect.val === 'function') ? (competicoesSelect.val() || []) : [],
-                        ativado: ativadoCheckbox ? ativadoCheckbox.checked : false,
-                        lastUpdated: timestamp()
-                    };
-
-                    delete formData.nomecategoria;
-                    delete formData.nomesubcategoria;
-                    delete formData.nome3categoria;
-                    delete formData.categoriapai;
-                    delete formData.subcategoriapai;
-
-                    if (!formData.indiceIngles) throw new Error("O campo 'Indice Inglês' é obrigatório.");
-                    if (formData.ordem === null || isNaN(formData.ordem)) throw new Error("O campo 'Ordem' deve ser um número válido.");
-                    if (!formData.icon) throw new Error("O campo 'Icon / Emoji' é obrigatório.");
-
-                    if (tipoCategoria === 'categoria') {
-                        formData.nomecategoria = nomeCategoriaInput ? nomeCategoriaInput.value.trim() : '';
-                        if (!formData.nomecategoria) throw new Error("O campo 'Nome da Categoria' é obrigatório.");
-                    } else if (tipoCategoria === 'subcategoria') {
-                        formData.nomesubcategoria = nomeSubcategoriaInput ? nomeSubcategoriaInput.value.trim() : '';
-                        formData.categoriapai = categoriaDropdown ? categoriaDropdown.value : '';
-                        if (!formData.nomesubcategoria) throw new Error("O campo 'Nome da Subcategoria' é obrigatório.");
-                        if (!formData.categoriapai) throw new Error("É necessário selecionar uma Categoria pai.");
-                    } else if (tipoCategoria === '3cat') {
-                        formData.nome3categoria = nomeTerceiraCategoriaInput ? nomeTerceiraCategoriaInput.value.trim() : '';
-                        formData.categoriapai = categoriaDropdown ? categoriaDropdown.value : '';
-                        formData.subcategoriapai = subcategoriaPaiSelect ? subcategoriaPaiSelect.value : '';
-                        if (!formData.nome3categoria) throw new Error("O campo 'Nome da 3ª Categoria' é obrigatório.");
-                        if (!formData.categoriapai) throw new Error("É necessário selecionar uma Categoria pai.");
-                        if (!formData.subcategoriapai) throw new Error("É necessário selecionar uma Subcategoria pai.");
-                    }
-
-                    console.log("DEBUG: Dados a serem atualizados:", formData);
-
-                    await db.collection('oddcategorias').doc(selectedOddId).update(formData);
-                    alert('Odd atualizada com sucesso!');
-                    
-                    if (oddsTreeViewDiv && (oddsTreeViewDiv.style.display === 'block' || (oddsTreeViewDiv.innerHTML && oddsTreeViewDiv.innerHTML.trim() !== ''))) {
-                        console.log("DEBUG: Atualizando árvore após salvar.");
-                        renderOddsTree();
-                    }
-                    preencherFormulario(selectedOddId); // Reloads form with updated data, and shows delete button
-
-                } catch (error) {
-                    console.error('Erro ao salvar alterações:', error);
-                    alert(`Erro ao salvar: ${error.message}\nPor favor, verifique os campos e tente novamente.`);
-                } finally {
-                    if (submitButton) {
-                        submitButton.disabled = false;
-                        submitButton.textContent = 'Salvar Alterações';
-                    }
-                }
-            });
+      if (editarOddForm) {
+    editarOddForm.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        if (!selectedOddId) {
+            alert('Por favor, pesquise e selecione uma odd da lista ou da estrutura antes de salvar.');
+            if (searchInput) searchInput.focus();
+            return;
         }
+
+        if (!submitButton) return;
+        submitButton.disabled = true;
+        submitButton.textContent = 'Salvando...';
+
+        try {
+            const tipoCategoria = tipoCategoriaSelect.value;
+            if (!tipoCategoria) throw new Error("O campo 'Tipo de Categoria' é obrigatório.");
+
+            const formData = {
+                categoria_subcategoria_3cat: tipoCategoria,
+                indiceIngles: indiceInglesInput ? indiceInglesInput.value.trim() : '',
+                breveDescricao: breveDescricaoInput ? breveDescricaoInput.value.trim() : '',
+                ordem: ordemInput ? parseInt(ordemInput.value) : null,
+                icon: iconInput ? iconInput.value.trim() : '',
+                competicoes: (typeof competicoesSelect.val === 'function') ? (competicoesSelect.val() || []) : [],
+                ativado: ativadoCheckbox ? ativadoCheckbox.checked : false,
+                lastUpdated: timestamp()
+            };
+
+            delete formData.nomecategoria;
+            delete formData.nomesubcategoria;
+            delete formData.nome3categoria;
+            delete formData.categoriapai;
+            delete formData.subcategoriapai;
+
+            if (!formData.indiceIngles) throw new Error("O campo 'Indice Inglês' é obrigatório.");
+            if (formData.ordem === null || isNaN(formData.ordem)) throw new Error("O campo 'Ordem' deve ser um número válido.");
+            if (!formData.icon) throw new Error("O campo 'Icon / Emoji' é obrigatório.");
+
+            // ---------- INÍCIO DA NOVA LÓGICA ----------
+            if (tipoCategoria === 'subcategoria') {
+                formData.nomesubcategoria = nomeSubcategoriaInput ? nomeSubcategoriaInput.value.trim() : '';
+                formData.categoriapai = categoriaDropdown ? categoriaDropdown.value : '';
+                if (!formData.nomesubcategoria) throw new Error("O campo 'Nome da Subcategoria' é obrigatório.");
+                if (!formData.categoriapai) throw new Error("É necessário selecionar uma Categoria pai.");
+
+                // Verifica se a categoria pai foi realmente alterada
+                const isMoveOperation = originalOddData && originalOddData.categoriapai !== formData.categoriapai;
+
+                if (isMoveOperation) {
+                    console.log("Iniciando operação de mover subcategoria e seus filhos...");
+                    
+                    // 1. Inicia uma atualização em lote (batch)
+                    const batch = db.batch();
+
+                    // 2. Adiciona a atualização da própria subcategoria ao lote
+                    const subcategoriaRef = db.collection('oddcategorias').doc(selectedOddId);
+                    batch.update(subcategoriaRef, formData);
+
+                    // 3. Procura por todas as 3ªs categorias filhas
+                    const terceirasCategoriasSnapshot = await db.collection('oddcategorias')
+                        .where('subcategoriapai', '==', selectedOddId)
+                        .get();
+                    
+                    const filhosMovidosCount = terceirasCategoriasSnapshot.size;
+                    console.log(`Encontradas ${filhosMovidosCount} 3ªs categorias para mover.`);
+
+                    // 4. Adiciona a atualização de cada filho ao lote
+                    terceirasCategoriasSnapshot.forEach(doc => {
+                        const terceiraCatRef = db.collection('oddcategorias').doc(doc.id);
+                        // Atualiza apenas o campo 'categoriapai' e o 'lastUpdated'
+                        batch.update(terceiraCatRef, { 
+                            categoriapai: formData.categoriapai,
+                            lastUpdated: timestamp() 
+                        });
+                    });
+
+                    // 5. Executa todas as atualizações de uma vez
+                    await batch.commit();
+                    alert(`Subcategoria movida com sucesso! ${filhosMovidosCount} 3ªs categorias filhas foram atualizadas automaticamente.`);
+
+                } else {
+                    // Se não foi uma operação de mover, apenas atualiza a subcategoria
+                    await db.collection('oddcategorias').doc(selectedOddId).update(formData);
+                    alert('Subcategoria atualizada com sucesso!');
+                }
+                
+            } else { // Lógica original para 'categoria' e '3cat'
+                if (tipoCategoria === 'categoria') {
+                    formData.nomecategoria = nomeCategoriaInput ? nomeCategoriaInput.value.trim() : '';
+                    if (!formData.nomecategoria) throw new Error("O campo 'Nome da Categoria' é obrigatório.");
+                } else if (tipoCategoria === '3cat') {
+                    formData.nome3categoria = nomeTerceiraCategoriaInput ? nomeTerceiraCategoriaInput.value.trim() : '';
+                    formData.categoriapai = categoriaDropdown ? categoriaDropdown.value : '';
+                    formData.subcategoriapai = subcategoriaPaiSelect ? subcategoriaPaiSelect.value : '';
+                    if (!formData.nome3categoria) throw new Error("O campo 'Nome da 3ª Categoria' é obrigatório.");
+                    if (!formData.categoriapai) throw new Error("É necessário selecionar uma Categoria pai.");
+                    if (!formData.subcategoriapai) throw new Error("É necessário selecionar uma Subcategoria pai.");
+                }
+                // Executa a atualização simples para 'categoria' e '3cat'
+                await db.collection('oddcategorias').doc(selectedOddId).update(formData);
+                alert('Odd atualizada com sucesso!');
+            }
+            // ---------- FIM DA NOVA LÓGICA ----------
+
+            if (oddsTreeViewDiv && (oddsTreeViewDiv.style.display === 'block' || (oddsTreeViewDiv.innerHTML && oddsTreeViewDiv.innerHTML.trim() !== ''))) {
+                renderOddsTree();
+            }
+            preencherFormulario(selectedOddId);
+
+        } catch (error) {
+            console.error('Erro ao salvar alterações:', error);
+            alert(`Erro ao salvar: ${error.message}\nPor favor, verifique os campos e tente novamente.`);
+        } finally {
+            if (submitButton) {
+                submitButton.disabled = false;
+                submitButton.textContent = 'Salvar Alterações';
+            }
+        }
+    });
+}
 
         // ------------- Initial Page Load Setup -------------
         function initializePage() {
