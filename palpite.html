@@ -147,7 +147,50 @@
         .remove-prediction-btn:hover {
             background-color: #c82333; /* Vermelho mais escuro */
         }
+
+         #category-shortcuts-container {
+            margin: 0 0 20px 0;
+            padding: 0 10px;
+        }
+
+       .shortcuts-wrapper {
+            display: flex;
+            justify-content: center; /* ADICIONADA ESTA LINHA PARA CENTRAR */
+            gap: 10px;
+            overflow-x: auto;
+            padding-bottom: 10px;
+            -webkit-overflow-scrolling: touch;
+        }
         
+        .shortcuts-wrapper::-webkit-scrollbar {
+            display: none;
+        }
+
+        .category-shortcut {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #fff;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            width: 50px; /* Largura fixa para um quadrado perfeito */
+            height: 50px; /* Altura fixa */
+            flex-shrink: 0;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .category-shortcut:hover {
+            border-color: #2176ff;
+            background-color: #f0f7ff;
+            transform: translateY(-2px);
+        }
+
+        .shortcut-icon {
+            font-size: 24px;
+            /* A margem de baixo foi removida pois não há mais texto */
+        }
+
    </style>
 </head>
 <body>
@@ -157,6 +200,7 @@
     <div class="content">
         <h1></h1>
         <div id="game-container"></div>
+        <div id="category-shortcuts-container"></div>
         <div id="odds-list-container"></div>
         <div id="submit-button-container"></div>
     </div>
@@ -231,110 +275,85 @@
         }
 
         // Lógica de Renderização da Lista (Acordeão Aninhado)
-     function renderOddsList(hierarchy) {
+      function renderOddsList(hierarchy) {
             const container = document.getElementById('odds-list-container');
             container.innerHTML = '';
+            
+            const shortcutsContainer = document.getElementById('category-shortcuts-container');
+            let shortcutsHtml = '';
+
             hierarchy.forEach(category => {
                 if (category.children.length === 0) return;
+
+                // --- INÍCIO DA ALTERAÇÃO ---
+                // O HTML do atalho agora não tem o span de texto e inclui um atributo "title"
+                shortcutsHtml += `
+                    <div class="category-shortcut" onclick="scrollToCategory('${category.id}')" title="${replaceTeamPlaceholders(category.nomecategoria)}">
+                        <span class="shortcut-icon">${category.icon || '⭐'}</span>
+                    </div>
+                `;
+                // --- FIM DA ALTERAÇÃO ---
+
                 const categoryElement = document.createElement('div');
                 categoryElement.className = 'odds-category';
-                
-                let subcategoriesHTML = '';
-                let filterBarHtml = ''; // Variável para o HTML do filtro
+                categoryElement.id = category.id;
 
-                // --- INÍCIO DA LÓGICA DE FILTRO ---
-                // Verifica se a categoria é uma das especiais para adicionar o filtro
+                let filterBarHtml = '';
                 if (category.nomecategoria === 'Por Parte') {
-                    filterBarHtml = `
-                        <div class="subcategory-filter-container">
-                            <strong>Filtro:</strong>
-                            <button class="filter-btn active" onclick="applyFilter(this, '${category.id}', 'all')">Todas</button>
-                            <button class="filter-btn" onclick="applyFilter(this, '${category.id}', '1st Half')">Primeira Parte</button>
-                            <button class="filter-btn" onclick="applyFilter(this, '${category.id}', '2nd Half')">Segunda Parte</button>
-                        </div>
-                    `;
+                    filterBarHtml = `<div class="subcategory-filter-container"><strong>Filtro:</strong><button class="filter-btn active" onclick="applyFilter(this, '${category.id}', 'all')">Todas</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', '1st Half')">Primeira Parte</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', '2nd Half')">Segunda Parte</button></div>`;
+                } else if (category.nomecategoria === 'Mercados Combinados') {
+                    filterBarHtml = `<div class="subcategory-filter-container"><strong>Filtro:</strong><button class="filter-btn active" onclick="applyFilter(this, '${category.id}', 'all')">Todos</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'home')">${currentGame.equipaCasa}</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'away')">${currentGame.equipaFora}</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'both')">Ambas</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'others')">Outras Odds</button></div>`;
+                } else if (category.nomecategoria === 'Mercados Especiais') {
+                    filterBarHtml = `<div class="subcategory-filter-container"><strong>Filtro:</strong><button class="filter-btn active" onclick="applyFilter(this, '${category.id}', 'all')">Todos</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'home_special')">${currentGame.equipaCasa}</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'away_special')">${currentGame.equipaFora}</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'others_special')">Outras Odds</button></div>`;
                 } else if (category.nomecategoria === 'Específicos por Equipa') {
-                    const homeTeam = currentGame.equipaCasa;
-                    const awayTeam = currentGame.equipaFora;
-                    filterBarHtml = `
-                        <div class="subcategory-filter-container">
-                            <strong>Filtro:</strong>
-                            <button class="filter-btn active" onclick="applyFilter(this, '${category.id}', 'all')">Todos</button>
-                            <button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'home_team_specific')">${homeTeam}</button>
-                            <button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'away_team_specific')">${awayTeam}</button>
-                            <button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'others_team_specific')">Outras Odds</button>
-                        </div>
-                    `;
-
-
-                     } else if (category.nomecategoria === 'Mercados Especiais') {
-                    const homeTeam = currentGame.equipaCasa;
-                    const awayTeam = currentGame.equipaFora;
-                    filterBarHtml = `
-                        <div class="subcategory-filter-container">
-                            <strong>Filtro:</strong>
-                            <button class="filter-btn active" onclick="applyFilter(this, '${category.id}', 'all')">Todos</button>
-                            <button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'home')">${homeTeam}</button>
-                            <button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'away')">${awayTeam}</button>
-                            <button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'others_no_both')">Outras Odds</button>
-                        </div>
-                    `;
+                    filterBarHtml = `<div class="subcategory-filter-container"><strong>Filtro:</strong><button class="filter-btn active" onclick="applyFilter(this, '${category.id}', 'all')">Todos</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'home_team_specific')">${currentGame.equipaCasa}</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'away_team_specific')">${currentGame.equipaFora}</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'others_team_specific')">Outras Odds</button></div>`;
                 }
-                // --- FIM DA LÓGICA DE FILTRO ---
 
+                let subcategoriesHTML = '';
                 category.children.forEach(subcategory => {
                     if (subcategory.children.length === 0) return;
                     let itemsHTML = '';
                     subcategory.children.forEach(item => {
-                        const predictionData = {
-                            value: `${category.nomecategoria} - ${subcategory.nomesubcategoria} - ${item.nome3categoria}`,
-                            catIndice: category.indiceIngles || null,
-                            subcatIndice: subcategory.indiceIngles || null,
-                            cat3Indice: item.indiceIngles || null
-                        };
-
+                        const predictionData = { value: `${category.nomecategoria} - ${subcategory.nomesubcategoria} - ${item.nome3categoria}`, catIndice: category.indiceIngles || null, subcatIndice: subcategory.indiceIngles || null, cat3Indice: item.indiceIngles || null };
                         let infoIconHTML = '';
                         if (item.breveDescricao && item.breveDescricao.trim() !== '') {
                             infoIconHTML = `<div class="info-container"><i class="fas fa-info-circle info-icon"></i><div class="info-tooltip">${replaceTeamPlaceholders(item.breveDescricao)}</div></div>`;
                         }
-
- itemsHTML += `
-                            <li class="odds-item" data-prediction='${JSON.stringify(predictionData)}'>
-                                ${infoIconHTML}
-                                <span class="odds-item-text">${replaceTeamPlaceholders(item.nome3categoria)}</span>
-                            </li>`;                    });
-
-                    // Adiciona classe e data-attribute para a filtragem
+                        itemsHTML += `<li class="odds-item" data-prediction='${JSON.stringify(predictionData)}'>${infoIconHTML}<span class="odds-item-text">${replaceTeamPlaceholders(item.nome3categoria)}</span></li>`;
+                    });
                     const subcatIndiceIngles = subcategory.indiceIngles || '';
-                    subcategoriesHTML += `
-                        <li class="filterable-subcategory" data-indice-ingles="${subcatIndiceIngles}">
-                            <div class="subcategory-header">
-                                <span>${replaceTeamPlaceholders(subcategory.nomesubcategoria)}</span>
-                                <i class="fas fa-chevron-down toggle-icon"></i>
-                            </div>
-                            <ul class="nested-list"><ul class="odds-items-grid">${itemsHTML}</ul></ul>
-                        </li>`;
+                    subcategoriesHTML += `<li class="filterable-subcategory" data-indice-ingles="${subcatIndiceIngles}"><div class="subcategory-header"><span>${replaceTeamPlaceholders(subcategory.nomesubcategoria)}</span><i class="fas fa-chevron-down toggle-icon"></i></div><ul class="nested-list"><ul class="odds-items-grid">${itemsHTML}</ul></ul></li>`;
                 });
                 
                 if (subcategoriesHTML === '') return;
-                
-                // Monta o HTML final da categoria, incluindo a barra de filtro (se houver)
-                categoryElement.innerHTML = `
-                    <div class="category-header">
-                        <span class="category-header-title">
-                            <span>${category.icon || '⭐'}</span>
-                            <span>${replaceTeamPlaceholders(category.nomecategoria)}</span>
-                        </span>
-                        <i class="fas fa-chevron-down toggle-icon"></i>
-                    </div>
-                    <ul class="nested-list">
-                        ${filterBarHtml}
-                        ${subcategoriesHTML}
-                    </ul>`;
+                categoryElement.innerHTML = `<div class="category-header"><span class="category-header-title"><span>${category.icon || '⭐'}</span><span>${replaceTeamPlaceholders(category.nomecategoria)}</span></span><i class="fas fa-chevron-down toggle-icon"></i></div><ul class="nested-list">${filterBarHtml}${subcategoriesHTML}</ul>`;
                 container.appendChild(categoryElement);
             });
+            
+            if (shortcutsHtml) {
+                shortcutsContainer.innerHTML = `<div class="shortcuts-wrapper">${shortcutsHtml}</div>`;
+            }
             addEventListenersToList();
         }
+
+
+
+          window.scrollToCategory = function(targetId) {
+            const targetElement = document.getElementById(targetId);
+            if (!targetElement) return;
+
+            // 1. Faz o scroll suave até ao topo da categoria
+            targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+            // 2. Encontra o cabeçalho e abre o toggle (se não estiver já aberto)
+            const header = targetElement.querySelector('.category-header');
+            if (header && !header.classList.contains('active')) {
+                // Adiciona um pequeno atraso para garantir que a animação de scroll não interfere com o clique
+                setTimeout(() => {
+                    header.click();
+                }, 300); // 300ms é geralmente suficiente
+            }
+        };
 
     window.applyFilter = function(clickedButton, categoryId, filterKeyword) {
             const filterContainer = clickedButton.parentElement;
