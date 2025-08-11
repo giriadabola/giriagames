@@ -102,6 +102,52 @@
         .info-tooltip.tooltip-adjust-left::after { left: auto; right: 10px; margin-left: 0; }
         .info-tooltip.tooltip-adjust-right { left: 0; margin-left: 0; }
         .info-tooltip.tooltip-adjust-right::after { left: 10px; margin-left: 0; }
+
+         .confirmation-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            text-align: left;
+        }
+
+        .confirmation-list-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .confirmation-list-item:last-child {
+            border-bottom: none;
+        }
+
+        .confirmation-list-item span {
+            flex-grow: 1;
+            margin-right: 15px;
+        }
+
+        .remove-prediction-btn {
+            background-color: #dc3545; /* Vermelho */
+            color: white;
+            border: none;
+            border-radius: 50%; /* Círculo perfeito */
+            width: 24px;
+            height: 24px;
+            font-size: 16px;
+            font-weight: bold;
+            line-height: 24px; /* Alinha o "×" verticalmente */
+            text-align: center;
+            cursor: pointer;
+            padding: 0;
+            flex-shrink: 0; /* Impede que o botão encolha */
+            transition: background-color 0.2s ease;
+        }
+
+        .remove-prediction-btn:hover {
+            background-color: #c82333; /* Vermelho mais escuro */
+        }
+        
    </style>
 </head>
 <body>
@@ -460,21 +506,56 @@
         }
         
         // Funções de Submissão
-        window.submitPredictions = function() {
+    window.submitPredictions = function() {
             if (selectedPredictions.length !== maxPredictions) {
                 showErrorPopup(`Deve selecionar exatamente ${maxPredictions} palpites. Atualmente tem ${selectedPredictions.length}.`);
                 return;
             }
             const confirmationPopup = document.getElementById('confirmation-popup');
             const confirmationPredictions = document.getElementById('confirmation-predictions');
-            let predictionsHtml = '<div style="text-align: left; padding-left: 20px;"><ul>';
-            selectedPredictions.forEach(prediction => {
-                predictionsHtml += `<li style="margin: 5px 0;"><strong>${replaceTeamPlaceholders(prediction.value)}</strong></li>`;
+
+            // --- INÍCIO DA ALTERAÇÃO ---
+            // Usamos uma lista <ul> com uma classe para melhor estilização
+            let predictionsHtml = '<ul class="confirmation-list">';
+            selectedPredictions.forEach((prediction, index) => {
+                // Adiciona o item da lista com o nome do palpite e um botão "remover"
+                // O botão chama a nova função removePredictionFromPopup() com o índice do palpite
+                predictionsHtml += `
+                    <li class="confirmation-list-item">
+                        <span><strong>${replaceTeamPlaceholders(prediction.value)}</strong></span>
+                        <button class="remove-prediction-btn" onclick="removePredictionFromPopup(${index})" title="Remover este palpite">×</button>
+                    </li>`;
             });
-            predictionsHtml += '</ul></div>';
+            predictionsHtml += '</ul>';
+            // --- FIM DA ALTERAÇÃO ---
+
             confirmationPredictions.innerHTML = predictionsHtml;
             confirmationPopup.style.display = 'block';
         }
+
+          window.removePredictionFromPopup = function(indexToRemove) {
+            // 1. Guarda o valor do palpite que será removido para encontrá-lo na página principal
+            const predictionValue = selectedPredictions[indexToRemove].value;
+
+            // 2. Remove o palpite do array principal de seleções
+            selectedPredictions.splice(indexToRemove, 1);
+
+            // 3. Encontra o botão (.odds-item) correspondente na página e remove a sua classe "selected"
+            const allItems = document.querySelectorAll('.odds-item');
+            for (const item of allItems) {
+                const itemData = JSON.parse(item.dataset.prediction);
+                if (itemData.value === predictionValue) {
+                    item.classList.remove('selected');
+                    break; // Para o loop assim que encontrar o item
+                }
+            }
+
+            // 4. Atualiza a interface principal (contagem de palpites, botões desativados, etc.)
+            updateUI();
+
+            // 5. Fecha o painel de confirmação, forçando o utilizador a re-selecionar ou a reenviar
+            closeConfirmationPopup();
+        };
 
         window.confirmPredictions = async function() {
             try {
