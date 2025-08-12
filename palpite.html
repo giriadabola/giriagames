@@ -191,6 +191,10 @@
             /* A margem de baixo foi removida pois não há mais texto */
         }
 
+        .menu-item.hidden {
+    display: none;
+}
+
    </style>
 </head>
 <body>
@@ -204,8 +208,28 @@
         <div id="odds-list-container"></div>
         <div id="submit-button-container"></div>
     </div>
-    <nav class="bottom-menu"><a href="1x.html" class="menu-item"><i class="fas fa-home"></i></a><a href="market.html" class="menu-item"><i class="fas fa-shopping-cart"></i></a><a href="team.html" class="menu-item"><i class="fas fa-users"></i></a><a href="empire.html" class="menu-item"><i class="fas fa-landmark"></i></a><a href="rankings.html" class="menu-item"><i class="fas fa-list"></i></a><a href="profile.html" class="menu-item"><i class="fas fa-user"></i></a></nav>
-
+<nav class="bottom-menu">
+    <!-- Adicionado data-key a todos os itens -->
+    <a href="1x.html" class="menu-item active" data-key="1x">
+        <i class="fas fa-home"></i>
+    </a>
+    <a href="market.html" class="menu-item" data-key="market">
+        <i class="fas fa-shopping-cart"></i>
+    </a>
+    <a href="team.html" class="menu-item" data-key="team">
+        <i class="fas fa-users"></i>
+    </a>
+    <a href="empire.html" class="menu-item" data-key="empire">
+        <!-- O ícone do império pode necessitar de estilos próprios se os tiver -->
+        <i class="fas fa-landmark"></i>
+    </a>
+    <a href="rankings.html" class="menu-item" data-key="rankings">
+        <i class="fas fa-list"></i>
+    </a>
+    <a href="profile.html" class="menu-item" data-key="profile">
+        <i class="fas fa-user"></i>
+    </a>
+</nav>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getFirestore, doc, getDoc, addDoc, collection, serverTimestamp, getDocs, query, where, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
@@ -741,15 +765,122 @@
         }
         
         // Ponto de Entrada da Aplicação
-        onAuthStateChanged(auth, async (user) => {
-            if (user) { await loadGameDetails(); } 
-            else { window.location.href = 'index.html'; }
-        });
+     let currentUserStatus = null; // Variável para guardar o estatuto do utilizador
 
-        // --- NOVO: Limpeza do intervalo ao sair da página ---
-        window.addEventListener('beforeunload', () => {
-            clearInterval(countdownInterval);
-        });
+// --- Função para carregar as Definições do Menu ---
+async function loadMenuSettings() {
+    try {
+        const menuSettingsDocRef = doc(db, 'paineis', 'paineis menu');
+        const docSnap = await getDoc(menuSettingsDocRef);
+        return docSnap.exists() ? docSnap.data() : null;
+    } catch (error) {
+        return null;
+    }
+}
+
+// --- Função para verificar o acesso à página ---
+function checkPageAccess(userStatus, menuSettings) {
+    if (!menuSettings) {
+        console.warn("Definições do menu não disponíveis.");
+        // Acesso por defeito apenas para 'ruler' se as definições falharem
+        return userStatus === 'ruler';
+    }
+
+    // Alterado de 'rankings' para '1x' para corresponder a esta página
+    const pageAccessEnabled = menuSettings['1x'] === 'on';
+
+    if (pageAccessEnabled) {
+        return true; // Acesso garantido se a página estiver 'on'
+    } else {
+        // Acesso garantido apenas se a página estiver 'off' MAS o utilizador for 'ruler'
+        return userStatus === 'ruler';
+    }
+}
+
+// --- Função para atualizar a Visibilidade dos Itens do Menu ---
+function updateMenuVisibility(menuSettings) {
+    if (!menuSettings) {
+        console.warn("Não é possível atualizar a visibilidade do menu, definições nulas.");
+        return;
+    }
+    const menuItems = document.querySelectorAll('.bottom-menu .menu-item');
+    menuItems.forEach(item => {
+        const key = item.getAttribute('data-key');
+        if (key) {
+            if (menuSettings[key] === 'off') {
+                item.classList.add('hidden');
+            } else {
+                item.classList.remove('hidden');
+            }
+        }
+    });
+}
+
+// --- Função para obter o Estatuto do Utilizador ---
+async function getUserStatus(userId) {
+    try {
+        const userDocRef = doc(db, 'users', userId);
+        const docSnap = await getDoc(userDocRef);
+        if (docSnap.exists()) {
+            const userData = docSnap.data();
+            if (userData.aceite !== "Yes") {
+                return null; // Não aceite, estatuto inválido
+            }
+            return userData.estatuto || null;
+        } else {
+            return null; // Documento não existe
+        }
+    } catch (error) {
+        console.error('Erro ao obter o estatuto do utilizador:', error);
+        return null;
+    }
+}
+
+// --- Ponto de Entrada da Aplicação (Lógica de Autenticação Consolidada) ---
+onAuthStateChanged(auth, async (user) => {
+    if (user) {
+        // 1. Obter o Estatuto do Utilizador
+        currentUserStatus = await getUserStatus(user.uid);
+
+        // Redirecionar imediatamente se o estatuto for inválido (não encontrado, não aceite)
+        if (currentUserStatus === null) {
+            console.log("Redirecionando: Estatuto do utilizador nulo.");
+            window.location.href = '404.html';
+            return; // Parar execução
+        }
+
+        // 2. Carregar as Definições do Menu
+        const menuSettings = await loadMenuSettings();
+
+        // 3. Verificar o Acesso à Página
+        const hasAccess = checkPageAccess(currentUserStatus, menuSettings);
+
+        if (hasAccess) {
+            // 4. Atualizar a Visibilidade do Menu (apenas se tiver acesso)
+            updateMenuVisibility(menuSettings);
+
+            // 5. Carregar o Conteúdo da Página
+            // Conteúdo específico desta página é carregado aqui
+            await loadGameDetails();
+
+        } else {
+            // Redirecionar se o acesso for negado
+            console.log("Redirecionando: Acesso negado pelas regras.");
+            window.location.href = '404.html';
+        }
+
+    } else {
+        // Utilizador não está logado
+        console.log("Redirecionando: Nenhum utilizador logado.");
+        loadingScreen.style.display = 'none';
+        window.location.href = 'index.html';
+    }
+});
+
+// --- NOVO: Limpeza do intervalo ao sair da página (MANTENHA ISTO) ---
+window.addEventListener('beforeunload', () => {
+    clearInterval(countdownInterval);
+});
 
     </script>
 </body>
