@@ -223,449 +223,451 @@
     </nav>
 
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, doc, getDoc, collection, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getFirestore, doc, getDoc, collection, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
-        // --- Firebase Configuration (Keep yours) ---
-        const firebaseConfig = {
-            apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0",
-            authDomain: "g-games-8a8fc.firebaseapp.com",
-            projectId: "g-games-8a8fc",
-            storageBucket: "g-games-8a8fc.firebasestorage.app",
-            messagingSenderId: "689897349449",
-            appId: "1:689897349449:web:536599794579901beb7a98",
-            measurementId: "G-GTTPJ6G5MD"
-        };
-        // --- ---
+    // --- Firebase Configuration (Keep yours) ---
+    const firebaseConfig = {
+        apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0",
+        authDomain: "g-games-8a8fc.firebaseapp.com",
+        projectId: "g-games-8a8fc",
+        storageBucket: "g-games-8a8fc.firebasestorage.app",
+        messagingSenderId: "689897349449",
+        appId: "1:689897349449:web:536599794579901beb7a98",
+        measurementId: "G-GTTPJ6G5MD"
+    };
+    // --- ---
 
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-        const auth = getAuth(app);
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
 
-        const loadingScreen = document.getElementById('loading-screen');
-        const content = document.querySelector('.content');
-        const rankingsBody = document.getElementById('rankings-body');
-        let currentUserStatus = null; // Store user status (estatuto)
-        // Removed global menuVisibilitySettings, fetch within onAuthStateChanged
+    const loadingScreen = document.getElementById('loading-screen');
+    const content = document.querySelector('.content');
+    const rankingsBody = document.getElementById('rankings-body');
+    let currentUserStatus = null; // Store user status (estatuto)
+    // Removed global menuVisibilitySettings, fetch within onAuthStateChanged
 
-        // --- Function to load Menu Settings ---
-        async function loadMenuSettings() {
-            try {
-                const menuSettingsDocRef = doc(db, 'paineis', 'paineis menu');
-                const docSnap = await getDoc(menuSettingsDocRef);
-                if (docSnap.exists()) {
-                    // console.log("Menu settings loaded:", docSnap.data()); // Debugging
-                    return docSnap.data();
-                } else {
-                    return null; // Return null if document doesn't exist
-                }
-            } catch (error) {
-                return null; // Return null on error
-            }
-        }
-
-        // --- Function to check page access based on status and menu settings ---
-        function checkPageAccess(userStatus, menuSettings) {
-            // Check if menu settings were loaded
-            if (!menuSettings) {
-                console.warn("Menu settings not available for access check.");
-                // Default behavior if settings are missing: only ruler access
-                return userStatus === 'ruler';
-            }
-
-            // Check the 'rankings' setting
-            const rankingsEnabled = menuSettings['rankings'] === 'on';
-            // console.log(`Rankings Enabled: ${rankingsEnabled}, User Status: ${userStatus}`); // Debugging
-
-            if (rankingsEnabled) {
-                return true; // Access granted if rankings are 'on'
+    // --- Function to load Menu Settings ---
+    async function loadMenuSettings() {
+        try {
+            const menuSettingsDocRef = doc(db, 'paineis', 'paineis menu');
+            const docSnap = await getDoc(menuSettingsDocRef);
+            if (docSnap.exists()) {
+                // console.log("Menu settings loaded:", docSnap.data()); // Debugging
+                return docSnap.data();
             } else {
-                // Access granted only if rankings are 'off' BUT user is 'ruler'
-                return userStatus === 'ruler';
+                return null; // Return null if document doesn't exist
             }
+        } catch (error) {
+            return null; // Return null on error
+        }
+    }
+
+    // --- Function to check page access based on status and menu settings ---
+    function checkPageAccess(userStatus, menuSettings) {
+        // Check if menu settings were loaded
+        if (!menuSettings) {
+            console.warn("Menu settings not available for access check.");
+            // Default behavior if settings are missing: only ruler access
+            return userStatus === 'ruler';
         }
 
-        // --- Function to update Menu Item Visibility ---
-        function updateMenuVisibility(menuSettings) {
-            console.log("Attempting to update menu visibility. Settings received:", menuSettings); // Log received settings
+        // Check the 'rankings' setting
+        const rankingsEnabled = menuSettings['rankings'] === 'on';
+        // console.log(`Rankings Enabled: ${rankingsEnabled}, User Status: ${userStatus}`); // Debugging
 
-            if (!menuSettings) {
-                console.warn("Cannot update menu visibility, settings object is null or undefined.");
-                return; // Do nothing if settings aren't available
-            }
+        if (rankingsEnabled) {
+            return true; // Access granted if rankings are 'on'
+        } else {
+            // Access granted only if rankings are 'off' BUT user is 'ruler'
+            return userStatus === 'ruler';
+        }
+    }
 
-            const menuItems = document.querySelectorAll('.bottom-menu .menu-item');
-            console.log(`Found ${menuItems.length} menu items to process.`); // Log how many items were found
+    // --- Function to update Menu Item Visibility ---
+    function updateMenuVisibility(menuSettings) {
+        console.log("Attempting to update menu visibility. Settings received:", menuSettings); // Log received settings
 
-            menuItems.forEach(item => {
-                const key = item.getAttribute('data-key');
-                if (key) { // Check if data-key exists
-                    const settingValue = menuSettings[key];
-                    console.log(`Processing item with data-key="${key}". Firestore setting value:`, settingValue); // Log key and its value
-
-                    if (settingValue === 'off') {
-                        console.log(`   -> Setting is 'off'. Adding 'hidden' class to`, item); // Log action
-                        item.classList.add('hidden');
-                    } else {
-                        console.log(`   -> Setting is NOT 'off' (it's '${settingValue}'). Removing 'hidden' class from`, item); // Log action
-                        item.classList.remove('hidden');
-                    }
-                } else {
-                    console.warn("Found a menu item without a data-key attribute:", item); // Warn about items missing the key
-                }
-            });
-            console.log("Menu visibility update complete."); // Log completion
+        if (!menuSettings) {
+            console.warn("Cannot update menu visibility, settings object is null or undefined.");
+            return; // Do nothing if settings aren't available
         }
 
+        const menuItems = document.querySelectorAll('.bottom-menu .menu-item');
+        console.log(`Found ${menuItems.length} menu items to process.`); // Log how many items were found
 
-        // --- Function to get User Status (estatuto) ---
-        async function getUserStatus(userId) {
-            try {
-                const userDocRef = doc(db, 'users', userId);
-                const docSnap = await getDoc(userDocRef);
-                if (docSnap.exists()) {
-                    const userData = docSnap.data();
-                    // Ensure user is accepted before returning status
-                    if (userData.aceite !== "Yes") {
-                        console.log(`User ${userId} has not accepted terms.`);
-                        return null; // Treat as not valid if terms not accepted
-                    }
-                    // console.log(`User Status for ${userId}:`, userData.estatuto); // Debugging
-                    return userData.estatuto || null; // Return estatuto or null if missing
+        menuItems.forEach(item => {
+            const key = item.getAttribute('data-key');
+            if (key) { // Check if data-key exists
+                const settingValue = menuSettings[key];
+                console.log(`Processing item with data-key="${key}". Firestore setting value:`, settingValue); // Log key and its value
+
+                if (settingValue === 'off') {
+                    console.log(`   -> Setting is 'off'. Adding 'hidden' class to`, item); // Log action
+                    item.classList.add('hidden');
                 } else {
-                    console.warn(`User document not found for ID: ${userId}`);
-                    return null; // User document doesn't exist
+                    console.log(`   -> Setting is NOT 'off' (it's '${settingValue}'). Removing 'hidden' class from`, item); // Log action
+                    item.classList.remove('hidden');
                 }
-            } catch (error) {
-                console.error('Error fetching user status:', error);
-                return null; // Return null on error
-            }
-        }
-
-        // --- Consolidated Authentication and Initialization Logic ---
-        onAuthStateChanged(auth, async (user) => {
-            if (user) {
-                // 1. Get User Status
-                currentUserStatus = await getUserStatus(user.uid);
-
-                // Redirect immediately if user status is invalid (not found, not accepted)
-                if (currentUserStatus === null) {
-                    console.log("Redirecting: User status is null (not found or not accepted).");
-                    window.location.href = '404.html';
-                    return; // Stop further execution
-                }
-
-                // 2. Load Menu Settings
-                const menuSettings = await loadMenuSettings();
-
-                // 3. Check Page Access
-                const hasAccess = checkPageAccess(currentUserStatus, menuSettings);
-
-                if (hasAccess) {
-                    // 4. Update Menu Visibility (only if user has access)
-                    updateMenuVisibility(menuSettings);
-
-                    // 5. Load Page Content (Rankings)
-                    await loadSeasons(); // Load rankings data
-
-                    // 6. Show Content and Hide Loader
-                    loadingScreen.style.display = 'none';
-                    content.style.display = 'block';
-                } else {
-                    // Redirect if access is denied based on rules
-                    console.log("Redirecting: Access denied based on menu settings and user status.");
-                    window.location.href = '404.html';
-                }
-
             } else {
-                // User is signed out
-                console.log("Redirecting: No user signed in.");
-                loadingScreen.style.display = 'none'; // Hide loader before redirecting
-                window.location.href = 'index.html';
+                console.warn("Found a menu item without a data-key attribute:", item); // Warn about items missing the key
             }
         });
+        console.log("Menu visibility update complete."); // Log completion
+    }
 
 
-        // --- Load Seasons and Rankings (No changes needed here) ---
-        async function loadSeasons() {
+    // --- Function to get User Status (estatuto) ---
+    async function getUserStatus(userId) {
+        try {
+            const userDocRef = doc(db, 'users', userId);
+            const docSnap = await getDoc(userDocRef);
+            if (docSnap.exists()) {
+                const userData = docSnap.data();
+                // Ensure user is accepted before returning status
+                if (userData.aceite !== "Yes") {
+                    console.log(`User ${userId} has not accepted terms.`);
+                    return null; // Treat as not valid if terms not accepted
+                }
+                // console.log(`User Status for ${userId}:`, userData.estatuto); // Debugging
+                return userData.estatuto || null; // Return estatuto or null if missing
+            } else {
+                console.warn(`User document not found for ID: ${userId}`);
+                return null; // User document doesn't exist
+            }
+        } catch (error) {
+            console.error('Error fetching user status:', error);
+            return null; // Return null on error
+        }
+    }
+
+    // --- Consolidated Authentication and Initialization Logic ---
+    onAuthStateChanged(auth, async (user) => {
+        if (user) {
+            // 1. Get User Status
+            currentUserStatus = await getUserStatus(user.uid);
+
+            // Redirect immediately if user status is invalid (not found, not accepted)
+            if (currentUserStatus === null) {
+                console.log("Redirecting: User status is null (not found or not accepted).");
+                window.location.href = '404.html';
+                return; // Stop further execution
+            }
+
+            // 2. Load Menu Settings
+            const menuSettings = await loadMenuSettings();
+
+            // 3. Check Page Access
+            const hasAccess = checkPageAccess(currentUserStatus, menuSettings);
+
+            if (hasAccess) {
+                // 4. Update Menu Visibility (only if user has access)
+                updateMenuVisibility(menuSettings);
+
+                // 5. Load Page Content (Rankings)
+                await loadSeasons(); // Load rankings data
+
+                // 6. Show Content and Hide Loader
+                loadingScreen.style.display = 'none';
+                content.style.display = 'block';
+            } else {
+                // Redirect if access is denied based on rules
+                console.log("Redirecting: Access denied based on menu settings and user status.");
+                window.location.href = '404.html';
+            }
+
+        } else {
+            // User is signed out
+            console.log("Redirecting: No user signed in.");
+            loadingScreen.style.display = 'none'; // Hide loader before redirecting
+            window.location.href = 'index.html';
+        }
+    });
+
+
+    // --- Load Seasons and Rankings (No changes needed here) ---
+    async function loadSeasons() {
+        const palpitesRef = collection(db, 'palpites');
+        const palpitesSnap = await getDocs(palpitesRef);
+        const seasons = new Set();
+
+        palpitesSnap.forEach(doc => {
+            const temporada = doc.data().temporada;
+            if (temporada) seasons.add(temporada);
+        });
+
+        const sortedSeasons = Array.from(seasons).sort((a, b) => b.localeCompare(a));
+
+        if (sortedSeasons.length > 0) {
+            const mostRecentSeason = sortedSeasons[0];
+            await loadRankings(mostRecentSeason);
+        } else {
+            rankingsBody.innerHTML = '<tr><td colspan="4">Sem épocas disponíveis.</td></tr>';
+        }
+    }
+
+    async function loadRankings(season) {
+        const usersRef = collection(db, 'users');
+        const usersSnap = await getDocs(usersRef);
+        const rankings = [];
+
+        usersSnap.forEach(userDoc => {
+            const userData = userDoc.data();
+             // Filter out users who haven't accepted or don't have 'estatuto' (optional, but good practice)
+            if (userData.aceite === "Yes" && userData.estatuto) {
+                const seasonPointsKey = season.replace('/', '') + 'Pontos'; // e.g., 20232024Pontos
+                const seasonPoints = userData[seasonPointsKey] || 0;
+                rankings.push({
+                    userId: userDoc.id,
+                    username: userData.nomeDeUsuario || 'Utilizador Desconhecido',
+                    points: seasonPoints
+                });
+             }
+        });
+
+        rankings.sort((a, b) => b.points - a.points);
+        rankingsBody.innerHTML = '';
+
+        const totalUsers = rankings.length;
+        if (totalUsers === 0) {
+             rankingsBody.innerHTML = '<tr><td colspan="4">Sem jogadores classificados para esta época.</td></tr>';
+             return;
+        }
+
+
+        rankings.forEach((rank, index) => {
+            const row = document.createElement('tr');
+            const position = index + 1;
+            const positionCell = document.createElement('td');
+            const playerCell = document.createElement('td');
+            const pointsCell = document.createElement('td');
+            const infoCell = document.createElement('td');
+
+            const percentage = totalUsers > 1 ? position / totalUsers : 0; // Avoid division by zero, handle single user case
+
+            let backgroundColor;
+            if (percentage <= 0.33) {
+                const factor = percentage / 0.33;
+                const green = Math.floor(200 - 100 * factor); // Darker green at top
+                backgroundColor = `rgba(50, ${green}, 50, 0.2)`;
+            } else if (percentage <= 0.67) {
+                 const factor = (percentage - 0.33) / 0.34;
+                 const yellowComp = Math.floor(200 - 100 * factor); // From bright yellow to darker orange/yellow
+                 backgroundColor = `rgba(${yellowComp}, ${yellowComp}, 50, 0.2)`;
+            } else {
+                 const factor = (percentage - 0.67) / 0.33;
+                 const red = Math.floor(200 - 100 * factor); // From bright red to darker red
+                 backgroundColor = `rgba(${red}, 50, 50, 0.2)`;
+            }
+
+
+            positionCell.innerHTML = `<div class="position-circle">${position}</div>`;
+            playerCell.innerHTML = `<span>${rank.username}</span>`;
+            pointsCell.textContent = rank.points;
+            infoCell.innerHTML = `<i class="fas fa-info-circle info-icon" data-userid="${rank.userId}" data-season="${season}"></i>`;
+
+            row.style.backgroundColor = backgroundColor;
+
+
+            row.appendChild(positionCell);
+            row.appendChild(playerCell);
+            row.appendChild(pointsCell);
+            row.appendChild(infoCell);
+
+            const infoIcon = infoCell.querySelector('.info-icon');
+            infoIcon.addEventListener('click', () => togglePredictions(rank.userId, season));
+
+            rankingsBody.appendChild(row);
+        });
+    }
+
+
+    // --- Toggle Predictions Popup Logic (Unchanged, but ensure Firestore queries are correct) ---
+    let selectedRounds = {}; // Store selected round per user/season key
+
+    async function togglePredictions(userId, season) {
+        const popup = document.getElementById('predictions-popup');
+        const popupBody = document.getElementById('popup-predictions-body');
+        const roundFilter = document.getElementById('round-filter');
+
+         // Show loading indicator inside popup maybe?
+         popupBody.innerHTML = 'A carregar previsões...';
+         popup.style.display = "block"; // Show popup immediately
+
+        try {
             const palpitesRef = collection(db, 'palpites');
-            const palpitesSnap = await getDocs(palpitesRef);
-            const seasons = new Set();
+            const q = query(palpitesRef,
+                where('userId', '==', userId),
+                where('temporada', '==', season)
+            );
+            const palpitesSnap = await getDocs(q);
+
+            let predictionsHTML = '';
+            const predictions = [];
+            const rounds = new Set();
 
             palpitesSnap.forEach(doc => {
-                const temporada = doc.data().temporada;
-                if (temporada) seasons.add(temporada);
+                const data = doc.data();
+                predictions.push({
+                    ...data,
+                    id: doc.id, // Store doc id if needed later
+                    timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : new Date(0) // Handle timestamp conversion
+                });
+                if (data.ronda) rounds.add(data.ronda); // Collect rounds
             });
 
-            const sortedSeasons = Array.from(seasons).sort((a, b) => b.localeCompare(a));
-
-            if (sortedSeasons.length > 0) {
-                const mostRecentSeason = sortedSeasons[0];
-                await loadRankings(mostRecentSeason);
-            } else {
-                rankingsBody.innerHTML = '<tr><td colspan="4">Sem épocas disponíveis.</td></tr>';
-            }
-        }
-
-        async function loadRankings(season) {
-            const usersRef = collection(db, 'users');
-            const usersSnap = await getDocs(usersRef);
-            const rankings = [];
-
-            usersSnap.forEach(userDoc => {
-                const userData = userDoc.data();
-                 // Filter out users who haven't accepted or don't have 'estatuto' (optional, but good practice)
-                if (userData.aceite === "Yes" && userData.estatuto) {
-                    const seasonPointsKey = season.replace('/', '') + 'Pontos'; // e.g., 20232024Pontos
-                    const seasonPoints = userData[seasonPointsKey] || 0;
-                    rankings.push({
-                        userId: userDoc.id,
-                        username: userData.nomeDeUsuario || 'Utilizador Desconhecido',
-                        points: seasonPoints
-                    });
-                 }
-            });
-
-            rankings.sort((a, b) => b.points - a.points);
-            rankingsBody.innerHTML = '';
-
-            const totalUsers = rankings.length;
-            if (totalUsers === 0) {
-                 rankingsBody.innerHTML = '<tr><td colspan="4">Sem jogadores classificados para esta época.</td></tr>';
-                 return;
-            }
+             // Sort predictions by timestamp (latest first) - maybe sort by round then timestamp?
+             // Sorting by round first might be more logical for display
+             predictions.sort((a, b) => (b.ronda || 0) - (a.ronda || 0) || b.timestamp - a.timestamp);
 
 
-            rankings.forEach((rank, index) => {
-                const row = document.createElement('tr');
-                const position = index + 1;
-                const positionCell = document.createElement('td');
-                const playerCell = document.createElement('td');
-                const pointsCell = document.createElement('td');
-                const infoCell = document.createElement('td');
+             // Populate Round Filter
+             const sortedRounds = Array.from(rounds).sort((a, b) => parseInt(a) - parseInt(b)); // Sort numerically
+             const userSeasonKey = `${userId}-${season}`;
+             const currentSelection = selectedRounds[userSeasonKey] || ''; // Get previous selection or default to all
 
-                const percentage = totalUsers > 1 ? position / totalUsers : 0; // Avoid division by zero, handle single user case
-
-                let backgroundColor;
-                if (percentage <= 0.33) {
-                    const factor = percentage / 0.33;
-                    const green = Math.floor(200 - 100 * factor); // Darker green at top
-                    backgroundColor = `rgba(50, ${green}, 50, 0.2)`;
-                } else if (percentage <= 0.67) {
-                     const factor = (percentage - 0.33) / 0.34;
-                     const yellowComp = Math.floor(200 - 100 * factor); // From bright yellow to darker orange/yellow
-                     backgroundColor = `rgba(${yellowComp}, ${yellowComp}, 50, 0.2)`;
-                } else {
-                     const factor = (percentage - 0.67) / 0.33;
-                     const red = Math.floor(200 - 100 * factor); // From bright red to darker red
-                     backgroundColor = `rgba(${red}, 50, 50, 0.2)`;
+             roundFilter.innerHTML = '<option value="">Todas as Rondas</option>'; // Reset options
+             sortedRounds.forEach(round => {
+                const option = document.createElement('option');
+                option.value = round;
+                option.textContent = `Ronda ${round}`;
+                if (String(currentSelection) === String(round)) { // Compare as strings
+                    option.selected = true;
                 }
+                roundFilter.appendChild(option);
+             });
+             // Ensure the filter displays the correct selected value after population
+             roundFilter.value = currentSelection;
 
 
-                positionCell.innerHTML = `<div class="position-circle">${position}</div>`;
-                playerCell.innerHTML = `<span>${rank.username}</span>`;
-                pointsCell.textContent = rank.points;
-                infoCell.innerHTML = `<i class="fas fa-info-circle info-icon" data-userid="${rank.userId}" data-season="${season}"></i>`;
+             // Filter predictions based on selected round
+             const selectedRound = roundFilter.value;
+             const filteredPredictions = selectedRound
+                 ? predictions.filter(p => String(p.ronda) === selectedRound) // Filter by selected round
+                 : predictions; // Show all if no round selected
 
-                row.style.backgroundColor = backgroundColor;
-
-
-                row.appendChild(positionCell);
-                row.appendChild(playerCell);
-                row.appendChild(pointsCell);
-                row.appendChild(infoCell);
-
-                const infoIcon = infoCell.querySelector('.info-icon');
-                infoIcon.addEventListener('click', () => togglePredictions(rank.userId, season));
-
-                rankingsBody.appendChild(row);
+            // Group predictions by round for display
+            const predictionsByRound = {};
+            filteredPredictions.forEach(prediction => {
+                const round = prediction.ronda || 'Desconhecida'; // Handle missing round
+                if (!predictionsByRound[round]) {
+                    predictionsByRound[round] = [];
+                }
+                predictionsByRound[round].push(prediction);
             });
-        }
 
 
-        // --- Toggle Predictions Popup Logic (Unchanged, but ensure Firestore queries are correct) ---
-        let selectedRounds = {}; // Store selected round per user/season key
+             predictionsHTML = ''; // Reset HTML content
+             // Display rounds sorted numerically (descending - latest first)
+             const displaySortedRounds = Object.keys(predictionsByRound).sort((a, b) => parseInt(b) - parseInt(a));
 
-        async function togglePredictions(userId, season) {
-            const popup = document.getElementById('predictions-popup');
-            const popupBody = document.getElementById('popup-predictions-body');
-            const roundFilter = document.getElementById('round-filter');
+             if (displaySortedRounds.length === 0) {
+                 predictionsHTML = 'Nenhuma previsão encontrada para esta seleção.';
+             } else {
+                const roundToOpen = selectedRound || displaySortedRounds[0]; // Open selected or latest round
 
-             // Show loading indicator inside popup maybe?
-             popupBody.innerHTML = 'A carregar previsões...';
-             popup.style.display = "block"; // Show popup immediately
+                displaySortedRounds.forEach(round => {
+                    const isOpen = String(round) === String(roundToOpen);
+                    const roundPredictions = predictionsByRound[round];
+                    let roundContentHTML = '';
 
-            try {
-                const palpitesRef = collection(db, 'palpites');
-                const q = query(palpitesRef,
-                    where('userId', '==', userId),
-                    where('temporada', '==', season)
-                );
-                const palpitesSnap = await getDocs(q);
+                     // Sort predictions within the round if needed (e.g., by timestamp or game name)
+                     roundPredictions.sort((a,b) => a.timestamp - b.timestamp); // Example: oldest first within round
 
-                let predictionsHTML = '';
-                const predictions = [];
-                const rounds = new Set();
-
-                palpitesSnap.forEach(doc => {
-                    const data = doc.data();
-                    predictions.push({
-                        ...data,
-                        id: doc.id, // Store doc id if needed later
-                        timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : new Date(0) // Handle timestamp conversion
-                    });
-                    if (data.ronda) rounds.add(data.ronda); // Collect rounds
-                });
-
-                 // Sort predictions by timestamp (latest first) - maybe sort by round then timestamp?
-                 // Sorting by round first might be more logical for display
-                 predictions.sort((a, b) => (b.ronda || 0) - (a.ronda || 0) || b.timestamp - a.timestamp);
-
-
-                 // Populate Round Filter
-                 const sortedRounds = Array.from(rounds).sort((a, b) => parseInt(a) - parseInt(b)); // Sort numerically
-                 const userSeasonKey = `${userId}-${season}`;
-                 const currentSelection = selectedRounds[userSeasonKey] || ''; // Get previous selection or default to all
-
-                 roundFilter.innerHTML = '<option value="">Todas as Rondas</option>'; // Reset options
-                 sortedRounds.forEach(round => {
-                    const option = document.createElement('option');
-                    option.value = round;
-                    option.textContent = `Ronda ${round}`;
-                    if (String(currentSelection) === String(round)) { // Compare as strings
-                        option.selected = true;
-                    }
-                    roundFilter.appendChild(option);
-                 });
-                 // Ensure the filter displays the correct selected value after population
-                 roundFilter.value = currentSelection;
-
-
-                 // Filter predictions based on selected round
-                 const selectedRound = roundFilter.value;
-                 const filteredPredictions = selectedRound
-                     ? predictions.filter(p => String(p.ronda) === selectedRound) // Filter by selected round
-                     : predictions; // Show all if no round selected
-
-                // Group predictions by round for display
-                const predictionsByRound = {};
-                filteredPredictions.forEach(prediction => {
-                    const round = prediction.ronda || 'Desconhecida'; // Handle missing round
-                    if (!predictionsByRound[round]) {
-                        predictionsByRound[round] = [];
-                    }
-                    predictionsByRound[round].push(prediction);
-                });
-
-
-                 predictionsHTML = ''; // Reset HTML content
-                 // Display rounds sorted numerically (descending - latest first)
-                 const displaySortedRounds = Object.keys(predictionsByRound).sort((a, b) => parseInt(b) - parseInt(a));
-
-                 if (displaySortedRounds.length === 0) {
-                     predictionsHTML = 'Nenhuma previsão encontrada para esta seleção.';
-                 } else {
-                    const roundToOpen = selectedRound || displaySortedRounds[0]; // Open selected or latest round
-
-                    displaySortedRounds.forEach(round => {
-                        const isOpen = String(round) === String(roundToOpen);
-                        const roundPredictions = predictionsByRound[round];
-                        let roundContentHTML = '';
-
-                         // Sort predictions within the round if needed (e.g., by timestamp or game name)
-                         roundPredictions.sort((a,b) => a.timestamp - b.timestamp); // Example: oldest first within round
-
-                        roundPredictions.forEach(prediction => {
-                            let palpitesHTML = '';
-                            for (let i = 1; i <= 10; i++) { // Assuming max 10 predictions per game doc
-                                if (prediction[`palpite${i}`]) {
-                                    let pointsContent = '';
-                                    if (prediction.Analisado === "Sim") {
-                                        const points = prediction[`Palpite${i}PontosGanhos`] || 0;
-                                        const pointsClass = points >= 0 ? 'prediction-points' : 'prediction-points-negative'; // Non-negative is green
-                                        pointsContent = `<span class="${pointsClass}">(${points} pts)</span>`;
-                                    } else {
-                                        pointsContent = `<span class="in-analysis"><em>(em análise)</em></span>`;
-                                    }
-                                    palpitesHTML += `<div class="prediction-item">→ ${prediction[`palpite${i}`]} ${pointsContent}</div>`;
+                    roundPredictions.forEach(prediction => {
+                        let palpitesHTML = '';
+                        for (let i = 1; i <= 10; i++) { // Assuming max 10 predictions per game doc
+                            if (prediction[`palpite${i}`]) {
+                                let pointsContent = '';
+                                if (prediction.Analisado === "Sim") {
+                                    const points = prediction[`Palpite${i}PontosGanhos`] || 0;
+                                    // *** MODIFICAÇÃO AQUI ***
+                                    // Apenas pontos > 0 são verdes. 0 e negativos são vermelhos.
+                                    const pointsClass = points > 0 ? 'prediction-points' : 'prediction-points-negative';
+                                    pointsContent = `<span class="${pointsClass}">(${points} pts)</span>`;
+                                } else {
+                                    pointsContent = `<span class="in-analysis"><em>(em análise)</em></span>`;
                                 }
+                                palpitesHTML += `<div class="prediction-item">→ ${prediction[`palpite${i}`]} ${pointsContent}</div>`;
                             }
+                        }
 
-                            if (palpitesHTML) { // Only add if there are predictions for this game entry
-                                roundContentHTML += `
-                                    <div class="game-header">${prediction.nomeJogo || 'Jogo Desconhecido'}</div>
-                                    ${palpitesHTML}
-                                `;
-                            }
-                        });
-
-                         if (roundContentHTML) { // Only add round section if it has content
-                            predictionsHTML += `
-                                <div class="round-section">
-                                    <div class="round-header" data-round="${round}">
-                                        <span>Ronda ${round}</span>
-                                        <span class="toggle-arrow ${isOpen ? 'open' : ''}">▶</span>
-                                    </div>
-                                    <div class="round-content ${isOpen ? 'open' : ''}">
-                                        ${roundContentHTML}
-                                    </div>
-                                </div>
+                        if (palpitesHTML) { // Only add if there are predictions for this game entry
+                            roundContentHTML += `
+                                <div class="game-header">${prediction.nomeJogo || 'Jogo Desconhecido'}</div>
+                                ${palpitesHTML}
                             `;
-                         }
+                        }
                     });
-                 }
 
-                 popupBody.innerHTML = predictionsHTML;
+                     if (roundContentHTML) { // Only add round section if it has content
+                        predictionsHTML += `
+                            <div class="round-section">
+                                <div class="round-header" data-round="${round}">
+                                    <span>Ronda ${round}</span>
+                                    <span class="toggle-arrow ${isOpen ? 'open' : ''}">▶</span>
+                                </div>
+                                <div class="round-content ${isOpen ? 'open' : ''}">
+                                    ${roundContentHTML}
+                                </div>
+                            </div>
+                        `;
+                     }
+                });
+             }
+
+             popupBody.innerHTML = predictionsHTML;
 
 
-                 // Add event listeners for round headers AFTER content is in DOM
-                 document.querySelectorAll('.round-header').forEach(header => {
-                     header.removeEventListener('click', toggleRoundContent); // Remove previous listeners if any
-                     header.addEventListener('click', toggleRoundContent);
-                 });
+             // Add event listeners for round headers AFTER content is in DOM
+             document.querySelectorAll('.round-header').forEach(header => {
+                 header.removeEventListener('click', toggleRoundContent); // Remove previous listeners if any
+                 header.addEventListener('click', toggleRoundContent);
+             });
 
 
-                // Add event listener for round filter - Ensure it's added only once or managed correctly
-                roundFilter.onchange = () => { // Using arrow function is fine here
-                    selectedRounds[userSeasonKey] = roundFilter.value; // Store selection
-                    togglePredictions(userId, season); // Re-render predictions
-                };
+            // Add event listener for round filter - Ensure it's added only once or managed correctly
+            roundFilter.onchange = () => { // Using arrow function is fine here
+                selectedRounds[userSeasonKey] = roundFilter.value; // Store selection
+                togglePredictions(userId, season); // Re-render predictions
+            };
 
-            } catch (error) {
-                console.error("Error loading predictions:", error);
-                popupBody.innerHTML = 'Erro ao carregar previsões.';
-            }
+        } catch (error) {
+            console.error("Error loading predictions:", error);
+            popupBody.innerHTML = 'Erro ao carregar previsões.';
         }
+    }
 
-        // Helper function to toggle round content visibility
-        function toggleRoundContent() {
-            const content = this.nextElementSibling;
-            const arrow = this.querySelector('.toggle-arrow');
-            if (content && arrow) {
-                 content.classList.toggle('open');
-                 arrow.classList.toggle('open');
-                 // Optional: Close other rounds when one is opened
-                 // if (content.classList.contains('open')) {
-                 //     closeOtherRounds(this.dataset.round);
-                 // }
-            }
+    // Helper function to toggle round content visibility
+    function toggleRoundContent() {
+        const content = this.nextElementSibling;
+        const arrow = this.querySelector('.toggle-arrow');
+        if (content && arrow) {
+             content.classList.toggle('open');
+             arrow.classList.toggle('open');
+             // Optional: Close other rounds when one is opened
+             // if (content.classList.contains('open')) {
+             //     closeOtherRounds(this.dataset.round);
+             // }
         }
+    }
 
-        // --- Popup Closing Logic (Unchanged) ---
-        const popup = document.getElementById('predictions-popup');
-        const closeButton = document.getElementById('close-popup');
+    // --- Popup Closing Logic (Unchanged) ---
+    const popup = document.getElementById('predictions-popup');
+    const closeButton = document.getElementById('close-popup');
 
-        closeButton.addEventListener('click', () => {
+    closeButton.addEventListener('click', () => {
+        popup.style.display = "none";
+    });
+
+    window.addEventListener('click', (event) => {
+        if (event.target == popup) {
             popup.style.display = "none";
-        });
+        }
+    });
 
-        window.addEventListener('click', (event) => {
-            if (event.target == popup) {
-                popup.style.display = "none";
-            }
-        });
-
-    </script>
+</script>
 </body>
 </html>
