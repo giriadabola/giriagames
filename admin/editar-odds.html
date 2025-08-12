@@ -602,6 +602,61 @@
    .odds-tree-view-area .delete-tree-item-btn { font-size: 9px !important; padding: 2px 4px !important; }
 }
 
+/* START: CSS para os botões de mover na árvore */
+.odds-tree-view-area .move-tree-item-btn {
+    flex-grow: 0;
+    flex-shrink: 0;
+    flex-basis: auto;
+    padding: 3px 6px !important;
+    font-size: 10px !important;
+    line-height: 1.2 !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 3px !important;
+    cursor: pointer !important;
+    width: auto !important;
+    margin-top: 0 !important;
+    margin-left: 5px; /* Espaçamento entre botões */
+}
+
+.odds-tree-view-area .move-up-btn {
+    background-color: #28a745 !important; /* Verde para subir */
+}
+.odds-tree-view-area .move-up-btn:hover {
+    background-color: #218838 !important;
+}
+
+.odds-tree-view-area .move-down-btn {
+    background-color: #ffc107 !important; /* Amarelo/Laranja para descer */
+    color: #212529 !important;
+}
+.odds-tree-view-area .move-down-btn:hover {
+    background-color: #e0a800 !important;
+}
+/* END: CSS para os botões de mover */
+
+/* Adaptação para telas pequenas */
+@media (max-width: 480px) {
+   .odds-tree-view-area .move-tree-item-btn { font-size: 9px !important; padding: 2px 4px !important; }
+}
+
+.odds-tree-view-area .order-input {
+    width: 50px !important;
+    padding: 3px 6px !important;
+    font-size: 10px !important;
+    line-height: 1.2 !important;
+    text-align: center;
+    border: 1px solid #ccc !important;
+    border-radius: 3px !important;
+    margin-left: auto; /* Mantém o grupo de controlos à direita */
+    margin-right: 5px; /* Espaço entre o input e o botão Editar */
+}
+
+.odds-tree-view-area .order-input:disabled {
+    background-color: #e9ecef;
+    cursor: wait;
+}
+
     </style>
 </head>
 <body>
@@ -834,6 +889,83 @@
             }
         }
 
+
+        async function handleOrderChange(event) {
+            const input = event.target;
+            const oddId = input.dataset.id;
+            const newOrder = parseInt(input.value, 10);
+            const type = input.dataset.type;
+            const parentId = input.dataset.parentId;
+            const subParentId = input.dataset.subParentId;
+
+            const docSnap = await db.collection('oddcategorias').doc(oddId).get();
+            const originalOrder = docSnap.exists ? docSnap.data().ordem : null;
+
+            if (isNaN(newOrder) || newOrder < 1) {
+                alert("Por favor, insira um número de ordem válido (maior ou igual a 1).");
+                input.value = originalOrder; // Reverte para o valor original
+                return;
+            }
+
+            if (newOrder === originalOrder) {
+                return; // Não faz nada se a ordem for a mesma
+            }
+
+            input.disabled = true;
+
+            try {
+                const batch = db.batch();
+
+                // Constrói a query para obter todos os "irmãos" (mesmo nível e mesmo pai)
+                let query = db.collection('oddcategorias').where('categoria_subcategoria_3cat', '==', type);
+                if (type === 'subcategoria') {
+                    query = query.where('categoriapai', '==', parentId);
+                } else if (type === '3cat') {
+                    // Ambos os pais devem corresponder
+                    query = query.where('categoriapai', '==', parentId).where('subcategoriapai', '==', subParentId);
+                }
+
+                const snapshot = await query.get();
+                let siblings = [];
+                snapshot.forEach(doc => siblings.push({ id: doc.id, ...doc.data() }));
+
+                const itemToMove = siblings.find(item => item.id === oddId);
+                if (!itemToMove) throw new Error("Item a ser movido não encontrado.");
+
+                // Cria uma lista ordenada dos irmãos, removendo o item que estamos a mover
+                let sortedSiblings = siblings
+                    .filter(item => item.id !== oddId)
+                    .sort((a, b) => (a.ordem || Infinity) - (b.ordem || Infinity));
+
+                // Garante que a nova posição não seja maior que o número de itens
+                const finalNewOrder = Math.max(1, Math.min(newOrder, sortedSiblings.length + 1));
+
+                // Insere o item na sua nova posição
+                sortedSiblings.splice(finalNewOrder - 1, 0, itemToMove);
+
+                // Percorre a lista agora reordenada e atualiza a ordem de cada item no batch
+                sortedSiblings.forEach((item, index) => {
+                    const newAssignedOrder = index + 1;
+                    if (item.ordem !== newAssignedOrder) {
+                        const docRef = db.collection('oddcategorias').doc(item.id);
+                        batch.update(docRef, { ordem: newAssignedOrder, lastUpdated: timestamp() });
+                    }
+                });
+
+                // Executa todas as atualizações de uma vez
+                await batch.commit();
+
+                // Re-renderiza a árvore para mostrar o resultado final
+                await renderOddsTree();
+
+            } catch (error) {
+                console.error("Erro ao atualizar a ordem:", error);
+                alert(`Não foi possível atualizar a ordem: ${error.message}`);
+                input.value = originalOrder; // Reverte em caso de erro
+                input.disabled = false;
+            }
+        }
+
         async function loadCategorias() {
             try {
                 const snapshot = await db.collection('oddcategorias')
@@ -1039,7 +1171,7 @@
     }
 }
 
-       async function renderOddsTree() {
+      async function renderOddsTree() {
         if (!oddsTreeViewDiv) {
             console.error("DEBUG: oddsTreeViewDiv não foi encontrado no DOM!");
             return;
@@ -1083,17 +1215,22 @@
                                             <i class="fas fa-caret-right tree-toggle-icon ${noToggleIconClass}"></i>
                                             <span class="tree-item-name categoria">${cat.nomecategoria || `[Categoria ID: ${cat.id} sem nome]`}</span>
                                         </span>
-                                        <span class="tree-item-details">(Ordem: ${cat.ordem !== undefined ? cat.ordem : 'N/A'})</span>
                                     </div>
+                                    <!-- NOVO CAMPO DE ORDEM ADICIONADO AQUI -->
+                                    <input type="number" class="order-input" value="${cat.ordem || ''}" title="Mudar Ordem (Pressione Enter)"
+                                           data-id="${cat.id}"
+                                           data-type="categoria"
+                                           data-parent-id=""
+                                           data-sub-parent-id="">
                                     <button class="edit-tree-item-btn" data-id="${cat.id}">Editar</button>
-                                    <button class="delete-tree-item-btn" data-id="${cat.id}">Eliminar</button>  <!-- BOTÃO ADICIONADO -->
+                                    <button class="delete-tree-item-btn" data-id="${cat.id}">Eliminar</button>
                                 </div>`;
 
                 if (hasChildren) {
                     treeHtml += '<ul class="sub-list">';
                     for (const subCat of childSubcategorias) {
                         const childTerceirasCategorias = terceirasCategorias.filter(
-                            ter => ter.categoriapai === cat.id && ter.subcategoriapai === subCat.id
+                            ter => ter.categoriapai === subCat.categoriapai && ter.subcategoriapai === subCat.id
                         );
                         const hasGrandChildren = childTerceirasCategorias.length > 0;
                         const subToggleableClass = hasGrandChildren ? 'toggleable' : '';
@@ -1106,10 +1243,15 @@
                                                     <i class="fas fa-caret-right tree-toggle-icon ${subNoToggleIconClass}"></i>
                                                     <span class="tree-item-name subcategoria">${subCat.nomesubcategoria || `[Subcat ID: ${subCat.id} sem nome]`}</span>
                                                 </span>
-                                                <span class="tree-item-details">(Ordem: ${subCat.ordem !== undefined ? subCat.ordem : 'N/A'})</span>
                                             </div>
+                                            <!-- NOVO CAMPO DE ORDEM ADICIONADO AQUI -->
+                                            <input type="number" class="order-input" value="${subCat.ordem || ''}" title="Mudar Ordem (Pressione Enter)"
+                                                   data-id="${subCat.id}"
+                                                   data-type="subcategoria"
+                                                   data-parent-id="${subCat.categoriapai || ''}"
+                                                   data-sub-parent-id="">
                                             <button class="edit-tree-item-btn" data-id="${subCat.id}">Editar</button>
-                                            <button class="delete-tree-item-btn" data-id="${subCat.id}">Eliminar</button>  <!-- BOTÃO ADICIONADO -->
+                                            <button class="delete-tree-item-btn" data-id="${subCat.id}">Eliminar</button>
                                         </div>`;
 
                         if (hasGrandChildren) {
@@ -1122,10 +1264,15 @@
                                                             <i class="fas fa-minus tree-toggle-icon no-toggle"></i>
                                                             <span class="tree-item-name terceira-categoria">${terCat.nome3categoria || `[3aCat ID: ${terCat.id} sem nome]`}</span>
                                                         </span>
-                                                        <span class="tree-item-details">(Ordem: ${terCat.ordem !== undefined ? terCat.ordem : 'N/A'})</span>
                                                     </div>
+                                                    <!-- NOVO CAMPO DE ORDEM ADICIONADO AQUI -->
+                                                    <input type="number" class="order-input" value="${terCat.ordem || ''}" title="Mudar Ordem (Pressione Enter)"
+                                                           data-id="${terCat.id}"
+                                                           data-type="3cat"
+                                                           data-parent-id="${terCat.categoriapai || ''}"
+                                                           data-sub-parent-id="${terCat.subcategoriapai || ''}">
                                                     <button class="edit-tree-item-btn" data-id="${terCat.id}">Editar</button>
-                                                    <button class="delete-tree-item-btn" data-id="${terCat.id}">Eliminar</button>  <!-- BOTÃO ADICIONADO -->
+                                                    <button class="delete-tree-item-btn" data-id="${terCat.id}">Eliminar</button>
                                                 </div>
                                             </li>`;
                             }
@@ -1146,7 +1293,6 @@
                 button.addEventListener('click', function() {
                     const oddId = this.dataset.id;
                     preencherFormulario(oddId);
-                    // Ocultar a árvore após clicar em editar para focar no formulário
                     if (toggleTreeViewButton && oddsTreeViewDiv.style.display === 'block') {
                          oddsTreeViewDiv.style.display = 'none';
                          toggleTreeViewButton.classList.remove('open');
@@ -1160,13 +1306,13 @@
                 });
             });
 
-            // Anexar event listener para os NOVOS botões ELIMINAR
+            // Anexar event listener para os botões ELIMINAR
             oddsTreeViewDiv.querySelectorAll('.delete-tree-item-btn').forEach(button => {
                 button.addEventListener('click', function(event) {
-                    event.stopPropagation(); // Impede que o clique expanda/recolha o item da árvore
-                    oddIdToDelete = this.dataset.id; // Define o ID a ser deletado
+                    event.stopPropagation();
+                    oddIdToDelete = this.dataset.id;
                     if (deleteConfirmPopup) {
-                        deleteConfirmPopup.style.display = 'flex'; // Mostra o popup de confirmação
+                        deleteConfirmPopup.style.display = 'flex';
                     }
                 });
             });
@@ -1191,6 +1337,11 @@
             tipoCategoriaSelect.addEventListener('change', toggleCategoryFields);
         }
 
+
+
+
+
+        
         let searchDebounceTimer;
         if (searchInput) {
             searchInput.addEventListener('input', (e) => {
@@ -1452,7 +1603,7 @@
             if (oddsTreeViewDiv && (oddsTreeViewDiv.style.display === 'block' || (oddsTreeViewDiv.innerHTML && oddsTreeViewDiv.innerHTML.trim() !== ''))) {
                 renderOddsTree();
             }
-            preencherFormulario(selectedOddId);
+          resetForm();
 
         } catch (error) {
             console.error('Erro ao salvar alterações:', error);
@@ -1478,6 +1629,16 @@
             }
             console.log("DEBUG: Página inicializada.");
         }
+
+        if (oddsTreeViewDiv) {
+                oddsTreeViewDiv.addEventListener('change', async (event) => {
+                    if (event.target.classList.contains('order-input')) {
+                        // Impede múltiplos cliques enquanto uma operação está em andamento
+                        if (event.target.disabled) return;
+                        await handleOrderChange(event);
+                    }
+                });
+            }
 
         initializePage();
 
