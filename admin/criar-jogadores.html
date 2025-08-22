@@ -5,24 +5,883 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Criar Jogadores - G EMPIRE</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
-    <script type="module">
- // Import Firebase functions
- import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+  
+    <!-- 1. Adicionado o script guardião para proteger a página -->
+    <script type="module" src="/js/auth-guard.js"></script>
 
-// Firebase configuration
-const firebaseConfig = {
-    apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0",
-    authDomain: "g-games-8a8fc.firebaseapp.com",
-    projectId: "g-games-8a8fc",
-    storageBucket: "g-games-8a8fc.firebasestorage.app",
-    messagingSenderId: "689897349449",
-    appId: "1:689897349449:web:536599794579901beb7a98",
-    measurementId: "G-GTTPJ6G5MD"
-};
+  <style>
+     * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+body {
+    min-height: 100vh;
+    background-color: #f0f0f0;
+    font-family: Arial, sans-serif;
+}
+
+.top-menu {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    background-color: #ffffff;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    padding: 12px 0;
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    align-items: center;
+    z-index: 1000;
+}
+
+.menu-item {
+    text-decoration: none;
+    color: #666;
+    transition: color 0.3s ease;
+    font-weight: 500;
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-size: 14px;
+    line-height: 1.4;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.menu-item:hover, .menu-item.active {
+    color: #2176ff;
+    background-color: rgba(33, 118, 255, 0.1);
+}
+
+.coeficientes-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+    font-size: 14px;
+}
+
+.coeficientes-table th,
+.coeficientes-table td {
+    padding: 8px 12px;
+    text-align: left;
+    border: 1px solid #ddd;
+}
+
+.coeficientes-table th {
+    background-color: #f2f2f2;
+    font-weight: bold;
+    color: #333;
+}
+
+.coeficientes-table tr:nth-child(even) {
+    background-color: #f9f9f9;
+}
+
+.coeficientes-table tr:hover {
+    background-color: #f0f7ff;
+}
+
+.content {
+    padding: 80px 20px 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+h1 {
+    color: #333;
+    margin-bottom: 30px;
+    text-align: center;
+    position: relative;
+}
+
+.gear-icon {
+    font-size: 24px;
+    color: #666;
+    cursor: pointer;
+    transition: color 0.3s ease;
+}
+
+.header-icons {
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.gear-icon:hover {
+    color: #2176ff;
+}
+
+.form-container {
+    max-width: 600px;
+    margin: 0 auto;
+    background-color: #ffffff;
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.form-group {
+    margin-bottom: 20px;
+    position: relative;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    color: #333;
+    font-weight: 500;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 16px;
+    transition: border-color 0.3s ease;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+    outline: none;
+    border-color: #2176ff;
+}
+
+
+#pais-list,
+#competicao-list {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background-color: #ffffff;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 1000;
+}
+
+.search-option {
+    padding: 10px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+.search-option:hover {
+    background-color: #f5f5f5;
+}
+
+.submit-btn {
+    background-color: #2176ff;
+    color: #ffffff;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 4px;
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+.submit-btn:hover {
+    background-color: #1a5cc4;
+}
+
+.overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 2000;
+}
+
+.overlay.active {
+    display: block;
+}
+
+.params-popup {
+    display: none;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: #fff;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    padding: 20px;
+    width: 90%;
+    max-width: 800px;
+    max-height: 80vh;
+    overflow-y: auto;
+    z-index: 2001;
+}
+
+.params-popup.active {
+    display: block;
+}
+
+.params-popup h2 {
+    margin-bottom: 20px;
+    color: #333;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 10px;
+}
+
+.params-popup .close-btn {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    font-size: 20px;
+    color: #666;
+    cursor: pointer;
+    transition: color 0.3s ease;
+}
+
+.params-popup .close-btn:hover {
+    color: #2176ff;
+}
+
+.param-section {
+    margin-bottom: 30px;
+    border: 1px solid #eee;
+    border-radius: 8px;
+    padding: 20px;
+    background-color: #f9f9f9;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.param-section h3 {
+    margin-bottom: 15px;
+    color: #333;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 10px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    color: #555;
+    font-weight: 500;
+}
+
+.form-group input[type="text"],
+.form-group input[type="number"],
+ .form-group select
+ {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 16px;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.form-group input[type="text"]:focus,
+.form-group input[type="number"]:focus,
+.form-group select:focus
+ {
+    outline: none;
+    border-color: #2176ff;
+    box-shadow: 0 0 5px rgba(33, 118, 255, 0.5);
+}
+
+.checkbox-group {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 15px;
+    margin-top: 5px;
+}
+
+.checkbox-group label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+    color: #555;
+    font-size: 14px;
+    white-space: nowrap;
+}
+
+.checkbox-group input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    width: 18px;
+    height: 18px;
+    border: 2px solid #ccc;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+.checkbox-group input[type="checkbox"]:checked {
+    background-color: #2176ff;
+    border-color: #2176ff;
+}
+
+.checkbox-group input[type="checkbox"]:checked::before {
+    content: '\f00c';
+    font-family: 'Font Awesome 6 Free';
+    font-weight: 900;
+    font-size: 12px;
+    color: white;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+}
+
+.add-category-btn {
+    background-color: #2176ff;
+    color: white;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 4px;
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+}
+ .add-category-btn:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+}
+
+.add-category-btn:hover {
+    background-color: #1a5cc4;
+}
+.existing-categories-section {
+}
+
+.message-error {
+    color: #ff0000;
+    margin-top: 5px;
+    font-size: 14px;
+}
+  .save-params-btn {
+    background-color: #4CAF50;
+    color: white;
+    padding: 10px 15px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: background-color 0.3s ease;
+    display: block;
+    width: 100%;
+    margin-top: 20px;
+}
+
+.save-params-btn:hover {
+    background-color: #388E3C;
+}
+
+.categories-list {
+    list-style: none;
+    padding: 0;
+}
+
+.categories-list > h4 {
+    margin-bottom: 10px;
+    padding: 10px;
+    border-radius: 8px;
+    background-color: #f0f0f0;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    font-size: 18px;
+    font-weight: bold;
+    color: #333;
+}
+
+
+.subcategories-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.subcategory-card {
+    background-color: #f0f0f0;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    padding: 10px;
+    cursor: pointer;
+    width: 150px;
+    text-align: center;
+    transition: background-color 0.3s ease;
+}
+
+.subcategory-card:hover {
+    background-color: #e0e0e0;
+}
+
+.subcategory-name {
+    font-weight: bold;
+}
+
+.popup-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2002;
+}
+
+.detailed-info-popup {
+    background-color: #fff;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    width: 80%;
+    max-width: 600px;
+    text-align: center;
+    z-index: 2003;
+}
+
+.detailed-info-popup h3 {
+    margin-bottom: 10px;
+}
+
+.detailed-info-popup p {
+    margin-bottom: 8px;
+    text-align: left;
+}
+
+.detailed-info-popup button {
+    margin: 5px;
+}
+
+.detailed-info-popup .button-group {
+    margin-top: 15px;
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+}
+
+
+.close-popup{
+    background-color: #ccc;
+    color: #333;
+}
+.close-popup:hover{
+     background-color: #bbb;
+}
+
+.detailed-info-popup .edit-mode {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background-color: #fff;
+    text-align: left;
+    margin-top: 10px;
+}
+.detailed-info-popup .edit-mode input[type="text"] {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 14px;
+}
+.detailed-info-popup .edit-mode .checkbox-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 5px;
+}
+.detailed-info-popup .edit-mode .checkbox-group label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+.detailed-info-popup .edit-mode .button-group {
+    margin-top: 15px;
+    justify-content: flex-end;
+}
+
+.edit-btn, .delete-btn, .save-btn, .cancel-btn, .close-popup {
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background-color 0.2s ease, color 0.2s ease;
+    border: none;
+    margin-left: 5px;
+    margin-right: 5px;
+}
+.edit-btn { background-color: #2196F3; color: white; }
+.edit-btn:hover{ background-color: #1976D2; }
+.delete-btn { background-color: #F44336; color: white; }
+.delete-btn:hover{ background-color: #D32F2F; }
+.save-btn { background-color: #4CAF50; color: white; }
+.save-btn:hover{ background-color: #388E3C; }
+.cancel-btn, .close-popup { background-color: #ccc; color: #333; }
+.cancel-btn:hover, .close-popup:hover{ background-color: #bbb; }
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+}
+
+.toggle-icon {
+    transition: transform 0.3s ease;
+}
+
+.toggle-icon.rotate {
+    transform: rotate(180deg);
+}
+
+.section-content {
+    padding-top: 10px;
+    overflow: hidden;
+}
+
+.search-container {
+    display: flex;
+    align-items: center;
+    margin-top: 15px;
+    margin-bottom: 10px;
+}
+
+#subcategory-search {
+    flex-grow: 1;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px 0 0 4px;
+    font-size: 14px;
+}
+
+.search-icon {
+    background-color: #eee;
+    color: #666;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-left: none;
+    border-radius: 0 4px 4px 0;
+    cursor: text;
+}
+
+#firebase-data-display {
+    margin-top: 10px;
+    padding-left: 20px;
+    font-size: 14px;
+    color: #555;
+}
+
+#coeficientes-section h3 {
+    font-size: 16px;
+    font-weight: bold;
+    color: #333;
+    margin-bottom: 5px;
+    margin-top: 15px;
+}
+
+#overall-popup .position-section {
+    margin-bottom: 25px;
+    padding: 15px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    background-color: #fcfcfc;
+}
+
+#overall-popup h4 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #eee;
+    font-size: 16px;
+    color: #333;
+    font-weight: bold;
+}
+
+#overall-popup .casta-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+#overall-popup .casta-row label {
+    flex-basis: 120px;
+    flex-shrink: 0;
+    font-weight: 500;
+    font-size: 14px;
+}
+
+#overall-popup .casta-row input[type="number"] {
+    width: 90px;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    text-align: center;
+}
+
+#overall-popup input::-webkit-outer-spin-button,
+#overall-popup input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+#overall-popup input[type=number] {
+  -moz-appearance: textfield;
+}
+
+    </style>
+</head>
+<body style="display: none;"> <!-- 2. Ocultado o corpo da página -->
+
+    <nav class="top-menu">
+        <a href="engrenagem.html" class="menu-item">
+            <i class="fas fa-home"></i>
+        </a>
+        <a href="criar-gplayer.html" class="menu-item">
+            <i class="fas fa-user"></i>
+            CRIAR GPLAYER
+        </a>
+        <a href="criar-jogo.html" class="menu-item">
+            <i class="fas fa-gamepad"></i>
+            CRIAR JOGO
+        </a>
+        <a href="criar-jogadores.html" class="menu-item active">
+            <i class="fas fa-users"></i>
+            CRIAR JOGADORES
+        </a>
+        <a href="criar-clubes.html" class="menu-item">
+            <i class="fas fa-shield-alt"></i>
+            CRIAR CLUBES
+        </a>
+        <a href="criar-competicoes.html" class="menu-item">
+            <i class="fas fa-trophy"></i>
+            CRIAR COMPETIÇÕES
+        </a>
+        <a href="criar-pais.html" class="menu-item">
+            <i class="fas fa-globe"></i>
+            CRIAR PAÍS
+        </a>
+        <a href="criar-mods.html" class="menu-item">
+            <i class="fas fa-puzzle-piece"></i>
+            CRIAR MODS
+        </a>
+        <a href="criar-odds.html" class="menu-item">
+            <i class="fas fa-percentage"></i>
+            CRIAR ODDS
+        </a>
+    </nav>
+
+    <div class="content">
+      <h1>Criar Jogadores
+    <i class="fas fa-cog gear-icon" id="params-settings-icon"></i>
+    <i class="fas fa-flask gear-icon" id="lab-icon" style="margin-left: 10px; cursor: pointer;"></i>
+</h1>
+        <div class="form-container">
+            <form id="criar-jogador-form">
+                 <div class="form-group">
+                    <label for="nome-jogador">Nome do Jogador</label>
+                    <input type="text" id="nome-jogador" name="nome-jogador" required>
+                </div>
+                <div class="form-group">
+                    <label for="imagem-jogador">Imagem do Jogador (URL)</label>
+                    <input type="url" id="imagem-jogador" name="imagem-jogador" required>
+                </div>
+                <div class="form-group">
+                    <label for="pais-jogador">País do Jogador</label>
+                    <input type="text" id="pais-jogador" name="pais-jogador" placeholder="Digite para pesquisar..." required>
+                    <div id="pais-list"></div>
+                </div>
+                <div class="form-group">
+                    <label for="clube-jogador">Clube do Jogador</label>
+                    <input type="text" id="clube-jogador" name="clube-jogador" placeholder="Digite para pesquisar..." required>
+                    <div id="clube-list"></div>
+                </div>
+                <div class="form-group">
+                    <label for="posicao-jogador">Posição do Jogador</label>
+                    <select id="posicao-jogador" name="posicao-jogador" required>
+                        <option value="">Selecione uma posição</option>
+                        <option value="Guarda-Redes">Guarda-Redes</option>
+                        <option value="Defesa">Defesa</option>
+                        <option value="Médio">Médio</option>
+                        <option value="Avançado">Avançado</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="overall-jogador">Overall do Jogador (Opcional)</label>
+                    <input type="number" id="overall-jogador" name="overall-jogador" min="0" max="1000">
+                </div>
+                <div class="form-group">
+                    <label for="casta-jogador">Casta do Jogador (Opcional)</label>
+                    <select id="casta-jogador" name="casta-jogador">
+                        <option value="">Selecione uma casta</option>
+                        <option value="Jogador Ouro">Jogador Ouro</option>
+                        <option value="Jogador Prata">Jogador Prata</option>
+                        <option value="Jogador Bronze">Jogador Bronze</option>
+                        <option value="Jogador Platina">Jogador Platina</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="mercado-jogador">No Mercado?</label>
+                    <select id="mercado-jogador" name="mercado-jogador">
+                        <option value="false" selected>Não</option>
+                        <option value="true">Sim</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Mini Games? (Opcional)</label>
+                    <div class="checkbox-group">
+                        <div class="mini-game-option">
+                            <label><input type="checkbox" name="mini-games" value="world26" class="mini-game-checkbox"> Euro26</label>
+                            <div class="mini-game-price" style="display: none;">
+                                <input type="text" name="world26-preco" maxlength="5" placeholder="Preço" class="mini-game-price-input">
+                            </div>
+                        </div>
+                        <div class="mini-game-option">
+                            <label><input type="checkbox" name="mini-games" value="whowins" class="mini-game-checkbox"> WhoWins</label>
+                            <div class="mini-game-price" style="display: none;">
+                                <input type="text" name="whowins-preco" maxlength="5" placeholder="Preço" class="mini-game-price-input">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="preco-jogador">Preço</label>
+                    <input type="number" id="preco-jogador" name="preco-jogador" min="0" max="1000">
+                </div>
+                <div class="form-group">
+                    <label for="comprador-jogador">Comprado por (Opcional)</label>
+                    <select id="comprador-jogador" name="comprador-jogador">
+                        <option value="">Ninguém</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="estatisticas-jogador">Estatísticas (Opcional)</label>
+                    <textarea id="estatisticas-jogador" name="estatisticas-jogador" rows="5"></textarea>
+                </div>
+
+                <div id="coeficientes-section" style="display: none;">
+                    <h3>Coeficientes</h3>
+                    <div id="firebase-data-display">
+                        <!-- Firebase data will be displayed here -->
+                    </div>
+                </div>
+
+                <button type="submit" class="submit-btn">Criar Jogador</button>
+
+            </form>
+        </div>
+    </div>
+
+    <!-- Overlay and Popup for Parameters Settings -->
+    <div class="overlay" id="params-overlay"></div>
+    <div class="params-popup" id="params-popup">
+         <i class="fas fa-times close-btn" id="close-params-popup"></i>
+        <h2><i class="fas fa-cog"></i> Configurações de Parâmetros</h2>
+        <div id="params-container">
+            <!-- Adicionar Categoria e Subcategoria -->
+            <div class="param-section add-category-section">
+                <div class="section-header">
+                    <h3>
+                        <i class="fas fa-plus-circle"></i> Adicionar Categoria/Subcategoria
+                        <i class="fas fa-chevron-down toggle-icon"></i>
+                    </h3>
+                </div>
+                <div class="section-content" style="display: none;">
+                    <div class="form-group">
+                        <label for="categoria-nome">Nome da Categoria:</label>
+                        <input type="text" id="categoria-nome" name="categoria-nome">
+                    </div>
+                    <div class="form-group">
+                        <label for="subcategoria-nome">Nome da Subcategoria:</label>
+                        <input type="text" id="subcategoria-nome" name="subcategoria-nome">
+                    </div>
+                    <!-- Checkboxes para Casta -->
+                    <div class="form-group">
+                        <label>Casta:</label>
+                        <div class="checkbox-group">
+                            <label><input type="checkbox" name="subcategoria-casta" value="Jogador Ouro"> <i class="fas fa-medal" style="color: gold;"></i> Jogador Ouro</label>
+                            <label><input type="checkbox" name="subcategoria-casta" value="Jogador Prata"> <i class="fas fa-medal" style="color: silver;"></i> Jogador Prata</label>
+                            <label><input type="checkbox" name="subcategoria-casta" value="Jogador Bronze"> <i class="fas fa-medal" style="color: #cd7f32;"></i> Jogador Bronze</label>
+                            <label><input type="checkbox" name="subcategoria-casta" value="Jogador Platina"> <i class="fas fa-medal" style="color: #e5e4e2;"></i> Jogador Platina</label>
+                        </div>
+                    </div>
+                    <!-- Checkboxes para Tipo de Jogador -->
+                    <div class="form-group">
+                        <label>Tipo de Jogador:</label>
+                        <div class="checkbox-group">
+                            <label><input type="checkbox" name="subcategoria-tipo" value="Guarda-Redes"> <i class="fas fa-hands"></i> Guarda-Redes</label>
+                            <label><input type="checkbox" name="subcategoria-tipo" value="Defesa"> <i class="fas fa-shield-alt"></i> Defesa</label>
+                            <label><input type="checkbox" name="subcategoria-tipo" value="Médio"> <i class="fas fa-running"></i> Médio</label>
+                            <label><input type="checkbox" name="subcategoria-tipo" value="Avançado"> <i class="fas fa-futbol"></i> Avançado</label>
+                        </div>
+                    </div>
+                    <button class="add-category-btn" id="add-category-btn"><i class="fas fa-plus"></i> Adicionar</button>
+                    <div id="category-message" class="message-error"></div>
+                </div>
+            </div>
+            <!-- Lista de Categorias e Subcategorias -->
+            <div class="param-section existing-categories-section">
+                <h3><i class="fas fa-list-ul"></i> Categorias e Subcategorias Existentes</h3>
+                <div class="search-container">
+                    <input type="text" id="subcategory-search" placeholder="Pesquisar Subcategoria...">
+                    <i class="fas fa-search search-icon"></i>
+                </div>
+               <ul id="categories-list" class="categories-list">
+                   <!-- As categorias e subcategorias serão inseridas aqui dinamicamente -->
+               </ul>
+            </div>
+        </div>
+        <button class="save-params-btn" id="save-params-btn"><i class="fas fa-save"></i> Salvar Configurações</button>
+    </div>
+    <!-- ADICIONE ESTE BLOCO NO FINAL DO SEU <body> -->
+<div class="overlay" id="overall-overlay"></div>
+<div class="params-popup" id="overall-popup">
+    <i class="fas fa-times close-btn" id="close-overall-popup"></i>
+    <h2><i class="fas fa-flask"></i> Limites de Overall por Casta</h2>
+    <div id="overall-limits-container">
+        <!-- O conteúdo será gerado por JavaScript -->
+    </div>
+    <button class="save-params-btn" id="save-overall-btn">Salvar</button>
+</div>
+
+
+
+
+
+
+<script type="module">
+        // Importa a variável 'db' do guardião e as outras funções do Firestore
+        import { db } from '/js/auth-guard.js';
+        import { collection, addDoc, getDocs, doc, updateDoc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 // --- Variáveis de elementos do DOM no escopo global ---
 const paramsSettingsIcon = document.getElementById('params-settings-icon');
@@ -1091,894 +1950,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 
     </script>
-    <style>
-     * {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-}
 
-body {
-    min-height: 100vh;
-    background-color: #f0f0f0;
-    font-family: Arial, sans-serif;
-}
-
-/* ... (outros estilos do menu, etc. - MANTENHA OS ESTILOS ORIGINAIS AQUI) ... */
-
-.top-menu {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    background-color: #ffffff;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-    padding: 12px 0;
-    display: flex;
-    justify-content: center;
-    gap: 24px;
-    align-items: center;
-    z-index: 1000;
-}
-
-.menu-item {
-    text-decoration: none;
-    color: #666;
-    transition: color 0.3s ease;
-    font-weight: 500;
-    padding: 8px 16px;
-    border-radius: 4px;
-    font-size: 14px;
-    line-height: 1.4;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.menu-item:hover, .menu-item.active {
-    color: #2176ff;
-    background-color: rgba(33, 118, 255, 0.1);
-}
-
-/* Estilos para a tabela de coeficientes */
-.coeficientes-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 10px;
-    font-size: 14px;
-}
-
-.coeficientes-table th,
-.coeficientes-table td {
-    padding: 8px 12px;
-    text-align: left;
-    border: 1px solid #ddd;
-}
-
-.coeficientes-table th {
-    background-color: #f2f2f2;
-    font-weight: bold;
-    color: #333;
-}
-
-.coeficientes-table tr:nth-child(even) {
-    background-color: #f9f9f9;
-}
-
-.coeficientes-table tr:hover {
-    background-color: #f0f7ff;
-}
-
-.content {
-    padding: 80px 20px 20px;
-    max-width: 1200px;
-    margin: 0 auto;
-}
-
-h1 {
-    color: #333;
-    margin-bottom: 30px;
-    text-align: center;
-    position: relative;
-}
-
-.gear-icon {
-    font-size: 24px;
-    color: #666;
-    cursor: pointer;
-    transition: color 0.3s ease;
-}
-
-.header-icons {
-    position: absolute;
-    right: 0;
-    top: 50%;
-    transform: translateY(-50%);
-    display: flex;
-    align-items: center;
-    gap: 15px; /* Controla o espaço entre os ícones */
-}
-
-.gear-icon:hover {
-    color: #2176ff;
-}
-
-.form-container {
-    max-width: 600px;
-    margin: 0 auto;
-    background-color: #ffffff;
-    padding: 30px;
-    border-radius: 8px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-}
-
-.form-group {
-    margin-bottom: 20px;
-    position: relative;
-}
-
-.form-group label {
-    display: block;
-    margin-bottom: 8px;
-    color: #333;
-    font-weight: 500;
-}
-
-.form-group input,
-.form-group select,
-.form-group textarea {
-    width: 100%;
-    padding: 10px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    font-size: 16px;
-    transition: border-color 0.3s ease;
-}
-
-.form-group input:focus,
-.form-group select:focus,
-.form-group textarea:focus {
-    outline: none;
-    border-color: #2176ff;
-}
-
-
-#pais-list,
-#competicao-list {
-    position: absolute;
-    top: 100%;
-    left: 0;
-    right: 0;
-    background-color: #ffffff;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    max-height: 200px;
-    overflow-y: auto;
-    z-index: 1000;
-}
-
-.search-option {
-    padding: 10px;
-    cursor: pointer;
-    transition: background-color 0.3s ease;
-}
-
-.search-option:hover {
-    background-color: #f5f5f5;
-}
-
-.submit-btn {
-    background-color: #2176ff;
-    color: #ffffff;
-    border: none;
-    padding: 12px 24px;
-    border-radius: 4px;
-    font-size: 16px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: background-color 0.3s ease;
-}
-
-.submit-btn:hover {
-    background-color: #1a5cc4;
-}
-
-/* Estilos para o popup de parâmetros */
-.overlay {
-    display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: rgba(0, 0, 0, 0.5);
-    z-index: 2000;
-}
-
-.overlay.active {
-    display: block;
-}
-
-.params-popup {
-    display: none;
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background-color: #fff;
-    border-radius: 8px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
-    padding: 20px;
-    width: 90%;
-    max-width: 800px;
-    max-height: 80vh;
-    overflow-y: auto;
-    z-index: 2001;
-}
-
-.params-popup.active {
-    display: block;
-}
-
-.params-popup h2 {
-    margin-bottom: 20px;
-    color: #333;
-    border-bottom: 1px solid #eee;
-    padding-bottom: 10px;
-}
-
-.params-popup .close-btn {
-    position: absolute;
-    top: 15px;
-    right: 15px;
-    font-size: 20px;
-    color: #666;
-    cursor: pointer;
-    transition: color 0.3s ease;
-}
-
-.params-popup .close-btn:hover {
-    color: #2176ff;
-}
-
-/* Novos estilos para o popup aprimorado */
-.param-section {
-    margin-bottom: 30px;
-    border: 1px solid #eee;
-    border-radius: 8px;
-    padding: 20px; /* Aumentei o padding */
-    background-color: #f9f9f9; /* Fundo levemente diferente */
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1); /* Sombra sutil */
-}
-
-.param-section h3 {
-    margin-bottom: 15px;
-    color: #333;
-    display: flex; /* Para alinhar o ícone */
-    align-items: center; /* Alinhar verticalmente */
-    gap: 10px; /* Espaço entre ícone e texto */
-    border-bottom: 1px solid #eee;
-    padding-bottom: 10px;
-}
-/*
-.form-group {
-    margin-bottom: 15px;
-}
-*/
-.form-group label {
-    display: block;
-    margin-bottom: 5px; /* Reduzi o margin */
-    color: #555; /* Cor um pouco mais escura */
-    font-weight: 500;
-}
-
-.form-group input[type="text"],
-.form-group input[type="number"],
- .form-group select
- {
-    width: 100%;
-    padding: 10px;
-    border: 1px solid #ccc; /* Borda mais suave */
-    border-radius: 4px;
-    font-size: 16px;
-    transition: border-color 0.3s ease, box-shadow 0.3s ease; /* Transição mais suave */
-}
-
-.form-group input[type="text"]:focus,
-.form-group input[type="number"]:focus,
-.form-group select:focus
- {
-    outline: none;
-    border-color: #2176ff;
-    box-shadow: 0 0 5px rgba(33, 118, 255, 0.5); /* Sombra ao focar */
-}
-
-.checkbox-group {
-    display: flex;
-    flex-direction: row; /* Exibe os itens lado a lado */
-    flex-wrap: wrap; /* Permite quebrar a linha se não houver espaço */
-    gap: 15px; /* Ajuste o espaçamento horizontal entre os itens */
-    margin-top: 5px;
-}
-
-.checkbox-group label {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    cursor: pointer;
-    color: #555;
-    font-size: 14px;
-    /* width: auto;  Ou width: alguma porcentagem se precisar limitar a largura */
-    white-space: nowrap; /* Impede que o texto do label quebre linha */
-}
-
-/* Estilos para os checkboxes customizados */
-.checkbox-group input[type="checkbox"] {
-    appearance: none; /* Remove a aparência padrão */
-    -webkit-appearance: none;
-    -moz-appearance: none;
-    width: 18px;
-    height: 18px;
-    border: 2px solid #ccc;
-    border-radius: 4px;
-    cursor: pointer;
-    transition: background-color 0.3s ease, border-color 0.3s ease;
-}
-
-.checkbox-group input[type="checkbox"]:checked {
-    background-color: #2176ff;
-    border-color: #2176ff;
-}
-
-/* Ícone dentro do checkbox (usando pseudoelemento) */
-.checkbox-group input[type="checkbox"]:checked::before {
-    content: '\f00c'; /* Código do ícone de check (Font Awesome) */
-    font-family: 'Font Awesome 6 Free'; /* Ajuste para a versão do Font Awesome */
-    font-weight: 900;
-    font-size: 12px;
-    color: white;
-    display: flex; /* Para centralizar o ícone */
-    justify-content: center;
-    align-items: center;
-    width: 100%;
-    height: 100%;
-}
-
-.add-category-btn {
-    background-color: #2176ff;
-    color: white;
-    border: none;
-    padding: 10px 15px;
-    border-radius: 4px;
-    font-size: 16px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: background-color 0.3s ease;
-    display: flex; /* Para alinhar ícone e texto */
-    align-items: center;
-    gap: 8px;
-    margin-top: 10px;
-}
- .add-category-btn:disabled {
-    background-color: #cccccc; /* Cor para botão desabilitado */
-    cursor: not-allowed;
-}
-
-.add-category-btn:hover {
-    background-color: #1a5cc4;
-}
-.existing-categories-section {
-    /* Estilos específicos para a seção de categorias existentes, se necessário */
-}
-
-.message-error {
-    color: #ff0000;
-    margin-top: 5px;
-    font-size: 14px;
-}
-  .save-params-btn {
-    background-color: #4CAF50; /* tom verde */
-    color: white;
-    padding: 10px 15px;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 16px;
-    transition: background-color 0.3s ease;
-    display: block; /* Ocupa toda a largura */
-    width: 100%; /* Garante que ocupa toda a largura */
-    margin-top: 20px; /* Espaço do topo */
-}
-
-.save-params-btn:hover {
-    background-color: #388E3C; /*tom verde escuro */
-}
-
-
-/* Estilos gerais para a lista */
-.categories-list {
-    list-style: none;
-    padding: 0;
-}
-
-.categories-list > h4 { /* Style for category titles */
-    margin-bottom: 10px; /* Space below category title */
-    padding: 10px;
-    border-radius: 8px;
-    background-color: #f0f0f0; /* Light grey background for titles */
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-    font-size: 18px;
-    font-weight: bold;
-    color: #333;
-}
-
-
-.subcategories-container {
-    display: flex; /* Use flexbox for horizontal layout */
-    flex-wrap: wrap; /* Allow cards to wrap to the next line */
-    gap: 10px; /* Space between cards */
-    margin-bottom: 15px; /* Space after each category */
-}
-
-.subcategory-card {
-    background-color: #f0f0f0;
-    border: 1px solid #ddd;
-    border-radius: 5px;
-    padding: 10px;
-    cursor: pointer;
-    width: 150px; /* Adjust as needed */
-    text-align: center;
-    transition: background-color 0.3s ease;
-}
-
-.subcategory-card:hover {
-    background-color: #e0e0e0;
-}
-
-.subcategory-name {
-    font-weight: bold;
-}
-
-
-/* Popup Styles */
-.popup-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.5); /* Semi-transparent background */
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 2002; /* Increased z-index to be on top of params-popup overlay (2000) and params-popup (2001) */
-}
-
-.detailed-info-popup {
-    background-color: #fff;
-    border-radius: 8px;
-    padding: 20px;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-    width: 80%; /* Adjust as needed */
-    max-width: 600px;
-    text-align: center;
-    z-index: 2003; /* Increased z-index to be on top of params-popup */
-}
-
-.detailed-info-popup h3 {
-    margin-bottom: 10px;
-}
-
-.detailed-info-popup p {
-    margin-bottom: 8px;
-    text-align: left; /* Align text within paragraphs to the left */
-}
-
-.detailed-info-popup button {
-    margin: 5px;
-}
-
-.detailed-info-popup .button-group {
-    margin-top: 15px; /* Add some space above the buttons */
-    display: flex;
-    justify-content: center; /* Center buttons horizontally */
-    gap: 10px; /* Space between buttons */
-}
-
-
-.close-popup{
-    background-color: #ccc; /* Cinza */
-    color: #333;
-}
-.close-popup:hover{
-     background-color: #bbb;
-}
-
-/* edit mode inside popup */
-.detailed-info-popup .edit-mode {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    padding: 10px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    background-color: #fff;
-    text-align: left; /* Ensure text inside edit mode is left-aligned */
-    margin-top: 10px; /* Add margin above edit form */
-}
-.detailed-info-popup .edit-mode input[type="text"] {
-    width: 100%;
-    padding: 8px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    font-size: 14px;
-}
-.detailed-info-popup .edit-mode .checkbox-group {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    margin-top: 5px; /* Add a little space above checkbox groups */
-}
-.detailed-info-popup .edit-mode .checkbox-group label {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-}
-.detailed-info-popup .edit-mode .button-group {
-    margin-top: 15px;
-    justify-content: flex-end; /* Align buttons to the right in edit mode */
-}
-
-
-/* Re-using button styles - Ensure these are consistent */
-.edit-btn, .delete-btn, .save-btn, .cancel-btn, .close-popup {
-    padding: 8px 16px; /* Slightly larger buttons */
-    border-radius: 4px;
-    font-size: 14px;
-    cursor: pointer;
-    transition: background-color 0.2s ease, color 0.2s ease;
-    border: none;
-    margin-left: 5px; /*spacing between buttons if needed*/
-    margin-right: 5px;
-}
-.edit-btn { background-color: #2196F3; color: white; }
-.edit-btn:hover{ background-color: #1976D2; }
-.delete-btn { background-color: #F44336; color: white; }
-.delete-btn:hover{ background-color: #D32F2F; }
-.save-btn { background-color: #4CAF50; color: white; }
-.save-btn:hover{ background-color: #388E3C; }
-.cancel-btn, .close-popup { background-color: #ccc; color: #333; }
-.cancel-btn:hover, .close-popup:hover{ background-color: #bbb; }
-
-
-/* Styles for toggle section */
-.section-header {
-    display: flex;
-    justify-content: space-between; /* Align title to left, icon to right */
-    align-items: center;
-    cursor: pointer; /* Indicate it's clickable */
-}
-
-.toggle-icon {
-    transition: transform 0.3s ease; /* Smooth arrow rotation */
-}
-
-.toggle-icon.rotate {
-    transform: rotate(180deg); /* Rotate arrow when section is open */
-}
-
-.section-content {
-    padding-top: 10px; /* Add some space between header and content when open */
-    overflow: hidden; /* Ensure smooth transition if using animation for height */
-}
-
-/* Styles for search bar */
-.search-container {
-    display: flex;
-    align-items: center;
-    margin-top: 15px;
-    margin-bottom: 10px; /* Add a bit of space below the search box */
-}
-
-#subcategory-search {
-    flex-grow: 1; /* Allow input to take up available space */
-    padding: 8px;
-    border: 1px solid #ccc;
-    border-radius: 4px 0 0 4px; /* Rounded left corners */
-    font-size: 14px;
-}
-
-.search-icon {
-    background-color: #eee;
-    color: #666;
-    padding: 8px;
-    border: 1px solid #ccc;
-    border-left: none; /* Remove left border to join with input */
-    border-radius: 0 4px 4px 0; /* Rounded right corners */
-    cursor: text; /* Change cursor to text to indicate input focus */
-}
-
-/* Style for Firebase data display area */
-#firebase-data-display {
-    margin-top: 10px;
-    padding-left: 20px;
-    font-size: 14px;
-    color: #555;
-}
-
-/* Style for Coeficientes section title */
-#coeficientes-section h3 {
-    font-size: 16px;
-    font-weight: bold;
-    color: #333;
-    margin-bottom: 5px;
-    margin-top: 15px;
-}
-
-#overall-popup .position-section {
-    margin-bottom: 25px;
-    padding: 15px;
-    border: 1px solid #e0e0e0;
-    border-radius: 8px;
-    background-color: #fcfcfc;
-}
-
-#overall-popup h4 {
-    margin-top: 0;
-    margin-bottom: 15px;
-    padding-bottom: 10px;
-    border-bottom: 1px solid #eee;
-    font-size: 16px;
-    color: #333;
-    font-weight: bold;
-}
-
-#overall-popup .casta-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 12px;
-}
-
-#overall-popup .casta-row label {
-    flex-basis: 120px;
-    flex-shrink: 0;
-    font-weight: 500;
-    font-size: 14px;
-}
-
-#overall-popup .casta-row input[type="number"] {
-    width: 90px;
-    padding: 8px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    text-align: center;
-}
-
-/* Opcional: Esconde as setas de incremento dos inputs numéricos */
-#overall-popup input::-webkit-outer-spin-button,
-#overall-popup input::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-#overall-popup input[type=number] {
-  -moz-appearance: textfield;
-}
-
-</style>
-
-</head>
-<body>
-    <nav class="top-menu">
-        <a href="engrenagem.html" class="menu-item">
-            <i class="fas fa-home"></i>
-        </a>
-        <a href="criar-gplayer.html" class="menu-item">
-            <i class="fas fa-user"></i>
-            CRIAR GPLAYER
-        </a>
-        <a href="criar-jogo.html" class="menu-item">
-            <i class="fas fa-gamepad"></i>
-            CRIAR JOGO
-        </a>
-        <a href="criar-jogadores.html" class="menu-item active">
-            <i class="fas fa-users"></i>
-            CRIAR JOGADORES
-        </a>
-        <a href="criar-clubes.html" class="menu-item">
-            <i class="fas fa-shield-alt"></i>
-            CRIAR CLUBES
-        </a>
-        <a href="criar-competicoes.html" class="menu-item">
-            <i class="fas fa-trophy"></i>
-            CRIAR COMPETIÇÕES
-        </a>
-        <a href="criar-pais.html" class="menu-item">
-            <i class="fas fa-globe"></i>
-            CRIAR PAÍS
-        </a>
-        <a href="criar-mods.html" class="menu-item">
-            <i class="fas fa-puzzle-piece"></i>
-            CRIAR MODS
-        </a>
-        <a href="criar-odds.html" class="menu-item">
-            <i class="fas fa-percentage"></i>
-            CRIAR ODDS
-        </a>
-    </nav>
-
-    <div class="content">
-      <h1>Criar Jogadores
-    <i class="fas fa-cog gear-icon" id="params-settings-icon"></i>
-    <i class="fas fa-flask gear-icon" id="lab-icon" style="margin-left: 10px; cursor: pointer;"></i>
-</h1>
-        <div class="form-container">
-            <form id="criar-jogador-form">
-                 <div class="form-group">
-                    <label for="nome-jogador">Nome do Jogador</label>
-                    <input type="text" id="nome-jogador" name="nome-jogador" required>
-                </div>
-                <div class="form-group">
-                    <label for="imagem-jogador">Imagem do Jogador (URL)</label>
-                    <input type="url" id="imagem-jogador" name="imagem-jogador" required>
-                </div>
-                <div class="form-group">
-                    <label for="pais-jogador">País do Jogador</label>
-                    <input type="text" id="pais-jogador" name="pais-jogador" placeholder="Digite para pesquisar..." required>
-                    <div id="pais-list"></div>
-                </div>
-                <div class="form-group">
-                    <label for="clube-jogador">Clube do Jogador</label>
-                    <input type="text" id="clube-jogador" name="clube-jogador" placeholder="Digite para pesquisar..." required>
-                    <div id="clube-list"></div>
-                </div>
-                <div class="form-group">
-                    <label for="posicao-jogador">Posição do Jogador</label>
-                    <select id="posicao-jogador" name="posicao-jogador" required>
-                        <option value="">Selecione uma posição</option>
-                        <option value="Guarda-Redes">Guarda-Redes</option>
-                        <option value="Defesa">Defesa</option>
-                        <option value="Médio">Médio</option>
-                        <option value="Avançado">Avançado</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="overall-jogador">Overall do Jogador (Opcional)</label>
-                    <input type="number" id="overall-jogador" name="overall-jogador" min="0" max="1000">
-                </div>
-                <div class="form-group">
-                    <label for="casta-jogador">Casta do Jogador (Opcional)</label>
-                    <select id="casta-jogador" name="casta-jogador">
-                        <option value="">Selecione uma casta</option>
-                        <option value="Jogador Ouro">Jogador Ouro</option>
-                        <option value="Jogador Prata">Jogador Prata</option>
-                        <option value="Jogador Bronze">Jogador Bronze</option>
-                        <option value="Jogador Platina">Jogador Platina</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="mercado-jogador">No Mercado?</label>
-                    <select id="mercado-jogador" name="mercado-jogador">
-                        <option value="false" selected>Não</option>
-                        <option value="true">Sim</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Mini Games? (Opcional)</label>
-                    <div class="checkbox-group">
-                        <div class="mini-game-option">
-                            <label><input type="checkbox" name="mini-games" value="world26" class="mini-game-checkbox"> Euro26</label>
-                            <div class="mini-game-price" style="display: none;">
-                                <input type="text" name="world26-preco" maxlength="5" placeholder="Preço" class="mini-game-price-input">
-                            </div>
-                        </div>
-                        <div class="mini-game-option">
-                            <label><input type="checkbox" name="mini-games" value="whowins" class="mini-game-checkbox"> WhoWins</label>
-                            <div class="mini-game-price" style="display: none;">
-                                <input type="text" name="whowins-preco" maxlength="5" placeholder="Preço" class="mini-game-price-input">
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label for="preco-jogador">Preço</label>
-                    <input type="number" id="preco-jogador" name="preco-jogador" min="0" max="1000">
-                </div>
-                <div class="form-group">
-                    <label for="comprador-jogador">Comprado por (Opcional)</label>
-                    <select id="comprador-jogador" name="comprador-jogador">
-                        <option value="">Ninguém</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label for="estatisticas-jogador">Estatísticas (Opcional)</label>
-                    <textarea id="estatisticas-jogador" name="estatisticas-jogador" rows="5"></textarea>
-                </div>
-
-                <div id="coeficientes-section" style="display: none;">
-                    <h3>Coeficientes</h3>
-                    <div id="firebase-data-display">
-                        <!-- Firebase data will be displayed here -->
-                    </div>
-                </div>
-
-                <button type="submit" class="submit-btn">Criar Jogador</button>
-
-            </form>
-        </div>
-    </div>
-
-    <!-- Overlay and Popup for Parameters Settings -->
-    <div class="overlay" id="params-overlay"></div>
-    <div class="params-popup" id="params-popup">
-         <i class="fas fa-times close-btn" id="close-params-popup"></i>
-        <h2><i class="fas fa-cog"></i> Configurações de Parâmetros</h2>
-        <div id="params-container">
-            <!-- Adicionar Categoria e Subcategoria -->
-            <div class="param-section add-category-section">
-                <div class="section-header">
-                    <h3>
-                        <i class="fas fa-plus-circle"></i> Adicionar Categoria/Subcategoria
-                        <i class="fas fa-chevron-down toggle-icon"></i>
-                    </h3>
-                </div>
-                <div class="section-content" style="display: none;">
-                    <div class="form-group">
-                        <label for="categoria-nome">Nome da Categoria:</label>
-                        <input type="text" id="categoria-nome" name="categoria-nome">
-                    </div>
-                    <div class="form-group">
-                        <label for="subcategoria-nome">Nome da Subcategoria:</label>
-                        <input type="text" id="subcategoria-nome" name="subcategoria-nome">
-                    </div>
-                    <!-- Checkboxes para Casta -->
-                    <div class="form-group">
-                        <label>Casta:</label>
-                        <div class="checkbox-group">
-                            <label><input type="checkbox" name="subcategoria-casta" value="Jogador Ouro"> <i class="fas fa-medal" style="color: gold;"></i> Jogador Ouro</label>
-                            <label><input type="checkbox" name="subcategoria-casta" value="Jogador Prata"> <i class="fas fa-medal" style="color: silver;"></i> Jogador Prata</label>
-                            <label><input type="checkbox" name="subcategoria-casta" value="Jogador Bronze"> <i class="fas fa-medal" style="color: #cd7f32;"></i> Jogador Bronze</label>
-                            <label><input type="checkbox" name="subcategoria-casta" value="Jogador Platina"> <i class="fas fa-medal" style="color: #e5e4e2;"></i> Jogador Platina</label>
-                        </div>
-                    </div>
-                    <!-- Checkboxes para Tipo de Jogador -->
-                    <div class="form-group">
-                        <label>Tipo de Jogador:</label>
-                        <div class="checkbox-group">
-                            <label><input type="checkbox" name="subcategoria-tipo" value="Guarda-Redes"> <i class="fas fa-hands"></i> Guarda-Redes</label>
-                            <label><input type="checkbox" name="subcategoria-tipo" value="Defesa"> <i class="fas fa-shield-alt"></i> Defesa</label>
-                            <label><input type="checkbox" name="subcategoria-tipo" value="Médio"> <i class="fas fa-running"></i> Médio</label>
-                            <label><input type="checkbox" name="subcategoria-tipo" value="Avançado"> <i class="fas fa-futbol"></i> Avançado</label>
-                        </div>
-                    </div>
-                    <button class="add-category-btn" id="add-category-btn"><i class="fas fa-plus"></i> Adicionar</button>
-                    <div id="category-message" class="message-error"></div>
-                </div>
-            </div>
-            <!-- Lista de Categorias e Subcategorias -->
-            <div class="param-section existing-categories-section">
-                <h3><i class="fas fa-list-ul"></i> Categorias e Subcategorias Existentes</h3>
-                <div class="search-container">
-                    <input type="text" id="subcategory-search" placeholder="Pesquisar Subcategoria...">
-                    <i class="fas fa-search search-icon"></i>
-                </div>
-               <ul id="categories-list" class="categories-list">
-                   <!-- As categorias e subcategorias serão inseridas aqui dinamicamente -->
-               </ul>
-            </div>
-        </div>
-        <button class="save-params-btn" id="save-params-btn"><i class="fas fa-save"></i> Salvar Configurações</button>
-    </div>
-    <!-- ADICIONE ESTE BLOCO NO FINAL DO SEU <body> -->
-<div class="overlay" id="overall-overlay"></div>
-<div class="params-popup" id="overall-popup">
-    <i class="fas fa-times close-btn" id="close-overall-popup"></i>
-    <h2><i class="fas fa-flask"></i> Limites de Overall por Casta</h2>
-    <div id="overall-limits-container">
-        <!-- O conteúdo será gerado por JavaScript -->
-    </div>
-    <button class="save-params-btn" id="save-overall-btn">Salvar</button>
-</div>
 </body>
 </html>
