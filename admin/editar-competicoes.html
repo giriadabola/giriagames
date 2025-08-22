@@ -5,80 +5,115 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Editar Competições - G EMPIRE</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+
+    <!-- 1. Adiciona o nosso guardião de segurança. Ele executará primeiro. -->
+    <script type="module" src="/js/auth-guard.js"></script>
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { min-height: 100vh; background-color: #f0f0f0; font-family: Arial, sans-serif; }
+        .top-menu { position: fixed; top: 0; left: 0; width: 100%; background-color: #ffffff; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); padding: 12px 0; display: flex; justify-content: center; gap: 24px; align-items: center; z-index: 1000; }
+        .menu-item { text-decoration: none; color: #666; transition: color 0.3s ease; font-weight: 500; padding: 8px 16px; border-radius: 4px; font-size: 14px; line-height: 1.4; display: flex; align-items: center; gap: 8px; }
+        .menu-item:hover, .menu-item.active { color: #2176ff; background-color: rgba(33, 118, 255, 0.1); }
+        .menu-item i { font-size: 16px; }
+        .content { padding: 80px 20px 20px; max-width: 1200px; margin: 0 auto; }
+        h1 { color: #333; margin-bottom: 30px; text-align: center; }
+        .form-container { max-width: 600px; margin: 0 auto; background-color: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); }
+        .form-group { margin-bottom: 20px; position: relative; }
+        .competition-select-container { display: flex; align-items: center; gap: 10px; max-width: 600px; margin: 0 auto 20px; }
+        .form-group label { display: block; margin-bottom: 8px; color: #333; font-weight: 500; }
+        .form-group input, .form-group select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px; transition: border-color, 0.3s ease; }
+        #all-competitions-select { width: 400px; }
+        .loading-spinner { display: inline-block; width: 20px; height: 20px; border: 3px solid rgba(33, 118, 255, 0.3); border-radius: 50%; border-top-color: #2176ff; animation: spin 1s ease-in-out infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .form-group input:focus, .form-group select:focus { outline: none; border-color: #2176ff; }
+        #pais-list { position: absolute; top: 100%; left: 0; right: 0; background-color: #ffffff; border: 1px solid #ddd; border-radius: 4px; max-height: 200px; overflow-y: auto; z-index: 1000; }
+        .country-option { padding: 10px; cursor: pointer; transition: background-color, 0.3s ease; }
+        .country-option:hover { background-color: #f5f5f5; }
+        .submit-btn { background-color: #2176ff; color: #ffffff; border: none; padding: 12px 24px; border-radius: 4px; font-size: 16px; font-weight: 500; cursor: pointer; transition: background-color, 0.3s ease; }
+        .submit-btn:hover { background-color: #1a5cc4; }
+    </style>
+</head>
+<body style="display: none;"> <!-- 2. O corpo da página está oculto por padrão -->
+
+    <nav class="top-menu">
+        <a href="engrenagem.html" class="menu-item"><i class="fas fa-home"></i></a>
+        <a href="editar-gplayer.html" class="menu-item"><i class="fas fa-user"></i>EDITAR GPLAYER</a>
+        <a href="editar-jogo.html" class="menu-item"><i class="fas fa-gamepad"></i>EDITAR JOGO</a>
+        <a href="editar-jogadores.html" class="menu-item"><i class="fas fa-users"></i>EDITAR JOGADORES</a>
+        <a href="editar-clubes.html" class="menu-item"><i class="fas fa-shield-alt"></i>EDITAR CLUBES</a>
+        <a href="editar-competicoes.html" class="menu-item active"><i class="fas fa-trophy"></i>EDITAR COMPETIÇÕES</a>
+        <a href="editar-pais.html" class="menu-item"><i class="fas fa-globe"></i>EDITAR PAIS</a>
+        <a href="editar-mods.html" class="menu-item"><i class="fas fa-puzzle-piece"></i>EDITAR MODS</a>
+    </nav>
+    <div class="content">
+        <h1>Editar Competições</h1>
+        <div class="competition-select-container">
+            <div class="form-group">
+                <select id="all-competitions-select">
+                    <option value="">Selecione uma competição</option>
+                </select>
+            </div>
+            <div id="loading-spinner" class="loading-spinner"></div>
+        </div>
+        <div class="form-container">
+            <form id="editar-competicao-form">
+                <div class="form-group"><label for="nome-competicao">Nome da Competição</label><input type="text" id="nome-competicao" name="nome-competicao" required></div>
+                <div class="form-group"><label for="escalao-competicao">Escalão</label><select id="escalao-competicao" name="escalao-competicao" required><option value="1 Divisão">1 Divisão</option><option value="2 Divisão">2 Divisão</option><option value="3 Divisão">3 Divisão</option><option value="4 Divisão">4 Divisão</option><option value="Taça">Taça</option><option value="Torneio">Torneio</option><option value="Amigável">Amigável</option></select></div>
+                <div class="form-group"><label for="imagem-competicao">Imagem da Competição (URL)</label><input type="url" id="imagem-competicao" name="imagem-competicao" required></div>
+                <div class="form-group"><label for="pais-competicao">País da Competição</label><input type="text" id="pais-competicao" name="pais-competicao" placeholder="Digite para pesquisar..." required><div id="pais-list"></div></div>
+                <div class="form-group"><label for="arena-competicao">Arena</label><select id="arena-competicao" name="arena-competicao"><option value="">Selecione uma arena (opcional)</option><option value="Arena 1">Arena 1</option><option value="Arena 2">Arena 2</option><option value="Arena 3">Arena 3</option><option value="Arena 4">Arena 4</option><option value="Arena 5">Arena 5</option><option value="Arena 6">Arena 6</option><option value="Arena 7">Arena 7</option><option value="Arena 8">Arena 8</option><option value="Arena 9">Arena 9</option><option value="Arena 10">Arena 10</option></select></div>
+                <button type="submit" class="submit-btn">Editar Competição</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- 3. Script específico da página, agora limpo e a importar o 'db' do guardião -->
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, doc, getDoc, updateDoc, collection, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { db } from '/js/auth-guard.js';
+        import { doc, getDoc, updateDoc, collection, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-        const firebaseConfig = {
-            apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0",
-            authDomain: "g-games-8a8fc.firebaseapp.com",
-            projectId: "g-games-8a8fc",
-            storageBucket: "g-games-8a8fc.firebasestorage.app",
-            messagingSenderId: "689897349449",
-            appId: "1:689897349449:web:536599794579901beb7a98",
-            measurementId: "G-GTTPJ6G5MD"
-        };
+        // A inicialização do Firebase foi removida daqui
 
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-
-        // Function to search countries (same as before)
         async function searchCountries(searchTerm) {
             const paisesRef = collection(db, 'paises');
             const searchTermLower = searchTerm.toLowerCase();
-            const querySnapshot = await getDocs(paisesRef); // Fetch all countries
-            const results = querySnapshot.docs
+            const querySnapshot = await getDocs(paisesRef);
+            return querySnapshot.docs
                 .map(doc => ({ id: doc.id, ...doc.data() }))
                 .filter(country => country.nome.toLowerCase().includes(searchTermLower));
-            return results;
         }
 
-        // Function to get country by id
         async function getCountryById(countryId) {
             const countryRef = doc(db, 'paises', countryId);
             const countrySnap = await getDoc(countryRef);
-
-            if (countrySnap.exists()) {
-              return {id: countrySnap.id, ...countrySnap.data()};
-            } else {
-              return null;
-            }
+            return countrySnap.exists() ? {id: countrySnap.id, ...countrySnap.data()} : null;
         }
 
-        // Function to load all competitions into the dropdown
         async function loadCompetitions() {
             const allCompetitionsSelect = document.getElementById('all-competitions-select');
             const loadingSpinner = document.getElementById('loading-spinner');
             
-            // Show loading spinner
             if (loadingSpinner) loadingSpinner.style.display = 'inline-block';
             
             const q = query(collection(db, "competicoes"));
             const querySnapshot = await getDocs(q);
+            const competitions = [];
 
-            const competitions = []; // Array to store competition data
-
-            // Fetch all competitions and their country names
-            for (const doc of querySnapshot.docs) {
-                const competitionData = doc.data();
+            for (const docSnapshot of querySnapshot.docs) {
+                const competitionData = docSnapshot.data();
                 const country = await getCountryById(competitionData.paisId);
-
                 if (country) {
                     competitions.push({
-                        id: doc.id,
+                        id: docSnapshot.id,
                         displayString: `${country.nome}: ${competitionData.nome}`
                     });
                 }
             }
 
-            // Sort the competitions array by country name
-            competitions.sort((a, b) => {
-                const countryA = a.displayString.split(':')[0].trim();
-                const countryB = b.displayString.split(':')[0].trim();
-                return countryA.localeCompare(countryB);
-            });
+            competitions.sort((a, b) => a.displayString.localeCompare(b.displayString));
 
-            // Add the sorted options to the dropdown
+            allCompetitionsSelect.innerHTML = '<option value="">Selecione uma competição</option>'; // Limpa antes de adicionar
             competitions.forEach(comp => {
                 const option = document.createElement('option');
                 option.value = comp.id;
@@ -86,7 +121,6 @@
                 allCompetitionsSelect.appendChild(option);
             });
             
-            // Hide loading spinner after loading is complete
             if (loadingSpinner) loadingSpinner.style.display = 'none';
         }
 
@@ -97,70 +131,53 @@
             const imagemInput = document.getElementById('imagem-competicao');
             const paisInput = document.getElementById('pais-competicao');
             const arenaInput = document.getElementById('arena-competicao');
-            const paisList = document.getElementById('pais-list');
-             let selectedPaisId = null; // Keep track within this function's scope
-                try {
-                    const docRef = doc(db, 'competicoes', competitionId);
-                    const docSnap = await getDoc(docRef);
+            
+            try {
+                const docRef = doc(db, 'competicoes', competitionId);
+                const docSnap = await getDoc(docRef);
 
-                    if (docSnap.exists()) {
-                        const data = docSnap.data();
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    nomeInput.value = data.nome;
+                    escalaoInput.value = data.escalao;
+                    imagemInput.value = data.imagem;
+                    arenaInput.value = data.arena || "";
 
-                        // Populate form fields
-                        nomeInput.value = data.nome;
-                        escalaoInput.value = data.escalao;
-                        imagemInput.value = data.imagem;
-                        //paisInput.value = data.paisId; // Removed direct assignment
-
-                        // Get and display the country name
-                        const country = await getCountryById(data.paisId);
-                        if(country) {
-                            paisInput.value = country.nome;
-                            selectedPaisId = country.id;  // Update the locally scoped variable
-                        }
-
-                        arenaInput.value = data.arena || ""; // Use empty string if arena is not set
-
-                        // Update the paisId inside the function.
-                        form.selectedPaisId = selectedPaisId; // Store on the form itself
-                    } else {
-                        alert('Competição não encontrada.');
-                        return; // Removed redirect
+                    const country = await getCountryById(data.paisId);
+                    if(country) {
+                        paisInput.value = country.nome;
+                        form.selectedPaisId = country.id;
                     }
-
-                } catch (error) {
-                    console.error("Erro ao buscar dados da competição:", error);
-                    alert('Erro ao buscar dados da competição.');
-                    return;
+                } else {
+                    alert('Competição não encontrada.');
                 }
+            } catch (error) {
+                console.error("Erro ao buscar dados da competição:", error);
+                alert('Erro ao buscar dados da competição.');
+            }
         }
 
         document.addEventListener('DOMContentLoaded', async () => {
             const form = document.getElementById('editar-competicao-form');
-            const nomeInput = document.getElementById('nome-competicao');
-            const imagemInput = document.getElementById('imagem-competicao');
             const paisInput = document.getElementById('pais-competicao');
             const paisList = document.getElementById('pais-list');
             const allCompetitionsSelect = document.getElementById('all-competitions-select');
-            form.selectedPaisId = null; // Initialize on the form
+            form.selectedPaisId = null;
 
-            // --- Country Search ---  (No changes here)
             paisInput.addEventListener('input', async (e) => {
                 const searchTerm = e.target.value.trim();
-                if (searchTerm.length < 2) {
-                    paisList.innerHTML = '';
-                    return;
-                }
+                paisList.innerHTML = '';
+                if (searchTerm.length < 2) return;
+                
                 try {
                     const countries = await searchCountries(searchTerm);
-                    paisList.innerHTML = '';
                     countries.forEach(country => {
                         const div = document.createElement('div');
                         div.className = 'country-option';
                         div.textContent = country.nome;
                         div.addEventListener('click', () => {
                             paisInput.value = country.nome;
-                            form.selectedPaisId = country.id; // Update the selectedPaisId.
+                            form.selectedPaisId = country.id;
                             paisList.innerHTML = '';
                         });
                         paisList.appendChild(div);
@@ -169,57 +186,41 @@
                     console.error('Erro ao buscar países:', error);
                 }
             });
-             // --- End Country Search ---
 
-            // Load competitions into the dropdown
             await loadCompetitions();
 
-            // Event listener for competition selection (no changes)
-            allCompetitionsSelect.addEventListener('change', async (e) => {
-                const selectedCompetitionId = e.target.value;
-                if (selectedCompetitionId) {
-                    await populateCompetitionForm(selectedCompetitionId);
+            allCompetitionsSelect.addEventListener('change', (e) => {
+                if (e.target.value) {
+                    populateCompetitionForm(e.target.value);
                 }
             });
 
-            // Handle form submission (update data) - No changes
             form.addEventListener('submit', async (e) => {
                 e.preventDefault();
-                const competitionId = allCompetitionsSelect.value; // ALWAYS get current ID
-
-                const nomeCompeticao = nomeInput.value;
-                const imagemCompeticao = imagemInput.value;
-                const arenaCompeticao = document.getElementById('arena-competicao').value;
-
-                 if (!form.selectedPaisId) {
+                const competitionId = allCompetitionsSelect.value;
+                if (!competitionId) {
+                    alert('Por favor, selecione uma competição para editar.');
+                    return;
+                }
+                if (!form.selectedPaisId) {
                     alert('Por favor, selecione um país válido da lista.');
                     return;
                 }
 
                 try {
                     const competitionData = {
-                        nome: nomeCompeticao,
+                        nome: document.getElementById('nome-competicao').value,
                         escalao: document.getElementById('escalao-competicao').value,
-                        imagem: imagemCompeticao,
-                        paisId: form.selectedPaisId
+                        imagem: document.getElementById('imagem-competicao').value,
+                        paisId: form.selectedPaisId,
+                        arena: document.getElementById('arena-competicao').value || null
                     };
 
-                    if (arenaCompeticao) {
-                        competitionData.arena = arenaCompeticao;
-                    }
+                    await updateDoc(doc(db, 'competicoes', competitionId), competitionData);
 
-                    // Update the document
-                    const docRef = doc(db, 'competicoes', competitionId);
-                    await updateDoc(docRef, competitionData);
-
-                    // Reload competitions to reflect changes
-                    // Clear existing options.
-                    allCompetitionsSelect.innerHTML = '<option value="">Selecione uma competição</option>';
-                    await loadCompetitions(); // Repopulate
-                    allCompetitionsSelect.value = competitionId; // Re-select current competition.
-
+                    await loadCompetitions();
+                    allCompetitionsSelect.value = competitionId;
                     alert('Competição atualizada com sucesso!');
-
                 } catch (error) {
                     console.error("Erro ao atualizar competição:", error);
                     alert('Erro ao atualizar competição.');
@@ -227,269 +228,5 @@
             });
         });
     </script>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            min-height: 100vh;
-            background-color: #f0f0f0;
-            font-family: Arial, sans-serif;
-        }
-
-        .top-menu {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            background-color: #ffffff;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-            padding: 12px 0;
-            display: flex;
-            justify-content: center;
-            gap: 24px;
-            align-items: center;
-            z-index: 1000;
-        }
-
-        .menu-item {
-            text-decoration: none;
-            color: #666;
-            transition: color 0.3s ease;
-            font-weight: 500;
-            padding: 8px 16px;
-            border-radius: 4px;
-            font-size: 14px;
-            line-height: 1.4;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .menu-item:hover, .menu-item.active {
-            color: #2176ff;
-            background-color: rgba(33, 118, 255, 0.1);
-        }
-
-          .menu-item i {
-            font-size: 16px;
-
-        }
-
-        .content {
-            padding: 80px 20px 20px;
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-
-        h1 {
-            color: #333;
-            margin-bottom: 30px;
-            text-align: center;
-        }
-
-        .form-container { /* Added this class for styling the form */
-            max-width: 600px;
-            margin: 0 auto;
-            background-color: #ffffff;
-            padding: 30px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-        }
-
-        .form-group { /* Added this class for styling form groups */
-            margin-bottom: 20px;
-            position: relative;
-        }
-        
-        .competition-select-container {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            max-width: 600px;
-            margin: 0 auto 20px;
-        }
-
-        .form-group label { /* Added this class for styling labels */
-            display: block;
-            margin-bottom: 8px;
-            color: #333;
-            font-weight: 500;
-        }
-
-        .form-group input,
-        .form-group select { /* Added this class for styling inputs and selects */
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 16px;
-            transition: border-color, 0.3s ease;
-        }
-        
-        #all-competitions-select {
-            width: 400px; /* Reduced width */
-        }
-        
-        .loading-spinner {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 3px solid rgba(33, 118, 255, 0.3);
-            border-radius: 50%;
-            border-top-color: #2176ff;
-            animation: spin 1s ease-in-out infinite;
-        }
-        
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        .form-group input:focus,
-        .form-group select:focus { /* Added this class for styling focused inputs/selects */
-            outline: none;
-            border-color: #2176ff;
-        }
-
-        #pais-list {
-            position: absolute;
-            top: 100%;
-            left: 0;
-            right: 0;
-            background-color: #ffffff;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            max-height: 200px;
-            overflow-y: auto;
-            z-index: 1000;
-        }
-
-        .country-option {
-            padding: 10px;
-            cursor: pointer;
-            transition: background-color, 0.3s ease;
-        }
-
-        .country-option:hover {
-            background-color: #f5f5f5;
-        }
-
-        .submit-btn { /* Renamed this class for clarity */
-            background-color: #2176ff;
-            color: #ffffff;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 4px;
-            font-size: 16px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: background-color, 0.3s ease;
-        }
-
-        .submit-btn:hover { /* Renamed this class for clarity */
-            background-color: #1a5cc4;
-        }
-
-    </style>
-</head>
-<body>
-    <nav class="top-menu">
-        <a href="engrenagem.html" class="menu-item">
-            <i class="fas fa-home"></i>
-        </a>
-        <a href="editar-gplayer.html" class="menu-item">
-            <i class="fas fa-user"></i>
-            EDITAR GPLAYER
-        </a>
-        <a href="editar-jogo.html" class="menu-item">
-            <i class="fas fa-gamepad"></i>
-            EDITAR JOGO
-        </a>
-        <a href="editar-jogadores.html" class="menu-item">
-            <i class="fas fa-users"></i>
-            EDITAR JOGADORES
-        </a>
-        <a href="editar-clubes.html" class="menu-item">
-            <i class="fas fa-shield-alt"></i>
-            EDITAR CLUBES
-        </a>
-        <a href="editar-competicoes.html" class="menu-item active">
-            <i class="fas fa-trophy"></i>
-            EDITAR COMPETIÇÕES
-        </a>
-        <a href="editar-pais.html" class="menu-item">
-            <i class="fas fa-globe"></i>
-            EDITAR PAIS
-        </a>
-        <a href="editar-mods.html" class="menu-item">
-            <i class="fas fa-puzzle-piece"></i>
-            EDITAR MODS
-        </a>
-    </nav>
-    <div class="content">
-        <h1>Editar Competições</h1>
-        <!-- Competition Selection Dropdown -->
-        <div class="competition-select-container">
-            <div class="form-group">
-                <select id="all-competitions-select">
-                    <option value="">Selecione uma competição</option>
-                    <!-- Options will be added here by JavaScript -->
-                </select>
-            </div>
-            <div id="loading-spinner" class="loading-spinner"></div>
-        </div>
-
-        <!-- Form Container -->
-        <div class="form-container">
-            <form id="editar-competicao-form">
-                <div class="form-group">
-                    <label for="nome-competicao">Nome da Competição</label>
-                    <input type="text" id="nome-competicao" name="nome-competicao" required>
-                </div>
-                <div class="form-group">
-                    <label for="escalao-competicao">Escalão</label>
-                    <select id="escalao-competicao" name="escalao-competicao" required>
-                        <option value="1 Divisão">1 Divisão</option>
-                        <option value="2 Divisão">2 Divisão</option>
-                        <option value="3 Divisão">3 Divisão</option>
-                        <option value="4 Divisão">4 Divisão</option>
-                        <option value="Taça">Taça</option>
-                        <option value="Torneio">Torneio</option>
-                        <option value="Amigável">Amigável</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="imagem-competicao">Imagem da Competição (URL)</label>
-                    <input type="url" id="imagem-competicao" name="imagem-competicao" required>
-                </div>
-                <div class="form-group">
-                    <label for="pais-competicao">País da Competição</label>
-                     <input type="text" id="pais-competicao" name="pais-competicao" placeholder="Digite para pesquisar..." required>
-                    <div id="pais-list"></div>
-                </div>
-                <!-- Arena Dropdown -->
-                <div class="form-group">
-                    <label for="arena-competicao">Arena</label>
-                    <select id="arena-competicao" name="arena-competicao">
-                        <option value="">Selecione uma arena (opcional)</option>
-                        <option value="Arena 1">Arena 1</option>
-                        <option value="Arena 2">Arena 2</option>
-                        <option value="Arena 3">Arena 3</option>
-                        <option value="Arena 4">Arena 4</option>
-                        <option value="Arena 5">Arena 5</option>
-                        <option value="Arena 6">Arena 6</option>
-                        <option value="Arena 7">Arena 7</option>
-                        <option value="Arena 8">Arena 8</option>
-                        <option value="Arena 9">Arena 9</option>
-                        <option value="Arena 10">Arena 10</option>
-                    </select>
-                </div>
-                <button type="submit" class="submit-btn">Editar Competição</button>
-            </form>
-        </div>
-    </div>
 </body>
 </html>
