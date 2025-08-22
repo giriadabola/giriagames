@@ -5,316 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Criar Jogo - G EMPIRE</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
-    <script type="module">
-        // Import Firebase functions
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, collection, addDoc, query, where, getDocs, doc, getDoc, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-
-        // Firebase configuration
-        const firebaseConfig = {
-            apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0",
-            authDomain: "g-games-8a8fc.firebaseapp.com",
-            projectId: "g-games-8a8fc",
-            storageBucket: "g-games-8a8fc.firebasestorage.app",
-            messagingSenderId: "689897349449",
-            appId: "1:689897349449:web:536599794579901beb7a98",
-            measurementId: "G-GTTPJ6G5MD"
-        };
-
-        // Initialize Firebase
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-
-        // Function to search clubs
-        async function searchClubs(searchTerm) {
-            const clubesRef = collection(db, 'clubes');
-            const searchTermLower = searchTerm.toLowerCase();
-            const querySnapshot = await getDocs(collection(db, 'clubes'));
-            const results = querySnapshot.docs
-                .map(doc => ({ id: doc.id, ...doc.data() }))
-                .filter(club => club.nome.toLowerCase().includes(searchTermLower));
-            return results;
-        }
-
-        // Function to load competitions
-        async function loadCompetitions() {
-            try {
-                const competicoesRef = collection(db, 'competicoes');
-                const querySnapshot = await getDocs(competicoesRef);
-                const competicaoSelect = document.getElementById('competicao');
-                competicaoSelect.innerHTML = '<option value="">Selecione uma competição</option>';
-                querySnapshot.forEach(doc => {
-                    const competicao = doc.data();
-                    const option = document.createElement('option');
-                    option.value = doc.id;
-                    option.textContent = competicao.nome;
-                    competicaoSelect.appendChild(option);
-                });
-            } catch (error) {
-                console.error('Erro ao carregar competições:', error);
-            }
-        }
-
-        // Function to get latest round number
-        async function getLatestRound() {
-            const jogosRef = collection(db, 'jogos');
-            const querySnapshot = await getDocs(jogosRef);
-            let latestRound = 1;
-            querySnapshot.forEach(doc => {
-                const ronda = doc.data().ronda || 1;
-                if (ronda > latestRound) latestRound = ronda;
-            });
-            return latestRound;
-        }
-
-        // Function to get mods
-        async function getMods() {
-            const modsRef = collection(db, 'mods');
-            const querySnapshot = await getDocs(modsRef);
-            return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        }
-
-        document.addEventListener('DOMContentLoaded', async () => {
-            const form = document.getElementById('criar-jogo-form');
-            const equipaCasaInput = document.getElementById('equipa-casa');
-            const equipaForaInput = document.getElementById('equipa-fora');
-            const equipaCasaList = document.getElementById('equipa-casa-list');
-            const equipaForaList = document.getElementById('equipa-fora-list');
-            const competicaoSelect = document.getElementById('competicao');
-            const nomeJogoInput = document.getElementById('nome-jogo');
-            const roundSelect = document.getElementById('ronda');
-            const modsSelect = document.getElementById('mods');
-            const modIdInput = document.getElementById('modId'); // Get the new modId input
-            let selectedEquipaCasaId = null;
-            let selectedEquipaForaId = null;
-
-            // Load competitions
-            await loadCompetitions();
-
-            // Initialize round options
-            const latestRound = await getLatestRound();
-            for (let i = 1; i <= 50; i++) {
-                const option = document.createElement('option');
-                option.value = i;
-                option.textContent = `Ronda ${i}`;
-                if (i === latestRound) option.selected = true;
-                roundSelect.appendChild(option);
-            }
-
-            // Initialize mods options
-            const mods = await getMods();
-            mods.forEach(mod => {
-                const option = document.createElement('option');
-                option.value = mod.id;
-                option.textContent = mod.nomeMod;
-                modsSelect.appendChild(option);
-            });
-
-            // Add event listener for mods dropdown
-            modsSelect.addEventListener('change', function() {
-                modIdInput.value = this.value; // Set modId input to selected mod's ID
-            });
-
-            // Handle home team search
-            equipaCasaInput.addEventListener('input', async (e) => {
-                const searchTerm = e.target.value.trim();
-                if (searchTerm.length < 2) {
-                    equipaCasaList.innerHTML = '';
-                    return;
-                }
-
-                try {
-                    const clubs = await searchClubs(searchTerm);
-                    equipaCasaList.innerHTML = '';
-                    clubs.forEach(club => {
-                        const div = document.createElement('div');
-                        div.className = 'search-option';
-                        div.textContent = `${club.nome} (${club.pais})`;
-                        div.addEventListener('click', async () => {
-                            equipaCasaInput.value = club.nome;
-                            selectedEquipaCasaId = club.id;
-                            equipaCasaList.innerHTML = '';
-
-                            // Update club image
-                            const clubDoc = await getDoc(doc(db, 'clubes', club.id));
-                            const clubData = clubDoc.data();
-                            const clubImage = document.getElementById('equipa-casa-image');
-                            if (clubData && clubData.imagem) {
-                                clubImage.innerHTML = `<img src="${clubData.imagem}" class="club-image" alt="${club.nome}">`;
-                                clubImage.className = 'club-image';
-                            } else {
-                                clubImage.innerHTML = '<i class="fas fa-shield-alt"></i>';
-                                clubImage.className = 'club-image placeholder';
-                            }
-
-                            // Auto-fill competition based on home team
-                            if (clubData && clubData.competicaoId) {
-                                competicaoSelect.value = clubData.competicaoId;
-                                
-                                // Update competition image
-                                const competicaoDoc = await getDoc(doc(db, 'competicoes', clubData.competicaoId));
-                                const competicaoData = competicaoDoc.data();
-                                const competicaoImage = document.getElementById('competicao-image');
-                                if (competicaoData && competicaoData.imagem) {
-                                    competicaoImage.innerHTML = `<img src="${competicaoData.imagem}" class="club-image" alt="${competicaoData.nome}">`;
-                                    competicaoImage.className = 'club-image';
-                                } else {
-                                    competicaoImage.innerHTML = '<i class="fas fa-trophy"></i>';
-                                    competicaoImage.className = 'club-image placeholder';
-                                }
-                            }
-
-                            updateGameName();
-                        });
-                        equipaCasaList.appendChild(div);
-                    });
-                } catch (error) {
-                    console.error('Erro ao buscar clubes:', error);
-                }
-            });
-
-            // Handle away team search
-            equipaForaInput.addEventListener('input', async (e) => {
-                const searchTerm = e.target.value.trim();
-                if (searchTerm.length < 2) {
-                    equipaForaList.innerHTML = '';
-                    return;
-                }
-
-                try {
-                    const clubs = await searchClubs(searchTerm);
-                    equipaForaList.innerHTML = '';
-                    clubs.forEach(club => {
-                        const div = document.createElement('div');
-                        div.className = 'search-option';
-                        div.textContent = `${club.nome} (${club.pais})`;
-                        div.addEventListener('click', async () => {
-                            equipaForaInput.value = club.nome;
-                            selectedEquipaForaId = club.id;
-                            equipaForaList.innerHTML = '';
-
-                            // Update club image
-                            const clubDoc = await getDoc(doc(db, 'clubes', club.id));
-                            const clubData = clubDoc.data();
-                            const clubImage = document.getElementById('equipa-fora-image');
-                            if (clubData && clubData.imagem) {
-                                clubImage.innerHTML = `<img src="${clubData.imagem}" class="club-image" alt="${club.nome}">`;
-                                clubImage.className = 'club-image';
-                            } else {
-                                clubImage.innerHTML = '<i class="fas fa-shield-alt"></i>';
-                                clubImage.className = 'club-image placeholder';
-                            }
-
-                            updateGameName();
-                        });
-                        equipaForaList.appendChild(div);
-                    });
-                } catch (error) {
-                    console.error('Erro ao buscar clubes:', error);
-                }
-            });
-
-            // Function to update game name
-            function updateGameName() {
-                const equipaCasa = equipaCasaInput.value;
-                const equipaFora = equipaForaInput.value;
-                const dataJogo = document.getElementById('data-jogo').value;
-                const ronda = document.getElementById('ronda').value;
-
-                if (equipaCasa && equipaFora && dataJogo) {
-                    const formattedDate = new Date(dataJogo).toLocaleDateString('pt-PT');
-                    nomeJogoInput.value = `${equipaCasa} x ${equipaFora} - ${formattedDate} | Ronda ${ronda}`;
-                }
-            }
-
-            // Add event listeners for game name update
-            document.getElementById('data-jogo').addEventListener('change', updateGameName);
-            document.getElementById('ronda').addEventListener('change', updateGameName);
-
-            // Function to update fim-palpite based on game date and time
-            function updateFimPalpite() {
-                const gameDate = document.getElementById('data-jogo').value;
-                const gameTime = document.getElementById('hora-jogo').value;
-                if (gameDate && gameTime) {
-                    const gameDateTime = new Date(gameDate + 'T' + gameTime);
-                    gameDateTime.setHours(gameDateTime.getHours() - 1);
-                    document.getElementById('fim-palpite').value = gameDateTime.toISOString().slice(0, 16);
-                }
-            }
-
-            // Add event listeners for fim-palpite update
-            document.getElementById('data-jogo').addEventListener('change', updateFimPalpite);
-            document.getElementById('hora-jogo').addEventListener('change', updateFimPalpite);
-
-            // Function to update interval fields
-            function updateIntervalFields() {
-                // Set inicio-intervalo to current datetime
-                const now = new Date();
-                document.getElementById('inicio-intervalo').value = now.toISOString().slice(0, 16);
-
-                // Set fim-intervalo based on game date and time
-                const gameDate = document.getElementById('data-jogo').value;
-                const gameTime = document.getElementById('hora-jogo').value;
-                if (gameDate && gameTime) {
-                    const gameDateTime = new Date(gameDate + 'T' + gameTime);
-                    document.getElementById('fim-intervalo').value = gameDateTime.toISOString().slice(0, 16);
-                }
-            }
-
-            // Add event listeners for interval fields update
-            document.getElementById('data-jogo').addEventListener('change', updateIntervalFields);
-            document.getElementById('hora-jogo').addEventListener('change', updateIntervalFields);
-            // Call updateIntervalFields on page load to set initial values
-            updateIntervalFields();
-
-            // Form submission
-         form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-
-    if (!selectedEquipaCasaId || !selectedEquipaForaId) {
-        alert('Por favor, selecione ambas as equipas da lista.');
-        return;
-    }
-
-    try {
-        await addDoc(collection(db, 'jogos'), {
-            equipaCasaId: selectedEquipaCasaId,
-            equipaCasa: equipaCasaInput.value,
-            equipaForaId: selectedEquipaForaId,
-            equipaFora: equipaForaInput.value,
-            competicaoId: competicaoSelect.value,
-            competicao: competicaoSelect.options[competicaoSelect.selectedIndex].text,
-            dataJogo: new Date(document.getElementById('data-jogo').value + 'T' + document.getElementById('hora-jogo').value),
-            ronda: parseInt(roundSelect.value),
-            inicioIntervalo: new Date(document.getElementById('inicio-intervalo').value),
-            fimIntervalo: new Date(document.getElementById('fim-intervalo').value),
-            numeroPalpites: parseInt(document.getElementById('numero-palpites').value),
-            mods: modsSelect.value || null,
-            modId: document.getElementById('modId').value.trim() || null,
-            nomeJogo: nomeJogoInput.value,
-            temporada: document.getElementById('temporada').value,
-            dataCriacao: new Date(),
-            anexado: document.getElementById('anexado').value,
-            analisado: document.getElementById('analisado').value
-        });
-
-        alert('Jogo criado com sucesso!');
-        form.reset();
-        selectedEquipaCasaId = null;
-        selectedEquipaForaId = null;
-
-        // --- Page Refresh and Scroll to Top ---
-        window.location.reload();
-        window.scrollTo(0, 0); // Add this line
-
-
-    } catch (error) {
-        console.error('Erro ao criar jogo:', error);
-        alert('Erro ao criar jogo. Por favor, tente novamente.');
-    }
-});
-});
-    </script>
+    
+    <!-- 1. Adiciona o nosso guardião de segurança. -->
+    <script type="module" src="/js/auth-guard.js"></script>
+    
     <style>
         * {
             margin: 0;
@@ -492,38 +186,33 @@
         }
 
         .top-menu {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    background-color: #ffffff;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-    padding: 12px 0;
-    display: flex;
-    justify-content: center;
-    gap: 24px;
-    align-items: center;
-    z-index: 1000;
-}
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            background-color: #ffffff;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            padding: 12px 0;
+            display: flex;
+            justify-content: center;
+            gap: 24px;
+            align-items: center;
+            z-index: 1000;
+        }
 
-.menu-item {
-    text-decoration: none;
-    color: #666;
-    transition: color 0.3s ease;
-    font-weight: 500;
-    padding: 8px 16px;
-    border-radius: 4px;
-    font-size: 14px;
-    line-height: 1.4;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.menu-item:hover, .menu-item.active {
-    color: #2176ff;
-    background-color: rgba(33, 118, 255, 0.1);
-}
+        .menu-item {
+            text-decoration: none;
+            color: #666;
+            transition: color 0.3s ease;
+            font-weight: 500;
+            padding: 8px 16px;
+            border-radius: 4px;
+            font-size: 14px;
+            line-height: 1.4;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
 
         .menu-item:hover, .menu-item.active {
             color: #2176ff;
@@ -650,43 +339,18 @@
         }
     </style>
 </head>
-<body>
+<body style="display: none;"> <!-- 2. O corpo da página está oculto por padrão -->
+    
     <nav class="top-menu">
-        <a href="engrenagem.html" class="menu-item">
-            <i class="fas fa-home"></i>
-        </a>
-        <a href="criar-gplayer.html" class="menu-item">
-            <i class="fas fa-user"></i>
-            CRIAR GPLAYER
-        </a>
-        <a href="criar-jogo.html" class="menu-item active">
-            <i class="fas fa-gamepad"></i>
-            CRIAR JOGO
-        </a>
-        <a href="criar-jogadores.html" class="menu-item">
-            <i class="fas fa-users"></i>
-            CRIAR JOGADORES
-        </a>
-        <a href="criar-clubes.html" class="menu-item">
-            <i class="fas fa-shield-alt"></i>
-            CRIAR CLUBES
-        </a>
-        <a href="criar-competicoes.html" class="menu-item">
-            <i class="fas fa-trophy"></i>
-            CRIAR COMPETIÇÕES
-        </a>
-        <a href="criar-pais.html" class="menu-item">
-            <i class="fas fa-globe"></i>
-            CRIAR PAÍS
-        </a>
-        <a href="criar-mods.html" class="menu-item">
-            <i class="fas fa-puzzle-piece"></i>
-            CRIAR MODS
-        </a>
-        <a href="criar-odds.html" class="menu-item">
-            <i class="fas fa-percentage"></i>
-            CRIAR ODDS
-        </a>
+        <a href="engrenagem.html" class="menu-item"><i class="fas fa-home"></i></a>
+        <a href="criar-gplayer.html" class="menu-item"><i class="fas fa-user"></i>CRIAR GPLAYER</a>
+        <a href="criar-jogo.html" class="menu-item active"><i class="fas fa-gamepad"></i>CRIAR JOGO</a>
+        <a href="criar-jogadores.html" class="menu-item"><i class="fas fa-users"></i>CRIAR JOGADORES</a>
+        <a href="criar-clubes.html" class="menu-item"><i class="fas fa-shield-alt"></i>CRIAR CLUBES</a>
+        <a href="criar-competicoes.html" class="menu-item"><i class="fas fa-trophy"></i>CRIAR COMPETIÇÕES</a>
+        <a href="criar-pais.html" class="menu-item"><i class="fas fa-globe"></i>CRIAR PAÍS</a>
+        <a href="criar-mods.html" class="menu-item"><i class="fas fa-puzzle-piece"></i>CRIAR MODS</a>
+        <a href="criar-odds.html" class="menu-item"><i class="fas fa-percentage"></i>CRIAR ODDS</a>
     </nav>
 
     <div class="content">
@@ -694,154 +358,294 @@
         <a href="criar-whowins.html" class="submit-btn" style="display: block; margin: 0 auto 10px; text-decoration: none; padding: 8px 16px; font-size: 14px; width: fit-content;">Criar jogos WhoWins</a>
         <div class="form-container">
             <form id="criar-jogo-form">
-                <div class="form-group">
-                    <label for="equipa-casa">Equipa Casa</label>
-                    <div class="club-image placeholder" id="equipa-casa-image">
-                        <i class="fas fa-shield-alt"></i>
-                    </div>
-                    <div class="input-container">
-                        <input type="text" id="equipa-casa" name="equipa-casa" placeholder="Digite para pesquisar..." required>
-                        <div id="equipa-casa-list" class="search-results"></div>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label for="equipa-fora">Equipa Fora</label>
-                    <div class="club-image placeholder" id="equipa-fora-image">
-                        <i class="fas fa-shield-alt"></i>
-                    </div>
-                    <div class="input-container">
-                        <input type="text" id="equipa-fora" name="equipa-fora" placeholder="Digite para pesquisar..." required>
-                        <div id="equipa-fora-list" class="search-results"></div>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label for="competicao">Competição</label>
-                    <div class="club-image placeholder" id="competicao-image">
-                        <i class="fas fa-trophy"></i>
-                    </div>
-                    <div class="input-container">
-                        <select id="competicao" name="competicao" required>
-                            <option value="">Selecione uma competição</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label for="data-jogo">Data do Jogo</label>
-                    <input type="date" id="data-jogo" name="data-jogo" required>
-                </div>
-                <div class="form-group">
-                    <label for="hora-jogo">Hora do Jogo</label>
-                    <input type="time" id="hora-jogo" name="hora-jogo" required>
-                </div>
-                <div class="form-group">
-                    <label for="ronda">Ronda</label>
-                    <select id="ronda" name="ronda" required></select>
-                </div>
-                <div class="form-group highlight-section">
-                    <label for="inicio-palpite">Início dos Palpites</label>
-                    <input type="datetime-local" id="inicio-palpite" name="inicio-palpite" required>
-                </div>
-                <div class="form-group highlight-section">
-                    <label for="fim-palpite">Fim dos Palpites</label>
-                    <input type="datetime-local" id="fim-palpite" name="fim-palpite" required>
-                </div>
-                <div class="form-group highlight-section">
-                    <label for="numero-palpites">Número de Palpites</label>
-                    <select id="numero-palpites" name="numero-palpites" required>
-                        <option value="1">1</option>
-                        <option value="2">2</option>
-                        <option value="3">3</option>
-                        <option value="4" selected>4</option>
-                        <option value="5">5</option>
-                        <option value="6">6</option>
-                        <option value="7">7</option>
-                        <option value="8">8</option>
-                        <option value="9">9</option>
-                        <option value="10">10</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="mods">Mods</label>
-                    <select id="mods" name="mods">
-                        <option value="">Selecione um mod (opcional)</option>
-                    </select>
-                </div>
+                <div class="form-group"><label for="equipa-casa">Equipa Casa</label><div class="club-image placeholder" id="equipa-casa-image"><i class="fas fa-shield-alt"></i></div><div class="input-container"><input type="text" id="equipa-casa" name="equipa-casa" placeholder="Digite para pesquisar..." required><div id="equipa-casa-list" class="search-results"></div></div></div>
+                <div class="form-group"><label for="equipa-fora">Equipa Fora</label><div class="club-image placeholder" id="equipa-fora-image"><i class="fas fa-shield-alt"></i></div><div class="input-container"><input type="text" id="equipa-fora" name="equipa-fora" placeholder="Digite para pesquisar..." required><div id="equipa-fora-list" class="search-results"></div></div></div>
+                <div class="form-group"><label for="competicao">Competição</label><div class="club-image placeholder" id="competicao-image"><i class="fas fa-trophy"></i></div><div class="input-container"><select id="competicao" name="competicao" required><option value="">Selecione uma competição</option></select></div></div>
+                <div class="form-group"><label for="data-jogo">Data do Jogo</label><input type="date" id="data-jogo" name="data-jogo" required></div>
+                <div class="form-group"><label for="hora-jogo">Hora do Jogo</label><input type="time" id="hora-jogo" name="hora-jogo" required></div>
+                <div class="form-group"><label for="ronda">Ronda</label><select id="ronda" name="ronda" required></select></div>
+                <div class="form-group highlight-section"><label for="inicio-palpite">Início dos Palpites</label><input type="datetime-local" id="inicio-palpite" name="inicio-palpite" required></div>
+                <div class="form-group highlight-section"><label for="fim-palpite">Fim dos Palpites</label><input type="datetime-local" id="fim-palpite" name="fim-palpite" required></div>
+                <div class="form-group highlight-section"><label for="numero-palpites">Número de Palpites</label><select id="numero-palpites" name="numero-palpites" required><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4" selected>4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option></select></div>
+                <div class="form-group"><label for="mods">Mods</label><select id="mods" name="mods"><option value="">Selecione um mod (opcional)</option></select></div>
                 <input type="hidden" id="modId" name="modId">
-                <!-- ADDED: New form group for Anexado -->
-                <div class="form-group">
-                    <label for="anexado">Anexado</label>
-                    <select id="anexado" name="anexado">
-                        <option value="1x"selected>1x</option>
-                        <option value="world26">world26</option>
-                    </select>
-                </div>
+                <div class="form-group"><label for="anexado">Anexado</label><select id="anexado" name="anexado"><option value="1x"selected>1x</option><option value="world26">world26</option></select></div>
                 <input type="hidden" id="analisado" name="analisado" value="null">
-                <div class="form-group">
-                    <input type="hidden" id="nome-jogo" name="nome-jogo" required>
-                </div>
-                <div class="form-group" style="display: none;">
-                    <input type="hidden" id="inicio-intervalo" name="inicio-intervalo" required>
-                </div>
-                <div class="form-group" style="display: none;">
-                    <input type="hidden" id="fim-intervalo" name="fim-intervalo" required>
-                </div>
-                <div class="form-group">
-                    <label for="temporada">Temporada</label>
-                    <input type="text" id="temporada" name="temporada" value="2025/2026" required>
-                </div>
+                <div class="form-group"><input type="hidden" id="nome-jogo" name="nome-jogo" required></div>
+                <div class="form-group" style="display: none;"><input type="hidden" id="inicio-intervalo" name="inicio-intervalo" required></div>
+                <div class="form-group" style="display: none;"><input type="hidden" id="fim-intervalo" name="fim-intervalo" required></div>
+                <div class="form-group"><label for="temporada">Temporada</label><input type="text" id="temporada" name="temporada" value="2025/2026" required></div>
                 <button type="submit" class="submit-btn">Criar Jogo</button>
             </form>
         </div>
     </div>
-    <!-- Ícone de Estatísticas -->    
-    <div class="stats-icon" id="stats-icon">
-        <i class="fas fa-chart-bar"></i>
-    </div>
-
-    <!-- Popup de Estatísticas -->
+    <div class="stats-icon" id="stats-icon"><i class="fas fa-chart-bar"></i></div>
     <div class="stats-overlay" id="stats-overlay">
         <div class="stats-popup">
-            <span class="close-btn" id="close-stats-popup">&times;</span>
-            <h2>Estatísticas de Jogos</h2>
-            
-            <div class="stats-section">
-                <h3>Temporadas</h3>
-                <div class="stats-cards" id="temporadas-cards"></div>
-            </div>
-            
-            <div class="stats-section">
-                <h3>Estatísticas por Liga</h3>
-                <div class="stats-tables" id="stats-por-liga"></div>
-            </div>
-            
-            <div class="stats-section">
-                <h3>Estatísticas por Equipe</h3>
-                <div class="stats-tables" id="stats-por-equipe"></div>
-            </div>
+            <span class="close-btn" id="close-stats-popup">&times;</span><h2>Estatísticas de Jogos</h2>
+            <div class="stats-section"><h3>Temporadas</h3><div class="stats-cards" id="temporadas-cards"></div></div>
+            <div class="stats-section"><h3>Estatísticas por Liga</h3><div class="stats-tables" id="stats-por-liga"></div></div>
+            <div class="stats-section"><h3>Estatísticas por Equipe</h3><div class="stats-tables" id="stats-por-equipe"></div></div>
         </div>
     </div>
 
+    <!-- 3. Scripts da página unificados, limpos e movidos para o final do body -->
     <script type="module">
-        // Import Firebase functions
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        // Importa a variável 'db' do guardião e todas as outras funções necessárias
+        import { db } from '/js/auth-guard.js';
+        import { collection, addDoc, query, where, getDocs, doc, getDoc, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-        // Firebase configuration
-        const firebaseConfig = {
-            apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0",
-            authDomain: "g-games-8a8fc.firebaseapp.com",
-            projectId: "g-games-8a8fc",
-            storageBucket: "g-games-8a8fc.firebasestorage.app",
-            messagingSenderId: "689897349449",
-            appId: "1:689897349449:web:536599794579901beb7a98",
-            measurementId: "G-GTTPJ6G5MD"
-        };
+        // A inicialização do Firebase foi completamente removida daqui
 
-        // Initialize Firebase
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
+        // --- INÍCIO DA LÓGICA DO FORMULÁRIO DE CRIAÇÃO DE JOGO (Script 1 original) ---
+        
+        async function searchClubs(searchTerm) {
+            const clubesRef = collection(db, 'clubes');
+            const searchTermLower = searchTerm.toLowerCase();
+            const querySnapshot = await getDocs(collection(db, 'clubes'));
+            const results = querySnapshot.docs
+                .map(doc => ({ id: doc.id, ...doc.data() }))
+                .filter(club => club.nome.toLowerCase().includes(searchTermLower));
+            return results;
+        }
 
-        // Elementos do DOM
+        async function loadCompetitions() {
+            try {
+                const competicoesRef = collection(db, 'competicoes');
+                const querySnapshot = await getDocs(competicoesRef);
+                const competicaoSelect = document.getElementById('competicao');
+                competicaoSelect.innerHTML = '<option value="">Selecione uma competição</option>';
+                querySnapshot.forEach(doc => {
+                    const competicao = doc.data();
+                    const option = document.createElement('option');
+                    option.value = doc.id;
+                    option.textContent = competicao.nome;
+                    competicaoSelect.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Erro ao carregar competições:', error);
+            }
+        }
+
+        async function getLatestRound() {
+            const jogosRef = collection(db, 'jogos');
+            const querySnapshot = await getDocs(jogosRef);
+            let latestRound = 1;
+            querySnapshot.forEach(doc => {
+                const ronda = doc.data().ronda || 1;
+                if (ronda > latestRound) latestRound = ronda;
+            });
+            return latestRound;
+        }
+
+        async function getMods() {
+            const modsRef = collection(db, 'mods');
+            const querySnapshot = await getDocs(modsRef);
+            return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        }
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            const form = document.getElementById('criar-jogo-form');
+            const equipaCasaInput = document.getElementById('equipa-casa');
+            const equipaForaInput = document.getElementById('equipa-fora');
+            const equipaCasaList = document.getElementById('equipa-casa-list');
+            const equipaForaList = document.getElementById('equipa-fora-list');
+            const competicaoSelect = document.getElementById('competicao');
+            const nomeJogoInput = document.getElementById('nome-jogo');
+            const roundSelect = document.getElementById('ronda');
+            const modsSelect = document.getElementById('mods');
+            const modIdInput = document.getElementById('modId');
+            let selectedEquipaCasaId = null;
+            let selectedEquipaForaId = null;
+
+            await loadCompetitions();
+
+            const latestRound = await getLatestRound();
+            for (let i = 1; i <= 50; i++) {
+                const option = document.createElement('option');
+                option.value = i;
+                option.textContent = `Ronda ${i}`;
+                if (i === latestRound) option.selected = true;
+                roundSelect.appendChild(option);
+            }
+
+            const mods = await getMods();
+            mods.forEach(mod => {
+                const option = document.createElement('option');
+                option.value = mod.id;
+                option.textContent = mod.nomeMod;
+                modsSelect.appendChild(option);
+            });
+
+            modsSelect.addEventListener('change', function() {
+                modIdInput.value = this.value;
+            });
+
+            equipaCasaInput.addEventListener('input', async (e) => {
+                const searchTerm = e.target.value.trim();
+                if (searchTerm.length < 2) {
+                    equipaCasaList.innerHTML = '';
+                    return;
+                }
+                try {
+                    const clubs = await searchClubs(searchTerm);
+                    equipaCasaList.innerHTML = '';
+                    clubs.forEach(club => {
+                        const div = document.createElement('div');
+                        div.className = 'search-option';
+                        div.textContent = `${club.nome} (${club.pais})`;
+                        div.addEventListener('click', async () => {
+                            equipaCasaInput.value = club.nome;
+                            selectedEquipaCasaId = club.id;
+                            equipaCasaList.innerHTML = '';
+                            const clubDoc = await getDoc(doc(db, 'clubes', club.id));
+                            const clubData = clubDoc.data();
+                            const clubImage = document.getElementById('equipa-casa-image');
+                            if (clubData && clubData.imagem) {
+                                clubImage.innerHTML = `<img src="${clubData.imagem}" class="club-image" alt="${club.nome}">`;
+                                clubImage.className = 'club-image';
+                            } else {
+                                clubImage.innerHTML = '<i class="fas fa-shield-alt"></i>';
+                                clubImage.className = 'club-image placeholder';
+                            }
+                            if (clubData && clubData.competicaoId) {
+                                competicaoSelect.value = clubData.competicaoId;
+                                const competicaoDoc = await getDoc(doc(db, 'competicoes', clubData.competicaoId));
+                                const competicaoData = competicaoDoc.data();
+                                const competicaoImage = document.getElementById('competicao-image');
+                                if (competicaoData && competicaoData.imagem) {
+                                    competicaoImage.innerHTML = `<img src="${competicaoData.imagem}" class="club-image" alt="${competicaoData.nome}">`;
+                                    competicaoImage.className = 'club-image';
+                                } else {
+                                    competicaoImage.innerHTML = '<i class="fas fa-trophy"></i>';
+                                    competicaoImage.className = 'club-image placeholder';
+                                }
+                            }
+                            updateGameName();
+                        });
+                        equipaCasaList.appendChild(div);
+                    });
+                } catch (error) { console.error('Erro ao buscar clubes:', error); }
+            });
+
+            equipaForaInput.addEventListener('input', async (e) => {
+                const searchTerm = e.target.value.trim();
+                if (searchTerm.length < 2) {
+                    equipaForaList.innerHTML = '';
+                    return;
+                }
+                try {
+                    const clubs = await searchClubs(searchTerm);
+                    equipaForaList.innerHTML = '';
+                    clubs.forEach(club => {
+                        const div = document.createElement('div');
+                        div.className = 'search-option';
+                        div.textContent = `${club.nome} (${club.pais})`;
+                        div.addEventListener('click', async () => {
+                            equipaForaInput.value = club.nome;
+                            selectedEquipaForaId = club.id;
+                            equipaForaList.innerHTML = '';
+                            const clubDoc = await getDoc(doc(db, 'clubes', club.id));
+                            const clubData = clubDoc.data();
+                            const clubImage = document.getElementById('equipa-fora-image');
+                            if (clubData && clubData.imagem) {
+                                clubImage.innerHTML = `<img src="${clubData.imagem}" class="club-image" alt="${club.nome}">`;
+                                clubImage.className = 'club-image';
+                            } else {
+                                clubImage.innerHTML = '<i class="fas fa-shield-alt"></i>';
+                                clubImage.className = 'club-image placeholder';
+                            }
+                            updateGameName();
+                        });
+                        equipaForaList.appendChild(div);
+                    });
+                } catch (error) { console.error('Erro ao buscar clubes:', error); }
+            });
+
+            function updateGameName() {
+                const equipaCasa = equipaCasaInput.value;
+                const equipaFora = equipaForaInput.value;
+                const dataJogo = document.getElementById('data-jogo').value;
+                const ronda = document.getElementById('ronda').value;
+                if (equipaCasa && equipaFora && dataJogo) {
+                    const formattedDate = new Date(dataJogo).toLocaleDateString('pt-PT');
+                    nomeJogoInput.value = `${equipaCasa} x ${equipaFora} - ${formattedDate} | Ronda ${ronda}`;
+                }
+            }
+
+            document.getElementById('data-jogo').addEventListener('change', updateGameName);
+            document.getElementById('ronda').addEventListener('change', updateGameName);
+
+            function updateFimPalpite() {
+                const gameDate = document.getElementById('data-jogo').value;
+                const gameTime = document.getElementById('hora-jogo').value;
+                if (gameDate && gameTime) {
+                    const gameDateTime = new Date(gameDate + 'T' + gameTime);
+                    gameDateTime.setHours(gameDateTime.getHours() - 1);
+                    document.getElementById('fim-palpite').value = gameDateTime.toISOString().slice(0, 16);
+                }
+            }
+
+            document.getElementById('data-jogo').addEventListener('change', updateFimPalpite);
+            document.getElementById('hora-jogo').addEventListener('change', updateFimPalpite);
+
+            function updateIntervalFields() {
+                const now = new Date();
+                document.getElementById('inicio-intervalo').value = now.toISOString().slice(0, 16);
+                const gameDate = document.getElementById('data-jogo').value;
+                const gameTime = document.getElementById('hora-jogo').value;
+                if (gameDate && gameTime) {
+                    const gameDateTime = new Date(gameDate + 'T' + gameTime);
+                    document.getElementById('fim-intervalo').value = gameDateTime.toISOString().slice(0, 16);
+                }
+            }
+
+            document.getElementById('data-jogo').addEventListener('change', updateIntervalFields);
+            document.getElementById('hora-jogo').addEventListener('change', updateIntervalFields);
+            updateIntervalFields();
+
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                if (!selectedEquipaCasaId || !selectedEquipaForaId) {
+                    alert('Por favor, selecione ambas as equipas da lista.');
+                    return;
+                }
+                try {
+                    await addDoc(collection(db, 'jogos'), {
+                        equipaCasaId: selectedEquipaCasaId,
+                        equipaCasa: equipaCasaInput.value,
+                        equipaForaId: selectedEquipaForaId,
+                        equipaFora: equipaForaInput.value,
+                        competicaoId: competicaoSelect.value,
+                        competicao: competicaoSelect.options[competicaoSelect.selectedIndex].text,
+                        dataJogo: new Date(document.getElementById('data-jogo').value + 'T' + document.getElementById('hora-jogo').value),
+                        ronda: parseInt(roundSelect.value),
+                        inicioIntervalo: new Date(document.getElementById('inicio-intervalo').value),
+                        fimIntervalo: new Date(document.getElementById('fim-intervalo').value),
+                        numeroPalpites: parseInt(document.getElementById('numero-palpites').value),
+                        mods: modsSelect.value || null,
+                        modId: document.getElementById('modId').value.trim() || null,
+                        nomeJogo: nomeJogoInput.value,
+                        temporada: document.getElementById('temporada').value,
+                        dataCriacao: new Date(),
+                        anexado: document.getElementById('anexado').value,
+                        analisado: document.getElementById('analisado').value
+                    });
+                    alert('Jogo criado com sucesso!');
+                    form.reset();
+                    selectedEquipaCasaId = null;
+                    selectedEquipaForaId = null;
+                    window.location.reload();
+                    window.scrollTo(0, 0);
+                } catch (error) {
+                    console.error('Erro ao criar jogo:', error);
+                    alert('Erro ao criar jogo. Por favor, tente novamente.');
+                }
+            });
+        });
+        
+        // --- INÍCIO DA LÓGICA DO POPUP DE ESTATÍSTICAS (Script 2 original) ---
+
         const statsIcon = document.getElementById('stats-icon');
         const statsOverlay = document.getElementById('stats-overlay');
         const closeStatsPopup = document.getElementById('close-stats-popup');
@@ -849,81 +653,70 @@
         const statsPorLiga = document.getElementById('stats-por-liga');
         const statsPorEquipe = document.getElementById('stats-por-equipe');
 
-        // Variáveis globais
         let jogosData = [];
         let temporadaSelecionada = null;
 
-        // Event Listeners
-        statsIcon.addEventListener('click', abrirPopupEstatisticas);
-        closeStatsPopup.addEventListener('click', fecharPopupEstatisticas);
+        if (statsIcon) {
+            statsIcon.addEventListener('click', abrirPopupEstatisticas);
+        }
+        if (closeStatsPopup) {
+            closeStatsPopup.addEventListener('click', fecharPopupEstatisticas);
+        }
 
-        // Função para abrir o popup de estatísticas
         async function abrirPopupEstatisticas() {
             statsOverlay.style.display = 'flex';
             await carregarEstatisticas();
         }
 
-        // Função para fechar o popup de estatísticas
         function fecharPopupEstatisticas() {
             statsOverlay.style.display = 'none';
         }
 
-        // Função para carregar estatísticas do Firebase
         async function carregarEstatisticas() {
             try {
-                // Buscar todos os jogos do Firebase
                 const jogosRef = collection(db, 'jogos');
                 const querySnapshot = await getDocs(jogosRef);
-                jogosData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                
-                // Processar dados e exibir estatísticas
+                jogosData = querySnapshot.docs.map(doc => {
+                    const data = doc.data();
+                    const processedData = { id: doc.id, ...data };
+                    if (processedData.temporada === undefined || processedData.temporada === null) {
+                        processedData.temporada = 'Sem Temporada';
+                    }
+                    return processedData;
+                });
                 exibirTemporadas();
             } catch (error) {
                 console.error('Erro ao carregar estatísticas:', error);
             }
         }
 
-        // Função para exibir cards de temporadas
         function exibirTemporadas() {
-            // Obter temporadas únicas
             const temporadas = [...new Set(jogosData.map(jogo => jogo.temporada))];
-            temporadas.sort().reverse(); // Ordenar temporadas em ordem decrescente
-            
-            // Limpar container
+            temporadas.sort().reverse();
             temporadasCards.innerHTML = '';
-            
-            // Criar card para cada temporada
+            if (temporadas.length === 0) {
+                temporadasCards.innerHTML = '<div class="stats-card"><h4>Sem dados</h4><div class="value">0</div></div>';
+                statsPorLiga.innerHTML = '<p>Nenhum dado disponível para exibir.</p>';
+                statsPorEquipe.innerHTML = '<p>Nenhum dado disponível para exibir.</p>';
+                return;
+            }
             temporadas.forEach(temporada => {
                 const jogosTemporada = jogosData.filter(jogo => jogo.temporada === temporada);
-                
                 const card = document.createElement('div');
                 card.className = 'stats-card';
                 if (temporadaSelecionada === temporada) {
                     card.classList.add('active');
                 }
-                
-                card.innerHTML = `
-                    <h4>${temporada}</h4>
-                    <div class="value">${jogosTemporada.length}</div>
-                `;
-                
+                card.innerHTML = `<h4>${temporada}</h4><div class="value">${jogosTemporada.length}</div>`;
                 card.addEventListener('click', () => {
-                    // Remover classe active de todos os cards
                     document.querySelectorAll('.stats-card').forEach(c => c.classList.remove('active'));
-                    
-                    // Adicionar classe active ao card clicado
                     card.classList.add('active');
-                    
-                    // Atualizar temporada selecionada e exibir estatísticas
                     temporadaSelecionada = temporada;
                     exibirEstatisticasPorLiga(temporada);
                     exibirEstatisticasPorEquipe(temporada);
                 });
-                
                 temporadasCards.appendChild(card);
             });
-            
-            // Selecionar primeira temporada por padrão se nenhuma estiver selecionada
             if (!temporadaSelecionada && temporadas.length > 0) {
                 temporadaSelecionada = temporadas[0];
                 document.querySelector('.stats-card').classList.add('active');
@@ -932,18 +725,13 @@
             }
         }
 
-        // Variáveis para controle de ordenação
         let sortColumnLiga = '';
         let sortDirectionLiga = 'asc';
         let sortColumnEquipe = '';
         let sortDirectionEquipe = 'asc';
 
-        // Função para exibir estatísticas por liga
         function exibirEstatisticasPorLiga(temporada) {
-            // Filtrar jogos da temporada selecionada
             const jogosTemporada = jogosData.filter(jogo => jogo.temporada === temporada);
-            
-            // Agrupar jogos por competição
             const competicoes = {};
             jogosTemporada.forEach(jogo => {
                 const competicaoNome = jogo.competicao || 'Sem Competição';
@@ -952,215 +740,92 @@
                 }
                 competicoes[competicaoNome].push(jogo);
             });
-            
-            // Preparar dados para ordenação
             let competicoesArray = Object.entries(competicoes).map(([competicao, jogos]) => {
                 const totalJogos = jogos.length;
                 const mediaPalpites = jogos.reduce((sum, jogo) => sum + (jogo.numeroPalpites || 0), 0) / totalJogos;
                 const jogosMods = jogos.filter(jogo => jogo.mods).length;
                 const percentMods = Math.round(jogosMods/totalJogos*100);
-                
-                return {
-                    competicao,
-                    totalJogos,
-                    mediaPalpites,
-                    jogosMods,
-                    percentMods
-                };
+                return { competicao, totalJogos, mediaPalpites, jogosMods, percentMods };
             });
-            
-            // Aplicar ordenação se uma coluna estiver selecionada
             if (sortColumnLiga) {
                 competicoesArray.sort((a, b) => {
                     let comparison = 0;
-                    
                     switch (sortColumnLiga) {
-                        case 'competicao':
-                            comparison = a.competicao.localeCompare(b.competicao);
-                            break;
-                        case 'jogos':
-                            comparison = a.totalJogos - b.totalJogos;
-                            break;
-                        case 'palpites':
-                            comparison = a.mediaPalpites - b.mediaPalpites;
-                            break;
-                        case 'mods':
-                            comparison = a.jogosMods - b.jogosMods;
-                            break;
+                        case 'competicao': comparison = a.competicao.localeCompare(b.competicao); break;
+                        case 'jogos': comparison = a.totalJogos - b.totalJogos; break;
+                        case 'palpites': comparison = a.mediaPalpites - b.mediaPalpites; break;
+                        case 'mods': comparison = a.jogosMods - b.jogosMods; break;
                     }
-                    
                     return sortDirectionLiga === 'asc' ? comparison : -comparison;
                 });
             }
-            
-            // Criar tabela de estatísticas
-            let html = `
-                <table class="stats-table">
-                    <thead>
-                        <tr>
-                            <th data-sort="competicao">Competição ${sortColumnLiga === 'competicao' ? (sortDirectionLiga === 'asc' ? '▲' : '▼') : ''}</th>
-                            <th data-sort="jogos">Jogos ${sortColumnLiga === 'jogos' ? (sortDirectionLiga === 'asc' ? '▲' : '▼') : ''}</th>
-                            <th data-sort="palpites">Média de Palpites ${sortColumnLiga === 'palpites' ? (sortDirectionLiga === 'asc' ? '▲' : '▼') : ''}</th>
-                            <th data-sort="mods">Mods ${sortColumnLiga === 'mods' ? (sortDirectionLiga === 'asc' ? '▲' : '▼') : ''}</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-            `;
-            
-            // Adicionar linha para cada competição
+            let html = `<table class="stats-table"><thead><tr><th data-sort="competicao">Competição ${sortColumnLiga === 'competicao' ? (sortDirectionLiga === 'asc' ? '▲' : '▼') : ''}</th><th data-sort="jogos">Jogos ${sortColumnLiga === 'jogos' ? (sortDirectionLiga === 'asc' ? '▲' : '▼') : ''}</th><th data-sort="palpites">Média de Palpites ${sortColumnLiga === 'palpites' ? (sortDirectionLiga === 'asc' ? '▲' : '▼') : ''}</th><th data-sort="mods">Mods ${sortColumnLiga === 'mods' ? (sortDirectionLiga === 'asc' ? '▲' : '▼') : ''}</th></tr></thead><tbody>`;
             competicoesArray.forEach(item => {
-                html += `
-                    <tr>
-                        <td>${item.competicao}</td>
-                        <td>${item.totalJogos}</td>
-                        <td>${item.mediaPalpites.toFixed(1)}</td>
-                        <td>${item.jogosMods} (${item.percentMods}%)</td>
-                    </tr>
-                `;
+                html += `<tr><td>${item.competicao}</td><td>${item.totalJogos}</td><td>${item.mediaPalpites.toFixed(1)}</td><td>${item.jogosMods} (${item.percentMods}%)</td></tr>`;
             });
-            
-            html += `
-                    </tbody>
-                </table>
-            `;
-            
-            // Exibir tabela
+            html += `</tbody></table>`;
             statsPorLiga.innerHTML = html;
             statsPorLiga.classList.add('active');
-            
-            // Adicionar event listeners para ordenação
             document.querySelectorAll('#stats-por-liga th[data-sort]').forEach(th => {
                 th.style.cursor = 'pointer';
                 th.addEventListener('click', () => {
                     const sortBy = th.getAttribute('data-sort');
-                    
-                    // Se clicar na mesma coluna, inverte a direção
                     if (sortBy === sortColumnLiga) {
                         sortDirectionLiga = sortDirectionLiga === 'asc' ? 'desc' : 'asc';
                     } else {
                         sortColumnLiga = sortBy;
                         sortDirectionLiga = 'asc';
                     }
-                    
-                    // Atualizar tabela com nova ordenação
                     exibirEstatisticasPorLiga(temporada);
                 });
             });
         }
 
-        // Função para exibir estatísticas por equipe
         function exibirEstatisticasPorEquipe(temporada) {
-            // Filtrar jogos da temporada selecionada
             const jogosTemporada = jogosData.filter(jogo => jogo.temporada === temporada);
-            
-            // Contar jogos por equipe
             const equipesStats = {};
-            
             jogosTemporada.forEach(jogo => {
-                // Equipe Casa
                 const equipaCasa = jogo.equipaCasa || 'Desconhecida';
-                if (!equipesStats[equipaCasa]) {
-                    equipesStats[equipaCasa] = { total: 0, casa: 0, fora: 0 };
-                }
+                if (!equipesStats[equipaCasa]) { equipesStats[equipaCasa] = { total: 0, casa: 0, fora: 0 }; }
                 equipesStats[equipaCasa].total++;
                 equipesStats[equipaCasa].casa++;
-                
-                // Equipe Fora
                 const equipaFora = jogo.equipaFora || 'Desconhecida';
-                if (!equipesStats[equipaFora]) {
-                    equipesStats[equipaFora] = { total: 0, casa: 0, fora: 0 };
-                }
+                if (!equipesStats[equipaFora]) { equipesStats[equipaFora] = { total: 0, casa: 0, fora: 0 }; }
                 equipesStats[equipaFora].total++;
                 equipesStats[equipaFora].fora++;
             });
-            
-            // Preparar dados para ordenação
-            let equipesArray = Object.entries(equipesStats).map(([equipe, stats]) => {
-                return {
-                    equipe,
-                    total: stats.total,
-                    casa: stats.casa,
-                    fora: stats.fora
-                };
-            });
-            
-            // Aplicar ordenação se uma coluna estiver selecionada
+            let equipesArray = Object.entries(equipesStats).map(([equipe, stats]) => ({ equipe, total: stats.total, casa: stats.casa, fora: stats.fora }));
             if (sortColumnEquipe) {
                 equipesArray.sort((a, b) => {
                     let comparison = 0;
-                    
                     switch (sortColumnEquipe) {
-                        case 'equipe':
-                            comparison = a.equipe.localeCompare(b.equipe);
-                            break;
-                        case 'total':
-                            comparison = a.total - b.total;
-                            break;
-                        case 'casa':
-                            comparison = a.casa - b.casa;
-                            break;
-                        case 'fora':
-                            comparison = a.fora - b.fora;
-                            break;
+                        case 'equipe': comparison = a.equipe.localeCompare(b.equipe); break;
+                        case 'total': comparison = a.total - b.total; break;
+                        case 'casa': comparison = a.casa - b.casa; break;
+                        case 'fora': comparison = a.fora - b.fora; break;
                     }
-                    
                     return sortDirectionEquipe === 'asc' ? comparison : -comparison;
                 });
             } else {
-                // Ordenação padrão por total de jogos (decrescente)
                 equipesArray.sort((a, b) => b.total - a.total);
             }
-            
-            // Criar tabela de estatísticas
-            let html = `
-                <table class="stats-table">
-                    <thead>
-                        <tr>
-                            <th data-sort="equipe">Equipe ${sortColumnEquipe === 'equipe' ? (sortDirectionEquipe === 'asc' ? '▲' : '▼') : ''}</th>
-                            <th data-sort="total">Total de Jogos ${sortColumnEquipe === 'total' ? (sortDirectionEquipe === 'asc' ? '▲' : '▼') : ''}</th>
-                            <th data-sort="casa">Jogos em Casa ${sortColumnEquipe === 'casa' ? (sortDirectionEquipe === 'asc' ? '▲' : '▼') : ''}</th>
-                            <th data-sort="fora">Jogos Fora ${sortColumnEquipe === 'fora' ? (sortDirectionEquipe === 'asc' ? '▲' : '▼') : ''}</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-            `;
-            
-            // Adicionar linha para cada equipe
+            let html = `<table class="stats-table"><thead><tr><th data-sort="equipe">Equipe ${sortColumnEquipe === 'equipe' ? (sortDirectionEquipe === 'asc' ? '▲' : '▼') : ''}</th><th data-sort="total">Total de Jogos ${sortColumnEquipe === 'total' ? (sortDirectionEquipe === 'asc' ? '▲' : '▼') : ''}</th><th data-sort="casa">Jogos em Casa ${sortColumnEquipe === 'casa' ? (sortDirectionEquipe === 'asc' ? '▲' : '▼') : ''}</th><th data-sort="fora">Jogos Fora ${sortColumnEquipe === 'fora' ? (sortDirectionEquipe === 'asc' ? '▲' : '▼') : ''}</th></tr></thead><tbody>`;
             equipesArray.forEach(item => {
-                html += `
-                    <tr>
-                        <td>${item.equipe}</td>
-                        <td>${item.total}</td>
-                        <td>${item.casa}</td>
-                        <td>${item.fora}</td>
-                    </tr>
-                `;
+                html += `<tr><td>${item.equipe}</td><td>${item.total}</td><td>${item.casa}</td><td>${item.fora}</td></tr>`;
             });
-            
-            html += `
-                    </tbody>
-                </table>
-            `;
-            
-            // Exibir tabela
+            html += `</tbody></table>`;
             statsPorEquipe.innerHTML = html;
             statsPorEquipe.classList.add('active');
-            
-            // Adicionar event listeners para ordenação
             document.querySelectorAll('#stats-por-equipe th[data-sort]').forEach(th => {
                 th.style.cursor = 'pointer';
                 th.addEventListener('click', () => {
                     const sortBy = th.getAttribute('data-sort');
-                    
-                    // Se clicar na mesma coluna, inverte a direção
                     if (sortBy === sortColumnEquipe) {
                         sortDirectionEquipe = sortDirectionEquipe === 'asc' ? 'desc' : 'asc';
                     } else {
                         sortColumnEquipe = sortBy;
                         sortDirectionEquipe = 'asc';
                     }
-                    
-                    // Atualizar tabela com nova ordenação
                     exibirEstatisticasPorEquipe(temporada);
                 });
             });
