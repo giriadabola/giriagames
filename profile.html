@@ -830,6 +830,11 @@
         opacity: 0;
     }
 }
+
+
+
+
+
     </style>
 </head>
 <body>
@@ -839,7 +844,7 @@
     </div>
 
    <div class="content">
-    <div class="header-container">
+    <div class="header-container">  <!-- Nova div adicionada -->
         <h1>Perfil de <span id="profileUsername"></span></h1>
         <button class="logout-btn" id="logoutBtn">
             <i class="fas fa-sign-out-alt"></i> Sair
@@ -852,6 +857,7 @@
             <div class="display-value" id="gcoinsValue">0</div>
         </div>
 
+        <!-- GCoins Change Notification Popup -->
         <div class="popup-overlay" id="gcoinsChangePopup">
             <div class="popup-content">
                 <h2>Os teus GCoins acabaram de ser alterados</h2>
@@ -908,6 +914,8 @@
         </div>
     </div>
 
+
+     <!-- Mini Games Popup -->
      <div class="popup-overlay" id="miniGamesPopup">
         <div class="popup-content">
             <button class="popup-btn popup-btn-icon" id="closeMiniGamesPopupIcon">
@@ -917,16 +925,19 @@
             <div class="mini-game-display jornada-world26-display">
                 <h3>Rumo a Jersey</h3>
                 <div class="display-icon"></div>
+                <!-- Add Rumo a Jersey specific content here later -->
             </div>
 
             <div class="mini-game-display quem-ganha-display">
                 <h3>Quem Ganha?</h3>
                 <div class="display-icon"></div>
+                <!-- Add Quem Ganha specific content here later -->
             </div>
 
             <div class="mini-game-display myths-display" style="display: none;">
                 <h3>Mitos e Lendas</h3>
                 <div class="display-icon"><i class="fas fa-dragon"></i></div>
+                <!-- Add Myths specific content here later -->
             </div>
 
         </div>
@@ -937,6 +948,7 @@
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
         import { getFirestore, doc, getDoc, collection, getDocs, query, orderBy, limit, where, updateDoc, addDoc, serverTimestamp, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
+        // Firebase configuration
         const firebaseConfig = {
             apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0",
             authDomain: "g-games-8a8fc.firebaseapp.com",
@@ -947,10 +959,12 @@
             measurementId: "G-GTTPJ6G5MD"
         };
 
+        // Initialize Firebase
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
 
+        // Get DOM elements
         const returnDisplay = document.getElementById('returnDisplay');
         const returnPlayersPopup = document.getElementById('returnPlayersPopup');
         const returnPlayersList = document.getElementById('returnPlayersList');
@@ -974,28 +988,34 @@
         const quemGanhaDisplay = miniGamesPopup.querySelector('.quem-ganha-display');
         const mythsDisplay = miniGamesPopup.querySelector('.myths-display');
         const logoutBtn = document.getElementById('logoutBtn');
+
+        // Bottom Menu Items
         const bottomMenuHome = document.querySelector('.bottom-menu a[href="1x.html"]');
         const bottomMenuMarket = document.querySelector('.bottom-menu a[href="market.html"]');
         const bottomMenuTeam = document.querySelector('.bottom-menu a[href="team.html"]');
         const bottomMenuEmpire = document.querySelector('.bottom-menu a[href="empire.html"]');
         const bottomMenuRankings = document.querySelector('.bottom-menu a[href="rankings.html"]');
         const bottomMenuProfile = document.querySelector('.bottom-menu a[href="profile.html"]');
-
+        
+        // Variables for listener and state
         let unsubscribePanelListener = null;
         let initialPanelSettings = null;
         let isInitialPanelLoad = true;
         let previousMythsValue = null;
 
+        // Function to update mini-games visibility based on panel settings
         async function updateMiniGamesVisibility(panelSettings) {
             const mythsDisplay = miniGamesPopup.querySelector('.myths-display');
             const currentMythsValue = panelSettings?.myths;
             mythsDisplay.style.display = currentMythsValue === 'off' ? 'none' : 'flex';
+
             if (previousMythsValue !== null && previousMythsValue !== currentMythsValue) {
                 location.reload();
             }
             previousMythsValue = currentMythsValue;
         }
 
+        // Add click event listeners
         returnDisplay.addEventListener('click', () => {
             loadReturnPlayers();
             returnPlayersPopup.style.display = 'flex';
@@ -1026,6 +1046,7 @@
             window.location.href = 'whowins.html';
         });
 
+        // Check Firebase panel settings for myths visibility
         const checkMythsVisibility = async () => {
             try {
                 const painelDoc = await getDoc(doc(db, 'paineis', 'paineis perfil'));
@@ -1037,12 +1058,14 @@
                 console.error('Error checking myths visibility:', error);
             }
         };
+
         checkMythsVisibility();
 
         mythsDisplay.addEventListener('click', () => {
             window.location.href = 'myths.html';
         });
 
+        // Logout button functionality
         logoutBtn.addEventListener('click', async () => {
             if (unsubscribePanelListener) {
                 unsubscribePanelListener();
@@ -1060,15 +1083,18 @@
         async function loadReturnPlayers() {
             const user = auth.currentUser;
             if (!user) return;
+
             try {
                 const q = query(collection(db, 'jogadores'), where('compradopor', '==', user.uid));
                 const querySnapshot = await getDocs(q);
                 returnPlayersList.innerHTML = '';
+
                 const positionOrder = ['Guarda-Redes', 'Defesa', 'Médio', 'Avançado'];
                 const playersByPosition = {};
                 positionOrder.forEach(pos => {
                     playersByPosition[pos] = [];
                 });
+
                 const promises = querySnapshot.docs.map(async playerDoc => {
                     const player = playerDoc.data();
                     const paisRef = doc(db, 'paises', player.paisId);
@@ -1076,12 +1102,15 @@
                     const paisData = paisDoc.exists() ? paisDoc.data() : null;
                     return { playerDoc, player, paisData };
                 });
+
                 const players = await Promise.all(promises);
+
                 players.forEach(({ playerDoc, player, paisData }) => {
                     if (positionOrder.includes(player.posicao)) {
                         playersByPosition[player.posicao].push({ playerDoc, player, paisData });
                     }
                 });
+
                 let hasPlayers = false;
                 positionOrder.forEach(position => {
                     if (playersByPosition[position].length > 0) {
@@ -1093,23 +1122,33 @@
                         header.style.marginBottom = '10px';
                         header.style.fontSize = '18px';
                         returnPlayersList.appendChild(header);
+
                         playersByPosition[position].forEach(({ playerDoc, player, paisData }) => {
                             const playerCard = document.createElement('div');
                             playerCard.className = 'player-card';
+
                             let castaClassName = '';
                             const castaValue = player.casta;
+
                             if (castaValue === "Jogador Ouro") castaClassName = 'golden';
                             else if (castaValue === "Jogador Prata") castaClassName = 'silver';
                             else if (castaValue === "Jogador Bronze") castaClassName = 'bronze';
                             else if (castaValue === "Jogador Platina") castaClassName = 'platina';
+                            
                             if (castaClassName) playerCard.classList.add(castaClassName);
+
                             playerCard.innerHTML = `
                                 <img src="${player.imagem}" alt="${player.nome}" class="player-image">
                                 ${paisData ? `<img src="${paisData.imagem}" alt="${paisData.nome}" class="country-flag">` : ''}
                                 <div class="player-name">${player.nome}</div>
                                 <div class="player-position">${player.posicao}</div>
-                                <div class="player-price"><i class="fas fa-coins"></i>${player.preco}</div>
-                                <button class="return-button" data-player-id="${playerDoc.id}" data-player-position="${player.posicao}">Devolver</button>`;
+                                <div class="player-price">
+                                    <i class="fas fa-coins"></i>
+                                    ${player.preco}
+                                </div>
+                                <button class="return-button" data-player-id="${playerDoc.id}" data-player-position="${player.posicao}">Devolver</button>
+                            `;
+
                             const returnButton = playerCard.querySelector('.return-button');
                             returnButton.addEventListener('click', async () => {
                                 const confirmPopup = document.createElement('div');
@@ -1118,22 +1157,32 @@
                                 confirmPopup.innerHTML = `
                                     <div class="popup-content">
                                         <h2 style="font-size: 1.2rem;">Devolver para o Mercado? (não será reembolsado)</h2>
-                                        <div class="popup-buttons">
-                                            <button class="popup-btn confirm-return" style="background-color: #4CAF50;">Sim</button>
-                                            <button class="popup-btn cancel-return" style="background-color: #f44336;">Não</button>
-                                        </div>
-                                    </div>`;
+                                    <div class="popup-buttons">
+                                        <button class="popup-btn confirm-return" style="background-color: #4CAF50;">Sim</button>
+                                        <button class="popup-btn cancel-return" style="background-color: #f44336;">Não</button>
+                                    </div>
+                                </div>
+                            `;
                                 document.body.appendChild(confirmPopup);
+
                                 const confirmButton = confirmPopup.querySelector('.confirm-return');
                                 const cancelButton = confirmPopup.querySelector('.cancel-return');
-                                cancelButton.addEventListener('click', () => confirmPopup.remove());
+
+                                cancelButton.addEventListener('click', () => {
+                                    confirmPopup.remove();
+                                });
+
                                 confirmButton.addEventListener('click', async () => {
                                     try {
                                         const seasonsQuery = query(collection(db, 'palpites'), orderBy('temporada', 'desc'), limit(1));
                                         const seasonsSnapshot = await getDocs(seasonsQuery);
                                         let latestSeason = seasonsSnapshot.docs[0]?.data()?.temporada || '';
                                         latestSeason = latestSeason.replace('/', '');
-                                        await updateDoc(doc(db, 'jogadores', playerDoc.id), { compradopor: null });
+
+                                        await updateDoc(doc(db, 'jogadores', playerDoc.id), {
+                                            compradopor: null
+                                        });
+
                                         await addDoc(collection(db, 'movimentos'), {
                                             de: user.uid,
                                             estado: 'Devolvido',
@@ -1146,6 +1195,7 @@
                                             userId: user.uid,
                                             tipo: 'Mercado'
                                         });
+
                                         const successMessage = document.createElement('div');
                                         successMessage.className = 'success-message';
                                         successMessage.textContent = 'Jogador Devolvido';
@@ -1158,11 +1208,13 @@
                                         successMessage.style.color = 'white';
                                         successMessage.style.borderRadius = '5px';
                                         document.body.appendChild(successMessage);
+
                                         setTimeout(() => {
                                             confirmPopup.remove();
                                             successMessage.remove();
                                             location.reload();
                                         }, 1500);
+
                                     } catch (error) {
                                         console.error('Error returning player:', error);
                                         alert('Erro ao devolver jogador. Tente novamente.');
@@ -1170,10 +1222,12 @@
                                     }
                                 });
                             });
+
                             returnPlayersList.appendChild(playerCard);
                         });
                     }
                 });
+
                 if (!hasPlayers) {
                     const noPlayersMessage = document.createElement('p');
                     noPlayersMessage.textContent = "Sem jogadores para devolver.";
@@ -1182,6 +1236,7 @@
                     noPlayersMessage.style.padding = '20px';
                     returnPlayersList.appendChild(noPlayersMessage);
                 }
+
             } catch (error) {
                 console.error('Error loading return players:', error);
             }
@@ -1203,8 +1258,9 @@
         }
 
         async function updateGCoinsDisplay() {
-            const user = auth.currentUser;
+             const user = auth.currentUser;
             const gcoinsValue = document.getElementById('gcoinsValue');
+
             if (user) {
                 const userDoc = await getDoc(doc(db, 'users', user.uid));
                 if (userDoc.exists()) {
@@ -1220,26 +1276,32 @@
 
         async function loadTransactions() {
             gcoinsTransactionsList.innerHTML = '';
+
             const loadingSpinner = document.createElement('div');
             loadingSpinner.className = 'transactions-loading-spinner';
             loadingSpinner.style.display = 'block';
+
             const loadingText = document.createElement('p');
             loadingText.textContent = 'A carregar transações...';
             loadingText.style.textAlign = 'center';
             loadingText.style.padding = '20px';
             loadingText.style.display = 'block';
+
             gcoinsTransactionsList.appendChild(loadingSpinner);
             gcoinsTransactionsList.appendChild(loadingText);
+
             const user = auth.currentUser;
             if (!user) {
                 gcoinsTransactionsList.innerHTML = '<p style="text-align:center; padding: 20px;">Utilizador não autenticado.</p>';
                 return;
             }
+
             try {
                 const seasonsQuery = query(collection(db, 'palpites'), orderBy('temporada', 'desc'), limit(1));
                 const seasonsSnapshot = await getDocs(seasonsQuery);
                 let latestSeason = seasonsSnapshot.docs[0]?.data()?.temporada || '';
                 latestSeason = latestSeason.replace('/', '');
+
                 const movementsQuery = query(
                     collection(db, 'movimentos'),
                     where('userId', '==', user.uid),
@@ -1248,18 +1310,21 @@
                     orderBy('movimentoData', 'desc')
                 );
                 const movementsSnapshot = await getDocs(movementsQuery);
+
                 if (movementsSnapshot.empty) {
                     gcoinsTransactionsList.innerHTML = '<p style="text-align:center; padding: 20px;">Sem transações registadas.</p>';
                     return;
                 }
+
                 const transactionsHTML = document.createElement('ul');
                 transactionsHTML.style.listStyleType = 'none';
                 transactionsHTML.style.padding = '0';
+
                 for (const docSnapshot of movementsSnapshot.docs) {
                     const transaction = docSnapshot.data();
                     const listItem = document.createElement('li');
                     let itemName = '';
-                    if (transaction.empireTipo) {
+                     if (transaction.empireTipo) {
                         const itemEmpireValue = transaction.itemEmpire || '';
                         itemName = transaction.empireTipo + " " + itemEmpireValue;
                     } else if (transaction.nomeJogo) {
@@ -1275,20 +1340,25 @@
                     } else {
                         itemName = 'N/A';
                     }
+
                     const date = transaction.movimentoData ? transaction.movimentoData.toDate().toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: '2-digit' }) : 'Data Indisponível';
                     let valorReal = transaction.valorreal !== undefined ? transaction.valorreal : 0;
                     let valorRealColor = 'black';
                     if (valorReal > 0) valorRealColor = 'green';
                     else if (valorReal < 0) valorRealColor = 'red';
+
                     listItem.innerHTML = `
                         <p>${transaction.estado}</p>
                         <p>${itemName}</p>
                         <p><span style="color: ${valorRealColor}">${valorReal}</span></p>
-                        <p>${date}</p>`;
+                        <p>${date}</p>
+                    `;
                     transactionsHTML.appendChild(listItem);
                 }
+
                 gcoinsTransactionsList.innerHTML = '';
                 gcoinsTransactionsList.appendChild(transactionsHTML);
+
             } catch (error) {
                 console.error('Error loading transactions:', error);
                 gcoinsTransactionsList.innerHTML = '<p style="text-align:center; padding: 20px;">Erro ao carregar transações. Tente novamente.</p>';
@@ -1323,7 +1393,7 @@
         async function fetchMenuSettings() {
             try {
                 const menuSettingsDocRef = doc(db, 'paineis', 'paineis menu');
-                const docSnap = await getDoc(docSettingsDocRef);
+                const docSnap = await getDoc(menuSettingsDocRef);
                 if (docSnap.exists()) {
                     return docSnap.data();
                 } else {
@@ -1331,7 +1401,7 @@
                 }
             } catch (error) {
                 console.error("Error fetching menu settings:", error);
-                return { '1x': 'off', bank: 'off', empire: 'off', market: 'off', profile: 'off', rankings: 'off', team: 'off' };
+                 return { '1x': 'off', bank: 'off', empire: 'off', market: 'off', profile: 'off', rankings: 'off', team: 'off' };
             }
         }
 
@@ -1351,11 +1421,12 @@
 
         onAuthStateChanged(auth, async (user) => {
             if (unsubscribePanelListener) {
-                unsubscribePanelListener();
-                unsubscribePanelListener = null;
-                initialPanelSettings = null;
-                isInitialPanelLoad = true;
+                 unsubscribePanelListener();
+                 unsubscribePanelListener = null;
+                 initialPanelSettings = null;
+                 isInitialPanelLoad = true;
             }
+
             const panelDocRef = doc(db, 'paineis', 'paineis perfil');
             unsubscribePanelListener = onSnapshot(panelDocRef, (doc) => {
                 if (doc.exists()) {
@@ -1363,6 +1434,7 @@
                     updateMiniGamesVisibility(panelSettings);
                 }
             });
+
             if (user) {
                 try {
                     const userDocRef = doc(db, 'users', user.uid);
@@ -1370,27 +1442,35 @@
                         getDoc(userDocRef),
                         fetchMenuSettings()
                     ]);
+
                     if (!userDocSnap.exists() || userDocSnap.data().aceite !== "Yes") {
                         loadingScreen.style.display = 'none';
                         window.location.href = 'index.html';
                         return;
                     }
+
                     const userData = userDocSnap.data();
                     const userStatus = userData.estatuto || null;
+
                     const canAccessProfilePage = menuSettings.profile === 'on' || userStatus === 'ruler';
+
                     if (!canAccessProfilePage) {
-                        loadingScreen.style.display = 'none';
-                        window.location.href = '404.html';
-                        return;
+                         loadingScreen.style.display = 'none';
+                         window.location.href = '404.html';
+                         return;
                     }
+
                     applyMenuVisibility(menuSettings);
+
                     initialPanelSettings = await fetchPanelSettings();
+
                     if (initialPanelSettings) {
                         gcoinsDisplay.style.display = initialPanelSettings.GCoin === 'on' ? 'flex' : 'none';
                         debtDisplay.style.display = initialPanelSettings.dividas === 'on' ? 'flex' : 'none';
                         returnDisplay.style.display = initialPanelSettings.devolver === 'on' ? 'flex' : 'none';
                         squadDisplayLink.style.display = initialPanelSettings.myteam === 'on' ? 'block' : 'none';
                         minigamesDisplay.style.display = initialPanelSettings.minigames === 'on' ? 'flex' : 'none';
+
                         const miniGamesDisplayVisible = initialPanelSettings.minigames === 'on';
                         if (jornadaEuroDisplay) jornadaEuroDisplay.style.display = miniGamesDisplayVisible && initialPanelSettings.world26 === 'on' ? 'block' : 'none';
                         if (quemGanhaDisplay) quemGanhaDisplay.style.display = miniGamesDisplayVisible && initialPanelSettings.quemganha === 'on' ? 'block' : 'none';
@@ -1402,17 +1482,25 @@
                         minigamesDisplay.style.display = 'flex';
                         if (jornadaEuroDisplay) jornadaEuroDisplay.style.display = 'block';
                         if (quemGanhaDisplay) quemGanhaDisplay.style.display = 'block';
+
                         initialPanelSettings = { GCoin: 'on', dividas: 'on', devolver: 'on', myteam: 'on', minigames: 'on', world26: 'on', quemganha: 'on' };
                     }
+
                     const panelSettingsDocRef = doc(db, 'paineis', 'paineis perfil');
                     isInitialPanelLoad = true;
+                    
                     unsubscribePanelListener = onSnapshot(panelSettingsDocRef, (docSnap) => {
                         if (isInitialPanelLoad) {
                             isInitialPanelLoad = false;
                             return;
                         }
-                        if (!docSnap.exists()) return;
+
+                        if (!docSnap.exists()) {
+                            return;
+                        }
+
                         const currentSettings = docSnap.data();
+
                         const fieldsToCheck = ['GCoin', 'dividas', 'devolver', 'myteam', 'minigames', 'world26', 'quemganha', 'myths'];
                         let changed = false;
                         for (const field of fieldsToCheck) {
@@ -1421,6 +1509,7 @@
                                 break;
                             }
                         }
+
                         if (changed) {
                             if (unsubscribePanelListener) {
                                 unsubscribePanelListener();
@@ -1428,22 +1517,28 @@
                             }
                             location.reload();
                         }
+
                     }, (error) => {
                         console.error("Error in 'paineis perfil' listener:", error);
                         if (unsubscribePanelListener) {
-                            unsubscribePanelListener();
-                            unsubscribePanelListener = null;
+                             unsubscribePanelListener();
+                             unsubscribePanelListener = null;
                         }
                     });
+
                     await updateGCoinsDisplay();
+
                     profileUsernameSpan.textContent = userData.nomeDeUsuario || "Username Not Found";
+
                     loadingScreen.style.display = 'none';
                     content.style.display = 'block';
+
                 } catch (error) {
                     console.error("Error during auth state change processing:", error);
                     loadingScreen.style.display = 'none';
                     window.location.href = '404.html';
                 }
+
             } else {
                 loadingScreen.style.display = 'none';
                 window.location.href = 'index.html';
@@ -1454,14 +1549,18 @@
             const settingValue = isChecked ? 'on' : 'off';
             try {
                 const panelSettingsDocRef = doc(db, 'paineis', 'paineis perfil');
-                await updateDoc(panelSettingsDocRef, { [fieldName]: settingValue });
+                await updateDoc(panelSettingsDocRef, {
+                    [fieldName]: settingValue
+                });
             } catch (error) {
                 console.error("Error updating panel setting:", error);
                 alert('Failed to update setting. Please try again.');
             }
         }
+
     </script>
 
+    <!-- MENU INFERIOR -->
     <nav class="bottom-menu">
         <a href="1x.html" class="menu-item">
             <i class="fas fa-home"></i>
@@ -1482,29 +1581,37 @@
             <i class="fas fa-user"></i>
         </a>
     </nav>
+    <!-- FIM DO MENU INFERIOR -->
 
     <script>
         function criarRipple(event, element) {
             const ripple = document.createElement('span');
             ripple.classList.add('ripple');
+    
             const rect = element.getBoundingClientRect();
             ripple.style.left = `${event.clientX - rect.left}px`;
             ripple.style.top = `${event.clientY - rect.top}px`;
+    
             element.appendChild(ripple);
+    
             setTimeout(() => {
                 ripple.remove();
             }, 600);
         }
+    
         function addRippleEffect(element) {
             element.addEventListener('click', function (e) {
                 criarRipple(e, element);
             });
+    
             element.addEventListener('mouseenter', function (e) {
                 criarRipple(e, element);
             });
         }
+    
         document.querySelectorAll('.ripple-effect').forEach(addRippleEffect);
     </script>
     
+
 </body>
 </html>
