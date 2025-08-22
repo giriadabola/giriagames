@@ -249,7 +249,6 @@
     const content = document.querySelector('.content');
     const rankingsBody = document.getElementById('rankings-body');
     let currentUserStatus = null; // Store user status (estatuto)
-    // Removed global menuVisibilitySettings, fetch within onAuthStateChanged
 
     // --- Function to load Menu Settings ---
     async function loadMenuSettings() {
@@ -257,7 +256,6 @@
             const menuSettingsDocRef = doc(db, 'paineis', 'paineis menu');
             const docSnap = await getDoc(menuSettingsDocRef);
             if (docSnap.exists()) {
-                // console.log("Menu settings loaded:", docSnap.data()); // Debugging
                 return docSnap.data();
             } else {
                 return null; // Return null if document doesn't exist
@@ -269,16 +267,12 @@
 
     // --- Function to check page access based on status and menu settings ---
     function checkPageAccess(userStatus, menuSettings) {
-        // Check if menu settings were loaded
         if (!menuSettings) {
-            console.warn("Menu settings not available for access check.");
             // Default behavior if settings are missing: only ruler access
             return userStatus === 'ruler';
         }
 
-        // Check the 'rankings' setting
         const rankingsEnabled = menuSettings['rankings'] === 'on';
-        // console.log(`Rankings Enabled: ${rankingsEnabled}, User Status: ${userStatus}`); // Debugging
 
         if (rankingsEnabled) {
             return true; // Access granted if rankings are 'on'
@@ -290,36 +284,24 @@
 
     // --- Function to update Menu Item Visibility ---
     function updateMenuVisibility(menuSettings) {
-        console.log("Attempting to update menu visibility. Settings received:", menuSettings); // Log received settings
-
         if (!menuSettings) {
-            console.warn("Cannot update menu visibility, settings object is null or undefined.");
             return; // Do nothing if settings aren't available
         }
 
         const menuItems = document.querySelectorAll('.bottom-menu .menu-item');
-        console.log(`Found ${menuItems.length} menu items to process.`); // Log how many items were found
 
         menuItems.forEach(item => {
             const key = item.getAttribute('data-key');
             if (key) { // Check if data-key exists
                 const settingValue = menuSettings[key];
-                console.log(`Processing item with data-key="${key}". Firestore setting value:`, settingValue); // Log key and its value
-
                 if (settingValue === 'off') {
-                    console.log(`   -> Setting is 'off'. Adding 'hidden' class to`, item); // Log action
                     item.classList.add('hidden');
                 } else {
-                    console.log(`   -> Setting is NOT 'off' (it's '${settingValue}'). Removing 'hidden' class from`, item); // Log action
                     item.classList.remove('hidden');
                 }
-            } else {
-                console.warn("Found a menu item without a data-key attribute:", item); // Warn about items missing the key
             }
         });
-        console.log("Menu visibility update complete."); // Log completion
     }
-
 
     // --- Function to get User Status (estatuto) ---
     async function getUserStatus(userId) {
@@ -328,15 +310,11 @@
             const docSnap = await getDoc(userDocRef);
             if (docSnap.exists()) {
                 const userData = docSnap.data();
-                // Ensure user is accepted before returning status
                 if (userData.aceite !== "Yes") {
-                    console.log(`User ${userId} has not accepted terms.`);
                     return null; // Treat as not valid if terms not accepted
                 }
-                // console.log(`User Status for ${userId}:`, userData.estatuto); // Debugging
                 return userData.estatuto || null; // Return estatuto or null if missing
             } else {
-                console.warn(`User document not found for ID: ${userId}`);
                 return null; // User document doesn't exist
             }
         } catch (error) {
@@ -351,9 +329,7 @@
             // 1. Get User Status
             currentUserStatus = await getUserStatus(user.uid);
 
-            // Redirect immediately if user status is invalid (not found, not accepted)
             if (currentUserStatus === null) {
-                console.log("Redirecting: User status is null (not found or not accepted).");
                 window.location.href = '404.html';
                 return; // Stop further execution
             }
@@ -375,14 +351,11 @@
                 loadingScreen.style.display = 'none';
                 content.style.display = 'block';
             } else {
-                // Redirect if access is denied based on rules
-                console.log("Redirecting: Access denied based on menu settings and user status.");
                 window.location.href = '404.html';
             }
 
         } else {
             // User is signed out
-            console.log("Redirecting: No user signed in.");
             loadingScreen.style.display = 'none'; // Hide loader before redirecting
             window.location.href = 'index.html';
         }
@@ -417,7 +390,6 @@
 
         usersSnap.forEach(userDoc => {
             const userData = userDoc.data();
-             // Filter out users who haven't accepted or don't have 'estatuto' (optional, but good practice)
             if (userData.aceite === "Yes" && userData.estatuto) {
                 const seasonPointsKey = season.replace('/', '') + 'Pontos'; // e.g., 20232024Pontos
                 const seasonPoints = userData[seasonPointsKey] || 0;
@@ -447,20 +419,20 @@
             const pointsCell = document.createElement('td');
             const infoCell = document.createElement('td');
 
-            const percentage = totalUsers > 1 ? position / totalUsers : 0; // Avoid division by zero, handle single user case
+            const percentage = totalUsers > 1 ? position / totalUsers : 0;
 
             let backgroundColor;
             if (percentage <= 0.33) {
                 const factor = percentage / 0.33;
-                const green = Math.floor(200 - 100 * factor); // Darker green at top
+                const green = Math.floor(200 - 100 * factor);
                 backgroundColor = `rgba(50, ${green}, 50, 0.2)`;
             } else if (percentage <= 0.67) {
                  const factor = (percentage - 0.33) / 0.34;
-                 const yellowComp = Math.floor(200 - 100 * factor); // From bright yellow to darker orange/yellow
+                 const yellowComp = Math.floor(200 - 100 * factor);
                  backgroundColor = `rgba(${yellowComp}, ${yellowComp}, 50, 0.2)`;
             } else {
                  const factor = (percentage - 0.67) / 0.33;
-                 const red = Math.floor(200 - 100 * factor); // From bright red to darker red
+                 const red = Math.floor(200 - 100 * factor);
                  backgroundColor = `rgba(${red}, 50, 50, 0.2)`;
             }
 
@@ -494,7 +466,6 @@
         const popupBody = document.getElementById('popup-predictions-body');
         const roundFilter = document.getElementById('round-filter');
 
-         // Show loading indicator inside popup maybe?
          popupBody.innerHTML = 'A carregar previsões...';
          popup.style.display = "block"; // Show popup immediately
 
@@ -514,46 +485,38 @@
                 const data = doc.data();
                 predictions.push({
                     ...data,
-                    id: doc.id, // Store doc id if needed later
-                    timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : new Date(0) // Handle timestamp conversion
+                    id: doc.id,
+                    timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : new Date(0)
                 });
-                if (data.ronda) rounds.add(data.ronda); // Collect rounds
+                if (data.ronda) rounds.add(data.ronda);
             });
 
-             // Sort predictions by timestamp (latest first) - maybe sort by round then timestamp?
-             // Sorting by round first might be more logical for display
              predictions.sort((a, b) => (b.ronda || 0) - (a.ronda || 0) || b.timestamp - a.timestamp);
 
-
-             // Populate Round Filter
-             const sortedRounds = Array.from(rounds).sort((a, b) => parseInt(a) - parseInt(b)); // Sort numerically
+             const sortedRounds = Array.from(rounds).sort((a, b) => parseInt(a) - parseInt(b));
              const userSeasonKey = `${userId}-${season}`;
-             const currentSelection = selectedRounds[userSeasonKey] || ''; // Get previous selection or default to all
+             const currentSelection = selectedRounds[userSeasonKey] || '';
 
-             roundFilter.innerHTML = '<option value="">Todas as Rondas</option>'; // Reset options
+             roundFilter.innerHTML = '<option value="">Todas as Rondas</option>';
              sortedRounds.forEach(round => {
                 const option = document.createElement('option');
                 option.value = round;
                 option.textContent = `Ronda ${round}`;
-                if (String(currentSelection) === String(round)) { // Compare as strings
+                if (String(currentSelection) === String(round)) {
                     option.selected = true;
                 }
                 roundFilter.appendChild(option);
              });
-             // Ensure the filter displays the correct selected value after population
              roundFilter.value = currentSelection;
 
-
-             // Filter predictions based on selected round
              const selectedRound = roundFilter.value;
              const filteredPredictions = selectedRound
-                 ? predictions.filter(p => String(p.ronda) === selectedRound) // Filter by selected round
-                 : predictions; // Show all if no round selected
+                 ? predictions.filter(p => String(p.ronda) === selectedRound)
+                 : predictions;
 
-            // Group predictions by round for display
             const predictionsByRound = {};
             filteredPredictions.forEach(prediction => {
-                const round = prediction.ronda || 'Desconhecida'; // Handle missing round
+                const round = prediction.ronda || 'Desconhecida';
                 if (!predictionsByRound[round]) {
                     predictionsByRound[round] = [];
                 }
@@ -561,32 +524,28 @@
             });
 
 
-             predictionsHTML = ''; // Reset HTML content
-             // Display rounds sorted numerically (descending - latest first)
+             predictionsHTML = '';
              const displaySortedRounds = Object.keys(predictionsByRound).sort((a, b) => parseInt(b) - parseInt(a));
 
              if (displaySortedRounds.length === 0) {
                  predictionsHTML = 'Nenhuma previsão encontrada para esta seleção.';
              } else {
-                const roundToOpen = selectedRound || displaySortedRounds[0]; // Open selected or latest round
+                const roundToOpen = selectedRound || displaySortedRounds[0];
 
                 displaySortedRounds.forEach(round => {
                     const isOpen = String(round) === String(roundToOpen);
                     const roundPredictions = predictionsByRound[round];
                     let roundContentHTML = '';
 
-                     // Sort predictions within the round if needed (e.g., by timestamp or game name)
-                     roundPredictions.sort((a,b) => a.timestamp - b.timestamp); // Example: oldest first within round
+                     roundPredictions.sort((a,b) => a.timestamp - b.timestamp);
 
                     roundPredictions.forEach(prediction => {
                         let palpitesHTML = '';
-                        for (let i = 1; i <= 10; i++) { // Assuming max 10 predictions per game doc
+                        for (let i = 1; i <= 10; i++) {
                             if (prediction[`palpite${i}`]) {
                                 let pointsContent = '';
                                 if (prediction.Analisado === "Sim") {
                                     const points = prediction[`Palpite${i}PontosGanhos`] || 0;
-                                    // *** MODIFICAÇÃO AQUI ***
-                                    // Apenas pontos > 0 são verdes. 0 e negativos são vermelhos.
                                     const pointsClass = points > 0 ? 'prediction-points' : 'prediction-points-negative';
                                     pointsContent = `<span class="${pointsClass}">(${points} pts)</span>`;
                                 } else {
@@ -596,7 +555,7 @@
                             }
                         }
 
-                        if (palpitesHTML) { // Only add if there are predictions for this game entry
+                        if (palpitesHTML) {
                             roundContentHTML += `
                                 <div class="game-header">${prediction.nomeJogo || 'Jogo Desconhecido'}</div>
                                 ${palpitesHTML}
@@ -604,7 +563,7 @@
                         }
                     });
 
-                     if (roundContentHTML) { // Only add round section if it has content
+                     if (roundContentHTML) {
                         predictionsHTML += `
                             <div class="round-section">
                                 <div class="round-header" data-round="${round}">
@@ -622,18 +581,14 @@
 
              popupBody.innerHTML = predictionsHTML;
 
-
-             // Add event listeners for round headers AFTER content is in DOM
              document.querySelectorAll('.round-header').forEach(header => {
-                 header.removeEventListener('click', toggleRoundContent); // Remove previous listeners if any
+                 header.removeEventListener('click', toggleRoundContent);
                  header.addEventListener('click', toggleRoundContent);
              });
 
-
-            // Add event listener for round filter - Ensure it's added only once or managed correctly
-            roundFilter.onchange = () => { // Using arrow function is fine here
-                selectedRounds[userSeasonKey] = roundFilter.value; // Store selection
-                togglePredictions(userId, season); // Re-render predictions
+            roundFilter.onchange = () => {
+                selectedRounds[userSeasonKey] = roundFilter.value;
+                togglePredictions(userId, season);
             };
 
         } catch (error) {
@@ -649,10 +604,6 @@
         if (content && arrow) {
              content.classList.toggle('open');
              arrow.classList.toggle('open');
-             // Optional: Close other rounds when one is opened
-             // if (content.classList.contains('open')) {
-             //     closeOtherRounds(this.dataset.round);
-             // }
         }
     }
 
