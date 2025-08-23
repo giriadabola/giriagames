@@ -151,7 +151,7 @@
     <a href="rankings.html" class="menu-item" data-key="rankings"><i class="fas fa-list"></i></a>
     <a href="profile.html" class="menu-item" data-key="profile"><i class="fas fa-user"></i></a>
 </nav>
-   <script type="module">
+  <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
     import { getFirestore, doc, getDoc, collection, serverTimestamp, getDocs, query, where, orderBy, writeBatch } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
@@ -170,58 +170,42 @@
     let maxPredictions = 0;
     let countdownInterval = null;
 
-    // --- NOVO: Função para renderizar os cards de palpites ---
+    // --- FUNÇÕES DE RENDERIZAÇÃO DINÂMICA ---
     function renderPredictionCards(predictions) {
-        // 1. Esconder a interface de seleção de odds
         document.getElementById('category-shortcuts-container').style.display = 'none';
         document.getElementById('odds-list-container').style.display = 'none';
         document.getElementById('submit-button-container').style.display = 'none';
 
-        // 2. Preparar o HTML dos cards
         const displayArea = document.getElementById('prediction-display-area');
-        let cardsHtml = `
-            <div class="prediction-display-container">
-                <h3>✅ Seus Palpites Registrados</h3>`;
+        let cardsHtml = `<div class="prediction-display-container"><h3>✅ Seus Palpites Registrados</h3>`;
         
-        // Loop através do objeto de palpites para encontrar todas as chaves "palpiteX"
         Object.keys(predictions)
             .filter(key => key.startsWith('palpite') && !key.includes('Pontos') && !key.includes('Indice'))
-            .sort() // Garante a ordem correta (palpite1, palpite2, ...)
+            .sort()
             .forEach(key => {
                 const predictionNumber = key.replace('palpite', '');
                 const predictionValue = predictions[key];
-                cardsHtml += `
-                    <div class="prediction-card">
-                        <p><strong>Palpite ${predictionNumber}:</strong> ${replaceTeamPlaceholders(predictionValue)}</p>
-                    </div>
-                `;
+                cardsHtml += `<div class="prediction-card"><p><strong>Palpite ${predictionNumber}:</strong> ${replaceTeamPlaceholders(predictionValue)}</p></div>`;
             });
         
         cardsHtml += `</div>`;
-        
-        // 3. Injetar o HTML na página
         displayArea.innerHTML = cardsHtml;
         displayArea.style.display = 'block';
     }
     
-    // --- NOVO: Função para mostrar a interface de seleção de odds ---
     async function showOddsSelector() {
-        // Garantir que a área de exibição de cards está vazia e escondida
         const displayArea = document.getElementById('prediction-display-area');
         displayArea.innerHTML = '';
         displayArea.style.display = 'none';
 
-        // Mostrar os contêineres de seleção de odds
         document.getElementById('category-shortcuts-container').style.display = 'block';
         document.getElementById('odds-list-container').style.display = 'block';
         document.getElementById('submit-button-container').style.display = 'block';
 
-        // Construir e renderizar a lista de odds
         const hierarchy = await buildFullOddHierarchy();
         renderOddsList(hierarchy);
         document.getElementById('submit-button-container').innerHTML = `<button id="submit-button" class="submit-button" onclick="submitPredictions()" disabled>Enviar Palpites (0/${maxPredictions})</button>`;
     }
-
 
     // --- FUNÇÃO CONFIRMPREDICTIONS MODIFICADA ---
     window.confirmPredictions = async function() {
@@ -260,14 +244,7 @@
             await batch.commit();
 
             closeConfirmationPopup();
-
-            // MUDANÇA PRINCIPAL: Em vez de recarregar a página, renderiza os cards
             renderPredictionCards(palpiteData);
-            
-            // Opcional: remover a mensagem de sucesso se a atualização visual for suficiente
-            // showSuccessPopup("Palpites enviados com sucesso!"); 
-            // setTimeout(() => { window.location.reload(); }, 1500); // REMOVIDO
-
         } catch (error) {
             console.error('Error submitting predictions:', error);
             showErrorPopup(`Erro ao enviar palpites: ${error.message}`);
@@ -286,7 +263,6 @@
             currentGame = await loadGameData(gameId);
             maxPredictions = currentGame.numeroPalpites || 1;
             
-            // Busca de dados visuais (imagens, etc.)
             const competicaoDoc = await getDoc(doc(db, 'competicoes', currentGame.competicaoId || ' '));
             const equipaCasaDoc = await getDoc(doc(db, 'clubes', currentGame.equipaCasaId || ' '));
             const equipaForaDoc = await getDoc(doc(db, 'clubes', currentGame.equipaForaId || ' '));
@@ -297,40 +273,23 @@
             const formattedDate = gameDate.toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric' });
             const formattedTime = gameDate.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
 
-            // Renderiza o cabeçalho do jogo (sempre visível)
             document.getElementById('game-container').innerHTML = `
                 <div class="game-info">
-                    <div class="game-header">
-                        <div class="competition-and-date">
-                            <div class="competition-image"><img src="${competicaoImg}" alt="${currentGame.competicao}"></div>
-                            <span>${currentGame.competicao}</span><span class="separator">|</span>
-                            <span>${formattedDate} - ${formattedTime}</span><span class="separator">|</span>
-                            <strong style="color: #2176ff;">Palpites Possíveis: ${maxPredictions}</strong>
-                        </div>
-                    </div>
-                    <!-- O timer ou a mensagem de palpite feito será adicionado abaixo -->
+                    <div class="game-header"><div class="competition-and-date"><div class="competition-image"><img src="${competicaoImg}" alt="${currentGame.competicao}"></div><span>${currentGame.competicao}</span><span class="separator">|</span><span>${formattedDate} - ${formattedTime}</span><span class="separator">|</span><strong style="color: #2176ff;">Palpites Possíveis: ${maxPredictions}</strong></div></div>
                     <div id="timer-or-message-container"></div> 
-                    <div class="teams-container">
-                        <div class="team"><div class="team-image"><img src="${equipaCasaImg}" alt="${currentGame.equipaCasa}"></div><div class="team-name">${currentGame.equipaCasa}</div></div>
-                        <div class="vs">VS</div>
-                        <div class="team"><div class="team-image"><img src="${equipaForaImg}" alt="${currentGame.equipaFora}"></div><div class="team-name">${currentGame.equipaFora}</div></div>
-                    </div>
+                    <div class="teams-container"><div class="team"><div class="team-image"><img src="${equipaCasaImg}" alt="${currentGame.equipaCasa}"></div><div class="team-name">${currentGame.equipaCasa}</div></div><div class="vs">VS</div><div class="team"><div class="team-image"><img src="${equipaForaImg}" alt="${currentGame.equipaFora}"></div><div class="team-name">${currentGame.equipaFora}</div></div></div>
                 </div>`;
 
             const timerContainer = document.getElementById('timer-or-message-container');
-
-            // MUDANÇA PRINCIPAL: Decide o que renderizar com base nos palpites existentes
             const existingPredictions = await checkExistingPredictions(currentGame.id);
+
             if (existingPredictions) {
-                // Se já existem palpites, mostra a mensagem de confirmação e os cards
                 timerContainer.innerHTML = `<div class="existing-prediction-message"><strong>Já efetuou o seu palpite para este jogo.</strong></div>`;
                 renderPredictionCards(existingPredictions);
             } else {
-                // Se não há palpites, mostra o timer e o seletor de odds
                 timerContainer.innerHTML = `<div class="countdown-timer"><span class="countdown-label">Tempo para palpitar:</span><span id="countdown">Calculando...</span></div>`;
-                await showOddsSelector(); // Mostra a interface para palpitar
+                await showOddsSelector();
                 
-                // Inicia o countdown
                 if (currentGame.fimIntervalo) {
                     const countdownElement = document.getElementById('countdown');
                     clearInterval(countdownInterval);
@@ -339,7 +298,6 @@
                         if (timeLeft <= 0) {
                             countdownElement.innerHTML = '<span style="color: red; font-weight: bold;">Tempo esgotado!</span>';
                             clearInterval(countdownInterval);
-                            // Desativa a interface se o tempo acabar
                             document.getElementById('odds-list-container').innerHTML = '<p style="text-align:center; padding: 20px;">O tempo para palpitar neste jogo esgotou.</p>';
                             document.getElementById('submit-button-container').innerHTML = '';
                             document.getElementById('category-shortcuts-container').innerHTML = '';
@@ -363,100 +321,51 @@
         }
     }
     
-    // ----- O RESTANTE DO SEU CÓDIGO PERMANECE IGUAL -----
-    // (incluindo showErrorPopup, buildFullOddHierarchy, renderOddsList, handlePredictionClick, etc.)
-    // As funções abaixo não precisam de alteração
-    
-    function showErrorPopup(message) {
-        const popup = document.getElementById('error-popup');
-        popup.querySelector('.popup-message').textContent = message;
-        popup.style.display = 'block';
+    // --- FUNÇÃO GETUSERSTATUS CORRIGIDA ---
+    async function getUserStatus(userId) {
+        try {
+            const docSnap = await getDoc(doc(db, 'users', userId));
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                // CORRIGIDO: de "estatuito" para "estatuto"
+                return data.aceite === "Yes" ? data.estatuto || null : null;
+            }
+            return null;
+        } catch (error) {
+            console.error("Erro ao buscar status do usuário:", error);
+            return null;
+        }
     }
+
+    // ----- O RESTANTE DO SEU CÓDIGO (sem alterações) -----
+    function showErrorPopup(message) { /* ... */ const popup = document.getElementById('error-popup'); popup.querySelector('.popup-message').textContent = message; popup.style.display = 'block'; }
     window.closeConfirmationPopup = function() { document.getElementById('confirmation-popup').style.display = 'none'; }
     document.querySelector('#error-popup .close-popup').addEventListener('click', () => document.getElementById('error-popup').style.display = 'none');
     document.querySelector('#confirmation-popup .close-popup').addEventListener('click', closeConfirmationPopup);
-    function replaceTeamPlaceholders(text) {
-        if (!text || !currentGame) return text;
-        return text.replace(/Equipa da Casa|Equipa A/gi, currentGame.equipaCasa).replace(/Equipa Visitante|Equipa de Fora|Equipa B/gi, currentGame.equipaFora);
-    }
-
-    async function buildFullOddHierarchy() {
-        const allOddsData = [];
-        const q = query(collection(db, 'oddcategorias'), orderBy('ordem'));
-        const querySnapshot = await getDocs(q);
-        querySnapshot.forEach(doc => allOddsData.push({ id: doc.id, ...doc.data() }));
-        const categories = new Map();
-        const subcategories = new Map();
-        const thirdLevelItems = [];
-        allOddsData.forEach(item => {
-            if (item.categoria_subcategoria_3cat === 'categoria') categories.set(item.id, { ...item, children: [] });
-            else if (item.categoria_subcategoria_3cat === 'subcategoria') subcategories.set(item.id, { ...item, children: [] });
-            else if (item.categoria_subcategoria_3cat === '3cat') thirdLevelItems.push(item);
-        });
-        thirdLevelItems.forEach(item => {
-            if (item.subcategoriapai && subcategories.has(item.subcategoriapai)) subcategories.get(item.subcategoriapai).children.push(item);
-        });
-        for (const [id, subcategory] of subcategories) {
-            if (subcategory.categoriapai && categories.has(subcategory.categoriapai)) categories.get(subcategory.categoriapai).children.push(subcategory);
-        }
-        return Array.from(categories.values());
-    }
-
-    function renderOddsList(hierarchy) {
-        const container = document.getElementById('odds-list-container');
-        container.innerHTML = '';
-        const shortcutsContainer = document.getElementById('category-shortcuts-container');
-        let shortcutsHtml = '';
-        hierarchy.forEach(category => {
-            if (category.children.length === 0) return;
-            shortcutsHtml += `<div class="category-shortcut" onclick="scrollToCategory('${category.id}')" title="${replaceTeamPlaceholders(category.nomecategoria)}"><span class="shortcut-icon">${category.icon || '⭐'}</span></div>`;
-            const categoryElement = document.createElement('div');
-            categoryElement.className = 'odds-category';
-            categoryElement.id = category.id;
-            let filterBarHtml = '';
-            if (category.nomecategoria === 'Por Parte') filterBarHtml = `<div class="subcategory-filter-container"><strong>Filtro:</strong><button class="filter-btn active" onclick="applyFilter(this, '${category.id}', 'all')">Todas</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', '1st Half')">Primeira Parte</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', '2nd Half')">Segunda Parte</button></div>`;
-            else if (category.nomecategoria === 'Mercados Combinados') filterBarHtml = `<div class="subcategory-filter-container"><strong>Filtro:</strong><button class="filter-btn active" onclick="applyFilter(this, '${category.id}', 'all')">Todos</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'home')">${currentGame.equipaCasa}</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'away')">${currentGame.equipaFora}</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'both')">Ambas</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'others')">Outras Odds</button></div>`;
-            else if (category.nomecategoria === 'Mercados Especiais') filterBarHtml = `<div class="subcategory-filter-container"><strong>Filtro:</strong><button class="filter-btn active" onclick="applyFilter(this, '${category.id}', 'all')">Todos</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'home_special')">${currentGame.equipaCasa}</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'away_special')">${currentGame.equipaFora}</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'others_special')">Outras Odds</button></div>`;
-            else if (category.nomecategoria === 'Específicos por Equipa') filterBarHtml = `<div class="subcategory-filter-container"><strong>Filtro:</strong><button class="filter-btn active" onclick="applyFilter(this, '${category.id}', 'all')">Todos</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'home_team_specific')">${currentGame.equipaCasa}</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'away_team_specific')">${currentGame.equipaFora}</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'others_team_specific')">Outras Odds</button></div>`;
-            let subcategoriesHTML = '';
-            category.children.forEach(subcategory => {
-                if (subcategory.children.length === 0) return;
-                let itemsHTML = '';
-                subcategory.children.forEach(item => {
-                    const predictionData = { value: `${category.nomecategoria} - ${subcategory.nomesubcategoria} - ${item.nome3categoria}`, catIndice: category.indiceIngles || null, subcatIndice: subcategory.indiceIngles || null, cat3Indice: item.indiceIngles || null };
-                    let infoIconHTML = item.breveDescricao && item.breveDescricao.trim() !== '' ? `<div class="info-container"><i class="fas fa-info-circle info-icon"></i><div class="info-tooltip">${replaceTeamPlaceholders(item.breveDescricao)}</div></div>` : '';
-                    itemsHTML += `<li class="odds-item" data-prediction='${JSON.stringify(predictionData)}'>${infoIconHTML}<span class="odds-item-text">${replaceTeamPlaceholders(item.nome3categoria)}</span></li>`;
-                });
-                const subcatIndiceIngles = subcategory.indiceIngles || '';
-                subcategoriesHTML += `<li class="filterable-subcategory" data-indice-ingles="${subcatIndiceIngles}"><div class="subcategory-header"><span>${replaceTeamPlaceholders(subcategory.nomesubcategoria)}</span><i class="fas fa-chevron-down toggle-icon"></i></div><ul class="nested-list"><ul class="odds-items-grid">${itemsHTML}</ul></ul></li>`;
-            });
-            if (subcategoriesHTML === '') return;
-            categoryElement.innerHTML = `<div class="category-header"><span class="category-header-title"><span>${category.icon || '⭐'}</span><span>${replaceTeamPlaceholders(category.nomecategoria)}</span></span><i class="fas fa-chevron-down toggle-icon"></i></div><ul class="nested-list">${filterBarHtml}${subcategoriesHTML}</ul>`;
-            container.appendChild(categoryElement);
-        });
-        if (shortcutsHtml) shortcutsContainer.innerHTML = `<div class="shortcuts-wrapper">${shortcutsHtml}</div>`;
-        addEventListenersToList();
-    }
-    
-    window.scrollToCategory = function(targetId) { /* ...código original... */ const targetElement = document.getElementById(targetId); if (!targetElement) return; targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' }); const header = targetElement.querySelector('.category-header'); if (header && !header.classList.contains('active')) setTimeout(() => header.click(), 300); };
-    window.applyFilter = function(clickedButton, categoryId, filterKeyword) { /* ...código original... */ clickedButton.parentElement.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active')); clickedButton.classList.add('active'); const subcategories = clickedButton.closest('.odds-category').querySelectorAll('.filterable-subcategory'); subcategories.forEach(subcatLi => { const indiceIngles = (subcatLi.dataset.indiceIngles || '').toLowerCase(); let show = false; if (filterKeyword === 'all') show = true; else { let keywords = [], exclusionKeywords = []; switch(filterKeyword) { case '1st Half': keywords = ['1st half']; break; case '2nd Half': keywords = ['2nd half']; break; case 'home': keywords = ['h1', 'team 1', 'win1', 'win 1']; break; case 'away': keywords = ['h2', 'team 2', 'win2', 'win 2']; break; case 'both': keywords = ['both teams']; break; case 'home_special': keywords = ['h1', 'team 1', 'win1', 'win 1', '2:0']; break; case 'away_special': keywords = ['h2', 'team 2', 'win2', 'win 2', '0:2']; break; case 'home_team_specific': keywords = ['h1', 'team 1', 'win1', 'win 1']; break; case 'away_team_specific': keywords = ['h2', 'team 2', 'win2', 'win 2']; break; case 'others': exclusionKeywords = ['h1', 'team 1', 'win1', 'win 1', 'h2', 'team 2', 'win2', 'win 2', 'both teams']; break; case 'others_special': exclusionKeywords = ['h1', 'team 1', 'win1', 'win 1', '2:0', 'h2', 'team 2', 'win2', 'win 2', '0:2']; break; case 'others_team_specific': exclusionKeywords = ['h1', 'team 1', 'win1', 'win 1', 'h2', 'team 2', 'win2', 'win 2']; break; } if (keywords.length > 0 && keywords.some(k => indiceIngles.includes(k))) show = true; if (exclusionKeywords.length > 0 && !exclusionKeywords.some(k => indiceIngles.includes(k))) show = true; } subcatLi.style.display = show ? 'block' : 'none'; }); }
-    function addEventListenersToList() { /* ...código original... */ document.querySelectorAll('.category-header, .subcategory-header').forEach(header => header.addEventListener('click', e => { if (!e.target.closest('.subcategory-filter-container')) e.currentTarget.classList.toggle('active'); })); document.querySelectorAll('.odds-item').forEach(item => item.addEventListener('click', () => handlePredictionClick(item))); document.querySelectorAll('.info-container').forEach(container => container.addEventListener('click', e => { e.stopPropagation(); const tooltip = container.querySelector('.info-tooltip'); const isAlreadyActive = tooltip.classList.contains('active'); document.querySelectorAll('.info-tooltip.active').forEach(t => t.classList.remove('active')); if (!isAlreadyActive) { tooltip.classList.add('active'); tooltip.classList.remove('tooltip-adjust-left', 'tooltip-adjust-right'); const tooltipRect = tooltip.getBoundingClientRect(); if (tooltipRect.right > window.innerWidth) tooltip.classList.add('tooltip-adjust-left'); if (tooltipRect.left < 0) tooltip.classList.add('tooltip-adjust-right'); } })); document.addEventListener('click', e => { if (!e.target.closest('.info-container')) document.querySelectorAll('.info-tooltip.active').forEach(t => t.classList.remove('active', 'tooltip-adjust-left', 'tooltip-adjust-right')); }); }
-    function handlePredictionClick(itemElement) { /* ...código original... */ const predictionDataStr = itemElement.dataset.prediction; const isSelected = itemElement.classList.contains('selected'); if (isSelected) { itemElement.classList.remove('selected'); selectedPredictions = selectedPredictions.filter(p => p.value !== JSON.parse(predictionDataStr).value); } else { if (selectedPredictions.length >= maxPredictions) { showErrorPopup(`Número máximo de palpites (${maxPredictions}) já foi atingido.`); return; } itemElement.classList.add('selected'); selectedPredictions.push(JSON.parse(predictionDataStr)); } updateUI(); }
-    function updateUI() { /* ...código original... */ const submitButton = document.getElementById('submit-button'); if (submitButton) { submitButton.textContent = `Enviar Palpites (${selectedPredictions.length}/${maxPredictions})`; submitButton.disabled = selectedPredictions.length === 0; } const isMaxReached = selectedPredictions.length >= maxPredictions; document.querySelectorAll('.odds-item').forEach(item => { if (!item.classList.contains('selected')) item.classList.toggle('disabled', isMaxReached); }); }
-    window.submitPredictions = function() { /* ...código original... */ if (selectedPredictions.length !== maxPredictions) { showErrorPopup(`Deve selecionar exatamente ${maxPredictions} palpites. Atualmente tem ${selectedPredictions.length}.`); return; } const confirmationPopup = document.getElementById('confirmation-popup'); let predictionsHtml = '<ul class="confirmation-list">'; selectedPredictions.forEach((p, i) => predictionsHtml += `<li class="confirmation-list-item"><span><strong>${replaceTeamPlaceholders(p.value)}</strong></span><button class="remove-prediction-btn" onclick="removePredictionFromPopup(${i})" title="Remover este palpite">×</button></li>`); predictionsHtml += '</ul>'; document.getElementById('confirmation-predictions').innerHTML = predictionsHtml; confirmationPopup.style.display = 'block'; }
-    window.removePredictionFromPopup = function(indexToRemove) { /* ...código original... */ const predictionValue = selectedPredictions[indexToRemove].value; selectedPredictions.splice(indexToRemove, 1); for (const item of document.querySelectorAll('.odds-item')) { if (JSON.parse(item.dataset.prediction).value === predictionValue) { item.classList.remove('selected'); break; } } updateUI(); closeConfirmationPopup(); };
-    async function loadGameData(gameId) { /* ...código original... */ const gameDoc = await getDoc(doc(db, 'jogos', gameId)); if (!gameDoc.exists()) throw new Error('Jogo não encontrado'); const game = { id: gameDoc.id, ...gameDoc.data() }; game.numeroPalpites = game.numeroPalpites || 1; const equipaCasaDoc = await getDoc(doc(db, 'clubes', game.equipaCasaId || ' ')); game.equipaCasa = equipaCasaDoc.exists() ? equipaCasaDoc.data().nome : 'Equipa A'; const equipaForaDoc = await getDoc(doc(db, 'clubes', game.equipaForaId || ' ')); game.equipaFora = equipaForaDoc.exists() ? equipaForaDoc.data().nome : 'Equipa B'; return game; }
-    async function checkExistingPredictions(gameId) { /* ...código original... */ if (!auth.currentUser) return null; const q = query(collection(db, 'users', auth.currentUser.uid, 'palpites'), where('jogoId', '==', gameId)); const querySnapshot = await getDocs(q); return querySnapshot.empty ? null : querySnapshot.docs[0].data(); }
+    function replaceTeamPlaceholders(text) { if (!text || !currentGame) return text; return text.replace(/Equipa da Casa|Equipa A/gi, currentGame.equipaCasa).replace(/Equipa Visitante|Equipa de Fora|Equipa B/gi, currentGame.equipaFora); }
+    async function buildFullOddHierarchy() { const allOddsData = []; const q = query(collection(db, 'oddcategorias'), orderBy('ordem')); const querySnapshot = await getDocs(q); querySnapshot.forEach(doc => allOddsData.push({ id: doc.id, ...doc.data() })); const categories = new Map(); const subcategories = new Map(); const thirdLevelItems = []; allOddsData.forEach(item => { if (item.categoria_subcategoria_3cat === 'categoria') categories.set(item.id, { ...item, children: [] }); else if (item.categoria_subcategoria_3cat === 'subcategoria') subcategories.set(item.id, { ...item, children: [] }); else if (item.categoria_subcategoria_3cat === '3cat') thirdLevelItems.push(item); }); thirdLevelItems.forEach(item => { if (item.subcategoriapai && subcategories.has(item.subcategoriapai)) subcategories.get(item.subcategoriapai).children.push(item); }); for (const [id, subcategory] of subcategories) { if (subcategory.categoriapai && categories.has(subcategory.categoriapai)) categories.get(subcategory.categoriapai).children.push(subcategory); } return Array.from(categories.values()); }
+    function renderOddsList(hierarchy) { const container = document.getElementById('odds-list-container'); container.innerHTML = ''; const shortcutsContainer = document.getElementById('category-shortcuts-container'); let shortcutsHtml = ''; hierarchy.forEach(category => { if (category.children.length === 0) return; shortcutsHtml += `<div class="category-shortcut" onclick="scrollToCategory('${category.id}')" title="${replaceTeamPlaceholders(category.nomecategoria)}"><span class="shortcut-icon">${category.icon || '⭐'}</span></div>`; const categoryElement = document.createElement('div'); categoryElement.className = 'odds-category'; categoryElement.id = category.id; let filterBarHtml = ''; if (category.nomecategoria === 'Por Parte') filterBarHtml = `<div class="subcategory-filter-container"><strong>Filtro:</strong><button class="filter-btn active" onclick="applyFilter(this, '${category.id}', 'all')">Todas</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', '1st Half')">Primeira Parte</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', '2nd Half')">Segunda Parte</button></div>`; else if (category.nomecategoria === 'Mercados Combinados') filterBarHtml = `<div class="subcategory-filter-container"><strong>Filtro:</strong><button class="filter-btn active" onclick="applyFilter(this, '${category.id}', 'all')">Todos</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'home')">${currentGame.equipaCasa}</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'away')">${currentGame.equipaFora}</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'both')">Ambas</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'others')">Outras Odds</button></div>`; else if (category.nomecategoria === 'Mercados Especiais') filterBarHtml = `<div class="subcategory-filter-container"><strong>Filtro:</strong><button class="filter-btn active" onclick="applyFilter(this, '${category.id}', 'all')">Todos</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'home_special')">${currentGame.equipaCasa}</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'away_special')">${currentGame.equipaFora}</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'others_special')">Outras Odds</button></div>`; else if (category.nomecategoria === 'Específicos por Equipa') filterBarHtml = `<div class="subcategory-filter-container"><strong>Filtro:</strong><button class="filter-btn active" onclick="applyFilter(this, '${category.id}', 'all')">Todos</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'home_team_specific')">${currentGame.equipaCasa}</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'away_team_specific')">${currentGame.equipaFora}</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'others_team_specific')">Outras Odds</button></div>`; let subcategoriesHTML = ''; category.children.forEach(subcategory => { if (subcategory.children.length === 0) return; let itemsHTML = ''; subcategory.children.forEach(item => { const predictionData = { value: `${category.nomecategoria} - ${subcategory.nomesubcategoria} - ${item.nome3categoria}`, catIndice: category.indiceIngles || null, subcatIndice: subcategory.indiceIngles || null, cat3Indice: item.indiceIngles || null }; let infoIconHTML = item.breveDescricao && item.breveDescricao.trim() !== '' ? `<div class="info-container"><i class="fas fa-info-circle info-icon"></i><div class="info-tooltip">${replaceTeamPlaceholders(item.breveDescricao)}</div></div>` : ''; itemsHTML += `<li class="odds-item" data-prediction='${JSON.stringify(predictionData)}'>${infoIconHTML}<span class="odds-item-text">${replaceTeamPlaceholders(item.nome3categoria)}</span></li>`; }); const subcatIndiceIngles = subcategory.indiceIngles || ''; subcategoriesHTML += `<li class="filterable-subcategory" data-indice-ingles="${subcatIndiceIngles}"><div class="subcategory-header"><span>${replaceTeamPlaceholders(subcategory.nomesubcategoria)}</span><i class="fas fa-chevron-down toggle-icon"></i></div><ul class="nested-list"><ul class="odds-items-grid">${itemsHTML}</ul></ul></li>`; }); if (subcategoriesHTML === '') return; categoryElement.innerHTML = `<div class="category-header"><span class="category-header-title"><span>${category.icon || '⭐'}</span><span>${replaceTeamPlaceholders(category.nomecategoria)}</span></span><i class="fas fa-chevron-down toggle-icon"></i></div><ul class="nested-list">${filterBarHtml}${subcategoriesHTML}</ul>`; container.appendChild(categoryElement); }); if (shortcutsHtml) shortcutsContainer.innerHTML = `<div class="shortcuts-wrapper">${shortcutsHtml}</div>`; addEventListenersToList(); }
+    window.scrollToCategory = function(targetId) { const targetElement = document.getElementById(targetId); if (!targetElement) return; targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' }); const header = targetElement.querySelector('.category-header'); if (header && !header.classList.contains('active')) setTimeout(() => header.click(), 300); };
+    window.applyFilter = function(clickedButton, categoryId, filterKeyword) { clickedButton.parentElement.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active')); clickedButton.classList.add('active'); const subcategories = clickedButton.closest('.odds-category').querySelectorAll('.filterable-subcategory'); subcategories.forEach(subcatLi => { const indiceIngles = (subcatLi.dataset.indiceIngles || '').toLowerCase(); let show = false; if (filterKeyword === 'all') show = true; else { let keywords = [], exclusionKeywords = []; switch(filterKeyword) { case '1st Half': keywords = ['1st half']; break; case '2nd Half': keywords = ['2nd half']; break; case 'home': keywords = ['h1', 'team 1', 'win1', 'win 1']; break; case 'away': keywords = ['h2', 'team 2', 'win2', 'win 2']; break; case 'both': keywords = ['both teams']; break; case 'home_special': keywords = ['h1', 'team 1', 'win1', 'win 1', '2:0']; break; case 'away_special': keywords = ['h2', 'team 2', 'win2', 'win 2', '0:2']; break; case 'home_team_specific': keywords = ['h1', 'team 1', 'win1', 'win 1']; break; case 'away_team_specific': keywords = ['h2', 'team 2', 'win2', 'win 2']; break; case 'others': exclusionKeywords = ['h1', 'team 1', 'win1', 'win 1', 'h2', 'team 2', 'win2', 'win 2', 'both teams']; break; case 'others_special': exclusionKeywords = ['h1', 'team 1', 'win1', 'win 1', '2:0', 'h2', 'team 2', 'win2', 'win 2', '0:2']; break; case 'others_team_specific': exclusionKeywords = ['h1', 'team 1', 'win1', 'win 1', 'h2', 'team 2', 'win2', 'win 2']; break; } if (keywords.length > 0 && keywords.some(k => indiceIngles.includes(k))) show = true; if (exclusionKeywords.length > 0 && !exclusionKeywords.some(k => indiceIngles.includes(k))) show = true; } subcatLi.style.display = show ? 'block' : 'none'; }); }
+    function addEventListenersToList() { document.querySelectorAll('.category-header, .subcategory-header').forEach(header => header.addEventListener('click', e => { if (!e.target.closest('.subcategory-filter-container')) e.currentTarget.classList.toggle('active'); })); document.querySelectorAll('.odds-item').forEach(item => item.addEventListener('click', () => handlePredictionClick(item))); document.querySelectorAll('.info-container').forEach(container => container.addEventListener('click', e => { e.stopPropagation(); const tooltip = container.querySelector('.info-tooltip'); const isAlreadyActive = tooltip.classList.contains('active'); document.querySelectorAll('.info-tooltip.active').forEach(t => t.classList.remove('active')); if (!isAlreadyActive) { tooltip.classList.add('active'); tooltip.classList.remove('tooltip-adjust-left', 'tooltip-adjust-right'); const tooltipRect = tooltip.getBoundingClientRect(); if (tooltipRect.right > window.innerWidth) tooltip.classList.add('tooltip-adjust-left'); if (tooltipRect.left < 0) tooltip.classList.add('tooltip-adjust-right'); } })); document.addEventListener('click', e => { if (!e.target.closest('.info-container')) document.querySelectorAll('.info-tooltip.active').forEach(t => t.classList.remove('active', 'tooltip-adjust-left', 'tooltip-adjust-right')); }); }
+    function handlePredictionClick(itemElement) { const predictionDataStr = itemElement.dataset.prediction; const isSelected = itemElement.classList.contains('selected'); if (isSelected) { itemElement.classList.remove('selected'); selectedPredictions = selectedPredictions.filter(p => p.value !== JSON.parse(predictionDataStr).value); } else { if (selectedPredictions.length >= maxPredictions) { showErrorPopup(`Número máximo de palpites (${maxPredictions}) já foi atingido.`); return; } itemElement.classList.add('selected'); selectedPredictions.push(JSON.parse(predictionDataStr)); } updateUI(); }
+    function updateUI() { const submitButton = document.getElementById('submit-button'); if (submitButton) { submitButton.textContent = `Enviar Palpites (${selectedPredictions.length}/${maxPredictions})`; submitButton.disabled = selectedPredictions.length === 0; } const isMaxReached = selectedPredictions.length >= maxPredictions; document.querySelectorAll('.odds-item').forEach(item => { if (!item.classList.contains('selected')) item.classList.toggle('disabled', isMaxReached); }); }
+    window.submitPredictions = function() { if (selectedPredictions.length !== maxPredictions) { showErrorPopup(`Deve selecionar exatamente ${maxPredictions} palpites. Atualmente tem ${selectedPredictions.length}.`); return; } const confirmationPopup = document.getElementById('confirmation-popup'); let predictionsHtml = '<ul class="confirmation-list">'; selectedPredictions.forEach((p, i) => predictionsHtml += `<li class="confirmation-list-item"><span><strong>${replaceTeamPlaceholders(p.value)}</strong></span><button class="remove-prediction-btn" onclick="removePredictionFromPopup(${i})" title="Remover este palpite">×</button></li>`); predictionsHtml += '</ul>'; document.getElementById('confirmation-predictions').innerHTML = predictionsHtml; confirmationPopup.style.display = 'block'; }
+    window.removePredictionFromPopup = function(indexToRemove) { const predictionValue = selectedPredictions[indexToRemove].value; selectedPredictions.splice(indexToRemove, 1); for (const item of document.querySelectorAll('.odds-item')) { if (JSON.parse(item.dataset.prediction).value === predictionValue) { item.classList.remove('selected'); break; } } updateUI(); closeConfirmationPopup(); };
+    async function loadGameData(gameId) { const gameDoc = await getDoc(doc(db, 'jogos', gameId)); if (!gameDoc.exists()) throw new Error('Jogo não encontrado'); const game = { id: gameDoc.id, ...gameDoc.data() }; game.numeroPalpites = game.numeroPalpites || 1; const equipaCasaDoc = await getDoc(doc(db, 'clubes', game.equipaCasaId || ' ')); game.equipaCasa = equipaCasaDoc.exists() ? equipaCasaDoc.data().nome : 'Equipa A'; const equipaForaDoc = await getDoc(doc(db, 'clubes', game.equipaForaId || ' ')); game.equipaFora = equipaForaDoc.exists() ? equipaForaDoc.data().nome : 'Equipa B'; return game; }
+    async function checkExistingPredictions(gameId) { if (!auth.currentUser) return null; const q = query(collection(db, 'users', auth.currentUser.uid, 'palpites'), where('jogoId', '==', gameId)); const querySnapshot = await getDocs(q); return querySnapshot.empty ? null : querySnapshot.docs[0].data(); }
     let currentUserStatus = null;
     async function loadMenuSettings() { try { const docSnap = await getDoc(doc(db, 'paineis', 'paineis menu')); return docSnap.exists() ? docSnap.data() : null; } catch (error) { return null; } }
     function checkPageAccess(userStatus, menuSettings) { return !menuSettings ? userStatus === 'ruler' : menuSettings['1x'] === 'on' || userStatus === 'ruler'; }
     function updateMenuVisibility(menuSettings) { if (!menuSettings) return; document.querySelectorAll('.bottom-menu .menu-item').forEach(item => { const key = item.getAttribute('data-key'); if (key) item.classList.toggle('hidden', menuSettings[key] === 'off'); }); }
-    async function getUserStatus(userId) { try { const docSnap = await getDoc(doc(db, 'users', userId)); if (docSnap.exists()) { const data = docSnap.data(); return data.aceite === "Yes" ? data.estatuito || null : null; } return null; } catch (error) { return null; } }
 
     onAuthStateChanged(auth, async (user) => {
         if (user) {
             currentUserStatus = await getUserStatus(user.uid);
-            if (currentUserStatus === null) { window.location.href = '404.html'; return; }
+            if (currentUserStatus === null) {
+                window.location.href = '404.html';
+                return;
+            }
             const menuSettings = await loadMenuSettings();
             if (checkPageAccess(currentUserStatus, menuSettings)) {
                 updateMenuVisibility(menuSettings);
