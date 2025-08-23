@@ -1362,45 +1362,91 @@
             }
         });
 
-        onAuthStateChanged(auth, async (user) => {
-            if (user) {
-                currentUserUid = user.uid;
-                currentUserStatus = await getUserStatus(user.uid);
-                if (currentUserStatus !== null) {
-                    loadingScreen.style.display = 'flex';
-                    try {
-                        await fetchCountries();
-                        await populateFormationDropdownFromFirestore();
-                        await fetchUserOwnedPlayers();
-                        const activeFormation = await fetchActiveFormationFromPlanteis();
-                        let initialFormationToLoad = null;
-                        if (activeFormation && formationSelect.querySelector(`option[value="${activeFormation}"]`)) {
-                            initialFormationToLoad = activeFormation;
-                            formationSelect.value = activeFormation;
-                        } else if (formationSelect.options.length > 1) {
-                            initialFormationToLoad = formationSelect.options[1].value;
-                            formationSelect.value = initialFormationToLoad;
+  onAuthStateChanged(auth, async (user) => {
+    if (user) {
+        currentUserUid = user.uid;
+        currentUserStatus = await getUserStatus(user.uid);
+
+        if (currentUserStatus !== null) {
+            try {
+                // --- INÍCIO DO CÓDIGO ADICIONADO ---
+                const paineisMenuDoc = await getDoc(doc(db, 'paineis', 'paineis menu'));
+
+                if (paineisMenuDoc.exists()) {
+                    const paineisMenuData = paineisMenuDoc.data();
+
+                    // Regra 1: Controlo de Acesso à Página "Minha Equipa"
+                    if (paineisMenuData.team === "off" && currentUserStatus !== 'ruler') {
+                        window.location.href = '404.html';
+                        return; // Interrompe a execução para não carregar o resto da página
+                    }
+
+                    // Regra 2: Visibilidade Dinâmica dos Itens do Menu
+                    const menuItemsConfig = {
+                        "1x": "menu-item-1x", // Supondo que o ID seja este
+                        "market": "menu-item-market", // Supondo que o ID seja este
+                        "team": "menu-item-team", // Supondo que o ID seja este
+                        "empire": "menu-item-empire", // Supondo que o ID seja este
+                        "rankings": "menu-item-rankings", // Supondo que o ID seja este
+                        "profile": "menu-item-profile" // Supondo que o ID seja este
+                    };
+
+                    // Adicione IDs aos seus <a> no HTML se ainda não tiverem
+                    // Ex: <a href="market.html" class="menu-item" id="menu-item-market">
+                    for (const menuItemKey in menuItemsConfig) {
+                        if (paineisMenuData[menuItemKey] === "off") {
+                            // Encontre o item do menu pelo href, já que não temos IDs no seu HTML
+                            const menuItemElement = document.querySelector(`.menu-item[href*="${menuItemKey}.html"]`);
+                            if (menuItemElement) {
+                                menuItemElement.style.display = 'none';
+                            }
                         }
-                        currentFormation = initialFormationToLoad;
-                        renderFormation(currentFormation);
-                        if (currentFormation) {
-                            await loadFormation();
-                        }
-                     } catch(error) {
-                          console.error("Erro durante a inicialização:", error);
-                     } finally {
-                          loadingScreen.style.display = 'none';
-                          content.style.display = 'block';
-                     }
+                    }
                 } else {
-                    loadingScreen.style.display = 'none';
-                    window.location.href = '404.html';
+                    console.error("Documento 'paineis menu' não encontrado.");
+                    // Continua a carregar a página como fallback
                 }
-            } else {
+                // --- FIM DO CÓDIGO ADICIONADO ---
+
+
+                // Lógica original da página "Minha Equipa"
+                await fetchCountries();
+                await populateFormationDropdownFromFirestore();
+                await fetchUserOwnedPlayers();
+
+                const activeFormation = await fetchActiveFormationFromPlanteis();
+                let initialFormationToLoad = null;
+
+                if (activeFormation && formationSelect.querySelector(`option[value="${activeFormation}"]`)) {
+                    initialFormationToLoad = activeFormation;
+                    formationSelect.value = activeFormation;
+                } else if (formationSelect.options.length > 1) {
+                    initialFormationToLoad = formationSelect.options[1].value;
+                    formationSelect.value = initialFormationToLoad;
+                }
+
+                currentFormation = initialFormationToLoad;
+                renderFormation(currentFormation);
+
+                if (currentFormation) {
+                    await loadFormation();
+                }
+
+            } catch (error) {
+                console.error("Erro durante a inicialização:", error);
+            } finally {
                 loadingScreen.style.display = 'none';
-                window.location.href = 'index.html';
+                content.style.display = 'block';
             }
-        });
+        } else {
+            // Se o status for nulo (aceite != "Yes")
+            window.location.href = '404.html';
+        }
+    } else {
+        // Se não houver utilizador logado
+        window.location.href = 'index.html';
+    }
+});
 
         window.addEventListener('beforeunload', (e) => {
             if (hasUnsavedChanges) {
