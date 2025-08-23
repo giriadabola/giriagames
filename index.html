@@ -314,17 +314,40 @@
             const signupSuccessPopup = document.getElementById('signupSuccessPopup');
             let tempUser = null;
 
-            document.getElementById('loginForm').addEventListener('submit', async (e) => {
-                e.preventDefault();
-                const email = document.getElementById('loginEmail').value;
-                const password = document.getElementById('loginPassword').value;
-                try {
-                    const userCredential = await signInWithEmailAndPassword(auth, email, password);
-                    // O onAuthStateChanged tratará do redirecionamento
-                } catch (error) {
-                    showError('Erro ao fazer login: Email ou passe incorretas');
+           document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+
+            try {
+                // 1. Tenta fazer o login
+                const userCredential = await signInWithEmailAndPassword(auth, email, password);
+                const user = userCredential.user;
+
+                // 2. Se o login for bem-sucedido, VERIFICA o status no Firestore
+                const userDocRef = doc(db, 'users', user.uid);
+                const docSnap = await getDoc(userDocRef);
+
+                if (docSnap.exists() && docSnap.data().aceite === 'yes') {
+                    // 3a. Se for aprovado, onAuthStateChanged já vai redirecionar, mas podemos fazer aqui para ser mais rápido.
+                    window.location.href = '1x.html';
+                } else {
+                    // 3b. Se NÃO for aprovado, MOSTRE O POPUP DE PENDENTE.
+                    const verificationPopup = document.getElementById('verificationPopup');
+                    verificationPopup.style.display = 'flex';
+
+                    // Adiciona funcionalidade ao botão para deslogar e fechar o popup
+                    document.getElementById('closeVerificationPopup').textContent = 'Entendido';
+                    document.getElementById('closeVerificationPopup').onclick = () => {
+                        auth.signOut(); // Desloga o usuário para que ele possa tentar com outra conta
+                        verificationPopup.style.display = 'none';
+                    };
                 }
-            });
+            } catch (error) {
+                // 4. Se o login falhar (senha/email errados), mostra o erro.
+                showError('Erro ao fazer login: Email ou passe incorretas');
+            }
+        });
 
             document.getElementById('signupForm').addEventListener('submit', async (e) => {
                 e.preventDefault();
@@ -384,50 +407,26 @@
             });
 
             // ===== LÓGICA PRINCIPAL ATUALIZADA =====
-           onAuthStateChanged(auth, async (user) => {
+       onAuthStateChanged(auth, async (user) => {
             const loader = document.getElementById('loader');
             const authContainer = document.getElementById('auth-container');
-            const verificationPopup = document.getElementById('verificationPopup'); // Referência ao popup de verificação
 
             if (user) {
-                // Usuário está logado. Agora vamos verificar a autorização no Firestore.
-                try {
-                    const userDocRef = doc(db, 'users', user.uid);
-                    const docSnap = await getDoc(userDocRef);
+                // Se houver um usuário, verificamos se ele está aprovado.
+                const userDocRef = doc(db, 'users', user.uid);
+                const docSnap = await getDoc(userDocRef);
 
-                    if (docSnap.exists() && docSnap.data().aceite === 'yes') {
-                        // CASO 1: Usuário existe no DB e foi aceito.
-                        // Redireciona para a página principal.
-                        window.location.href = '1x.html';
-                    } else {
-                        // CASO 2: Usuário logado, mas ou não tem documento ainda (acabou de se registrar)
-                        // ou o campo 'aceite' não é 'yes'.
-                        // Mostra a mensagem de pendente e esconde o loader.
-                        loader.style.display = 'none';
-                        authContainer.style.display = 'none'; // Esconde o formulário de login
-                        verificationPopup.style.display = 'flex'; // Mostra o popup de "Pendente"
-
-                        // Opcional: Adicionar um botão de logout no popup de verificação
-                        document.getElementById('closeVerificationPopup').textContent = 'Sair';
-                        document.getElementById('closeVerificationPopup').onclick = () => {
-                           auth.signOut(); // Desloga o usuário
-                           window.location.reload(); // Recarrega a página para mostrar o formulário de login
-                        };
-                    }
-                } catch (error) {
-                    // Trata possíveis erros de leitura do banco de dados
-                    console.error("Erro ao verificar documento do usuário:", error);
-                    showError("Não foi possível verificar seu status. Tente novamente.");
-                    loader.style.display = 'none';
-                    authContainer.style.display = 'block';
+                if (docSnap.exists() && docSnap.data().aceite === 'yes') {
+                    // SÓ redireciona se o usuário estiver logado E aprovado.
+                    window.location.href = '1x.html';
+                    return; // Importante: para a execução para não mostrar o formulário.
                 }
-            } else {
-                // CASO 3: Ninguém está logado.
-                // Esconde o loader e mostra o formulário de autenticação.
-                loader.style.display = 'none';
-                authContainer.style.display = 'block';
-                verificationPopup.style.display = 'none';
             }
+
+            // Para TODOS os outros casos (sem usuário, ou usuário não aprovado),
+            // simplesmente mostre o formulário de login.
+            loader.style.display = 'none';
+            authContainer.style.display = 'block';
         });
         });
     </script>
