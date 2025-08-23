@@ -898,18 +898,54 @@
                         userName: popupUserIdSelect.selectedOptions[0]?.textContent || userId
                     };
 
-                    try {
-                        const movimentosCollectionRef = collection(db, 'movimentos');
-                        const docRef = await addDoc(movimentosCollectionRef, movimentoData);
-                        console.log("Movimento gravado com ID: ", docRef.id);
-                        alert('Movimento gravado com sucesso!');
-                        closePopup();
-                    } catch (error) {
-                        console.error('Erro ao gravar movimento:', error);
-                        alert('Erro ao gravar movimento.');
-                    } finally {
-                        popupSaveButton.disabled = false; popupSaveButton.textContent = 'Gravar Movimento';
-                    }
+                  try {
+    // PASSO 1: Grava a nova transação (o seu código original)
+    const movimentosCollectionRef = collection(db, 'movimentos');
+    const docRef = await addDoc(movimentosCollectionRef, movimentoData);
+    console.log("Movimento gravado com ID: ", docRef.id);
+
+    // --- INÍCIO DA NOVA LÓGICA DE RECONCILIAÇÃO ---
+
+    // PASSO 2: Prepara a query para buscar TODOS os movimentos do utilizador na temporada
+    const movimentosQuery = query(collection(db, 'movimentos'),
+        where("userId", "==", userId),
+        where("temporada", "==", temporada),
+        where("estado", "!=", "Dívida") // Boa prática: Ignora dívidas no cálculo de GCoins
+    );
+
+    // PASSO 3: Executa a query e calcula o novo total
+    const movimentosSnapshot = await getDocs(movimentosQuery);
+    let totalGcoinsRecalculado = 0;
+    
+    movimentosSnapshot.forEach(movDoc => {
+        const movData = movDoc.data();
+        if (typeof movData.valorreal === 'number') {
+            totalGcoinsRecalculado += movData.valorreal;
+        }
+    });
+
+    // PASSO 4: Atualiza o documento do utilizador com o novo saldo total
+    const userDocRef = doc(db, 'users', userId);
+    const temporadaGcoinsField = `${temporada}GCoins`;
+    
+    await updateDoc(userDocRef, {
+        [temporadaGcoinsField]: totalGcoinsRecalculado
+    });
+    
+    console.log(`Saldo de GCoins do utilizador ${userId} reconciliado para: ${totalGcoinsRecalculado}`);
+    
+    // --- FIM DA NOVA LÓGICA DE RECONCILIAÇÃO ---
+
+    alert('Movimento gravado e saldo do utilizador atualizado com sucesso!');
+    closePopup();
+
+} catch (error) {
+    console.error('Erro ao gravar movimento ou ao atualizar GCoins:', error);
+    alert('Ocorreu um erro. Verifique a consola para mais detalhes.');
+} finally {
+    popupSaveButton.disabled = false;
+    popupSaveButton.textContent = 'Gravar Movimento';
+}
                 });
             }
         }
