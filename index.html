@@ -384,18 +384,51 @@
             });
 
             // ===== LÓGICA PRINCIPAL ATUALIZADA =====
-            onAuthStateChanged(auth, (user) => {
-                if (user) {
-                    // Usuário está logado. Redireciona imediatamente.
-                    // O loader continuará visível até a próxima página carregar.
-                    window.location.href = '1x.html';
-                } else {
-                    // Usuário não está logado.
-                    // Esconde o loader e mostra o formulário de autenticação.
+           onAuthStateChanged(auth, async (user) => {
+            const loader = document.getElementById('loader');
+            const authContainer = document.getElementById('auth-container');
+            const verificationPopup = document.getElementById('verificationPopup'); // Referência ao popup de verificação
+
+            if (user) {
+                // Usuário está logado. Agora vamos verificar a autorização no Firestore.
+                try {
+                    const userDocRef = doc(db, 'users', user.uid);
+                    const docSnap = await getDoc(userDocRef);
+
+                    if (docSnap.exists() && docSnap.data().aceite === 'yes') {
+                        // CASO 1: Usuário existe no DB e foi aceito.
+                        // Redireciona para a página principal.
+                        window.location.href = '1x.html';
+                    } else {
+                        // CASO 2: Usuário logado, mas ou não tem documento ainda (acabou de se registrar)
+                        // ou o campo 'aceite' não é 'yes'.
+                        // Mostra a mensagem de pendente e esconde o loader.
+                        loader.style.display = 'none';
+                        authContainer.style.display = 'none'; // Esconde o formulário de login
+                        verificationPopup.style.display = 'flex'; // Mostra o popup de "Pendente"
+
+                        // Opcional: Adicionar um botão de logout no popup de verificação
+                        document.getElementById('closeVerificationPopup').textContent = 'Sair';
+                        document.getElementById('closeVerificationPopup').onclick = () => {
+                           auth.signOut(); // Desloga o usuário
+                           window.location.reload(); // Recarrega a página para mostrar o formulário de login
+                        };
+                    }
+                } catch (error) {
+                    // Trata possíveis erros de leitura do banco de dados
+                    console.error("Erro ao verificar documento do usuário:", error);
+                    showError("Não foi possível verificar seu status. Tente novamente.");
                     loader.style.display = 'none';
                     authContainer.style.display = 'block';
                 }
-            });
+            } else {
+                // CASO 3: Ninguém está logado.
+                // Esconde o loader e mostra o formulário de autenticação.
+                loader.style.display = 'none';
+                authContainer.style.display = 'block';
+                verificationPopup.style.display = 'none';
+            }
+        });
         });
     </script>
 </body>
