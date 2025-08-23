@@ -1168,20 +1168,18 @@
 
             try {
                 // 1. Get the latest season
-                const palpitesRef = collection(db, 'palpites');
-                const palpitesQuery = query(palpitesRef, orderBy('temporada', 'desc'), limit(1));
-                const palpitesSnapshot = await getDocs(palpitesQuery);
-                let latestSeason = '';
+            const configDocRef = doc(db, 'paineis', 'configuracoes_gerais');
+const configDocSnap = await getDoc(configDocRef);
+let latestSeason = '';
 
-                if (!palpitesSnapshot.empty) {
-                    latestSeason = palpitesSnapshot.docs[0].data().temporada;
-                } else {
-                    console.error('No seasons found in palpites collection. Cannot load team.');
-                    // Update lists with empty state
-                    updateStartingElevenList();
-                    updateSubstitutesList();
-                    return; // Stop if no season context
-                }
+if (configDocSnap.exists() && configDocSnap.data().temporadaAtual) {
+    latestSeason = configDocSnap.data().temporadaAtual;
+} else {
+    console.error('Documento de configuração "paineis/configuracoes_gerais" ou campo "temporadaAtual" não encontrado.');
+    updateStartingElevenList();
+    updateSubstitutesList();
+    return; // Stop if no season context
+}
 
                 // 2. Fetch the specific plantel data for this user, formation, and season
                 const plantelData = await fetchPlanteisData(selectedUserId, selectedFormation, latestSeason);
