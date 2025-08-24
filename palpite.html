@@ -342,34 +342,19 @@
     document.querySelector('#confirmation-popup .close-popup').addEventListener('click', closeConfirmationPopup);
     function replaceTeamPlaceholders(text) { if (!text || !currentGame) return text; return text.replace(/Equipa da Casa|Equipa A/gi, currentGame.equipaCasa).replace(/Equipa Visitante|Equipa de Fora|Equipa B/gi, currentGame.equipaFora); }
 async function buildFullOddHierarchy() {
-    console.log("%c--- INICIANDO DEBUG: buildFullOddHierarchy ---", "color: #00aaff; font-size: 16px; font-weight: bold;");
-
-    const competicaoDoJogoAtual = currentGame.competicao;
-    console.log(`[ETAPA 0] A competição do jogo atual é: "${competicaoDoJogoAtual}"`);
-
     const allOddsData = [];
     const q = query(collection(db, 'oddcategorias'), orderBy('ordem'));
     const querySnapshot = await getDocs(q);
-    
-    querySnapshot.forEach(doc => allOddsData.push({ id: doc.id, ...doc.data() }));
 
-    // LOG 1: VER TODOS OS DADOS QUE CHEGAM DA BASE DE DADOS, SEM FILTROS
-    console.log("%c--- LOG 1: Todos os dados recebidos da coleção 'oddcategorias' ---", "color: #ff9900; font-weight: bold;");
-    console.table(allOddsData.map(d => ({ 
-        id: d.id, 
-        tipo: d.categoria_subcategoria_3cat, 
-        nome: d.nomecategoria || d.nomesubcategoria || d.nome3categoria, 
-        ativado: d.ativado,
-        competicoes: d.competicoes,
-        pai_cat_ID: d.categoriapai, 
-        pai_subcat_ID: d.subcategoriapai 
-    })));
+    querySnapshot.forEach(doc => {
+        allOddsData.push({ id: doc.id, ...doc.data() });
+    });
 
     const categories = new Map();
     const subcategories = new Map();
     const thirdLevelItems = [];
 
-    // Separação dos itens por tipo
+    // Separa os documentos por tipo (categoria, subcategoria, item)
     allOddsData.forEach(item => {
         if (item.categoria_subcategoria_3cat === 'categoria') {
             categories.set(item.id, { ...item, children: [] });
@@ -380,47 +365,22 @@ async function buildFullOddHierarchy() {
         }
     });
 
-    // LOG 2: VER QUE CATEGORIAS, SUBCATEGORIAS E ITENS FORAM IDENTIFICADOS
-    console.log("%c--- LOG 2: Mapas de Categorias, Subcategorias e Itens identificados ---", "color: #ff9900; font-weight: bold;");
-    console.log("Categorias encontradas:", categories);
-    console.log("Subcategorias encontradas:", subcategories);
-    console.log("Itens (3cat) encontrados:", thirdLevelItems);
-
-    // Processo de ligação: Itens -> Subcategorias
-    console.log("%c--- LOG 3: Ligando Itens (3cat) às Subcategorias ---", "color: #33cc33; font-weight: bold;");
+    // Associa os itens (3cat) às suas subcategorias pai
     thirdLevelItems.forEach(item => {
-        const parentSubcatId = item.subcategoriapai;
-        console.log(`Item "${item.nome3categoria}" (ID: ${item.id}) -> Procura pelo pai com ID: ${parentSubcatId}`);
-        if (parentSubcatId && subcategories.has(parentSubcatId)) {
-            console.log(`   ✅ SUCESSO: Subcategoria pai encontrada. Ligando...`);
-            subcategories.get(parentSubcatId).children.push(item);
-        } else {
-            console.error(`   ❌ FALHA: Subcategoria pai com ID "${parentSubcatId}" não encontrada no mapa de subcategorias.`);
+        if (item.subcategoriapai && subcategories.has(item.subcategoriapai)) {
+            subcategories.get(item.subcategoriapai).children.push(item);
         }
     });
 
-    // Processo de ligação: Subcategorias -> Categorias
-    console.log("%c--- LOG 4: Ligando Subcategorias às Categorias ---", "color: #33cc33; font-weight: bold;");
-    for (const [subcatId, subcategory] of subcategories) {
-        const parentCatId = subcategory.categoriapai;
-        console.log(`Subcategoria "${subcategory.nomesubcategoria}" (ID: ${subcatId}) -> Procura pelo pai com ID: ${parentCatId}`);
-         if (parentCatId && categories.has(parentCatId)) {
-            console.log(`   ✅ SUCESSO: Categoria pai encontrada. Ligando...`);
-            categories.get(parentCatId).children.push(subcategory);
-        } else {
-             console.error(`   ❌ FALHA: Categoria pai com ID "${parentCatId}" não encontrada no mapa de categorias.`);
+    // Associa as subcategorias às suas categorias pai
+    for (const [id, subcategory] of subcategories) {
+        if (subcategory.categoriapai && categories.has(subcategory.categoriapai)) {
+            categories.get(subcategory.categoriapai).children.push(subcategory);
         }
     }
 
-    const finalHierarchy = Array.from(categories.values());
-
-    // LOG FINAL: VER A ESTRUTURA COMPLETA ANTES DE QUALQUER FILTRO FINAL
-    console.log("%c--- LOG FINAL: Hierarquia final construída (ANTES dos filtros de renderização) ---", "color: #00aaff; font-weight: bold;");
-    // Usamos JSON.stringify para garantir que vemos a estrutura aninhada completa
-    console.log(JSON.parse(JSON.stringify(finalHierarchy)));
-    console.log("--- FIM DO DEBUG ---");
-
-    return finalHierarchy;
+    // Retorna a hierarquia final como um array de categorias
+    return Array.from(categories.values());
 }
     function renderOddsList(hierarchy) { const container = document.getElementById('odds-list-container'); container.innerHTML = ''; const shortcutsContainer = document.getElementById('category-shortcuts-container'); let shortcutsHtml = ''; hierarchy.forEach(category => { if (category.children.length === 0) return; shortcutsHtml += `<div class="category-shortcut" onclick="scrollToCategory('${category.id}')" title="${replaceTeamPlaceholders(category.nomecategoria)}"><span class="shortcut-icon">${category.icon || '⭐'}</span></div>`; const categoryElement = document.createElement('div'); categoryElement.className = 'odds-category'; categoryElement.id = category.id; let filterBarHtml = ''; if (category.nomecategoria === 'Por Parte') filterBarHtml = `<div class="subcategory-filter-container"><strong>Filtro:</strong><button class="filter-btn active" onclick="applyFilter(this, '${category.id}', 'all')">Todas</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', '1st Half')">Primeira Parte</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', '2nd Half')">Segunda Parte</button></div>`; else if (category.nomecategoria === 'Mercados Combinados') filterBarHtml = `<div class="subcategory-filter-container"><strong>Filtro:</strong><button class="filter-btn active" onclick="applyFilter(this, '${category.id}', 'all')">Todos</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'home')">${currentGame.equipaCasa}</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'away')">${currentGame.equipaFora}</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'both')">Ambas</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'others')">Outras Odds</button></div>`; else if (category.nomecategoria === 'Mercados Especiais') filterBarHtml = `<div class="subcategory-filter-container"><strong>Filtro:</strong><button class="filter-btn active" onclick="applyFilter(this, '${category.id}', 'all')">Todos</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'home_special')">${currentGame.equipaCasa}</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'away_special')">${currentGame.equipaFora}</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'others_special')">Outras Odds</button></div>`; else if (category.nomecategoria === 'Específicos por Equipa') filterBarHtml = `<div class="subcategory-filter-container"><strong>Filtro:</strong><button class="filter-btn active" onclick="applyFilter(this, '${category.id}', 'all')">Todos</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'home_team_specific')">${currentGame.equipaCasa}</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'away_team_specific')">${currentGame.equipaFora}</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'others_team_specific')">Outras Odds</button></div>`; let subcategoriesHTML = ''; category.children.forEach(subcategory => { if (subcategory.children.length === 0) return; let itemsHTML = ''; subcategory.children.forEach(item => { const predictionData = { value: `${category.nomecategoria} - ${subcategory.nomesubcategoria} - ${item.nome3categoria}`, catIndice: category.indiceIngles || null, subcatIndice: subcategory.indiceIngles || null, cat3Indice: item.indiceIngles || null }; let infoIconHTML = item.breveDescricao && item.breveDescricao.trim() !== '' ? `<div class="info-container"><i class="fas fa-info-circle info-icon"></i><div class="info-tooltip">${replaceTeamPlaceholders(item.breveDescricao)}</div></div>` : ''; itemsHTML += `<li class="odds-item" data-prediction='${JSON.stringify(predictionData)}'>${infoIconHTML}<span class="odds-item-text">${replaceTeamPlaceholders(item.nome3categoria)}</span></li>`; }); const subcatIndiceIngles = subcategory.indiceIngles || ''; subcategoriesHTML += `<li class="filterable-subcategory" data-indice-ingles="${subcatIndiceIngles}"><div class="subcategory-header"><span>${replaceTeamPlaceholders(subcategory.nomesubcategoria)}</span><i class="fas fa-chevron-down toggle-icon"></i></div><ul class="nested-list"><ul class="odds-items-grid">${itemsHTML}</ul></ul></li>`; }); if (subcategoriesHTML === '') return; categoryElement.innerHTML = `<div class="category-header"><span class="category-header-title"><span>${category.icon || '⭐'}</span><span>${replaceTeamPlaceholders(category.nomecategoria)}</span></span><i class="fas fa-chevron-down toggle-icon"></i></div><ul class="nested-list">${filterBarHtml}${subcategoriesHTML}</ul>`; container.appendChild(categoryElement); }); if (shortcutsHtml) shortcutsContainer.innerHTML = `<div class="shortcuts-wrapper">${shortcutsHtml}</div>`; addEventListenersToList(); }
     window.scrollToCategory = function(targetId) { const targetElement = document.getElementById(targetId); if (!targetElement) return; targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' }); const header = targetElement.querySelector('.category-header'); if (header && !header.classList.contains('active')) setTimeout(() => header.click(), 300); };
