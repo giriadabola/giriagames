@@ -168,430 +168,404 @@
     </div>
 
     <!-- 3. O script da página foi limpo e usa a conexão do guardião -->
-    <script type="module">
-        // Importa a variável 'db' do guardião e as funções do Firestore
-      import { db } from './js/auth-guard.js';
-        import { collection, getDocs, doc, updateDoc, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+   <script type="module">
+    // Importa a variável 'db' do guardião e as funções do Firestore
+    import { db } from './js/auth-guard.js';
+    import { collection, getDocs, doc, updateDoc, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-        // A inicialização do Firebase foi removida daqui
+    // --- VARIÁVEIS GLOBAIS ---
+    let changedPlayers = new Map();
+    let allPlayers = []; // Armazena a lista completa de jogadores "enriquecidos"
 
-        let changedPlayers = new Map();
- let allPlayers = [];
-        function getTierClass(casta) {
-            switch(casta) {
-                case 'Jogador Ouro': return 'gold';
-                case 'Jogador Prata': return 'silver';
-                case 'Jogador Bronze': return 'bronze';
-                case 'Jogador Platina': return 'platinum';
-                default: return '';
-            }
+    // --- FUNÇÕES DE LÓGICA PRINCIPAL ---
+
+    function getTierClass(casta) {
+        switch(casta) {
+            case 'Jogador Ouro': return 'gold';
+            case 'Jogador Prata': return 'silver';
+            case 'Jogador Bronze': return 'bronze';
+            case 'Jogador Platina': return 'platinum';
+            default: return '';
         }
-
-
-
-
-
-function displayPlayers(playersToDisplay) {
-            const playersGrid = document.getElementById('players-grid');
-            playersGrid.innerHTML = ''; // Limpa a grade
-
-            if (playersToDisplay.length === 0) {
-                playersGrid.innerHTML = '<p style="text-align: center; color: #666; margin-top: 20px;">Nenhum jogador encontrado com os filtros selecionados.</p>';
-                return;
-            }
-
-            const positionOrder = ['Guarda-Redes', 'Defesa', 'Médio', 'Avançado'];
-            const playersByPosition = {};
-            positionOrder.forEach(pos => { playersByPosition[pos] = []; });
-
-            playersToDisplay.forEach(player => {
-                if (playersByPosition[player.posicao] !== undefined) {
-                    playersByPosition[player.posicao].push(player);
-                }
-            });
-
-            positionOrder.forEach(position => {
-                if (playersByPosition[position].length > 0) {
-                    const header = document.createElement('h2');
-                    header.textContent = position;
-                    header.style.color = '#333';
-                    header.style.marginTop = '32px';
-                    header.style.marginBottom = '16px';
-                    header.style.fontSize = '24px';
-                    playersGrid.appendChild(header);
-
-                    playersByPosition[position].sort((a, b) => a.nome.localeCompare(b.nome)).forEach(player => {
-                        const playerCard = createPlayerCard(player, player.id);
-                        playersGrid.appendChild(playerCard);
-                    });
-                }
-            });
-        }
-
-
-
-
-        // Função principal que inicializa a página
-     async function initializeApp() {
-    try {
-        const [jogadoresSnapshot, clubesSnapshot, competicoesSnapshot] = await Promise.all([
-            getDocs(collection(db, 'jogadores')),
-            getDocs(collection(db, 'clubes')),
-            getDocs(collection(db, 'competicoes'))
-        ]);
-
-        const clubesMap = new Map();
-        clubesSnapshot.forEach(doc => clubesMap.set(doc.id, doc.data()));
-
-        const competicoesMap = new Map();
-        competicoesSnapshot.forEach(doc => competicoesMap.set(doc.id, doc.data()));
-
-        allPlayers = jogadoresSnapshot.docs.map(doc => {
-            const player = { id: doc.id, ...doc.data() };
-            const clubeData = clubesMap.get(player.clube);
-            if (clubeData) {
-                player.clubeData = clubeData;
-                const competicaoData = competicoesMap.get(clubeData.competicaoId);
-                if (competicaoData) {
-                    player.competicaoNome = competicaoData.nome;
-                }
-            }
-            return player;
-        });
-
-        // Popula os seletores do menu de mercado (esta função não muda)
-        populateMarketTimeSelectors(allPlayers);
-        
-        // Chamada única que inicializa os filtros e a lista de jogadores
-        updateFiltersAndDisplay(); 
-
-        // Adiciona os "escutadores" de eventos aos filtros, todos chamando a mesma função
-        document.getElementById('filterPosicao').addEventListener('change', updateFiltersAndDisplay);
-        document.getElementById('filterCasta').addEventListener('change', updateFiltersAndDisplay);
-        document.getElementById('filterCompeticao').addEventListener('change', updateFiltersAndDisplay);
-        document.getElementById('filterPais').addEventListener('change', updateFiltersAndDisplay);
-
-    } catch (error) {
-        console.error('Error initializing app:', error);
-        document.getElementById('players-grid').innerHTML = '<p>Ocorreu um erro ao carregar os dados. Verifique o console.</p>';
     }
-}
 
-function populateMarketTimeSelectors(players) {
-    const posicoes = new Set();
-    const castas = new Set();
-
-    players.forEach(player => {
-        if (player.posicao) posicoes.add(player.posicao);
-        if (player.casta) castas.add(player.casta);
-    });
-
-    const addOptions = (selectElement, values) => {
-        selectElement.innerHTML = '<option value="" disabled selected>-- Selecione uma opção --</option>'; // Opção padrão
-        [...values].sort().forEach(value => {
-            const option = document.createElement('option');
-            option.value = value;
-            option.textContent = value;
-            selectElement.appendChild(option);
-        });
-    };
-    
-    addOptions(applyPositionSelect, posicoes);
-    addOptions(applyCasteSelect, castas);
-}
-
-
-        function createPlayerCard(player, docId) {
-            const card = document.createElement('div');
-            card.className = 'player-card';
-            const tierClass = getTierClass(player.casta);
-            
-            card.innerHTML = `
-                <img src="${player.imagem || 'https://via.placeholder.com/200'}" alt="${player.nome}" class="player-image">
-                <div class="player-info-container">
-                    <div class="player-name">${player.nome}</div>
-                    <div class="player-info">Posição: ${player.posicao}</div>
-                    <div class="player-info ${tierClass}">Casta: ${player.casta}</div>
-                    <div class="player-info">Comprado por: ${player.compradopor || 'Não comprado'}</div>
-                    <div class="player-info">Abertura: ${player.marketTimes?.abertura ? new Date(player.marketTimes.abertura).toLocaleString() : 'Não definido'}</div>
-                    <div class="player-info">Fechamento: ${player.marketTimes?.fechamento ? new Date(player.marketTimes.fechamento).toLocaleString() : 'Não definido'}</div>
-                </div>
-                <label class="toggle-switch">
-                    <input type="checkbox" ${player.noMercado ? 'checked' : ''} data-player-id="${docId}">
-                    <span class="slider"></span>
-                </label>
-            `;
-
-            const toggleSwitch = card.querySelector('input[type="checkbox"]');
-            toggleSwitch.addEventListener('change', (e) => {
-                changedPlayers.set(docId, e.target.checked);
-            });
-
-            return card;
-        }
-
-        async function loadPlayers() {
-            try {
-                const playersGrid = document.getElementById('players-grid');
-                const jogadoresRef = collection(db, 'jogadores');
-                const snapshot = await getDocs(jogadoresRef);
-                const applyMode = document.getElementById('applyMode');
-const positionSelectGroup = document.getElementById('positionSelectGroup');
-const applyPositionSelect = document.getElementById('applyPositionSelect');
-const casteSelectGroup = document.getElementById('casteSelectGroup');
-const applyCasteSelect = document.getElementById('applyCasteSelect');
-const playerSearchContainer = document.getElementById('playerSearchContainer');
-
-                const positionOrder = ['Guarda-Redes', 'Defesa', 'Médio', 'Avançado'];
-                const playersByPosition = {};
-                positionOrder.forEach(pos => { playersByPosition[pos] = []; });
-
-                snapshot.forEach(doc => {
-                    const player = doc.data();
-                    if (positionOrder.includes(player.posicao)) {
-                        playersByPosition[player.posicao].push({ ...player, id: doc.id });
-                    }
-                });
-
-                playersGrid.innerHTML = '';
-
-                positionOrder.forEach(position => {
-                    if (playersByPosition[position].length > 0) {
-                        const header = document.createElement('h2');
-                        header.textContent = position;
-                        header.style.color = '#333';
-                        header.style.marginTop = '32px';
-                        header.style.marginBottom = '16px';
-                        header.style.fontSize = '24px';
-                        playersGrid.appendChild(header);
-
-                        playersByPosition[position].sort((a, b) => a.nome.localeCompare(b.nome)).forEach(player => {
-                            const playerCard = createPlayerCard(player, player.id);
-                            playersGrid.appendChild(playerCard);
-                        });
-                    }
-                });
-            } catch (error) {
-                console.error('Error loading players:', error);
-            }
-        }
-
-        async function saveChanges() {
-            try {
-                if (changedPlayers.size === 0) {
-                    alert('Nenhuma alteração para salvar.');
-                    return;
-                }
-                const batch = [];
-                for (const [playerId, noMercado] of changedPlayers) {
-                    const playerRef = doc(db, 'jogadores', playerId);
-                    batch.push(updateDoc(playerRef, { noMercado }));
-                }
-                await Promise.all(batch);
-                changedPlayers.clear();
-                alert('Alterações salvas com sucesso!');
-            } catch (error) {
-                console.error('Error saving changes:', error);
-                alert('Erro ao salvar alterações. Por favor, tente novamente.');
-            }
-        }
-
-        initializeApp();
-        document.getElementById('saveChanges').addEventListener('click', saveChanges);
-
-        // --- All Menu and Overlay Logic ---
-        const overlay = document.getElementById('overlay');
-        const marketTimeButton = document.getElementById('marketTimeButton');
-        const marketTimeMenu = document.getElementById('marketTimeMenu');
-        const playerSearch = document.getElementById('playerSearch');
-        const searchResults = document.getElementById('searchResults');
-        const selectedPlayers = document.getElementById('selectedPlayers');
-        const applyToAll = document.getElementById('applyToAll');
-        const saveMarketTime = document.getElementById('saveMarketTime');
-        let selectedPlayersList = new Set();
-        const multiChangeButton = document.getElementById('multiChangeButton');
-        const multiChangeMenu = document.getElementById('multiChangeMenu');
-        const closeMultiChange = document.getElementById('closeMultiChange');
-
-        marketTimeButton.addEventListener('click', () => {
-            marketTimeMenu.classList.add('active');
-            overlay.classList.add('active');
-        });
-
-        multiChangeButton.addEventListener('click', () => {
-            multiChangeMenu.classList.add('active');
-            overlay.classList.add('active');
-        });
+    function createPlayerCard(player, docId) {
+        const card = document.createElement('div');
+        card.className = 'player-card';
+        const tierClass = getTierClass(player.casta);
         
-        const closeAllMenus = () => {
-            marketTimeMenu.classList.remove('active');
-            multiChangeMenu.classList.remove('active');
-            overlay.classList.remove('active');
+        card.innerHTML = `
+            <img src="${player.imagem || 'https://via.placeholder.com/200'}" alt="${player.nome}" class="player-image">
+            <div class="player-info-container">
+                <div class="player-name">${player.nome}</div>
+                <div class="player-info">Posição: ${player.posicao}</div>
+                <div class="player-info ${tierClass}">Casta: ${player.casta}</div>
+                <div class="player-info">Comprado por: ${player.compradopor || 'Não comprado'}</div>
+                <div class="player-info">Abertura: ${player.marketTimes?.abertura ? new Date(player.marketTimes.abertura).toLocaleString() : 'Não definido'}</div>
+                <div class="player-info">Fechamento: ${player.marketTimes?.fechamento ? new Date(player.marketTimes.fechamento).toLocaleString() : 'Não definido'}</div>
+            </div>
+            <label class="toggle-switch">
+                <input type="checkbox" ${player.noMercado ? 'checked' : ''} data-player-id="${docId}">
+                <span class="slider"></span>
+            </label>
+        `;
+
+        const toggleSwitch = card.querySelector('input[type="checkbox"]');
+        toggleSwitch.addEventListener('change', (e) => {
+            changedPlayers.set(docId, e.target.checked);
+        });
+
+        return card;
+    }
+
+    function displayPlayers(playersToDisplay) {
+        const playersGrid = document.getElementById('players-grid');
+        playersGrid.innerHTML = ''; 
+
+        if (playersToDisplay.length === 0) {
+            playersGrid.innerHTML = '<p style="text-align: center; color: #666; margin-top: 20px;">Nenhum jogador encontrado com os filtros selecionados.</p>';
+            return;
+        }
+
+        const positionOrder = ['Guarda-Redes', 'Defesa', 'Médio', 'Avançado'];
+        const playersByPosition = {};
+        positionOrder.forEach(pos => { playersByPosition[pos] = []; });
+
+        playersToDisplay.forEach(player => {
+            if (playersByPosition[player.posicao] !== undefined) {
+                playersByPosition[player.posicao].push(player);
+            }
+        });
+
+        positionOrder.forEach(position => {
+            if (playersByPosition[position].length > 0) {
+                const header = document.createElement('h2');
+                header.textContent = position;
+                header.style.color = '#333';
+                header.style.marginTop = '32px';
+                header.style.marginBottom = '16px';
+                header.style.fontSize = '24px';
+                playersGrid.appendChild(header);
+
+                playersByPosition[position].sort((a, b) => a.nome.localeCompare(b.nome)).forEach(player => {
+                    const playerCard = createPlayerCard(player, player.id);
+                    playersGrid.appendChild(playerCard);
+                });
+            }
+        });
+    }
+
+    // --- FUNÇÕES DE FILTRAGEM DINÂMICA ---
+
+    function updateFiltersAndDisplay() {
+        const selectedValues = {
+            posicao: document.getElementById('filterPosicao').value,
+            casta: document.getElementById('filterCasta').value,
+            competicao: document.getElementById('filterCompeticao').value,
+            pais: document.getElementById('filterPais').value
         };
 
-        overlay.addEventListener('click', closeAllMenus);
-        closeMultiChange.addEventListener('click', closeAllMenus);
+        const selects = {
+            posicao: document.getElementById('filterPosicao'),
+            casta: document.getElementById('filterCasta'),
+            competicao: document.getElementById('filterCompeticao'),
+            pais: document.getElementById('filterPais')
+        };
+        
+        const fieldNames = {
+            posicao: 'posicao',
+            casta: 'casta',
+            competicao: 'competicaoNome',
+            pais: 'pais'
+        };
 
-        async function updatePlayersByPosition(position, activate) {
+        Object.keys(selects).forEach(filterKey => {
+            const counts = {};
+            const relevantPlayers = allPlayers.filter(player => {
+                return Object.keys(selectedValues).every(key => {
+                    if (key === filterKey) return true;
+                    return !selectedValues[key] || player[fieldNames[key]] === selectedValues[key];
+                });
+            });
+
+            relevantPlayers.forEach(player => {
+                const value = player[fieldNames[filterKey]];
+                if (value) {
+                    counts[value] = (counts[value] || 0) + 1;
+                }
+            });
+
+            const selectElement = selects[filterKey];
+            const firstOptionText = selectElement.querySelector('option:first-child').textContent;
+            selectElement.innerHTML = `<option value="">${firstOptionText}</option>`;
+
+            const sortedValues = Object.keys(counts).sort((a, b) => a.localeCompare(b));
+            sortedValues.forEach(value => {
+                const option = document.createElement('option');
+                option.value = value;
+                option.textContent = `${value} (${counts[value]})`;
+                selectElement.appendChild(option);
+            });
+            selectElement.value = selectedValues[filterKey];
+        });
+
+        const playersToDisplay = allPlayers.filter(player => {
+            return (!selectedValues.posicao || player.posicao === selectedValues.posicao) &&
+                   (!selectedValues.casta || player.casta === selectedValues.casta) &&
+                   (!selectedValues.competicao || player.competicaoNome === selectedValues.competicao) &&
+                   (!selectedValues.pais || player.pais === selectedValues.pais);
+        });
+
+        displayPlayers(playersToDisplay);
+    }
+
+    async function saveChanges() {
+        try {
+            if (changedPlayers.size === 0) {
+                alert('Nenhuma alteração para salvar.');
+                return;
+            }
+            const batch = [];
+            for (const [playerId, noMercado] of changedPlayers) {
+                const playerRef = doc(db, 'jogadores', playerId);
+                batch.push(updateDoc(playerRef, { noMercado }));
+            }
+            await Promise.all(batch);
+            changedPlayers.clear();
+            alert('Alterações salvas com sucesso!');
+        } catch (error) {
+            console.error('Error saving changes:', error);
+            alert('Erro ao salvar alterações. Por favor, tente novamente.');
+        }
+    }
+
+    // --- LÓGICA DOS MENUS POP-UP ---
+
+    // Elementos dos Menus
+    const overlay = document.getElementById('overlay');
+    const marketTimeButton = document.getElementById('marketTimeButton');
+    const marketTimeMenu = document.getElementById('marketTimeMenu');
+    const playerSearch = document.getElementById('playerSearch');
+    const searchResults = document.getElementById('searchResults');
+    const selectedPlayers = document.getElementById('selectedPlayers');
+    const saveMarketTime = document.getElementById('saveMarketTime');
+    const multiChangeButton = document.getElementById('multiChangeButton');
+    const multiChangeMenu = document.getElementById('multiChangeMenu');
+    const closeMultiChange = document.getElementById('closeMultiChange');
+    const applyMode = document.getElementById('applyMode');
+    const positionSelectGroup = document.getElementById('positionSelectGroup');
+    const applyPositionSelect = document.getElementById('applyPositionSelect');
+    const casteSelectGroup = document.getElementById('casteSelectGroup');
+    const applyCasteSelect = document.getElementById('applyCasteSelect');
+    const playerSearchContainer = document.getElementById('playerSearchContainer');
+    let selectedPlayersList = new Set();
+
+    // Funções e Event Listeners dos Menus
+    const closeAllMenus = () => {
+        marketTimeMenu.classList.remove('active');
+        multiChangeMenu.classList.remove('active');
+        overlay.classList.remove('active');
+    };
+
+    marketTimeButton.addEventListener('click', () => {
+        marketTimeMenu.classList.add('active');
+        overlay.classList.add('active');
+    });
+
+    multiChangeButton.addEventListener('click', () => {
+        multiChangeMenu.classList.add('active');
+        overlay.classList.add('active');
+    });
+
+    overlay.addEventListener('click', closeAllMenus);
+    closeMultiChange.addEventListener('click', closeAllMenus);
+
+    function populateMarketTimeSelectors(players) {
+        const posicoes = new Set();
+        const castas = new Set();
+        players.forEach(player => {
+            if (player.posicao) posicoes.add(player.posicao);
+            if (player.casta) castas.add(player.casta);
+        });
+        const addOptions = (selectElement, values) => {
+            selectElement.innerHTML = '<option value="" disabled selected>-- Selecione uma opção --</option>';
+            [...values].sort().forEach(value => {
+                const option = document.createElement('option');
+                option.value = value;
+                option.textContent = value;
+                selectElement.appendChild(option);
+            });
+        };
+        addOptions(applyPositionSelect, posicoes);
+        addOptions(applyCasteSelect, castas);
+    }
+    
+    function updateApplyModeUI() {
+        const selectedMode = applyMode.value;
+        playerSearchContainer.style.display = 'none';
+        positionSelectGroup.style.display = 'none';
+        casteSelectGroup.style.display = 'none';
+
+        if (selectedMode === 'specific') playerSearchContainer.style.display = 'block';
+        else if (selectedMode === 'position') positionSelectGroup.style.display = 'block';
+        else if (selectedMode === 'caste') casteSelectGroup.style.display = 'block';
+    }
+
+    applyMode.addEventListener('change', updateApplyModeUI);
+
+    saveMarketTime.addEventListener('click', async () => {
+        const openTime = document.getElementById('marketOpenTime').value;
+        const closeTime = document.getElementById('marketCloseTime').value;
+        if (!openTime || !closeTime) {
+            return alert('Por favor, preencha os horários de abertura e fechamento.');
+        }
+        const marketTimes = { abertura: new Date(openTime).toISOString(), fechamento: new Date(closeTime).toISOString() };
+        const selectedMode = applyMode.value;
+        let batch = [];
+        let targetDescription = "";
+
+        try {
+            switch (selectedMode) {
+                case 'all':
+                    targetDescription = "todos os jogadores";
+                    const allSnapshot = await getDocs(collection(db, 'jogadores'));
+                    batch = allSnapshot.docs.map(d => updateDoc(d.ref, { marketTimes }));
+                    break;
+                case 'position':
+                    const selectedPosition = applyPositionSelect.value;
+                    if (!selectedPosition) return alert('Por favor, selecione uma posição.');
+                    targetDescription = `jogadores da posição "${selectedPosition}"`;
+                    const posQuery = query(collection(db, 'jogadores'), where("posicao", "==", selectedPosition));
+                    const posSnapshot = await getDocs(posQuery);
+                    batch = posSnapshot.docs.map(d => updateDoc(d.ref, { marketTimes }));
+                    break;
+                case 'caste':
+                    const selectedCaste = applyCasteSelect.value;
+                    if (!selectedCaste) return alert('Por favor, selecione uma casta.');
+                    targetDescription = `jogadores da casta "${selectedCaste}"`;
+                    const casteQuery = query(collection(db, 'jogadores'), where("casta", "==", selectedCaste));
+                    const casteSnapshot = await getDocs(casteQuery);
+                    batch = casteSnapshot.docs.map(d => updateDoc(d.ref, { marketTimes }));
+                    break;
+                case 'specific':
+                    if (selectedPlayersList.size === 0) return alert('Por favor, selecione pelo menos um jogador.');
+                    targetDescription = `${selectedPlayersList.size} jogador(es) selecionado(s)`;
+                    batch = Array.from(selectedPlayersList).map(id => updateDoc(doc(db, 'jogadores', id), { marketTimes }));
+                    break;
+            }
+            if (batch.length === 0) return alert(`Nenhum jogador encontrado para ${targetDescription}.`);
+            await Promise.all(batch);
+            alert(`Horários do mercado atualizados com sucesso para ${targetDescription}!`);
+            closeAllMenus();
+            initializeApp();
+        } catch (error) {
+            console.error('Error saving market times:', error);
+            alert('Erro ao salvar horários do mercado.');
+        }
+    });
+
+    document.querySelectorAll('.toggle-action-button').forEach(button => {
+        button.addEventListener('click', async (e) => {
+            const position = e.target.dataset.position;
+            const activate = e.target.dataset.action === 'activate';
             const actionText = activate ? 'ativar' : 'desativar';
             if (!confirm(`Tem certeza que deseja ${actionText} todos os jogadores da posição "${position}"?`)) return;
-
             try {
                 const q = query(collection(db, 'jogadores'), where("posicao", "==", position));
                 const querySnapshot = await getDocs(q);
-                if (querySnapshot.empty) {
-                    alert(`Nenhum jogador encontrado na posição ${position}.`);
-                    return;
-                }
+                if (querySnapshot.empty) return alert(`Nenhum jogador encontrado na posição ${position}.`);
                 const batch = querySnapshot.docs.map(d => updateDoc(d.ref, { noMercado: activate }));
                 await Promise.all(batch);
                 alert(`Jogadores da posição ${position} foram atualizados! A lista será recarregada.`);
-                await loadPlayers();
                 closeAllMenus();
+                initializeApp();
             } catch (error) {
                 console.error(`Erro ao atualizar jogadores da posição ${position}:`, error);
-                alert(`Ocorreu um erro ao atualizar.`);
             }
-        }
-        
-        document.querySelectorAll('.toggle-action-button').forEach(button => {
-            button.addEventListener('click', (e) => {
-                const position = e.target.dataset.position;
-                const activate = e.target.dataset.action === 'activate';
-                updatePlayersByPosition(position, activate);
-            });
         });
+    });
 
-        playerSearch.addEventListener('input', async (e) => {
-            const searchTerm = e.target.value.toLowerCase();
-            searchResults.innerHTML = '';
-            if (searchTerm.length < 2) return;
-            
-            try {
-                const snapshot = await getDocs(collection(db, 'jogadores'));
-                const playerResults = [];
-                snapshot.forEach(doc => {
-                    const player = doc.data();
-                    if (player.nome.toLowerCase().includes(searchTerm)) {
-                        playerResults.push({ id: doc.id, ...player });
+    playerSearch.addEventListener('input', async (e) => {
+        const searchTerm = e.target.value.toLowerCase();
+        searchResults.innerHTML = '';
+        if (searchTerm.length < 2) return;
+        try {
+            // Filtra a partir da lista já carregada (mais rápido)
+            const playerResults = allPlayers.filter(p => p.nome.toLowerCase().includes(searchTerm));
+            searchResults.innerHTML = playerResults
+                .map(player => `<div class="search-result-item" data-id="${player.id}" data-name="${player.nome}">${player.nome}</div>`)
+                .join('');
+            searchResults.querySelectorAll('.search-result-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    const playerId = item.dataset.id;
+                    const playerName = item.dataset.name;
+                    if (!selectedPlayersList.has(playerId)) {
+                        selectedPlayersList.add(playerId);
+                        const playerTag = document.createElement('div');
+                        playerTag.className = 'selected-player';
+                        playerTag.innerHTML = `${playerName} <button data-id="${playerId}">×</button>`;
+                        selectedPlayers.appendChild(playerTag);
+                        playerTag.querySelector('button').addEventListener('click', () => {
+                            selectedPlayersList.delete(playerId);
+                            playerTag.remove();
+                        });
                     }
+                    playerSearch.value = '';
+                    searchResults.innerHTML = '';
                 });
-                searchResults.innerHTML = playerResults
-                    .map(player => `<div class="search-result-item" data-id="${player.id}" data-name="${player.nome}">${player.nome}</div>`)
-                    .join('');
-
-                searchResults.querySelectorAll('.search-result-item').forEach(item => {
-                    item.addEventListener('click', () => {
-                        const playerId = item.dataset.id;
-                        const playerName = item.dataset.name;
-                        if (!selectedPlayersList.has(playerId)) {
-                            selectedPlayersList.add(playerId);
-                            const playerTag = document.createElement('div');
-                            playerTag.className = 'selected-player';
-                            playerTag.innerHTML = `${playerName} <button data-id="${playerId}">×</button>`;
-                            selectedPlayers.appendChild(playerTag);
-                            playerTag.querySelector('button').addEventListener('click', () => {
-                                selectedPlayersList.delete(playerId);
-                                playerTag.remove();
-                            });
-                        }
-                        playerSearch.value = '';
-                        searchResults.innerHTML = '';
-                    });
-                });
-            } catch (error) {
-                console.error('Error searching players:', error);
-            }
-        });
-
-      function updateApplyModeUI() {
-    const selectedMode = applyMode.value;
-
-    // Esconde todos os containers condicionais
-    playerSearchContainer.style.display = 'none';
-    positionSelectGroup.style.display = 'none';
-    casteSelectGroup.style.display = 'none';
-
-    // Mostra o container relevante
-    if (selectedMode === 'specific') {
-        playerSearchContainer.style.display = 'block';
-    } else if (selectedMode === 'position') {
-        positionSelectGroup.style.display = 'block';
-    } else if (selectedMode === 'caste') {
-        casteSelectGroup.style.display = 'block';
-    }
-}
-
-// Adiciona o "escutador" para o novo seletor de modo
-applyMode.addEventListener('change', updateApplyModeUI);
-
-     saveMarketTime.addEventListener('click', async () => {
-    const openTime = document.getElementById('marketOpenTime').value;
-    const closeTime = document.getElementById('marketCloseTime').value;
-    if (!openTime || !closeTime) {
-        return alert('Por favor, preencha os horários de abertura e fechamento.');
-    }
-
-    const marketTimes = {
-        abertura: new Date(openTime).toISOString(),
-        fechamento: new Date(closeTime).toISOString()
-    };
-    
-    const selectedMode = applyMode.value;
-    let batch = [];
-    let targetDescription = ""; // Para a mensagem de sucesso
-
-    try {
-        switch (selectedMode) {
-            case 'all':
-                targetDescription = "todos os jogadores";
-                const allSnapshot = await getDocs(collection(db, 'jogadores'));
-                batch = allSnapshot.docs.map(d => updateDoc(d.ref, { marketTimes }));
-                break;
-
-            case 'position':
-                const selectedPosition = applyPositionSelect.value;
-                if (!selectedPosition) return alert('Por favor, selecione uma posição.');
-                targetDescription = `jogadores da posição "${selectedPosition}"`;
-                const posQuery = query(collection(db, 'jogadores'), where("posicao", "==", selectedPosition));
-                const posSnapshot = await getDocs(posQuery);
-                batch = posSnapshot.docs.map(d => updateDoc(d.ref, { marketTimes }));
-                break;
-
-            case 'caste':
-                const selectedCaste = applyCasteSelect.value;
-                if (!selectedCaste) return alert('Por favor, selecione uma casta.');
-                targetDescription = `jogadores da casta "${selectedCaste}"`;
-                const casteQuery = query(collection(db, 'jogadores'), where("casta", "==", selectedCaste));
-                const casteSnapshot = await getDocs(casteQuery);
-                batch = casteSnapshot.docs.map(d => updateDoc(d.ref, { marketTimes }));
-                break;
-
-            case 'specific':
-                if (selectedPlayersList.size === 0) return alert('Por favor, selecione pelo menos um jogador.');
-                targetDescription = `${selectedPlayersList.size} jogador(es) selecionado(s)`;
-                batch = Array.from(selectedPlayersList).map(id => updateDoc(doc(db, 'jogadores', id), { marketTimes }));
-                break;
-                
-            default:
-                return alert('Modo de aplicação inválido.');
+            });
+        } catch (error) {
+            console.error('Error searching players:', error);
         }
+    });
 
-        if (batch.length === 0) {
-            return alert(`Nenhum jogador encontrado para ${targetDescription}. Nenhuma alteração foi feita.`);
+    // --- INICIALIZAÇÃO DA APLICAÇÃO ---
+
+    async function initializeApp() {
+        try {
+            document.getElementById('players-grid').innerHTML = '<p>A carregar jogadores...</p>';
+            const [jogadoresSnapshot, clubesSnapshot, competicoesSnapshot] = await Promise.all([
+                getDocs(collection(db, 'jogadores')),
+                getDocs(collection(db, 'clubes')),
+                getDocs(collection(db, 'competicoes'))
+            ]);
+
+            const clubesMap = new Map();
+            clubesSnapshot.forEach(doc => clubesMap.set(doc.id, doc.data()));
+
+            const competicoesMap = new Map();
+            competicoesSnapshot.forEach(doc => competicoesMap.set(doc.id, doc.data()));
+
+            allPlayers = jogadoresSnapshot.docs.map(doc => {
+                const player = { id: doc.id, ...doc.data() };
+                const clubeData = clubesMap.get(player.clube);
+                if (clubeData) {
+                    player.clubeData = clubeData;
+                    const competicaoData = competicoesMap.get(clubeData.competicaoId);
+                    if (competicaoData) {
+                        player.competicaoNome = competicaoData.nome;
+                    }
+                }
+                return player;
+            });
+            
+            populateMarketTimeSelectors(allPlayers);
+            updateFiltersAndDisplay();
+
+            document.getElementById('filterPosicao').addEventListener('change', updateFiltersAndDisplay);
+            document.getElementById('filterCasta').addEventListener('change', updateFiltersAndDisplay);
+            document.getElementById('filterCompeticao').addEventListener('change', updateFiltersAndDisplay);
+            document.getElementById('filterPais').addEventListener('change', updateFiltersAndDisplay);
+        } catch (error) {
+            console.error('Error initializing app:', error);
+            document.getElementById('players-grid').innerHTML = '<p style="color: red; text-align: center;">Ocorreu um erro ao carregar os dados.</p>';
         }
-
-        await Promise.all(batch);
-        alert(`Horários do mercado atualizados com sucesso para ${targetDescription}! A lista será recarregada.`);
-        closeAllMenus();
-        await initializeApp(); // Recarrega os dados e a exibição
-
-    } catch (error) {
-        console.error('Error saving market times:', error);
-        alert('Erro ao salvar horários do mercado. Verifique o console para mais detalhes.');
     }
-});
 
-    </script>
+    // Dispara a inicialização e adiciona o listener para o botão de salvar principal
+    initializeApp();
+    document.getElementById('saveChanges').addEventListener('click', saveChanges);
+
+</script>
 </body>
 </html>
