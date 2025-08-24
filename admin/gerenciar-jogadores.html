@@ -189,46 +189,42 @@
 
 
 function populateFilters(players) {
-            const counts = {
-                posicao: {},
-                casta: {},
-                competicaoId: {},
-                pais: {}
-            };
+    const counts = {
+        posicao: {},
+        casta: {},
+        competicao: {}, // Mudança de nome para refletir que agora é por nome
+        pais: {}
+    };
 
-            // 1. Calcula a contagem para cada valor de cada categoria
-            players.forEach(player => {
-                if (player.posicao) counts.posicao[player.posicao] = (counts.posicao[player.posicao] || 0) + 1;
-                if (player.casta) counts.casta[player.casta] = (counts.casta[player.casta] || 0) + 1;
-                if (player.competicaoId) counts.competicaoId[player.competicaoId] = (counts.competicaoId[player.competicaoId] || 0) + 1;
-                if (player.pais) counts.pais[player.pais] = (counts.pais[player.pais] || 0) + 1;
-            });
+    players.forEach(player => {
+        if (player.posicao) counts.posicao[player.posicao] = (counts.posicao[player.posicao] || 0) + 1;
+        if (player.casta) counts.casta[player.casta] = (counts.casta[player.casta] || 0) + 1;
+        // AQUI ESTÁ A MUDANÇA PRINCIPAL: usa o nome da competição
+        if (player.competicaoNome) counts.competicao[player.competicaoNome] = (counts.competicao[player.competicaoNome] || 0) + 1;
+        if (player.pais) counts.pais[player.pais] = (counts.pais[player.pais] || 0) + 1;
+    });
 
-            // 2. Função auxiliar para criar as opções nos menus <select>
-            const addOptions = (selectId, countMap) => {
-                const selectElement = document.getElementById(selectId);
-                const firstOptionText = selectElement.querySelector('option').textContent;
-                selectElement.innerHTML = `<option value="">${firstOptionText}</option>`; // Reseta mantendo a primeira opção
+    const addOptions = (selectId, countMap) => {
+        const selectElement = document.getElementById(selectId);
+        const firstOptionText = selectElement.querySelector('option').textContent;
+        selectElement.innerHTML = `<option value="">${firstOptionText}</option>`;
 
-                // Ordena os valores alfabeticamente antes de adicionar
-                const sortedValues = Object.keys(countMap).sort((a, b) => a.localeCompare(b));
+        const sortedValues = Object.keys(countMap).sort((a, b) => a.localeCompare(b));
 
-                sortedValues.forEach(value => {
-                    const count = countMap[value];
-                    const option = document.createElement('option');
-                    option.value = value;
-                    // Adiciona a contagem ao texto da opção
-                    option.textContent = `${value} (${count})`;
-                    selectElement.appendChild(option);
-                });
-            };
+        sortedValues.forEach(value => {
+            const count = countMap[value];
+            const option = document.createElement('option');
+            option.value = value;
+            option.textContent = `${value} (${count})`;
+            selectElement.appendChild(option);
+        });
+    };
 
-            // 3. Popula cada filtro com os valores e contagens
-            addOptions('filterPosicao', counts.posicao);
-            addOptions('filterCasta', counts.casta);
-            addOptions('filterCompeticao', counts.competicaoId);
-            addOptions('filterPais', counts.pais);
-        }
+    addOptions('filterPosicao', counts.posicao);
+    addOptions('filterCasta', counts.casta);
+    addOptions('filterCompeticao', counts.competicao); // Alvo é o mesmo <select>
+    addOptions('filterPais', counts.pais);
+}
 
 
 function displayPlayers(playersToDisplay) {
@@ -270,45 +266,83 @@ function displayPlayers(playersToDisplay) {
 
 
 function applyFiltersAndDisplay() {
-            const pos = document.getElementById('filterPosicao').value;
-            const casta = document.getElementById('filterCasta').value;
-            const comp = document.getElementById('filterCompeticao').value;
-            const pais = document.getElementById('filterPais').value;
+    const pos = document.getElementById('filterPosicao').value;
+    const casta = document.getElementById('filterCasta').value;
+    const comp = document.getElementById('filterCompeticao').value;
+    const pais = document.getElementById('filterPais').value;
 
-            const filteredPlayers = allPlayers.filter(player => {
-                return (pos === '' || player.posicao === pos) &&
-                       (casta === '' || player.casta === casta) &&
-                       (comp === '' || player.competicaoId === comp) &&
-                       (pais === '' || player.pais === pais);
-            });
+    const filteredPlayers = allPlayers.filter(player => {
+        // AQUI ESTÁ A MUDANÇA PRINCIPAL: compara com player.competicaoNome
+        return (pos === '' || player.posicao === pos) &&
+               (casta === '' || player.casta === casta) &&
+               (comp === '' || player.competicaoNome === comp) &&
+               (pais === '' || player.pais === pais);
+    });
 
-            displayPlayers(filteredPlayers);
-        }
+    displayPlayers(filteredPlayers);
+}
 
         // Função principal que inicializa a página
-        async function initializeApp() {
-            try {
-                const jogadoresRef = collection(db, 'jogadores');
-                const snapshot = await getDocs(jogadoresRef);
+      async function initializeApp() {
+    try {
+        // 1. Define as referências para as três coleções
+        const jogadoresRef = collection(db, 'jogadores');
+        const clubesRef = collection(db, 'clubes');
+        const competicoesRef = collection(db, 'competicoes'); // Assumindo que o nome da coleção é "competicoes"
 
-                allPlayers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        // 2. Busca os dados de todas as coleções em paralelo para maior eficiência
+        const [jogadoresSnapshot, clubesSnapshot, competicoesSnapshot] = await Promise.all([
+            getDocs(jogadoresRef),
+            getDocs(clubesRef),
+            getDocs(competicoesRef)
+        ]);
 
-                populateFilters(allPlayers);
-                displayPlayers(allPlayers); // Exibe todos ao carregar
-populateMarketTimeSelectors(allPlayers);
+        // 3. Cria "Mapas" para acesso rápido aos dados de clubes e competições
+        // Mapa: clubId -> dadosDoClube
+        const clubesMap = new Map();
+        clubesSnapshot.forEach(doc => clubesMap.set(doc.id, doc.data()));
 
-                // Adiciona os "escutadores" de eventos aos filtros
-                document.getElementById('filterPosicao').addEventListener('change', applyFiltersAndDisplay);
-                document.getElementById('filterCasta').addEventListener('change', applyFiltersAndDisplay);
-                document.getElementById('filterCompeticao').addEventListener('change', applyFiltersAndDisplay);
-                document.getElementById('filterPais').addEventListener('change', applyFiltersAndDisplay);
+        // Mapa: competicaoId -> dadosDaCompeticao
+        const competicoesMap = new Map();
+        competicoesSnapshot.forEach(doc => competicoesMap.set(doc.id, doc.data()));
 
-            } catch (error) {
-                console.error('Error loading players:', error);
-                document.getElementById('players-grid').innerHTML = '<p>Ocorreu um erro ao carregar os jogadores.</p>';
+        // 4. "Enriquece" os dados dos jogadores com as informações relacionadas
+        allPlayers = jogadoresSnapshot.docs.map(doc => {
+            const player = { id: doc.id, ...doc.data() };
+            
+            // Assumindo que o campo no jogador é `clube` e contém o ID do clube
+            const clubeData = clubesMap.get(player.clube); 
+            
+            if (clubeData) {
+                player.clubeData = clubeData; // Adiciona os dados do clube ao jogador
+                
+                // Assumindo que o campo no clube é `competicaoId`
+                const competicaoData = competicoesMap.get(clubeData.competicaoId);
+                
+                if (competicaoData) {
+                    // Adiciona o nome da competição diretamente ao objeto do jogador para fácil acesso
+                    player.competicaoNome = competicaoData.nome; 
+                }
             }
-        }
+            return player;
+        });
 
+        // 5. Continua com o fluxo normal da aplicação, agora com os dados enriquecidos
+        populateFilters(allPlayers);
+        populateMarketTimeSelectors(allPlayers); // Esta é a sua função do menu pop-up
+        displayPlayers(allPlayers); // Exibe todos ao carregar
+
+        // Adiciona os "escutadores" de eventos aos filtros
+        document.getElementById('filterPosicao').addEventListener('change', applyFiltersAndDisplay);
+        document.getElementById('filterCasta').addEventListener('change', applyFiltersAndDisplay);
+        document.getElementById('filterCompeticao').addEventListener('change', applyFiltersAndDisplay);
+        document.getElementById('filterPais').addEventListener('change', applyFiltersAndDisplay);
+
+    } catch (error) {
+        console.error('Error initializing app:', error);
+        document.getElementById('players-grid').innerHTML = '<p>Ocorreu um erro ao carregar os dados. Verifique o console.</p>';
+    }
+}
 
 function populateMarketTimeSelectors(players) {
     const posicoes = new Set();
