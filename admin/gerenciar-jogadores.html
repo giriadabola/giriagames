@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
 
     <!-- 1. Adiciona o nosso guardião de segurança. Ele protegerá a página. -->
-    <script type="module" src="js/auth-guard.js"></script>
+  <script type="module" src="js/auth-guard.js"></script>
 
     <style>
         /* O seu CSS original permanece exatamente o mesmo */
@@ -20,6 +20,7 @@
         .content { padding: 80px 20px 20px; max-width: 1200px; margin: 0 auto; }
         h1 { color: #333; margin-bottom: 24px; font-size: 28px; }
         
+        /* <!-- NOVO: Estilos para o container de filtros --> */
         .filters-container {
             display: flex;
             gap: 16px;
@@ -28,13 +29,13 @@
             padding: 16px;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            flex-wrap: wrap; 
+            flex-wrap: wrap; /* Para responsividade em telas menores */
         }
         .filter-group {
             display: flex;
             flex-direction: column;
             flex: 1;
-            min-width: 150px;
+            min-width: 150px; /* Largura mínima para cada filtro */
         }
         .filter-group label {
             font-size: 12px;
@@ -67,9 +68,34 @@
         .save-button:hover { background-color: #1a5cc4; }
         .market-time-button { background-color: #2176ff; color: white; border: none; padding: 12px 24px; border-radius: 4px; font-size: 16px; cursor: pointer; margin-bottom: 20px; margin-right: 10px; }
         .market-time-button:hover { background-color: #1a5cc4; }
+        .market-time-menu, .multi-change-menu { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 24px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); z-index: 1001; width: 90%; max-width: 500px; }
+        .market-time-menu.active, .multi-change-menu.active { display: block; }
+        .market-time-menu h2, .multi-change-menu h2 { margin-bottom: 20px; color: #333; }
+        .market-time-field { margin-bottom: 16px; }
+        .market-time-field label { display: block; margin-bottom: 8px; color: #666; font-weight: 500; }
+        .market-time-field input[type="datetime-local"] { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
+        .market-time-field input[type="checkbox"] { margin-right: 8px; }
+        .position-toggle { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #eee; }
+        .position-toggle:last-of-type { border-bottom: none; }
+        .position-toggle span { font-size: 16px; color: #333; }
+        .toggle-action-button { border: none; padding: 8px 16px; border-radius: 4px; font-size: 14px; cursor: pointer; margin-left: 8px; color: white; transition: background-color 0.2s; }
+        .toggle-action-button[data-action="activate"] { background-color: #4CAF50; }
+        .toggle-action-button[data-action="activate"]:hover { background-color: #45a049; }
+        .toggle-action-button[data-action="deactivate"] { background-color: #ff4444; }
+        .toggle-action-button[data-action="deactivate"]:hover { background-color: #e33030; }
+        .player-search { margin-top: 20px; }
+        .player-search input { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; margin-bottom: 12px; }
+        .selected-players { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+        .selected-player { background: #e9ecef; padding: 4px 8px; border-radius: 4px; display: flex; align-items: center; gap: 8px; font-size: 14px; }
+        .selected-player button { background: none; border: none; color: #666; cursor: pointer; padding: 0; font-size: 14px; }
+        .search-results { max-height: 200px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; margin-top: 8px; }
+        .search-result-item { padding: 8px; cursor: pointer; transition: background-color 0.2s; }
+        .search-result-item:hover { background-color: #f8f9fa; }
+        .overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.5); z-index: 1000; }
+        .overlay.active { display: block; }
     </style>
 </head>
-<body style="display: none;">
+<body style="display: none;"> <!-- 2. O corpo da página está oculto por padrão -->
 
     <nav class="top-menu">
         <a href="engrenagem.html" class="menu-item"><i class="fas fa-home"></i>Home</a>
@@ -85,6 +111,7 @@
             <button id="saveChanges" class="save-button">Salvar</button>
         </div>
         
+        <!-- NOVO: Container dos filtros -->
         <div class="filters-container">
             <div class="filter-group">
                 <label for="filterPosicao">Posição</label>
@@ -102,10 +129,9 @@
                     <option value="">Todas</option>
                 </select>
             </div>
-            <!-- MODIFICADO: ID e Label atualizados para Competição -->
             <div class="filter-group">
-                <label for="filterCompeticao">Competição</label>
-                <select id="filterCompeticao">
+                <label for="filterLiga">Liga</label>
+                <select id="filterLiga">
                     <option value="">Todas</option>
                 </select>
             </div>
@@ -120,21 +146,37 @@
         <div class="players-grid" id="players-grid"></div>
     </main>
 
-    <!-- Menus Pop-up (inalterados) -->
+    <div class="overlay" id="overlay"></div>
     
+    <div class="market-time-menu" id="marketTimeMenu">
+        <!-- Conteúdo do menu market-time... -->
+    </div>
+
+    <div class="multi-change-menu" id="multiChangeMenu">
+        <!-- Conteúdo do menu multi-change... -->
+    </div>
+
     <script type="module">
+        // Importa a variável 'db' do guardião e as funções do Firestore
         import { db } from './js/auth-guard.js';
         import { collection, getDocs, doc, updateDoc, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         let changedPlayers = new Map();
+        // MODIFICADO: Variáveis para guardar a lista completa de jogadores e o estado dos filtros
         let allPlayers = [];
         let filtersPopulated = false;
 
         function getTierClass(casta) {
-            // ... (função inalterada)
+            switch(casta) {
+                case 'Jogador Ouro': return 'gold';
+                case 'Jogador Prata': return 'silver';
+                case 'Jogador Bronze': return 'bronze';
+                case 'Jogador Platina': return 'platinum';
+                default: return '';
+            }
         }
 
-        function createPlayerCard(player) {
+        function createPlayerCard(player) { // MODIFICADO: Não precisa mais do docId, pois está no objeto player
             const card = document.createElement('div');
             card.className = 'player-card';
             const tierClass = getTierClass(player.casta);
@@ -145,9 +187,8 @@
                     <div class="player-name">${player.nome}</div>
                     <div class="player-info">Posição: ${player.posicao}</div>
                     <div class="player-info ${tierClass}">Casta: ${player.casta}</div>
-                    <!-- MODIFICADO: Exibe o nome da competição -->
-                    <div class="player-info">Competição: ${player.competicaoNome || 'N/A'}</div>
-                    <div class="player-info">País: ${player.pais || 'N/A'}</div>
+                    <div class="player-info">Liga: ${player.liga || 'N/A'}</div> <!-- NOVO: Exibe a liga -->
+                    <div class="player-info">País: ${player.pais || 'N/A'}</div> <!-- NOVO: Exibe o país -->
                     <div class="player-info">Comprado por: ${player.compradopor || 'Não comprado'}</div>
                     <div class="player-info">Abertura: ${player.marketTimes?.abertura ? new Date(player.marketTimes.abertura).toLocaleString() : 'Não definido'}</div>
                     <div class="player-info">Fechamento: ${player.marketTimes?.fechamento ? new Date(player.marketTimes.fechamento).toLocaleString() : 'Não definido'}</div>
@@ -166,109 +207,119 @@
             return card;
         }
         
+        // NOVO: Função para popular os filtros dinamicamente
         function populateFilters(players) {
             if (filtersPopulated) return;
 
             const castas = new Set();
-            // MODIFICADO: Mapa para competições para evitar duplicatas e guardar ID e Nome
-            const competicoes = new Map();
+            const ligas = new Set();
             const paises = new Set();
 
             players.forEach(player => {
                 if (player.casta) castas.add(player.casta);
-                // MODIFICADO: Adiciona a competição ao mapa usando seu ID como chave
-                if (player.competicaoiD && player.competicaoNome) {
-                    competicoes.set(player.competicaoiD, player.competicaoNome);
-                }
+                if (player.liga) ligas.add(player.liga);
                 if (player.pais) paises.add(player.pais);
             });
 
             const filterCasta = document.getElementById('filterCasta');
-            const filterCompeticao = document.getElementById('filterCompeticao'); // MODIFICADO: ID atualizado
+            const filterLiga = document.getElementById('filterLiga');
             const filterPais = document.getElementById('filterPais');
 
             castas.forEach(casta => filterCasta.innerHTML += `<option value="${casta}">${casta}</option>`);
-            // MODIFICADO: Popula o filtro de competições usando o ID no 'value' e o Nome no texto
-            competicoes.forEach((nome, id) => {
-                filterCompeticao.innerHTML += `<option value="${id}">${nome}</option>`;
-            });
+            ligas.forEach(liga => filterLiga.innerHTML += `<option value="${liga}">${liga}</option>`);
             paises.forEach(pais => filterPais.innerHTML += `<option value="${pais}">${pais}</option>`);
 
             filtersPopulated = true;
         }
 
+        // NOVO: Função para aplicar os filtros e redesenhar a lista
         function applyFiltersAndRender() {
             const posFilter = document.getElementById('filterPosicao').value;
             const castaFilter = document.getElementById('filterCasta').value;
-            const competicaoFilter = document.getElementById('filterCompeticao').value; // MODIFICADO: ID atualizado
+            const ligaFilter = document.getElementById('filterLiga').value;
             const paisFilter = document.getElementById('filterPais').value;
 
             const filteredPlayers = allPlayers.filter(player => {
                 const posMatch = posFilter ? player.posicao === posFilter : true;
                 const castaMatch = castaFilter ? player.casta === castaFilter : true;
-                // MODIFICADO: Lógica de filtro agora usa 'competicaoiD'
-                const competicaoMatch = competicaoFilter ? player.competicaoiD === competicaoFilter : true;
+                const ligaMatch = ligaFilter ? player.liga === ligaFilter : true;
                 const paisMatch = paisFilter ? player.pais === paisFilter : true;
-                return posMatch && castaMatch && competicaoMatch && paisMatch;
+                return posMatch && castaMatch && ligaMatch && paisMatch;
             });
 
             renderPlayers(filteredPlayers);
         }
-        
+
+        // MODIFICADO: Função para renderizar os jogadores foi separada da lógica de busca
         function renderPlayers(playersToRender) {
-            // ... (função inalterada)
+            const playersGrid = document.getElementById('players-grid');
+            playersGrid.innerHTML = ''; // Limpa a grade antes de redesenhar
+
+            const positionOrder = ['Guarda-Redes', 'Defesa', 'Médio', 'Avançado'];
+            const playersByPosition = {};
+            positionOrder.forEach(pos => { playersByPosition[pos] = []; });
+
+            playersToRender.forEach(player => {
+                if (positionOrder.includes(player.posicao)) {
+                    playersByPosition[player.posicao].push(player);
+                }
+            });
+
+            let playersFound = false;
+            positionOrder.forEach(position => {
+                if (playersByPosition[position].length > 0) {
+                    playersFound = true;
+                    const header = document.createElement('h2');
+                    header.textContent = position;
+                    header.style.cssText = 'color: #333; margin-top: 32px; margin-bottom: 16px; font-size: 24px;';
+                    playersGrid.appendChild(header);
+
+                    playersByPosition[position].sort((a, b) => a.nome.localeCompare(b.nome)).forEach(player => {
+                        const playerCard = createPlayerCard(player);
+                        playersGrid.appendChild(playerCard);
+                    });
+                }
+            });
+
+            if (!playersFound) {
+                playersGrid.innerHTML = '<p style="text-align: center; color: #666;">Nenhum jogador encontrado com os filtros selecionados.</p>';
+            }
         }
 
-        // MODIFICADO: A função principal agora busca competições primeiro
-        async function loadDataAndSetup() {
+        async function loadPlayersAndSetup() {
             try {
-                // 1. Buscar todas as competições e criar um mapa de ID -> Nome
-                const competicoesRef = collection(db, 'competicoes');
-                const competicoesSnapshot = await getDocs(competicoesRef);
-                const competitionsMap = new Map();
-                competicoesSnapshot.forEach(doc => {
-                    competitionsMap.set(doc.id, doc.data().nome);
-                });
-
-                // 2. Buscar todos os jogadores
                 const jogadoresRef = collection(db, 'jogadores');
-                const jogadoresSnapshot = await getDocs(jogadoresRef);
+                const snapshot = await getDocs(jogadoresRef);
 
-                // 3. Processar jogadores, adicionando o nome da competição a cada um
-                jogadoresSnapshot.forEach(doc => {
-                    const playerData = doc.data();
-                    const competicaoNome = competitionsMap.get(playerData.competicaoiD) || 'N/A';
-                    
-                    allPlayers.push({
-                        id: doc.id,
-                        ...playerData,
-                        competicaoNome: competicaoNome // Adiciona o nome da competição ao objeto
-                    });
+                snapshot.forEach(doc => {
+                    allPlayers.push({ id: doc.id, ...doc.data() });
                 });
 
                 populateFilters(allPlayers);
-                applyFiltersAndRender();
+                applyFiltersAndRender(); // Renderiza a lista inicial
 
             } catch (error) {
-                console.error('Error loading data:', error);
-                document.getElementById('players-grid').innerHTML = '<p>Erro ao carregar dados.</p>';
+                console.error('Error loading players:', error);
+                document.getElementById('players-grid').innerHTML = '<p>Erro ao carregar jogadores.</p>';
             }
         }
 
         async function saveChanges() {
-            // ... (função inalterada)
+            // ... (A sua função saveChanges permanece exatamente a mesma)
         }
 
         // --- Event Listeners ---
-        loadDataAndSetup(); // MODIFICADO: Chama a nova função principal
+        loadPlayersAndSetup(); // MODIFICADO: Chama a nova função principal
         document.getElementById('saveChanges').addEventListener('click', saveChanges);
 
+        // NOVO: Adiciona os listeners para os filtros
         document.getElementById('filterPosicao').addEventListener('change', applyFiltersAndRender);
         document.getElementById('filterCasta').addEventListener('change', applyFiltersAndRender);
-        document.getElementById('filterCompeticao').addEventListener('change', applyFiltersAndRender); // MODIFICADO
+        document.getElementById('filterLiga').addEventListener('change', applyFiltersAndRender);
         document.getElementById('filterPais').addEventListener('change', applyFiltersAndRender);
 
-        // --- Lógica de Menus e Overlay (inalterada) ---
+
+        // --- Toda a sua lógica de Menus e Overlay permanece aqui, inalterada ---
         // ...
 
     </script>
