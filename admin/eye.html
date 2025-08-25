@@ -2,7 +2,7 @@
 <html lang="pt">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale-1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>G Empire Eye - Visão Geral</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
     <script type="module" src="js/auth-guard.js"></script>
@@ -54,9 +54,6 @@
     </main>
 
     <script type="module">
-        // LOG A: O primeiro log de todos. Se este não aparecer, o script não está a ser executado.
-        console.log("LOG A: O script da página 'eye.html' começou a ser executado.");
-
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
         import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
         import { getFirestore, collection, getDocs, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
@@ -78,28 +75,32 @@
         let allUsersData = [];
         let currentSort = { column: null, direction: 'asc' };
 
-        function formatFirebaseTimestamp(timestampString) {
-            console.log("--- A iniciar formatação de data ---");
-            console.log("1. Valor recebido:", timestampString);
-            if (!timestampString || typeof timestampString !== 'string') {
-                console.log("2. Valor inválido ou ausente. A retornar 'Nunca'.");
+        /**
+         * FUNÇÃO CORRIGIDA: Agora processa o objeto Timestamp do Firebase.
+         * @param {object} timestampObject - O objeto Timestamp do Firebase.
+         * @returns {string} A data formatada.
+         */
+        function formatFirebaseTimestamp(timestampObject) {
+            // Verifica se o objeto existe e se tem o método .toDate()
+            if (!timestampObject || typeof timestampObject.toDate !== 'function') {
                 return 'Nunca';
             }
             try {
-                const meses = { 'janeiro': 0, 'fevereiro': 1, 'março': 2, 'abril': 3, 'maio': 4, 'junho': 5, 'julho': 6, 'agosto': 7, 'setembro': 8, 'outubro': 9, 'novembro': 10, 'dezembro': 11 };
-                const cleanString = timestampString.replace(' de ', ' ').replace(' às ', ' ');
-                const parts = cleanString.split(/[ :]/);
-                console.log("2. String dividida em partes:", parts);
-                const day = parseInt(parts[0], 10), month = meses[parts[1].toLowerCase()], year = parseInt(parts[2], 10), hours = parseInt(parts[3], 10), minutes = parseInt(parts[4], 10);
-                console.log(`3. Componentes extraídos: Ano=${year}, Mês=${month}, Dia=${day}, Hora=${hours}, Minuto=${minutes}`);
-                const dateObj = new Date(year, month, day, hours, minutes);
-                console.log("4. Objeto Date criado:", dateObj);
-                if (isNaN(dateObj.getTime())) { console.error("5. ERRO: O objeto Date criado é inválido!"); return 'Data Inválida'; }
-                const formattedDay = dateObj.getDate(), formattedMonth = dateObj.toLocaleString('pt-PT', { month: 'long' }), formattedYear = dateObj.getFullYear(), formattedHours = String(dateObj.getHours()).padStart(2, '0'), formattedMinutes = String(dateObj.getMinutes()).padStart(2, '0');
-                const finalResult = `${formattedDay} ${formattedMonth} ${formattedYear}, ${formattedHours}h${formattedMinutes}`;
-                console.log("6. Resultado final da formatação:", finalResult);
-                return finalResult;
-            } catch (error) { console.error("7. ERRO INESPERADO no bloco try/catch:", error); return 'Erro na Formatação'; }
+                // Converte o Timestamp do Firebase para um objeto Date do JavaScript
+                const dateObj = timestampObject.toDate();
+
+                // Formata o objeto Date
+                const formattedDay = dateObj.getDate();
+                const formattedMonth = dateObj.toLocaleString('pt-PT', { month: 'long' });
+                const formattedYear = dateObj.getFullYear();
+                const formattedHours = String(dateObj.getHours()).padStart(2, '0');
+                const formattedMinutes = String(dateObj.getMinutes()).padStart(2, '0');
+
+                return `${formattedDay} ${formattedMonth} ${formattedYear}, ${formattedHours}h${formattedMinutes}`;
+            } catch (error) {
+                console.error("Erro ao converter Timestamp:", error);
+                return 'Data Inválida';
+            }
         }
 
         function renderTable(users) {
@@ -117,7 +118,7 @@
             const direction = isAscending ? 'desc' : 'asc';
             allUsersData.sort((a, b) => {
                 let valA = a[columnKey]; let valB = b[columnKey];
-                if (typeof valA === 'number' && typeof valB === 'number') { return direction === 'asc' ? valA - b[columnKey] : b[columnKey] - valA; }
+                if (typeof valA === 'number' && typeof valB === 'number') { return direction === 'asc' ? valA - valB : valB - valA; }
                 else { return direction === 'asc' ? String(valA).localeCompare(String(valB)) : String(valB).localeCompare(String(valA)); }
             });
             currentSort = { column: columnKey, direction: direction };
@@ -129,19 +130,15 @@
         }
 
         async function fetchAndDisplayUsers() {
-            console.log("LOG D: A função fetchAndDisplayUsers() foi chamada.");
             const statusMessage = document.getElementById('status-message');
             const tableContainer = document.querySelector('.table-container');
             try {
                 const querySnapshot = await getDocs(collection(db, "users"));
-                console.log(`LOG E: A consulta ao Firestore retornou ${querySnapshot.size} documentos.`);
+                allUsersData = [];
                 if (querySnapshot.empty) { statusMessage.textContent = 'Nenhum utilizador encontrado.'; return; }
 
-                console.log("LOG F: A iniciar o loop para processar cada utilizador...");
                 querySnapshot.forEach(doc => {
                     const userData = doc.data();
-                    console.log(`LOG G: A processar o utilizador com email: ${userData.email}`);
-                    
                     let dynamicPontos = 0, dynamicGCoins = 0;
                     for (const key in userData) {
                         if (key.endsWith('Pontos') && !isNaN(parseInt(key.substring(0, 8)))) { dynamicPontos = userData[key]; }
@@ -163,24 +160,19 @@
                 sortTable('pontos');
 
             } catch (error) {
-                console.error("LOG H: ERRO CRÍTICO no bloco try/catch de fetchAndDisplayUsers:", error);
+                console.error("Erro CRÍTICO ao buscar utilizadores:", error);
                 statusMessage.textContent = 'Ocorreu um erro ao carregar os dados.';
             }
         }
         
         onAuthStateChanged(auth, async (user) => {
             if (user) {
-                console.log("LOG B: Utilizador autenticado encontrado. UID:", user.uid);
                 const userDoc = await getDoc(doc(db, "users", user.uid));
                 if (userDoc.exists() && userDoc.data().estatuto === 'ruler') {
-                    console.log("LOG C: Verificação de 'ruler' bem-sucedida. A chamar fetchAndDisplayUsers().");
                     fetchAndDisplayUsers();
                 } else {
-                    console.error("LOG X: Acesso negado. Utilizador não é 'ruler' ou documento não existe.", userDoc.exists() ? userDoc.data() : "Documento não existe");
                     window.location.replace('/acesso-negado.html');
                 }
-            } else {
-                console.warn("LOG Y: Nenhum utilizador autenticado. A redirecionar para o login.");
             }
         });
     </script>
