@@ -477,8 +477,7 @@
     <script src="config.js"></script>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, collection, getDocs, doc, getDoc, updateDoc, Timestamp, addDoc, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getFirestore, collection, getDocs, doc, getDoc, updateDoc, Timestamp, addDoc, query, where, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
              const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
@@ -1248,15 +1247,26 @@ function updateSectionCounts() {
 
         // --- Initialization and Auth Handling ---
 
-        onAuthStateChanged(auth, async (user) => {
-            try {
-                if (user) {
-                    updateLoadingProgress(10); // Auth checked
-                    currentUserEstatuto = await getUserEstatuto(user.uid);
-                    updateLoadingProgress(10); // Status fetched
+       onAuthStateChanged(auth, async (user) => {
+    try {
+        if (user) {
+            updateLoadingProgress(10); // Auth checked
+            currentUserEstatuto = await getUserEstatuto(user.uid);
+            updateLoadingProgress(10); // Status fetched
 
-                    if (currentUserEstatuto !== null) {
-                        const menuSettings = await loadMenuSettings();
+            // NOVO CÓDIGO A ADICIONAR AQUI
+            try {
+                const userDocRef = doc(db, 'users', user.uid);
+                await updateDoc(userDocRef, {
+                    ultimoacesso: serverTimestamp()
+                });
+            } catch (error) {
+                console.error("Erro ao atualizar o campo ultimoacesso: ", error);
+            }
+            // FIM DO NOVO CÓDIGO
+
+            if (currentUserEstatuto !== null) {
+                const menuSettings = await loadMenuSettings();
                         updateLoadingProgress(10); // Settings loaded
 
                         if (!checkPageAccess(currentUserEstatuto, menuSettings)) return; // Redirects
