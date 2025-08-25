@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>G Empire Eye - Visão Geral</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+
+    <!-- 
+      PASSO 1: O GUARDIÃO DE SEGURANÇA É INCLUÍDO AQUI.
+      Ele irá verificar a autenticação e o estatuto do utilizador.
+      No entanto, o 'auth-guard.js' só permite a entrada de 'ruler' e 'estafeta'.
+      Vamos adicionar uma verificação extra no script desta página para garantir que APENAS 'ruler' fica.
+    -->
+    <script type="module" src="js/auth-guard.js"></script>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 100vh;
+            background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
+            /* Começa escondido, o 'auth-guard' irá mostrar */
+            display: none; 
+            flex-direction: column;
+        }
+
+        .top-menu {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            background-color: #ffffff;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            padding: 12px 0;
+            display: flex;
+            justify-content: center;
+            gap: 24px;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .menu-item {
+            text-decoration: none;
+            color: #666;
+            transition: color 0.3s ease;
+            font-weight: 500;
+            padding: 8px 16px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .menu-item:hover, .menu-item.active {
+            color: #2176ff;
+            background-color: rgba(33, 118, 255, 0.1);
+        }
+
+        .menu-item i {
+            font-size: 16px;
+        }
+
+        .content {
+            padding: 80px 20px 20px;
+            max-width: 1200px;
+            width: 100%;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 24px;
+            font-size: 28px;
+            text-align: center;
+        }
+        
+        #status-message {
+            text-align: center;
+            font-size: 18px;
+            color: #666;
+            padding: 40px;
+        }
+
+        .table-container {
+            overflow-x: auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        th {
+            background-color: #f7f7f7;
+            font-weight: 600;
+            color: #333;
+        }
+
+        tbody tr:nth-child(even) {
+            background-color: #fafafa;
+        }
+
+        tbody tr:hover {
+            background-color: #f1f1f1;
+        }
+    </style>
+</head>
+<body>
+    <nav class="top-menu">
+        <a href="1x.html" class="menu-item"><i class="fas fa-home"></i>Home</a>
+        <a href="fusiveis.html" class="menu-item"><i class="fas fa-bolt"></i>Fusíveis</a>
+        <a href="arbitro.html" class="menu-item"><i class="fas fa-gavel"></i>Árbitro</a>
+    </nav>
+    <main class="content">
+        <h1><i class="fas fa-eye"></i> G Empire Eye - Utilizadores</h1>
+        
+        <p id="status-message">A carregar dados dos utilizadores...</p>
+
+        <div class="table-container" style="display: none;">
+            <table id="users-table">
+                <thead>
+                    <tr>
+                        <th>Nome de Utilizador</th>
+                        <th>Email</th>
+                        <th>Estatuto</th>
+                        <th>Pontos</th>
+                        <th>GCoins Ganhos</th>
+                        <th>Último Acesso</th>
+                    </tr>
+                </thead>
+                <tbody id="users-table-body">
+                    <!-- As linhas da tabela serão inseridas aqui via JavaScript -->
+                </tbody>
+            </table>
+        </div>
+    </main>
+
+    <!-- 
+      PASSO 2: SCRIPT PARA BUSCAR E EXIBIR OS DADOS
+      Este script só será executado se o 'auth-guard' permitir o acesso.
+    -->
+    <script type="module">
+        // Importa as funções necessárias do Firebase SDK
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+        import { getFirestore, collection, getDocs, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+        // A configuração do Firebase é a mesma do guardião
+        const firebaseConfig = {
+            apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0",
+            authDomain: "g-games-8a8fc.firebaseapp.com",
+            projectId: "g-games-8a8fc",
+            storageBucket: "g-games-8a8fc.appspot.com",
+            messagingSenderId: "689897349449",
+            appId: "1:689897349449:web:536599794579901beb7a98",
+            measurementId: "G-GTTPJ6G5MD"
+        };
+
+        // Inicializa o Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // Função para buscar e renderizar os dados dos utilizadores
+        async function fetchAndDisplayUsers() {
+            const statusMessage = document.getElementById('status-message');
+            const tableContainer = document.querySelector('.table-container');
+            const tableBody = document.getElementById('users-table-body');
+
+            try {
+                // Pega a referência da coleção 'users'
+                const usersCollectionRef = collection(db, "users");
+                // Vai buscar todos os documentos da coleção
+                const querySnapshot = await getDocs(usersCollectionRef);
+
+                // Limpa o conteúdo atual da tabela
+                tableBody.innerHTML = '';
+
+                if (querySnapshot.empty) {
+                    statusMessage.textContent = 'Nenhum utilizador encontrado.';
+                    return;
+                }
+
+                // Itera sobre cada documento
+                querySnapshot.forEach(doc => {
+                    const userData = doc.data();
+
+                    // Cria uma nova linha na tabela
+                    const row = document.createElement('tr');
+
+                    // Preenche as células da linha com os dados do utilizador
+                    // Usamos '|| 'N/A'' como fallback para campos que possam não existir
+                    row.innerHTML = `
+                        <td>${userData.nomeDoUsuario || 'N/A'}</td>
+                        <td>${userData.email || 'N/A'}</td>
+                        <td>${userData.estatuto || 'N/A'}</td>
+                        <td>${userData.pontos || 0}</td>
+                        <td>${userData.gCoinsGanhos || 0}</td>
+                        <td>${userData.ultimoacesso || 'Nunca'}</td>
+                    `;
+                    
+                    // Adiciona a linha ao corpo da tabela
+                    tableBody.appendChild(row);
+                });
+
+                // Esconde a mensagem de 'a carregar' e mostra a tabela
+                statusMessage.style.display = 'none';
+                tableContainer.style.display = 'block';
+
+            } catch (error) {
+                console.error("Erro ao buscar utilizadores: ", error);
+                statusMessage.textContent = 'Ocorreu um erro ao carregar os dados. Por favor, tente novamente mais tarde.';
+            }
+        }
+        
+        // PASSO 3: VERIFICAÇÃO FINAL DE PERMISSÃO E EXECUÇÃO
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                // Esta verificação é redundante se o 'auth-guard' já fez o seu trabalho,
+                // mas adiciona uma camada extra de segurança específica para esta página.
+                const userDocRef = doc(db, "users", user.uid);
+                const userDoc = await getDoc(userDocRef);
+
+                if (userDoc.exists() && userDoc.data().estatuto === 'ruler') {
+                    // Se o utilizador é 'ruler', busca e exibe os dados da tabela.
+                    fetchAndDisplayUsers();
+                } else {
+                    // Se um 'estafeta' (ou outro) chegar aqui, ele é redirecionado.
+                    window.location.replace('/acesso-negado.html');
+                }
+            }
+            // Se não houver 'user', o 'auth-guard.js' já o terá redirecionado para /login.html
+        });
+
+    </script>
+</body>
+</html>
