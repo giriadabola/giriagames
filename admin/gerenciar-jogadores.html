@@ -552,54 +552,58 @@
 
     // --- INICIALIZAÇÃO DA APLICAÇÃO ---
 
-  async function initializeApp() {
+ async function initializeApp() {
     try {
-        // 1. Busca todas as coleções necessárias de uma só vez
+        document.getElementById('players-grid').innerHTML = '<p>A carregar jogadores...</p>';
         const [jogadoresSnapshot, clubesSnapshot, competicoesSnapshot] = await Promise.all([
             getDocs(collection(db, 'jogadores')),
             getDocs(collection(db, 'clubes')),
             getDocs(collection(db, 'competicoes'))
         ]);
 
-        // 2. Cria mapas para busca rápida (muito eficiente!)
-        const clubesMap = new Map();
-        clubesSnapshot.forEach(doc => clubesMap.set(doc.id, doc.data()));
+        // --- ALTERAÇÃO PRINCIPAL AQUI ---
+        // 1. Criamos um mapa para procurar clubes PELO NOME, não pelo ID.
+        const clubesByNameMap = new Map();
+        clubesSnapshot.forEach(doc => {
+            const clubeData = doc.data();
+            if (clubeData.nome) { // Garante que só adicionamos clubes que têm um nome
+                clubesByNameMap.set(clubeData.nome, clubeData);
+            }
+        });
 
+        // 2. O mapa de competições continua igual, pois ele é procurado por ID.
         const competicoesMap = new Map();
         competicoesSnapshot.forEach(doc => competicoesMap.set(doc.id, doc.data()));
 
-        // 3. Processa cada jogador para adicionar o nome da competição
         allPlayers = jogadoresSnapshot.docs.map(doc => {
             const player = { id: doc.id, ...doc.data() };
             
-            // Pega o ID do clube do jogador (ex: "club_id_123")
-            const clubeData = clubesMap.get(player.clube); 
+            // 3. Agora procuramos o clube usando o NOME do jogador (player.clube).
+            const clubeData = clubesByNameMap.get(player.clube); 
             
             if (clubeData) {
-                // Pega o ID da competição de dentro do clube (ex: "comp_id_abc")
-                const competicaoData = competicoesMap.get(clubeData.competicaoId); 
-                
+                player.clubeData = clubeData;
+                // A lógica daqui para a frente funciona porque `clubeData` agora é encontrado corretamente.
+                const competicaoData = competicoesMap.get(clubeData.competicaoId);
                 if (competicaoData) {
-                    // **AQUI ESTÁ A LÓGICA CHAVE:**
-                    // Adiciona uma nova propriedade 'competicaoNome' ao objeto do jogador
-                    player.competicaoNome = competicaoData.nome; 
+                    player.competicaoNome = competicaoData.nome;
                 }
             }
             return player;
         });
-            
-            populateMarketTimeSelectors(allPlayers);
-            updateFiltersAndDisplay();
+        
+        populateMarketTimeSelectors(allPlayers);
+        updateFiltersAndDisplay();
 
-            document.getElementById('filterPosicao').addEventListener('change', updateFiltersAndDisplay);
-            document.getElementById('filterCasta').addEventListener('change', updateFiltersAndDisplay);
-            document.getElementById('filterCompeticao').addEventListener('change', updateFiltersAndDisplay);
-            document.getElementById('filterPais').addEventListener('change', updateFiltersAndDisplay);
-        } catch (error) {
-            console.error('Error initializing app:', error);
-            document.getElementById('players-grid').innerHTML = '<p style="color: red; text-align: center;">Ocorreu um erro ao carregar os dados.</p>';
-        }
+        document.getElementById('filterPosicao').addEventListener('change', updateFiltersAndDisplay);
+        document.getElementById('filterCasta').addEventListener('change', updateFiltersAndDisplay);
+        document.getElementById('filterCompeticao').addEventListener('change', updateFiltersAndDisplay);
+        document.getElementById('filterPais').addEventListener('change', updateFiltersAndDisplay);
+    } catch (error) {
+        console.error('Error initializing app:', error);
+        document.getElementById('players-grid').innerHTML = '<p style="color: red; text-align: center;">Ocorreu um erro ao carregar os dados.</p>';
     }
+}
 
     // Dispara a inicialização e adiciona o listener para o botão de salvar principal
     initializeApp();
