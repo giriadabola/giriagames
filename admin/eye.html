@@ -2,14 +2,12 @@
 <html lang="pt">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale-1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>G Empire Eye - Visão Geral</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
-
     <script type="module" src="js/auth-guard.js"></script>
-
     <style>
-        /* ... (Estilos gerais permanecem os mesmos) ... */
+        /* Estilos permanecem exatamente os mesmos da versão anterior */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { min-height: 100vh; background-color: #f0f0f0; font-family: Arial, sans-serif; display: none; flex-direction: column; }
         .top-menu { position: fixed; top: 0; left: 0; width: 100%; background-color: #ffffff; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); padding: 12px 0; display: flex; justify-content: center; gap: 24px; align-items: center; z-index: 1000; }
@@ -24,35 +22,11 @@
         th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #ddd; }
         tbody tr:nth-child(even) { background-color: #fafafa; }
         tbody tr:hover { background-color: #f1f1f1; }
-        
-        /* --- NOVOS ESTILOS PARA ORDENAÇÃO --- */
-        thead th.sortable {
-            cursor: pointer;
-            position: relative;
-            user-select: none; /* Impede a seleção de texto ao clicar */
-        }
-        thead th.sortable:hover {
-            background-color: #e9e9e9;
-        }
-        /* Seta para indicar a ordenação */
-        thead th.sortable::after {
-            content: '';
-            position: absolute;
-            right: 15px;
-            top: 50%;
-            margin-top: -8px;
-            border: 5px solid transparent;
-            opacity: 0.3;
-        }
-        thead th.sort-asc::after {
-            opacity: 1;
-            border-bottom-color: #333;
-        }
-        thead th.sort-desc::after {
-            opacity: 1;
-            border-top-color: #333;
-        }
-
+        thead th.sortable { cursor: pointer; position: relative; user-select: none; }
+        thead th.sortable:hover { background-color: #e9e9e9; }
+        thead th.sortable::after { content: ''; position: absolute; right: 15px; top: 50%; margin-top: -8px; border: 5px solid transparent; opacity: 0.3; }
+        thead th.sort-asc::after { opacity: 1; border-bottom-color: #333; }
+        thead th.sort-desc::after { opacity: 1; border-top-color: #333; }
     </style>
 </head>
 <body>
@@ -63,16 +37,13 @@
     </nav>
     <main class="content">
         <h1><i class="fas fa-eye"></i> G Empire Eye - Utilizadores</h1>
-        
         <p id="status-message">A carregar dados dos utilizadores...</p>
-
         <div class="table-container" style="display: none;">
             <table id="users-table">
-                <!-- MUDANÇA 1: Cabeçalho da tabela atualizado -->
                 <thead>
                     <tr>
-                        <!-- Adicionada a classe 'sortable' e o atributo 'data-column' para a lógica de ordenação -->
-                        <th class="sortable" data-column="id">ID do Utilizador</th>
+                        <!-- MUDANÇA 1: Cabeçalho da primeira coluna atualizado -->
+                        <th class="sortable" data-column="displayName">Utilizador</th>
                         <th class="sortable" data-column="tatica">Tática</th>
                         <th class="sortable" data-column="pontos">Pontos</th>
                         <th class="sortable" data-column="gcoins">GCoins</th>
@@ -80,13 +51,13 @@
                     </tr>
                 </thead>
                 <tbody id="users-table-body">
-                    <!-- As linhas da tabela serão inseridas aqui via JavaScript -->
+                    <!-- Linhas da tabela -->
                 </tbody>
             </table>
         </div>
     </main>
 
-    <!-- MUDANÇA 2: Lógica de JavaScript completamente reescrita -->
+    <!-- MUDANÇA 2: Lógica de JavaScript atualizada -->
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
         import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
@@ -106,21 +77,58 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
 
-        let allUsersData = []; // Array para guardar os dados processados e permitir a ordenação
-        let currentSort = { column: null, direction: 'asc' }; // Objeto para controlar o estado da ordenação
+        let allUsersData = [];
+        let currentSort = { column: null, direction: 'asc' };
 
         /**
-         * Renderiza a tabela com base nos dados fornecidos.
-         * @param {Array} users - O array de objetos de utilizadores a ser exibido.
+         * NOVA FUNÇÃO: Formata a string de data do Firebase para um formato mais legível.
+         * @param {string} timestampString - A data no formato "25 de agosto de 2025 às 13:03:24 UTC+1".
+         * @returns {string} A data formatada como "25 agosto 2025 , 13H03".
          */
+        function formatFirebaseTimestamp(timestampString) {
+            if (!timestampString || typeof timestampString !== 'string') {
+                return 'Nunca';
+            }
+
+            try {
+                // Mapeia os nomes dos meses para os seus equivalentes em inglês para o construtor Date
+                const meses = { 'janeiro': 'January', 'fevereiro': 'February', 'março': 'March', 'abril': 'April', 'maio': 'May', 'junho': 'June', 'julho': 'July', 'agosto': 'August', 'setembro': 'September', 'outubro': 'October', 'novembro': 'November', 'dezembro': 'December' };
+                
+                // Limpa e normaliza a string para um formato que o JavaScript Date entende
+                let cleanString = timestampString.replace(' de ', ' ').replace(' às ', ' ');
+                const parts = cleanString.split(' '); // [ "25", "agosto", "2025", "13:03:24", "UTC+1" ]
+                
+                const day = parts[0];
+                const monthNamePt = parts[1];
+                const year = parts[2];
+                const time = parts[3];
+
+                const monthNameEn = meses[monthNamePt.toLowerCase()];
+                if (!monthNameEn) return 'Data inválida';
+
+                // Cria um objeto Date a partir da string limpa
+                const dateObj = new Date(`${day} ${monthNameEn} ${year} ${time}`);
+
+                const formattedDay = dateObj.getDate();
+                const formattedMonth = dateObj.toLocaleString('pt-PT', { month: 'long' });
+                const formattedYear = dateObj.getFullYear();
+                const hours = String(dateObj.getHours()).padStart(2, '0');
+                const minutes = String(dateObj.getMinutes()).padStart(2, '0');
+
+                return `${formattedDay} ${formattedMonth} ${formattedYear} , ${hours}H${minutes}`;
+            } catch (error) {
+                console.warn("Não foi possível formatar a data:", timestampString, error);
+                return 'Data inválida';
+            }
+        }
+
         function renderTable(users) {
             const tableBody = document.getElementById('users-table-body');
-            tableBody.innerHTML = ''; // Limpa a tabela antes de renderizar
-
+            tableBody.innerHTML = '';
             users.forEach(user => {
                 const row = document.createElement('tr');
                 row.innerHTML = `
-                    <td>${user.id}</td>
+                    <td>${user.displayName}</td>
                     <td>${user.tatica}</td>
                     <td>${user.pontos}</td>
                     <td>${user.gcoins}</td>
@@ -130,101 +138,72 @@
             });
         }
 
-        /**
-         * Ordena os dados da tabela e a renderiza novamente.
-         * @param {string} columnKey - A chave do dado pela qual ordenar (ex: 'tatica', 'pontos').
-         */
         function sortTable(columnKey) {
             const isAscending = currentSort.column === columnKey && currentSort.direction === 'asc';
             const direction = isAscending ? 'desc' : 'asc';
-
             allUsersData.sort((a, b) => {
                 let valA = a[columnKey];
                 let valB = b[columnKey];
-                
-                // Trata números e strings de forma diferente
                 if (typeof valA === 'number' && typeof valB === 'number') {
                     return direction === 'asc' ? valA - valB : valB - valA;
                 } else {
-                    return direction === 'asc' 
-                        ? String(valA).localeCompare(String(valB)) 
-                        : String(valB).localeCompare(String(valA));
+                    return direction === 'asc' ? String(valA).localeCompare(String(valB)) : String(valB).localeCompare(String(valA));
                 }
             });
-
             currentSort = { column: columnKey, direction: direction };
-            
-            // Atualiza os indicadores visuais nos cabeçalhos
             document.querySelectorAll('thead th.sortable').forEach(th => {
                 th.classList.remove('sort-asc', 'sort-desc');
                 if (th.dataset.column === columnKey) {
                     th.classList.add(direction === 'asc' ? 'sort-asc' : 'sort-desc');
                 }
             });
-
             renderTable(allUsersData);
         }
 
-        /**
-         * Busca os dados do Firestore, processa-os e inicia a renderização.
-         */
         async function fetchAndDisplayUsers() {
             const statusMessage = document.getElementById('status-message');
             const tableContainer = document.querySelector('.table-container');
-
             try {
                 const querySnapshot = await getDocs(collection(db, "users"));
-                allUsersData = []; // Limpa dados antigos
-
+                allUsersData = [];
                 if (querySnapshot.empty) {
                     statusMessage.textContent = 'Nenhum utilizador encontrado.';
                     return;
                 }
-
                 querySnapshot.forEach(doc => {
                     const userData = doc.data();
-                    
-                    // Lógica para encontrar os campos de Pontos e GCoins dinamicamente
                     let dynamicPontos = 0;
                     let dynamicGCoins = 0;
                     for (const key in userData) {
-                        if (key.endsWith('Pontos') && !isNaN(parseInt(key.substring(0, 8)))) {
-                            dynamicPontos = userData[key];
-                        }
-                        if (key.endsWith('GCoins') && !isNaN(parseInt(key.substring(0, 8)))) {
-                            dynamicGCoins = userData[key];
-                        }
+                        if (key.endsWith('Pontos') && !isNaN(parseInt(key.substring(0, 8)))) { dynamicPontos = userData[key]; }
+                        if (key.endsWith('GCoins') && !isNaN(parseInt(key.substring(0, 8)))) { dynamicGCoins = userData[key]; }
                     }
 
                     allUsersData.push({
-                        id: doc.id, // ID do documento (nometabela)
+                        // LÓGICA ATUALIZADA: Usa 'nometabela' ou, como fallback, o 'email'.
+                        displayName: userData.nometabela || userData.email || 'N/A', 
                         tatica: userData.tática || 'N/A',
-                        pontos: dynamicPontos, // Usa os pontos encontrados dinamicamente
-                        gcoins: dynamicGCoins, // Usa os GCoins encontrados dinamicamente
-                        ultimoacesso: userData.ultimoacesso || 'Nunca'
+                        pontos: dynamicPontos,
+                        gcoins: dynamicGCoins,
+                        // LÓGICA ATUALIZADA: Chama a nova função para formatar a data.
+                        ultimoacesso: formatFirebaseTimestamp(userData.ultimoacesso)
                     });
                 });
 
                 statusMessage.style.display = 'none';
                 tableContainer.style.display = 'block';
-
-                // Configura os eventos de clique nos cabeçalhos para ordenação
                 document.querySelectorAll('thead th.sortable').forEach(th => {
-                    th.addEventListener('click', () => {
-                        sortTable(th.dataset.column);
-                    });
+                    th.addEventListener('click', () => sortTable(th.dataset.column));
                 });
                 
-                // Renderiza a tabela pela primeira vez (ordenada por ID por padrão)
-                sortTable('id');
-
+                // Ordenação inicial por nome de utilizador
+                sortTable('displayName');
             } catch (error) {
                 console.error("Erro ao buscar utilizadores: ", error);
                 statusMessage.textContent = 'Ocorreu um erro ao carregar os dados.';
             }
         }
         
-        // Verificação de permissão e execução
         onAuthStateChanged(auth, async (user) => {
             if (user) {
                 const userDoc = await getDoc(doc(db, "users", user.uid));
