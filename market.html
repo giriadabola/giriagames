@@ -830,125 +830,131 @@ import { getFirestore, collection, getDocs, doc, getDoc, updateDoc, Timestamp, a
 
 
                     // --- Popup Buy Button Action ---
-                    popupBuyButton.onclick = async () => {
-                        clearPopupMessages();
-                        popupBuyButton.disabled = true; popupBuyButton.textContent = 'Verificando...';
+                  popupBuyButton.onclick = async () => {
+    clearPopupMessages();
+    popupBuyButton.disabled = true; popupBuyButton.textContent = 'Verificando...';
 
-                        try {
-                            const checkPlayerSnap = await getDoc(playerDocRefPopup);
-                            if (!checkPlayerSnap.exists()) {
-                                displayErrorMessage(playerPopupContent, "Este jogador já não está disponível.");
-                                popupBuyButton.disabled = true; return;
-                            }
-                            const checkPlayerData = checkPlayerSnap.data();
-                            checkPlayerData.id = checkPlayerSnap.id;
+    try {
+        const checkPlayerSnap = await getDoc(playerDocRefPopup);
+        if (!checkPlayerSnap.exists()) {
+            displayErrorMessage(playerPopupContent, "Este jogador já não está disponível.");
+            popupBuyButton.disabled = true; return;
+        }
+        const checkPlayerData = checkPlayerSnap.data();
+        checkPlayerData.id = checkPlayerSnap.id;
 
-                            if (checkPlayerData.compradopor) {
-                                const compradorUsername = await getUsername(checkPlayerData.compradopor);
-                                displayErrorMessage(playerPopupContent, `Este jogador já foi comprado por ${compradorUsername || checkPlayerData.compradopor}.`);
-                                popupBuyButton.textContent = `Comprado por ${compradorUsername || checkPlayerData.compradopor}`;
-                                popupBuyButton.classList.add('purchased'); popupBuyButton.classList.remove('buy');
-                                popupBuyButton.disabled = true; return;
-                            }
+        // ... (todas as suas outras verificações de fundos, mercado, etc. permanecem iguais) ...
+        if (checkPlayerData.compradopor) {
+            const compradorUsername = await getUsername(checkPlayerData.compradopor);
+            displayErrorMessage(playerPopupContent, `Este jogador já foi comprado por ${compradorUsername || checkPlayerData.compradopor}.`);
+            popupBuyButton.textContent = `Comprado por ${compradorUsername || checkPlayerData.compradopor}`;
+            popupBuyButton.classList.add('purchased'); popupBuyButton.classList.remove('buy');
+            popupBuyButton.disabled = true; return;
+        }
+        if (checkPlayerData.marketTimes?.abertura && checkPlayerData.marketTimes?.fechamento) {
+            const aberturaDate = checkPlayerData.marketTimes.abertura.toDate ? checkPlayerData.marketTimes.abertura.toDate() : new Date(checkPlayerData.marketTimes.abertura);
+            const fechamentoDate = checkPlayerData.marketTimes.fechamento.toDate ? checkPlayerData.marketTimes.fechamento.toDate() : new Date(checkPlayerData.marketTimes.fechamento);
+            if (isNaN(aberturaDate.getTime()) || isNaN(fechamentoDate.getTime())) {
+                displayErrorMessage(playerPopupContent, "Datas de mercado inválidas.");
+                popupBuyButton.disabled = false; popupBuyButton.textContent = 'Comprar'; return;
+            }
+            if (!(new Date() >= aberturaDate && new Date() <= fechamentoDate)) {
+                displayErrorMessage(playerPopupContent, "O mercado para este jogador está fechado.");
+                popupBuyButton.disabled = false; popupBuyButton.textContent = 'Comprar'; return;
+            }
+        } else {
+            displayErrorMessage(playerPopupContent, "O Mercado está fechado para este Jogador.");
+            popupBuyButton.disabled = false; popupBuyButton.textContent = 'Comprar'; return;
+        }
+        if (!auth.currentUser) {
+            displayErrorMessage(playerPopupContent, "Utilizador não autenticado.");
+            popupBuyButton.disabled = false; popupBuyButton.textContent = 'Comprar'; return;
+        }
+        const userRef = doc(db, 'users', auth.currentUser.uid);
+        const userSnap = await getDoc(userRef);
+        if (!userSnap.exists()) {
+            displayErrorMessage(playerPopupContent, "Erro ao verificar os seus fundos.");
+            popupBuyButton.disabled = false; popupBuyButton.textContent = 'Comprar'; return;
+        }
+        const userData = userSnap.data();
+        const playerPrice = checkPlayerData.preco || 0;
+        const gCoinsField = findLatestGcoinsField(userData);
+        const userGcoins = (gCoinsField && typeof userData?.[gCoinsField] === 'number') ? userData[gCoinsField] : 0;
+        if (userGcoins < playerPrice) {
+            displayErrorMessage(playerPopupContent, "Fundos insuficientes.");
+            popupBuyButton.disabled = false; popupBuyButton.textContent = 'Comprar'; return;
+        }
+        if (!gCoinsField) {
+            displayErrorMessage(playerPopupContent, "Não foi possível determinar a época para a transação.");
+            popupBuyButton.disabled = false; popupBuyButton.textContent = 'Comprar'; return;
+        }
 
-                            // Check market times
-                            if (checkPlayerData.marketTimes?.abertura && checkPlayerData.marketTimes?.fechamento) {
-                                const aberturaDate = checkPlayerData.marketTimes.abertura.toDate ? checkPlayerData.marketTimes.abertura.toDate() : new Date(checkPlayerData.marketTimes.abertura);
-                                const fechamentoDate = checkPlayerData.marketTimes.fechamento.toDate ? checkPlayerData.marketTimes.fechamento.toDate() : new Date(checkPlayerData.marketTimes.fechamento);
-                                if (isNaN(aberturaDate.getTime()) || isNaN(fechamentoDate.getTime())) {
-                                    displayErrorMessage(playerPopupContent, "Datas de mercado inválidas.");
-                                    popupBuyButton.disabled = false; popupBuyButton.textContent = 'Comprar'; return;
-                                }
-                                if (!(new Date() >= aberturaDate && new Date() <= fechamentoDate)) {
-                                    displayErrorMessage(playerPopupContent, "O mercado para este jogador está fechado.");
-                                    popupBuyButton.disabled = false; popupBuyButton.textContent = 'Comprar'; return;
-                                }
-                            } else {
-                                displayErrorMessage(playerPopupContent, "O Mercado está fechado para este Jogador.");
-                                popupBuyButton.disabled = false; popupBuyButton.textContent = 'Comprar'; return;
-                            }
 
-                            if (!auth.currentUser) {
-                                displayErrorMessage(playerPopupContent, "Utilizador não autenticado.");
-                                popupBuyButton.disabled = false; popupBuyButton.textContent = 'Comprar'; return;
-                            }
-                            const userRef = doc(db, 'users', auth.currentUser.uid);
-                            const userSnap = await getDoc(userRef);
-                            if (!userSnap.exists()) {
-                                displayErrorMessage(playerPopupContent, "Erro ao verificar os seus fundos.");
-                                popupBuyButton.disabled = false; popupBuyButton.textContent = 'Comprar'; return;
-                            }
-                            const userData = userSnap.data();
-                            const playerPrice = checkPlayerData.preco || 0;
-                            const gCoinsField = findLatestGcoinsField(userData);
-                            const userGcoins = (gCoinsField && typeof userData?.[gCoinsField] === 'number') ? userData[gCoinsField] : 0; // Added optional chaining
+        // --- INÍCIO DA MODIFICAÇÃO PARA DIAGNÓSTICO ---
+        popupBuyButton.textContent = 'Processando...';
+        const currentSeason = gCoinsField.replace('GCoins', '');
 
-                            if (userGcoins < playerPrice) {
-                                displayErrorMessage(playerPopupContent, "Fundos insuficientes.");
-                                popupBuyButton.disabled = false; popupBuyButton.textContent = 'Comprar'; return;
-                            }
-                            if (!gCoinsField) {
-                                displayErrorMessage(playerPopupContent, "Não foi possível determinar a época para a transação.");
-                                popupBuyButton.disabled = false; popupBuyButton.textContent = 'Comprar'; return;
-                            }
+        // ETAPA 1: Atualizar o jogador
+        try {
+            const dadosParaAtualizar = {
+                compradopor: auth.currentUser.uid,
+                dataCompra: Timestamp.now()
+            };
+            await updateDoc(playerDocRefPopup, dadosParaAtualizar);
+            console.log("SUCESSO: Jogador atualizado com sucesso.");
 
-                            // --- Perform Purchase ---
-                        popupBuyButton.textContent = 'Processando...';
-                            const currentSeason = gCoinsField.replace('GCoins', '');
+        } catch (error) {
+            console.error("ERRO CRÍTICO AO ATUALIZAR O JOGADOR:", error);
+            displayErrorMessage(playerPopupContent, "Falha na Etapa 1: Atualizar jogador.");
+            popupBuyButton.disabled = false; popupBuyButton.textContent = 'Comprar';
+            return; // Pára a execução aqui se falhar
+        }
 
-                            // ** INÍCIO DA MODIFICAÇÃO DE DIAGNÓSTICO **
-                            const dadosParaAtualizar = {
-                                compradopor: auth.currentUser.uid,
-                                dataCompra: Timestamp.now()
-                            };
+        // ETAPA 2: Criar o movimento
+        try {
+            const movimentoData = {
+                userId: auth.currentUser.uid, jogadorId: checkPlayerData.id,
+                posicao: checkPlayerData.posicao, preco: playerPrice,
+                estado: "Comprado", valorreal: -playerPrice,
+                de: auth.currentUser.uid, para: null, mediapontos: null,
+                movimentoData: Timestamp.now(), temporada: currentSeason, tipo: "Mercado"
+            };
+            await addDoc(collection(db, 'movimentos'), movimentoData);
+            console.log("SUCESSO: Movimento criado com sucesso.");
 
-                            console.log("===== DADOS DE DIAGNÓSTICO PARA UPDATE =====");
-                            console.log("A tentar atualizar o jogador com o seguinte objeto:", dadosParaAtualizar);
-                            console.log("============================================");
-                            // ** FIM DA MODIFICAÇÃO DE DIAGNÓSTICO **
+        } catch (error) {
+            console.error("ERRO CRÍTICO AO CRIAR O MOVIMENTO:", error);
+            // ESTE É O ERRO QUE EU SUSPEITO QUE ESTÁ A ACONTECER
+            displayErrorMessage(playerPopupContent, "Falha na Etapa 2: Registar movimento.");
+            // TODO: Idealmente, aqui deveria haver uma lógica para reverter a compra do jogador.
+            popupBuyButton.disabled = false; popupBuyButton.textContent = 'Tentar Novamente';
+            return; // Pára a execução aqui
+        }
+        
+        // ETAPA 3: Atualizar o saldo do utilizador
+        const movimentosRef = collection(db, 'movimentos');
+        const q = query(movimentosRef, where('userId', '==', auth.currentUser.uid), where('temporada', '==', currentSeason));
+        const movimentosSnap = await getDocs(q);
+        let totalValorReal = 0;
+        movimentosSnap.forEach((movDoc) => {
+            totalValorReal += movDoc.data()?.valorreal || 0;
+        });
+        await updateDoc(userRef, { [gCoinsField]: totalValorReal });
 
-                            await updateDoc(playerDocRefPopup, dadosParaAtualizar);
+        displaySuccessMessage(playerPopupContent, "Jogador comprado com sucesso!");
+        // --- FIM DA MODIFICAÇÃO ---
 
-                            const movimentoData = {
-                                userId: auth.currentUser.uid, jogadorId: checkPlayerData.id,
-                                posicao: checkPlayerData.posicao, preco: playerPrice,
-                                estado: "Comprado", valorreal: -playerPrice,
-                                de: auth.currentUser.uid, para: null, mediapontos: null,
-                                movimentoData: Timestamp.now(), temporada: currentSeason, tipo: "Mercado"
-                            };
-                            await addDoc(collection(db, 'movimentos'), movimentoData);
+    } catch (geralError) {
+         // Este catch agora só apanha erros nas verificações iniciais
+        console.error("Erro geral na verificação antes da compra:", geralError);
+        displayErrorMessage(playerPopupContent, "Ocorreu um erro inesperado. Tente novamente.");
+        popupBuyButton.disabled = false; popupBuyButton.textContent = 'Comprar';
+    }
+};
 
-                            // Recalculate balance
-                            const movimentosRef = collection(db, 'movimentos');
-                            const q = query(movimentosRef, where('userId', '==', auth.currentUser.uid), where('temporada', '==', currentSeason));
-                            const movimentosSnap = await getDocs(q);
-                            let totalValorReal = 0;
-                            movimentosSnap.forEach((movDoc) => {
-                                totalValorReal += movDoc.data()?.valorreal || 0; // Optional chaining
-                            });
 
-                            await updateDoc(userRef, { [gCoinsField]: totalValorReal });
 
-                            displaySuccessMessage(playerPopupContent, "Jogador comprado com sucesso!");
-                            // Button state updated by listener
 
-                        } catch (error) {
-                            console.error("Erro ao comprar jogador:", error);
-                            displayErrorMessage(playerPopupContent, "Erro ao comprar jogador. Tente novamente.");
-                            try { // Safely re-check availability
-                                const finalCheckSnap = await getDoc(playerDocRefPopup);
-                                if (finalCheckSnap.exists() && !finalCheckSnap.data()?.compradopor) {
-                                    popupBuyButton.disabled = false; popupBuyButton.textContent = 'Comprar';
-                                    popupBuyButton.classList.remove('purchased'); popupBuyButton.classList.add('buy');
-                                } else {
-                                    popupBuyButton.textContent = 'Verificar Estado...'; popupBuyButton.disabled = true;
-                                }
-                            } catch (finalCheckError){
-                                console.error("Error during final check after purchase failure:", finalCheckError);
-                                popupBuyButton.textContent = 'Erro'; popupBuyButton.disabled = true;
-                            }
-                        }
-                    }; // End of popupBuyButton.onclick
 
                     // --- Show Popup After Delay ---
                     setTimeout(() => {
