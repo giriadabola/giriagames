@@ -2,12 +2,11 @@
 <html lang="pt">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale-1.0">
     <title>G Empire Eye - Visão Geral</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
     <script type="module" src="js/auth-guard.js"></script>
     <style>
-        /* Estilos permanecem exatamente os mesmos da versão anterior */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { min-height: 100vh; background-color: #f0f0f0; font-family: Arial, sans-serif; display: none; flex-direction: column; }
         .top-menu { position: fixed; top: 0; left: 0; width: 100%; background-color: #ffffff; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); padding: 12px 0; display: flex; justify-content: center; gap: 24px; align-items: center; z-index: 1000; }
@@ -55,6 +54,9 @@
     </main>
 
     <script type="module">
+        // LOG A: O primeiro log de todos. Se este não aparecer, o script não está a ser executado.
+        console.log("LOG A: O script da página 'eye.html' começou a ser executado.");
+
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
         import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
         import { getFirestore, collection, getDocs, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
@@ -76,57 +78,28 @@
         let allUsersData = [];
         let currentSort = { column: null, direction: 'asc' };
 
-        /**
-         * MUDANÇA 1: Formato da data atualizado para "15 agosto 2025, 12h30"
-        * @param {string} timestampString - A data no formato "25 de agosto de 2025 às 13:03:24 UTC+1".
-         * @returns {string} A data formatada como "25 agosto 2025, 12h30".
-         */
         function formatFirebaseTimestamp(timestampString) {
-            // Se não houver string, retorna 'Nunca'
+            console.log("--- A iniciar formatação de data ---");
+            console.log("1. Valor recebido:", timestampString);
             if (!timestampString || typeof timestampString !== 'string') {
+                console.log("2. Valor inválido ou ausente. A retornar 'Nunca'.");
                 return 'Nunca';
             }
-
             try {
-                // Mapeia os meses para números (0-11) para o construtor Date
-                const meses = {
-                    'janeiro': 0, 'fevereiro': 1, 'março': 2, 'abril': 3, 'maio': 4, 'junho': 5,
-                    'julho': 6, 'agosto': 7, 'setembro': 8, 'outubro': 9, 'novembro': 10, 'dezembro': 11
-                };
-
-                // Remove palavras desnecessárias e divide a string em partes
+                const meses = { 'janeiro': 0, 'fevereiro': 1, 'março': 2, 'abril': 3, 'maio': 4, 'junho': 5, 'julho': 6, 'agosto': 7, 'setembro': 8, 'outubro': 9, 'novembro': 10, 'dezembro': 11 };
                 const cleanString = timestampString.replace(' de ', ' ').replace(' às ', ' ');
-                const parts = cleanString.split(/[ :]/); // Divide por espaço ou por ":"
-                // parts -> ["25", "agosto", "2025", "13", "03", "24", "UTC+1"]
-
-                const day = parseInt(parts[0], 10);
-                const month = meses[parts[1].toLowerCase()];
-                const year = parseInt(parts[2], 10);
-                const hours = parseInt(parts[3], 10);
-                const minutes = parseInt(parts[4], 10);
-                
-                // Cria o objeto Date usando os componentes numéricos, que é mais fiável
+                const parts = cleanString.split(/[ :]/);
+                console.log("2. String dividida em partes:", parts);
+                const day = parseInt(parts[0], 10), month = meses[parts[1].toLowerCase()], year = parseInt(parts[2], 10), hours = parseInt(parts[3], 10), minutes = parseInt(parts[4], 10);
+                console.log(`3. Componentes extraídos: Ano=${year}, Mês=${month}, Dia=${day}, Hora=${hours}, Minuto=${minutes}`);
                 const dateObj = new Date(year, month, day, hours, minutes);
-
-                // VERIFICAÇÃO CRUCIAL: Confirma se a data criada é válida
-                if (isNaN(dateObj.getTime())) {
-                    console.warn("Data inválida gerada para:", timestampString);
-                    return 'Data Inválida'; // Retorna um feedback claro em caso de erro
-                }
-                
-                // Formata a saída
-                const formattedDay = dateObj.getDate();
-                const formattedMonth = dateObj.toLocaleString('pt-PT', { month: 'long' });
-                const formattedYear = dateObj.getFullYear();
-                const formattedHours = String(dateObj.getHours()).padStart(2, '0');
-                const formattedMinutes = String(dateObj.getMinutes()).padStart(2, '0');
-
-                return `${formattedDay} ${formattedMonth} ${formattedYear}, ${formattedHours}h${formattedMinutes}`;
-
-            } catch (error) {
-                console.error("Erro ao formatar a data:", timestampString, error);
-                return 'Erro na Formatação';
-            }
+                console.log("4. Objeto Date criado:", dateObj);
+                if (isNaN(dateObj.getTime())) { console.error("5. ERRO: O objeto Date criado é inválido!"); return 'Data Inválida'; }
+                const formattedDay = dateObj.getDate(), formattedMonth = dateObj.toLocaleString('pt-PT', { month: 'long' }), formattedYear = dateObj.getFullYear(), formattedHours = String(dateObj.getHours()).padStart(2, '0'), formattedMinutes = String(dateObj.getMinutes()).padStart(2, '0');
+                const finalResult = `${formattedDay} ${formattedMonth} ${formattedYear}, ${formattedHours}h${formattedMinutes}`;
+                console.log("6. Resultado final da formatação:", finalResult);
+                return finalResult;
+            } catch (error) { console.error("7. ERRO INESPERADO no bloco try/catch:", error); return 'Erro na Formatação'; }
         }
 
         function renderTable(users) {
@@ -134,51 +107,41 @@
             tableBody.innerHTML = '';
             users.forEach(user => {
                 const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td>${user.displayName}</td>
-                    <td>${user.tatica}</td>
-                    <td>${user.pontos}</td>
-                    <td>${user.gcoins}</td>
-                    <td>${user.ultimoacesso}</td>
-                `;
+                row.innerHTML = `<td>${user.displayName}</td><td>${user.tatica}</td><td>${user.pontos}</td><td>${user.gcoins}</td><td>${user.ultimoacesso}</td>`;
                 tableBody.appendChild(row);
             });
         }
-
+        
         function sortTable(columnKey) {
             const isAscending = currentSort.column === columnKey && currentSort.direction === 'asc';
             const direction = isAscending ? 'desc' : 'asc';
             allUsersData.sort((a, b) => {
-                let valA = a[columnKey];
-                let valB = b[columnKey];
-                if (typeof valA === 'number' && typeof valB === 'number') {
-                    return direction === 'asc' ? valA - valB : valB - valA;
-                } else {
-                    return direction === 'asc' ? String(valA).localeCompare(String(valB)) : String(valB).localeCompare(String(valA));
-                }
+                let valA = a[columnKey]; let valB = b[columnKey];
+                if (typeof valA === 'number' && typeof valB === 'number') { return direction === 'asc' ? valA - b[columnKey] : b[columnKey] - valA; }
+                else { return direction === 'asc' ? String(valA).localeCompare(String(valB)) : String(valB).localeCompare(String(valA)); }
             });
             currentSort = { column: columnKey, direction: direction };
             document.querySelectorAll('thead th.sortable').forEach(th => {
                 th.classList.remove('sort-asc', 'sort-desc');
-                if (th.dataset.column === columnKey) {
-                    th.classList.add(direction === 'asc' ? 'sort-asc' : 'sort-desc');
-                }
+                if (th.dataset.column === columnKey) { th.classList.add(direction === 'asc' ? 'sort-asc' : 'sort-desc'); }
             });
             renderTable(allUsersData);
         }
 
         async function fetchAndDisplayUsers() {
+            console.log("LOG D: A função fetchAndDisplayUsers() foi chamada.");
             const statusMessage = document.getElementById('status-message');
             const tableContainer = document.querySelector('.table-container');
             try {
                 const querySnapshot = await getDocs(collection(db, "users"));
-                allUsersData = [];
-                if (querySnapshot.empty) {
-                    statusMessage.textContent = 'Nenhum utilizador encontrado.';
-                    return;
-                }
+                console.log(`LOG E: A consulta ao Firestore retornou ${querySnapshot.size} documentos.`);
+                if (querySnapshot.empty) { statusMessage.textContent = 'Nenhum utilizador encontrado.'; return; }
+
+                console.log("LOG F: A iniciar o loop para processar cada utilizador...");
                 querySnapshot.forEach(doc => {
                     const userData = doc.data();
+                    console.log(`LOG G: A processar o utilizador com email: ${userData.email}`);
+                    
                     let dynamicPontos = 0, dynamicGCoins = 0;
                     for (const key in userData) {
                         if (key.endsWith('Pontos') && !isNaN(parseInt(key.substring(0, 8)))) { dynamicPontos = userData[key]; }
@@ -192,33 +155,32 @@
                         ultimoacesso: formatFirebaseTimestamp(userData.ultimoacesso)
                     });
                 });
-
+                
                 statusMessage.style.display = 'none';
                 tableContainer.style.display = 'block';
-                document.querySelectorAll('thead th.sortable').forEach(th => {
-                    th.addEventListener('click', () => sortTable(th.dataset.column));
-                });
-                
-                // MUDANÇA 2: Definir a ordenação predefinida por Pontos (decrescente).
-                // Pré-configura o estado para que a primeira chamada a sortTable inverta para 'desc'
+                document.querySelectorAll('thead th.sortable').forEach(th => { th.addEventListener('click', () => sortTable(th.dataset.column)); });
                 currentSort = { column: 'pontos', direction: 'asc' };
-                // Chama a função para ordenar pela coluna 'pontos'. Como a direção pré-definida é 'asc', a função irá inverter para 'desc'.
                 sortTable('pontos');
 
             } catch (error) {
-                console.error("Erro ao buscar utilizadores: ", error);
+                console.error("LOG H: ERRO CRÍTICO no bloco try/catch de fetchAndDisplayUsers:", error);
                 statusMessage.textContent = 'Ocorreu um erro ao carregar os dados.';
             }
         }
         
         onAuthStateChanged(auth, async (user) => {
             if (user) {
+                console.log("LOG B: Utilizador autenticado encontrado. UID:", user.uid);
                 const userDoc = await getDoc(doc(db, "users", user.uid));
                 if (userDoc.exists() && userDoc.data().estatuto === 'ruler') {
+                    console.log("LOG C: Verificação de 'ruler' bem-sucedida. A chamar fetchAndDisplayUsers().");
                     fetchAndDisplayUsers();
                 } else {
+                    console.error("LOG X: Acesso negado. Utilizador não é 'ruler' ou documento não existe.", userDoc.exists() ? userDoc.data() : "Documento não existe");
                     window.location.replace('/acesso-negado.html');
                 }
+            } else {
+                console.warn("LOG Y: Nenhum utilizador autenticado. A redirecionar para o login.");
             }
         });
     </script>
