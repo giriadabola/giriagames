@@ -46,7 +46,7 @@
         .popup-btn.no-btn:hover { background-color: #45a049; }
     </style>
 </head>
-<body style="display: none;"> <!-- 2. O corpo da página está oculto por padrão -->
+<body style="display: none;"> <!-- O corpo da página está oculto por padrão -->
 
     <nav class="top-menu">
         <a href="engrenagem.html" class="menu-item"><i class="fas fa-home"></i></a>
@@ -59,6 +59,12 @@
             <div class="form-group"><label for="userSelector">Selecionar Utilizador</label><select id="userSelector"><option value="">Selecionar Utilizador</option></select></div>
             <div class="form-group"><label for="email">Email</label><input type="email" id="email" readonly disabled></div>
             <div class="form-group"><label for="nomeDeUsuario">Nome de Utilizador</label><input type="text" id="nomeDeUsuario" required></div>
+            
+            <!-- CAMPOS ADICIONADOS -->
+            <div class="form-group"><label for="nomeTabela">Nome user na Tabela (nome)</label><input type="text" id="nomeTabela"></div>
+            <div class="form-group"><label for="naTabela">Aparece na Tabela?</label><select id="naTabela"><option value="No">No</option><option value="Yes">Yes</option></select></div>
+            <!-- FIM DOS CAMPOS ADICIONADOS -->
+
             <div class="form-group"><label for="estatuto">Estatuto</label><select id="estatuto"><option value="gplayer">gplayer</option><option value="ruler">ruler</option><option value="estafeta">estafeta</option></select></div>
             <div class="form-group"><label for="aceite">Aceite</label><select id="aceite"><option value="No">No</option><option value="Yes">Yes</option></select></div>
             <button type="submit" class="submit-btn">Salvar Alterações</button>
@@ -74,13 +80,10 @@
         </div>
     </div>
 
-    <!-- 3. O script da página foi simplificado -->
+    <!-- O script da página foi atualizado -->
     <script type="module">
-        // Importa os serviços 'auth' e 'db' do guardião e as funções do Firestore
         import { db } from './js/auth-guard.js';
         import { doc, getDoc, updateDoc, collection, getDocs, deleteDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
-
-        // A inicialização e a verificação de segurança foram removidas daqui
 
         const editGPlayerForm = document.getElementById('editGPlayerForm');
         const emailInput = document.getElementById('email');
@@ -94,6 +97,10 @@
         const confirmationPopup = document.getElementById('confirmationPopup');
         const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
         const cancelDeleteBtn = document.getElementById('cancelDeleteBtn');
+
+        // ### ALTERAÇÃO 1: Adicionar referências aos novos campos ###
+        const nomeTabelaInput = document.getElementById('nomeTabela');
+        const naTabelaSelect = document.getElementById('naTabela');
 
         function showError(message) { /* ...código da função... */ }
         function showSuccess(message = "Alterações salvas com sucesso!") { /* ...código da função... */ }
@@ -112,6 +119,11 @@
                     nomeDeUsuarioInput.value = userData.nomeDeUsuario || '';
                     estatutoSelect.value = userData.estatuto || 'gplayer';
                     aceiteSelect.value = userData.aceite || 'No';
+
+                    // ### ALTERAÇÃO 2: Carregar dados dos novos campos, com valores padrão se não existirem ###
+                    nomeTabelaInput.value = userData.nometabela || ''; // Usa string vazia se 'nometabela' não existir
+                    naTabelaSelect.value = userData.natabela || 'No';   // Usa 'No' como padrão se 'natabela' não existir
+
                 } else { showError("Erro ao carregar dados do usuário."); }
             } catch (error) { showError("Erro ao carregar dados do usuário."); }
         }
@@ -130,7 +142,6 @@
             } catch (error) { showError("Erro ao carregar lista de usuários."); }
         }
 
-        // Função que inicia a lógica da página (chamada após o HTML carregar)
         function initializePage() {
             loadAllUsers();
 
@@ -140,10 +151,13 @@
                 if (!selectedUserId) { showError("Selecione um utilizador para salvar."); return; }
                 const userDocRef = doc(db, 'users', selectedUserId);
                 try {
+                    // ### ALTERAÇÃO 3: Incluir os novos campos no momento de salvar ###
                     await updateDoc(userDocRef, {
                         nomeDeUsuario: nomeDeUsuarioInput.value,
                         estatuto: estatutoSelect.value,
-                        aceite: aceiteSelect.value
+                        aceite: aceiteSelect.value,
+                        nometabela: nomeTabelaInput.value, // Adicionado campo 'nometabela'
+                        natabela: naTabelaSelect.value     // Adicionado campo 'natabela'
                     });
                     showSuccess();
                 } catch (error) { showError("Erro ao salvar alterações."); }
@@ -170,7 +184,6 @@
             });
         }
         
-        // Inicia a lógica da página assim que o HTML estiver pronto
         document.addEventListener('DOMContentLoaded', initializePage);
     </script>
 </body>
