@@ -155,6 +155,8 @@
         const auth = getAuth(app);
 
         document.addEventListener('DOMContentLoaded', () => {
+            console.log("Página carregada. A iniciar scripts de autenticação.");
+
             const loader = document.getElementById('loader');
             const authContainer = document.getElementById('auth-container');
             const loginForm = document.getElementById('loginForm');
@@ -191,12 +193,18 @@
                 e.preventDefault();
                 const email = document.getElementById('loginEmail').value;
                 const password = document.getElementById('loginPassword').value;
+                console.log(`[LOGIN] Tentativa com email: ${email}`);
 
                 try {
-                    await signInWithEmailAndPassword(auth, email, password);
-                    // A verificação do estado e redirecionamento será gerida pelo onAuthStateChanged.
+                    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+                    const user = userCredential.user;
+                    console.log("[LOGIN] Sucesso no Firebase Auth. UID:", user.uid);
+                    
+                    // A verificação do estado e redirecionamento será gerida pelo onAuthStateChanged
+                    // para manter uma única fonte de verdade.
+                    
                 } catch (error) {
-                    console.error("Erro no Login:", error.code);
+                    console.error("[LOGIN] Erro no Firebase Auth:", error.code, error.message);
                     showError('Email ou senha incorretas.');
                 }
             });
@@ -207,6 +215,7 @@
                 const email = document.getElementById('signupEmail').value;
                 const password = document.getElementById('signupPassword').value;
                 const confirmPassword = document.getElementById('confirmPassword').value;
+                console.log(`[SIGNUP] Tentativa com email: ${email}`);
 
                 if (password !== confirmPassword) {
                     showError('As senhas não coincidem');
@@ -215,10 +224,11 @@
                 try {
                     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
                     tempUser = userCredential.user;
+                    console.log("[SIGNUP] Utilizador criado no Auth. UID:", tempUser.uid);
                     signupSuccessPopup.style.display = 'flex';
                     signupForm.style.display = 'none';
                 } catch (error) {
-                    console.error("Erro no Registo:", error.code);
+                    console.error("[SIGNUP] Erro no Firebase Auth:", error.code, error.message);
                     showError('Erro ao criar conta: ' + error.message);
                 }
             });
@@ -227,6 +237,7 @@
             document.getElementById('popupForm').addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const gplayerName = document.getElementById('gplayerName').value;
+                console.log(`[PERFIL] A salvar o perfil para o utilizador ${tempUser.uid} com nome ${gplayerName}`);
 
                 if (!gplayerName) {
                     showError('Por favor, preencha o campo Nome de Usuário.');
@@ -241,18 +252,20 @@
                         pontos: 0,
                         tática: "4-4-2",
                         ativo: null,
-                        aceite: "no" // Novo utilizador começa como não aceite
+                        aceite: "no" // NOVO UTILIZADOR COMEÇA COMO NÃO ACEITE
                     });
+                    console.log("[PERFIL] Dados guardados no Firestore com 'aceite: no'");
                     signupSuccessPopup.style.display = 'none';
                     verificationPopup.style.display = 'flex';
                 } catch (error) {
-                    console.error("Erro ao salvar perfil no Firestore:", error);
+                    console.error("[PERFIL] Erro ao salvar no Firestore:", error);
                     showError('Erro ao salvar dados do usuário.');
                 }
             });
 
             // CLOSE PENDING VERIFICATION POPUP
             document.getElementById('closeVerificationPopup').addEventListener('click', () => {
+                console.log("[POPUP] Utilizador fechou o popup de verificação. A deslogar para evitar estado 'preso'.");
                 signOut(auth); // Desloga o utilizador para forçar um novo login quando for aprovado
                 verificationPopup.style.display = 'none';
                 loginForm.style.display = 'block'; // Garante que o form de login reaparece
@@ -261,27 +274,34 @@
 
             // ===== PONTO CENTRAL DE CONTROLO DE ESTADO =====
             onAuthStateChanged(auth, async (user) => {
+                console.log("--- onAuthStateChanged Disparado ---");
+
                 if (user) {
+                    console.log(`Utilizador DETETADO com UID: ${user.uid}. A verificar dados no Firestore...`);
                     const userDocRef = doc(db, 'users', user.uid);
                     const docSnap = await getDoc(userDocRef);
 
                     if (docSnap.exists()) {
                         const userData = docSnap.data();
+                        console.log("Dados recebidos do Firestore:", userData);
+
                         if (userData.aceite === 'Yes') {
+                            console.log("--> DECISÃO: APROVADO ('aceite' é 'Yes'). Redirecionando para 1x.html...");
                             window.location.href = '1x.html';
-                            return;
+                            return; // Importante para parar a execução aqui
                         } else {
-                            // Utilizador pendente, mostra popup de verificação
+                            console.log("--> DECISÃO: PENDENTE ('aceite' não é 'Yes'). Mostrando popup de verificação.");
                             loader.style.display = 'none';
-                            authContainer.style.display = 'none';
-                            verificationPopup.style.display = 'flex';
+                            authContainer.style.display = 'none'; // Esconde o formulário principal
+                            verificationPopup.style.display = 'flex'; // Mostra o popup de pendente
                         }
                     } else {
-                        // Caso raro: utilizador no Auth mas sem dados no Firestore. Deslogar é o mais seguro.
+                        console.log("--> DECISÃO: UTILIZADOR NO AUTH MAS SEM DOCUMENTO NO FIRESTORE. A mostrar formulário.");
+                        // Este caso pode acontecer se o registo falhar a meio. Deslogar é o mais seguro.
                         signOut(auth);
                     }
                 } else {
-                    // Nenhum utilizador autenticado, mostra o formulário de login
+                    console.log("--> DECISÃO: NENHUM utilizador autenticado. A mostrar formulário de login.");
                     loader.style.display = 'none';
                     authContainer.style.display = 'block';
                 }
