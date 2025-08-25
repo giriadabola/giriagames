@@ -78,30 +78,54 @@
 
         /**
          * MUDANÇA 1: Formato da data atualizado para "15 agosto 2025, 12h30"
-         * @param {string} timestampString - A data no formato do Firebase.
-         * @returns {string} A data formatada.
+        * @param {string} timestampString - A data no formato "25 de agosto de 2025 às 13:03:24 UTC+1".
+         * @returns {string} A data formatada como "25 agosto 2025, 12h30".
          */
         function formatFirebaseTimestamp(timestampString) {
-            if (!timestampString || typeof timestampString !== 'string') return 'Nunca';
-            try {
-                const meses = { 'janeiro': 'January', 'fevereiro': 'February', 'março': 'March', 'abril': 'April', 'maio': 'May', 'junho': 'June', 'julho': 'July', 'agosto': 'August', 'setembro': 'September', 'outubro': 'October', 'novembro': 'November', 'dezembro': 'December' };
-                let cleanString = timestampString.replace(' de ', ' ').replace(' às ', ' ');
-                const parts = cleanString.split(' ');
-                const day = parts[0], monthNamePt = parts[1], year = parts[2], time = parts[3];
-                const monthNameEn = meses[monthNamePt.toLowerCase()];
-                if (!monthNameEn) return 'Data inválida';
+            // Se não houver string, retorna 'Nunca'
+            if (!timestampString || typeof timestampString !== 'string') {
+                return 'Nunca';
+            }
 
-                const dateObj = new Date(`${day} ${monthNameEn} ${year} ${time}`);
+            try {
+                // Mapeia os meses para números (0-11) para o construtor Date
+                const meses = {
+                    'janeiro': 0, 'fevereiro': 1, 'março': 2, 'abril': 3, 'maio': 4, 'junho': 5,
+                    'julho': 6, 'agosto': 7, 'setembro': 8, 'outubro': 9, 'novembro': 10, 'dezembro': 11
+                };
+
+                // Remove palavras desnecessárias e divide a string em partes
+                const cleanString = timestampString.replace(' de ', ' ').replace(' às ', ' ');
+                const parts = cleanString.split(/[ :]/); // Divide por espaço ou por ":"
+                // parts -> ["25", "agosto", "2025", "13", "03", "24", "UTC+1"]
+
+                const day = parseInt(parts[0], 10);
+                const month = meses[parts[1].toLowerCase()];
+                const year = parseInt(parts[2], 10);
+                const hours = parseInt(parts[3], 10);
+                const minutes = parseInt(parts[4], 10);
+                
+                // Cria o objeto Date usando os componentes numéricos, que é mais fiável
+                const dateObj = new Date(year, month, day, hours, minutes);
+
+                // VERIFICAÇÃO CRUCIAL: Confirma se a data criada é válida
+                if (isNaN(dateObj.getTime())) {
+                    console.warn("Data inválida gerada para:", timestampString);
+                    return 'Data Inválida'; // Retorna um feedback claro em caso de erro
+                }
+                
+                // Formata a saída
                 const formattedDay = dateObj.getDate();
                 const formattedMonth = dateObj.toLocaleString('pt-PT', { month: 'long' });
                 const formattedYear = dateObj.getFullYear();
-                const hours = String(dateObj.getHours()).padStart(2, '0');
-                const minutes = String(dateObj.getMinutes()).padStart(2, '0');
+                const formattedHours = String(dateObj.getHours()).padStart(2, '0');
+                const formattedMinutes = String(dateObj.getMinutes()).padStart(2, '0');
 
-                return `${formattedDay} ${formattedMonth} ${formattedYear}, ${hours}h${minutes}`;
+                return `${formattedDay} ${formattedMonth} ${formattedYear}, ${formattedHours}h${formattedMinutes}`;
+
             } catch (error) {
-                console.warn("Não foi possível formatar a data:", timestampString, error);
-                return 'Data inválida';
+                console.error("Erro ao formatar a data:", timestampString, error);
+                return 'Erro na Formatação';
             }
         }
 
