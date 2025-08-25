@@ -1415,86 +1415,91 @@
             }
         });
 
-      onAuthStateChanged(auth, async (user) => {
-        if (user) {
-            currentUserUid = user.uid;
-            currentUserStatus = await getUserStatus(user.uid);
+    onAuthStateChanged(auth, async (user) => {
+    if (user) {
+        currentUserUid = user.uid;
+        currentUserStatus = await getUserStatus(user.uid);
 
-            if (currentUserStatus !== null) {
-                try {
-                    const paineisMenuDoc = await getDoc(doc(db, 'paineis', 'paineis menu'));
+        if (currentUserStatus !== null) {
+            
+            // CÓDIGO ADICIONADO PARA ATUALIZAR O ÚLTIMO ACESSO
+            try {
+                const userDocRef = doc(db, 'users', user.uid);
+                await updateDoc(userDocRef, {
+                    ultimoacesso: serverTimestamp()
+                });
+            } catch (error) {
+                console.error("Erro ao atualizar o campo ultimoacesso: ", error);
+            }
+            // FIM DO CÓDIGO ADICIONADO
 
-                    if (paineisMenuDoc.exists()) {
-                        const paineisMenuData = paineisMenuDoc.data();
+            try {
+                const paineisMenuDoc = await getDoc(doc(db, 'paineis', 'paineis menu'));
 
-                        if (paineisMenuData.team === "off" && currentUserStatus !== 'ruler') {
-                            window.location.href = '404.html';
-                            return; 
-                        }
+                if (paineisMenuDoc.exists()) {
+                    const paineisMenuData = paineisMenuDoc.data();
 
-                        const menuItemsConfig = {
-                            "1x": "menu-item-1x",
-                            "market": "menu-item-market", 
-                            "team": "menu-item-team",
-                            "empire": "menu-item-empire",
-                            "rankings": "menu-item-rankings", 
-                            "profile": "menu-item-profile" 
-                        };
+                    if (paineisMenuData.team === "off" && currentUserStatus !== 'ruler') {
+                        window.location.href = '404.html';
+                        return; 
+                    }
 
-                        for (const menuItemKey in menuItemsConfig) {
-                            if (paineisMenuData[menuItemKey] === "off") {
-                                const menuItemElement = document.querySelector(`.menu-item[href*="${menuItemKey}.html"]`);
-                                if (menuItemElement) {
-                                    menuItemElement.style.display = 'none';
-                                }
+                    const menuItemsConfig = {
+                        "1x": "menu-item-1x",
+                        "market": "menu-item-market", 
+                        "team": "menu-item-team",
+                        "empire": "menu-item-empire",
+                        "rankings": "menu-item-rankings", 
+                        "profile": "menu-item-profile" 
+                    };
+
+                    for (const menuItemKey in menuItemsConfig) {
+                        if (paineisMenuData[menuItemKey] === "off") {
+                            const menuItemElement = document.querySelector(`.menu-item[href*="${menuItemKey}.html"]`);
+                            if (menuItemElement) {
+                                menuItemElement.style.display = 'none';
                             }
                         }
-                    } else {
-                        console.error("Documento 'paineis menu' não encontrado.");
                     }
-
-                    await fetchCountries();
-                    await populateFormationDropdownFromFirestore();
-                    await fetchUserOwnedPlayers();
-
-                    const activeFormation = await fetchActiveFormationFromPlanteis();
-                    let initialFormationToLoad = null;
-
-                    if (activeFormation && formationSelect.querySelector(`option[value="${activeFormation}"]`)) {
-                        initialFormationToLoad = activeFormation;
-                        formationSelect.value = activeFormation;
-                    } else if (formationSelect.options.length > 1) {
-                        initialFormationToLoad = formationSelect.options[1].value;
-                        formationSelect.value = initialFormationToLoad;
-                    }
-
-                    currentFormation = initialFormationToLoad;
-                    renderFormation(currentFormation);
-
-                    if (currentFormation) {
-                        await loadFormation();
-                    }
-
-                } catch (error) {
-                    console.error("Erro durante a inicialização:", error);
-                } finally {
-                    loadingScreen.style.display = 'none';
-                    content.style.display = 'block';
+                } else {
+                    console.error("Documento 'paineis menu' não encontrado.");
                 }
-            } else {
-                window.location.href = '404.html';
+
+                await fetchCountries();
+                await populateFormationDropdownFromFirestore();
+                await fetchUserOwnedPlayers();
+
+                const activeFormation = await fetchActiveFormationFromPlanteis();
+                let initialFormationToLoad = null;
+
+                if (activeFormation && formationSelect.querySelector(`option[value="${activeFormation}"]`)) {
+                    initialFormationToLoad = activeFormation;
+                    formationSelect.value = activeFormation;
+                } else if (formationSelect.options.length > 1) {
+                    initialFormationToLoad = formationSelect.options[1].value;
+                    formationSelect.value = initialFormationToLoad;
+                }
+
+                currentFormation = initialFormationToLoad;
+                renderFormation(currentFormation);
+
+                if (currentFormation) {
+                    await loadFormation();
+                }
+
+            } catch (error) {
+                console.error("Erro durante a inicialização:", error);
+            } finally {
+                loadingScreen.style.display = 'none';
+                content.style.display = 'block';
             }
         } else {
-            window.location.href = 'index.html';
+            window.location.href = '404.html';
         }
-    });
-
-        window.addEventListener('beforeunload', (e) => {
-            if (hasUnsavedChanges) {
-                const message = 'Tem alterações não guardadas que serão perdidas.';
-                e.preventDefault(); e.returnValue = message; return message;
-            }
-        });
+    } else {
+        window.location.href = 'index.html';
+    }
+});
 
         document.querySelectorAll('.menu-item').forEach(item => {
             item.addEventListener('click', async (e) => {
