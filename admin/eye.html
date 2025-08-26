@@ -45,6 +45,7 @@
                         <th class="sortable" data-column="tatica">Tática</th>
                         <th class="sortable" data-column="pontos">Pontos</th>
                         <th class="sortable" data-column="gcoins">GCoins</th>
+                        <th class="sortable" data-column="jogadores">Jogadores</th>
                         <th class="sortable" data-column="ultimoacesso">Último Acesso</th>
                     </tr>
                 </thead>
@@ -75,27 +76,17 @@
         let allUsersData = [];
         let currentSort = { column: null, direction: 'asc' };
 
-        /**
-         * FUNÇÃO CORRIGIDA: Agora processa o objeto Timestamp do Firebase.
-         * @param {object} timestampObject - O objeto Timestamp do Firebase.
-         * @returns {string} A data formatada.
-         */
         function formatFirebaseTimestamp(timestampObject) {
-            // Verifica se o objeto existe e se tem o método .toDate()
             if (!timestampObject || typeof timestampObject.toDate !== 'function') {
                 return 'Nunca';
             }
             try {
-                // Converte o Timestamp do Firebase para um objeto Date do JavaScript
                 const dateObj = timestampObject.toDate();
-
-                // Formata o objeto Date
                 const formattedDay = dateObj.getDate();
                 const formattedMonth = dateObj.toLocaleString('pt-PT', { month: 'long' });
                 const formattedYear = dateObj.getFullYear();
                 const formattedHours = String(dateObj.getHours()).padStart(2, '0');
                 const formattedMinutes = String(dateObj.getMinutes()).padStart(2, '0');
-
                 return `${formattedDay} ${formattedMonth} ${formattedYear}, ${formattedHours}h${formattedMinutes}`;
             } catch (error) {
                 console.error("Erro ao converter Timestamp:", error);
@@ -108,7 +99,8 @@
             tableBody.innerHTML = '';
             users.forEach(user => {
                 const row = document.createElement('tr');
-                row.innerHTML = `<td>${user.displayName}</td><td>${user.tatica}</td><td>${user.pontos}</td><td>${user.gcoins}</td><td>${user.ultimoacesso}</td>`;
+                // Adicionada a célula para 'user.jogadores'
+                row.innerHTML = `<td>${user.displayName}</td><td>${user.tatica}</td><td>${user.pontos}</td><td>${user.gcoins}</td><td>${user.jogadores}</td><td>${user.ultimoacesso}</td>`;
                 tableBody.appendChild(row);
             });
         }
@@ -133,22 +125,40 @@
             const statusMessage = document.getElementById('status-message');
             const tableContainer = document.querySelector('.table-container');
             try {
-                const querySnapshot = await getDocs(collection(db, "users"));
-                allUsersData = [];
-                if (querySnapshot.empty) { statusMessage.textContent = 'Nenhum utilizador encontrado.'; return; }
+                // ETAPA 1: Buscar todos os jogadores e contar quantos cada user comprou
+                const playerCounts = {};
+                const playersSnapshot = await getDocs(collection(db, "jogadores"));
+                playersSnapshot.forEach(playerDoc => {
+                    const playerData = playerDoc.data();
+                    const buyerId = playerData.compradopor;
+                    if (buyerId) {
+                        playerCounts[buyerId] = (playerCounts[buyerId] || 0) + 1;
+                    }
+                });
 
-                querySnapshot.forEach(doc => {
+                // ETAPA 2: Buscar todos os utilizadores
+                const usersSnapshot = await getDocs(collection(db, "users"));
+                allUsersData = [];
+                if (usersSnapshot.empty) { statusMessage.textContent = 'Nenhum utilizador encontrado.'; return; }
+
+                // ETAPA 3: Montar os dados para a tabela
+                usersSnapshot.forEach(doc => {
                     const userData = doc.data();
                     let dynamicPontos = 0, dynamicGCoins = 0;
                     for (const key in userData) {
                         if (key.endsWith('Pontos') && !isNaN(parseInt(key.substring(0, 8)))) { dynamicPontos = userData[key]; }
                         if (key.endsWith('GCoins') && !isNaN(parseInt(key.substring(0, 8)))) { dynamicGCoins = userData[key]; }
                     }
+
+                    // Obter a contagem de jogadores do mapa, ou 0 se não houver
+                    const numJogadores = playerCounts[doc.id] || 0;
+
                     allUsersData.push({
                         displayName: userData.nometabela || userData.email || 'N/A',
                         tatica: userData.tática || 'N/A',
                         pontos: dynamicPontos,
                         gcoins: dynamicGCoins,
+                        jogadores: numJogadores, // Adicionar a nova propriedade
                         ultimoacesso: formatFirebaseTimestamp(userData.ultimoacesso)
                     });
                 });
@@ -160,7 +170,7 @@
                 sortTable('pontos');
 
             } catch (error) {
-                console.error("Erro CRÍTICO ao buscar utilizadores:", error);
+                console.error("Erro CRÍTICO ao buscar dados:", error);
                 statusMessage.textContent = 'Ocorreu um erro ao carregar os dados.';
             }
         }
