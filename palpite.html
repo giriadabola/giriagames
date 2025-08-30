@@ -285,27 +285,46 @@ import { getFirestore, doc, getDoc, collection, serverTimestamp, getDocs, query,
                 timerContainer.innerHTML = `<div class="existing-prediction-message"><strong>Já efetuou o seu palpite para este jogo.</strong></div>`;
                 renderPredictionCards(existingPredictions);
             } else {
-                timerContainer.innerHTML = `<div class="countdown-timer"><span class="countdown-label">Tempo para palpitar:</span><span id="countdown">Calculando...</span></div>`;
-                await showOddsSelector();
-                
-                if (currentGame.fimIntervalo) {
-                    const countdownElement = document.getElementById('countdown');
-                    clearInterval(countdownInterval);
-                    const updateCountdown = () => {
-                        const timeLeft = currentGame.fimIntervalo.toDate().getTime() - new Date().getTime();
-                        if (timeLeft <= 0) {
-                            countdownElement.innerHTML = '<span style="color: red; font-weight: bold;">Tempo esgotado!</span>';
-                            clearInterval(countdownInterval);
-                            document.getElementById('odds-list-container').innerHTML = '<p style="text-align:center; padding: 20px;">O tempo para palpitar neste jogo esgotou.</p>';
-                            document.getElementById('submit-button-container').innerHTML = '';
-                            document.getElementById('category-shortcuts-container').innerHTML = '';
-                            return;
-                        }
-                        const d = Math.floor(timeLeft / 86400000), h = Math.floor(timeLeft % 86400000 / 3600000), m = Math.floor(timeLeft % 3600000 / 60000), s = Math.floor(timeLeft % 60000 / 1000);
-                        countdownElement.innerHTML = `${d > 0 ? `<span class="timer-unit">${d}d</span>` : ''}<span class="timer-unit">${h}h</span><span class="timer-unit">${m}m</span><span class="timer-unit">${s}s</span>`;
-                    };
-                    updateCountdown();
-                    countdownInterval = setInterval(updateCountdown, 1000);
+                const now = new Date();
+                const inicio = currentGame.inicioIntervalo ? currentGame.inicioIntervalo.toDate() : null;
+                const fim = currentGame.fimIntervalo ? currentGame.fimIntervalo.toDate() : null;
+
+                if (inicio && now < inicio) {
+                    // ANTES do intervalo de palpites
+                    timerContainer.innerHTML = `<div class="existing-prediction-message" style="background-color: #fff3cd; border-color: #ffeeba; color: #856404;"><strong>O jogo ainda não está disponível para palpitar.</strong></div>`;
+                    document.getElementById('odds-list-container').innerHTML = '';
+                    document.getElementById('submit-button-container').innerHTML = '';
+                    document.getElementById('category-shortcuts-container').innerHTML = '';
+                } else if (fim && now > fim) {
+                    // DEPOIS do intervalo de palpites
+                    timerContainer.innerHTML = `<div class="countdown-timer"><span id="countdown"><span style="color: red; font-weight: bold;">Tempo esgotado!</span></span></div>`;
+                    document.getElementById('odds-list-container').innerHTML = '<p style="text-align:center; padding: 20px;">O tempo para palpitar neste jogo esgotou.</p>';
+                    document.getElementById('submit-button-container').innerHTML = '';
+                    document.getElementById('category-shortcuts-container').innerHTML = '';
+                } else {
+                    // DENTRO do intervalo de palpites
+                    timerContainer.innerHTML = `<div class="countdown-timer"><span class="countdown-label">Tempo para palpitar:</span><span id="countdown">Calculando...</span></div>`;
+                    await showOddsSelector();
+                    
+                    if (currentGame.fimIntervalo) {
+                        const countdownElement = document.getElementById('countdown');
+                        clearInterval(countdownInterval);
+                        const updateCountdown = () => {
+                            const timeLeft = currentGame.fimIntervalo.toDate().getTime() - new Date().getTime();
+                            if (timeLeft <= 0) {
+                                countdownElement.innerHTML = '<span style="color: red; font-weight: bold;">Tempo esgotado!</span>';
+                                clearInterval(countdownInterval);
+                                document.getElementById('odds-list-container').innerHTML = '<p style="text-align:center; padding: 20px;">O tempo para palpitar neste jogo esgotou.</p>';
+                                document.getElementById('submit-button-container').innerHTML = '';
+                                document.getElementById('category-shortcuts-container').innerHTML = '';
+                                return;
+                            }
+                            const d = Math.floor(timeLeft / 86400000), h = Math.floor(timeLeft % 86400000 / 3600000), m = Math.floor(timeLeft % 3600000 / 60000), s = Math.floor(timeLeft % 60000 / 1000);
+                            countdownElement.innerHTML = `${d > 0 ? `<span class="timer-unit">${d}d</span>` : ''}<span class="timer-unit">${h}h</span><span class="timer-unit">${m}m</span><span class="timer-unit">${s}s</span>`;
+                        };
+                        updateCountdown();
+                        countdownInterval = setInterval(updateCountdown, 1000);
+                    }
                 }
             }
             
@@ -405,7 +424,7 @@ async function buildFullOddHierarchy() {
             return;
         }
 
-        // CÓDIGO ADICIONADO PARA ATUALIZAR O ÚLTIMO ACESSO
+        // CÓDIGO ADICIONADO PARA ATUALIZAR O ÚLTIMO ACESSO (COM CORREÇÃO)
         try {
             const userDocRef = doc(db, 'users', user.uid);
             await updateDoc(userDocRef, {
