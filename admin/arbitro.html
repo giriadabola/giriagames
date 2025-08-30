@@ -550,14 +550,15 @@
     </div>
 
     <!-- Main Content Area -->
-    <div class="content">
-        <h1>Árbitro</h1>
-        <div class="filter-container">
-            <select id="round-filter" class="round-filter"><option value="">Todas as Rondas</option></select>
-            <select id="game-filter" class="round-filter"><option value="">Todos os Jogos</option></select>
-            <select id="gplayer-filter" class="gplayer-filter"><option value="">Todos os GPlayers</option></select>
-            <button id="launch-button" class="launch-button">Lançar</button><span id="launch-status-icons"></span>
-        </div>
+    <div class="filter-container">
+    <select id="round-filter" class="round-filter"><option value="">Todas as Rondas</option></select>
+    <select id="game-filter" class="round-filter"><option value="">Todos os Jogos</option></select>
+    <select id="gplayer-filter" class="gplayer-filter"><option value="">Todos os GPlayers</option></select>
+    <button id="launch-button" class="launch-button">Lançar</button>
+    <!-- NOVO ELEMENTO PARA A CONTAGEM -->
+    <span id="voter-count-display" style="margin-left: 10px; font-weight: bold; font-size: 1.1em;"></span>
+    <span id="launch-status-icons"></span>
+</div>
         <div id="predictions-container" class="predictions-list">
             <div class="loading">Carregando palpites...</div>
         </div>
@@ -617,6 +618,7 @@
         let offsetY = 0;
         let initialPopupX = 0;
         let initialPopupY = 0;
+        let totalEligibleVoters = 0;
         if (popup) {
             popup.addEventListener('mousedown', (e) => {
                  const nonDraggableTags = ['TEXTAREA', 'SELECT', 'BUTTON', 'INPUT', 'TABLE', 'TBODY', 'TR', 'TD', 'TH', 'A', 'I'];
@@ -678,6 +680,7 @@
         let currentGPlayer = null;
         let allPredictions = [];
         let isProcessingLaunch = false;
+        
         
         async function loadPredictions() {
              try {
@@ -776,6 +779,28 @@
                  if (currentGPlayer) {
                      filteredPredictions = filteredPredictions.filter(p => p.nomeDeUsuario === currentGPlayer);
                  }
+
+
+const voterCountDisplay = document.getElementById('voter-count-display');
+                 if (currentGame && totalEligibleVoters > 0) {
+                     // Conta utilizadores únicos que palpitaram para o jogo filtrado
+                     const votedUserIds = new Set(filteredPredictions.map(p => p.userId));
+                     const votedCount = votedUserIds.size;
+
+                     voterCountDisplay.textContent = `(${votedCount}/${totalEligibleVoters})`;
+
+                     if (votedCount === totalEligibleVoters) {
+                         voterCountDisplay.style.color = '#28a745'; // Verde
+                     } else {
+                         voterCountDisplay.style.color = '#dc3545'; // Vermelho
+                     }
+                 } else {
+                     // Limpa a contagem se nenhum jogo estiver selecionado
+                     voterCountDisplay.textContent = '';
+                 }
+
+
+
                  let predictionsHTML = '';
                  predictionsContainer.innerHTML = '<div class="loading">Carregando palpites...</div>';
                  if (filteredPredictions.length === 0) {
@@ -877,6 +902,21 @@
                      '<div class="prediction-card">Erro ao carregar palpites. Tente atualizar a página.</div>';
              }
          }
+
+         async function fetchTotalEligibleVoters() {
+    try {
+        const usersRef = collection(db, 'users');
+        const q = query(usersRef, where("nometabela", "==", "Yes"));
+        const snapshot = await getCountFromServer(q);
+        totalEligibleVoters = snapshot.data().count;
+        console.log(`Total de votantes elegíveis encontrados: ${totalEligibleVoters}`);
+    } catch (error) {
+        console.error("Erro ao obter a contagem total de votantes:", error);
+        // Pode definir um valor padrão ou exibir uma mensagem de erro se preferir
+        totalEligibleVoters = 0; 
+    }
+}
+
         function addDynamicEventListeners() {
              document.querySelectorAll('.status-select').forEach(select => {
                  select.replaceWith(select.cloneNode(true));
@@ -1236,6 +1276,7 @@
              console.error("Botão de auto-preenchimento (foguetão) não encontrado!");
          }
         loadPredictions();
+        fetchTotalEligibleVoters();
     </script>
     <!-- == CONVERTER JAVASCRIPT START == -->
     <!-- (O script do conversor IIFE fica aqui, exatamente como fornecido na resposta anterior) -->
