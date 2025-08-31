@@ -372,8 +372,6 @@
                 <div class="form-group"><label for="anexado">Anexado</label><select id="anexado" name="anexado"><option value="1x"selected>1x</option><option value="world26">world26</option></select></div>
                 <input type="hidden" id="analisado" name="analisado" value="null">
                 <div class="form-group"><input type="hidden" id="nome-jogo" name="nome-jogo" required></div>
-                <div class="form-group" style="display: none;"><input type="hidden" id="inicio-intervalo" name="inicio-intervalo" required></div>
-                <div class="form-group" style="display: none;"><input type="hidden" id="fim-intervalo" name="fim-intervalo" required></div>
                 <div class="form-group"><label for="temporada">Temporada</label><input type="text" id="temporada" name="temporada" value="2025/2026" required></div>
                 <button type="submit" class="submit-btn">Criar Jogo</button>
             </form>
@@ -393,12 +391,44 @@
     <script type="module">
         // Importa a variável 'db' do guardião e todas as outras funções necessárias
         import { db } from './js/auth-guard.js';
-        import { collection, addDoc, query, where, getDocs, doc, getDoc, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-
+import { collection, addDoc, query, where, getDocs, doc, getDoc, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         // A inicialização do Firebase foi completamente removida daqui
 
         // --- INÍCIO DA LÓGICA DO FORMULÁRIO DE CRIAÇÃO DE JOGO (Script 1 original) ---
         
+
+function updateInicioPalpiteDefault() {
+    const gameDateInput = document.getElementById('data-jogo');
+    const inicioPalpiteInput = document.getElementById('inicio-palpite');
+
+    if (!gameDateInput.value) {
+        return; // Se não houver data do jogo, não faz nada
+    }
+
+    // Cria a data do jogo em UTC para evitar problemas de fuso horário
+    const gameDate = new Date(gameDateInput.value + 'T00:00:00Z');
+    
+    // getUTCDay() retorna 0 (Dom) a 6 (Sáb). Queremos a terça-feira (2).
+    const dayOfWeek = gameDate.getUTCDay();
+    
+    // Calcula quantos dias precisa de recuar para chegar à última terça-feira
+    let daysToSubtract = (dayOfWeek - 2 + 7) % 7;
+    
+    gameDate.setUTCDate(gameDate.getUTCDate() - daysToSubtract);
+
+    // Formata a data para o formato que o input datetime-local aceita (YYYY-MM-DDTHH:mm)
+    const year = gameDate.getUTCFullYear();
+    const month = String(gameDate.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(gameDate.getUTCDate()).padStart(2, '0');
+    
+    // Define o valor com a hora fixa às 08:00
+    const formattedDateTime = `${year}-${month}-${day}T08:00`;
+    inicioPalpiteInput.value = formattedDateTime;
+}
+
+
+
+
         async function searchClubs(searchTerm) {
             const clubesRef = collection(db, 'clubes');
             const searchTermLower = searchTerm.toLowerCase();
@@ -562,47 +592,56 @@
                 } catch (error) { console.error('Erro ao buscar clubes:', error); }
             });
 
-            function updateGameName() {
+         function updateGameName() {
                 const equipaCasa = equipaCasaInput.value;
                 const equipaFora = equipaForaInput.value;
                 const dataJogo = document.getElementById('data-jogo').value;
                 const ronda = document.getElementById('ronda').value;
                 if (equipaCasa && equipaFora && dataJogo) {
-                    const formattedDate = new Date(dataJogo).toLocaleDateString('pt-PT');
+                    const formattedDate = new Date(dataJogo + 'T00:00:00Z').toLocaleDateString('pt-PT', { timeZone: 'UTC' });
                     nomeJogoInput.value = `${equipaCasa} x ${equipaFora} - ${formattedDate} | Ronda ${ronda}`;
                 }
             }
 
-            document.getElementById('data-jogo').addEventListener('change', updateGameName);
+
+               function updateFimPalpite() {
+    const gameDateInput = document.getElementById('data-jogo');
+    const fimPalpiteInput = document.getElementById('fim-palpite');
+
+    if (!gameDateInput.value) {
+        return; // Se não houver data do jogo, não faz nada
+    }
+
+    // Cria a data do jogo em UTC para evitar problemas de fuso horário no cálculo
+    const gameDate = new Date(gameDateInput.value + 'T00:00:00Z');
+    
+    // getUTCDay() retorna 0 (Dom) a 6 (Sáb). Queremos a sexta-feira (5).
+    const dayOfWeek = gameDate.getUTCDay();
+    
+    // Calcula quantos dias precisa de recuar para chegar à última sexta-feira
+    // Se o jogo for no Sábado (6), subtrai 1 dia. Se for na Quinta (4), subtrai 6 dias.
+    let daysToSubtract = (dayOfWeek - 5 + 7) % 7;
+    
+    gameDate.setUTCDate(gameDate.getUTCDate() - daysToSubtract);
+
+    // Formata a data para o formato que o input datetime-local aceita (YYYY-MM-DDTHH:mm)
+    const year = gameDate.getUTCFullYear();
+    const month = String(gameDate.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(gameDate.getUTCDate()).padStart(2, '0');
+    
+    // Define o valor com a hora fixa às 20:00
+    const formattedDateTime = `${year}-${month}-${day}T20:00`;
+    fimPalpiteInput.value = formattedDateTime;
+}
+
+      // Gatilhos para o campo "Data do Jogo"
+const dataJogoInput = document.getElementById('data-jogo');
+            dataJogoInput.addEventListener('change', updateGameName);
+            dataJogoInput.addEventListener('change', updateInicioPalpiteDefault);
+            dataJogoInput.addEventListener('change', updateFimPalpite);
+
             document.getElementById('ronda').addEventListener('change', updateGameName);
-
-            function updateFimPalpite() {
-                const gameDate = document.getElementById('data-jogo').value;
-                const gameTime = document.getElementById('hora-jogo').value;
-                if (gameDate && gameTime) {
-                    const gameDateTime = new Date(gameDate + 'T' + gameTime);
-                    gameDateTime.setHours(gameDateTime.getHours() - 1);
-                    document.getElementById('fim-palpite').value = gameDateTime.toISOString().slice(0, 16);
-                }
-            }
-
-            document.getElementById('data-jogo').addEventListener('change', updateFimPalpite);
-            document.getElementById('hora-jogo').addEventListener('change', updateFimPalpite);
-
-            function updateIntervalFields() {
-                const now = new Date();
-                document.getElementById('inicio-intervalo').value = now.toISOString().slice(0, 16);
-                const gameDate = document.getElementById('data-jogo').value;
-                const gameTime = document.getElementById('hora-jogo').value;
-                if (gameDate && gameTime) {
-                    const gameDateTime = new Date(gameDate + 'T' + gameTime);
-                    document.getElementById('fim-intervalo').value = gameDateTime.toISOString().slice(0, 16);
-                }
-            }
-
-            document.getElementById('data-jogo').addEventListener('change', updateIntervalFields);
-            document.getElementById('hora-jogo').addEventListener('change', updateIntervalFields);
-            updateIntervalFields();
+    
 
             form.addEventListener('submit', async (e) => {
                 e.preventDefault();
@@ -610,19 +649,24 @@
                     alert('Por favor, selecione ambas as equipas da lista.');
                     return;
                 }
-                try {
-                    await addDoc(collection(db, 'jogos'), {
-                        equipaCasaId: selectedEquipaCasaId,
-                        equipaCasa: equipaCasaInput.value,
-                        equipaForaId: selectedEquipaForaId,
-                        equipaFora: equipaForaInput.value,
-                        competicaoId: competicaoSelect.value,
-                        competicao: competicaoSelect.options[competicaoSelect.selectedIndex].text,
-                        dataJogo: new Date(document.getElementById('data-jogo').value + 'T' + document.getElementById('hora-jogo').value),
-                        ronda: parseInt(roundSelect.value),
-                        inicioIntervalo: new Date(document.getElementById('inicio-intervalo').value),
-                        fimIntervalo: new Date(document.getElementById('fim-intervalo').value),
-                        numeroPalpites: parseInt(document.getElementById('numero-palpites').value),
+              try {
+    // ALTERADO: A string de data e hora é construída com 'Z' para garantir que é interpretada como UTC.
+    const dataJogoUTC = new Date(document.getElementById('data-jogo').value + 'T' + document.getElementById('hora-jogo').value + 'Z');
+    const inicioPalpiteUTC = new Date(document.getElementById('inicio-palpite').value + 'Z');
+    const fimPalpiteUTC = new Date(document.getElementById('fim-palpite').value + 'Z');
+
+    await addDoc(collection(db, 'jogos'), {
+        equipaCasaId: selectedEquipaCasaId,
+        equipaCasa: equipaCasaInput.value,
+        equipaForaId: selectedEquipaForaId,
+        equipaFora: equipaForaInput.value,
+        competicaoId: competicaoSelect.value,
+        competicao: competicaoSelect.options[competicaoSelect.selectedIndex].text,
+        dataJogo: dataJogoUTC, // ALTERADO: Usa a data UTC
+        ronda: parseInt(roundSelect.value),
+        inicioIntervalo: inicioPalpiteUTC, 
+        fimIntervalo: fimPalpiteUTC,
+        numeroPalpites: parseInt(document.getElementById('numero-palpites').value),
                         mods: modsSelect.value || null,
                         modId: document.getElementById('modId').value.trim() || null,
                         nomeJogo: nomeJogoInput.value,
