@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Editar Troféus - G EMPIRE</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <script type="module" src="js/auth-guard.js"></script>
+    <style>
+        body { display: none; flex-direction: column; align-items: center; background-color: #f4f7f9; font-family: Arial, sans-serif; margin: 0; }
+        .content { width: 100%; max-width: 900px; margin: 20px; padding: 30px; background: white; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        h1, h2 { text-align: center; color: #333; }
+        h2 { font-size: 1.2em; color: #555; margin-top: 30px; border-bottom: 2px solid #007bff; padding-bottom: 10px;}
+        .top-filters { display: grid; grid-template-columns: 1fr 1fr 120px; gap: 20px; align-items: flex-end; padding-bottom: 20px; border-bottom: 1px solid #eee; }
+        .form-grid { display: grid; grid-template-columns: 1fr; gap: 15px; }
+        label { font-weight: bold; margin-bottom: 5px; display: block; color: #666; }
+        select, input, button { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 1em; background-color: #fff; box-sizing: border-box; }
+        button { cursor: pointer; transition: background-color 0.3s; color: white; border: none; }
+        #list-view-btn { background-color: #17a2b8; }
+        #list-view-btn:hover { background-color: #138496; }
+        .trophy-list { margin-top: 20px; max-height: 300px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 4px; padding: 10px; }
+        .trophy-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #f0f0f0; }
+        .trophy-item:last-child { border-bottom: none; }
+        .trophy-item img { width: 24px; height: 24px; margin-right: 10px; }
+        .trophy-item-info { flex-grow: 1; }
+        .trophy-item-info span { display: block; }
+        .trophy-item-info .type { font-size: 0.8em; color: #888; }
+        .edit-btn { background-color: #007bff; flex-shrink: 0; padding: 5px 15px; }
+        .form-container { display: none; margin-top: 20px; border: 1px solid #e0e0e0; padding: 20px; border-radius: 8px; }
+        .form-actions { display: flex; gap: 10px; margin-top: 20px; }
+        #save-btn { background-color: #28a745; flex-grow: 2; }
+        #delete-btn { background-color: #dc3545; flex-grow: 1; }
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1000; display: none; justify-content: center; align-items: center; }
+        .modal-content { background: white; padding: 25px; border-radius: 8px; width: 90%; max-width: 600px; box-shadow: 0 5px 20px rgba(0,0,0,0.2); display: flex; flex-direction: column; max-height: 80vh; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .modal-header h3 { margin: 0; }
+        .modal-close { font-size: 1.5em; cursor: pointer; border: none; background: none; }
+        .modal-body { overflow-y: auto; }
+        .loader { text-align: center; padding: 20px; font-size: 1.2em; color: #555; }
+    </style>
+</head>
+<body>
+    <main class="content">
+        <h1><i class="fas fa-edit"></i> Editar Troféus</h1>
+        <!-- MODO 1: FILTROS POR UTILIZADOR -->
+        <div class="top-filters">
+            <div><label for="season-select">Temporada</label><select id="season-select"></select></div>
+            <div><label for="user-select">Utilizador</label><select id="user-select"><option value="">Selecione um utilizador...</option></select></div>
+            <div><button id="list-view-btn"><i class="fas fa-list"></i> Lista Geral</button></div>
+        </div>
+        <div id="user-trophies-list" class="trophy-list" style="display: none;"></div>
+        <div id="user-trophies-loader" class="loader" style="display: none;"></div>
+
+        <!-- FORMULÁRIO DE EDIÇÃO (COMUM AOS DOIS MODOS) -->
+        <div id="form-container" class="form-container">
+            <h2>Editar Detalhes do Troféu</h2>
+            <form id="trophy-form">
+                <!-- O conteúdo do formulário será gerado dinamicamente -->
+            </form>
+        </div>
+    </main>
+
+    <!-- MODO 2: POPUP COM LISTA GERAL -->
+    <div id="list-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header"><h3>Lista Geral de Troféus</h3><button class="modal-close">&times;</button></div>
+            <div class="modal-filters">
+                <label for="modal-season-select">Filtrar por Temporada</label>
+                <select id="modal-season-select"></select>
+            </div>
+            <div id="all-trophies-list" class="trophy-list modal-body"></div>
+            <div id="all-trophies-loader" class="loader" style="display: none;"></div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { db } from './js/auth-guard.js';
+        import { collection, getDocs, doc, getDoc, query, where, updateDoc, deleteDoc, Timestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+        const cache = { trophies: {} }; // Cache de troféus por temporada
+        const ui = {
+            seasonSelect: document.getElementById('season-select'),
+            userSelect: document.getElementById('user-select'),
+            listViewBtn: document.getElementById('list-view-btn'),
+            userTrophiesList: document.getElementById('user-trophies-list'),
+            userTrophiesLoader: document.getElementById('user-trophies-loader'),
+            formContainer: document.getElementById('form-container'),
+            trophyForm: document.getElementById('trophy-form'),
+            modal: document.getElementById('list-modal'),
+            modalCloseBtn: document.querySelector('.modal-close'),
+            modalSeasonSelect: document.getElementById('modal-season-select'),
+            allTrophiesList: document.getElementById('all-trophies-list'),
+            allTrophiesLoader: document.getElementById('all-trophies-loader'),
+        };
+
+        async function getTrophiesBySeason(season) {
+            if (cache.trophies[season]) return cache.trophies[season];
+            const q = query(collection(db, 'trofeus'), where('temporada', '==', season));
+            const snapshot = await getDocs(q);
+            const trophies = [];
+            snapshot.forEach(doc => trophies.push({ id: doc.id, ...doc.data() }));
+            trophies.sort((a, b) => b.timestamp.toMillis() - a.timestamp.toMillis());
+            cache.trophies[season] = trophies;
+            return trophies;
+        }
+
+        function renderTrophyList(trophies, container) {
+            if (trophies.length === 0) {
+                container.innerHTML = '<p style="text-align:center; color:#888;">Nenhum troféu encontrado.</p>';
+                return;
+            }
+            container.innerHTML = trophies.map(t => `
+                <div class="trophy-item">
+                    ${t.imagem ? `<img src="${t.imagem}" alt="${t.tipo}">` : ''}
+                    <div class="trophy-item-info">
+                        <span>${t.texto}</span>
+                        <span class="type"><b>${t.nometabela}</b> | ${t.tipo}</span>
+                    </div>
+                    <button class="edit-btn" data-id="${t.id}" data-season="${t.temporada}">Editar</button>
+                </div>
+            `).join('');
+        }
+        
+        async function populateForm(trophyId, season) {
+            const allTrophies = await getTrophiesBySeason(season);
+            const trophy = allTrophies.find(t => t.id === trophyId);
+            if (!trophy) { alert("Erro: Troféu não encontrado."); return; }
+
+            // Reutiliza os dropdowns de utilizadores, competições e clubes
+            const usersHTML = ui.userSelect.innerHTML.replace('<option value="">Selecione um utilizador...</option>', '');
+            const competitionsHTML = (await getDocs(collection(db, 'competicoes'))).docs.map(d => `<option value="${d.id}">${d.data().nome}</option>`).join('');
+            const clubsHTML = (await getDocs(collection(db, 'clubes'))).docs.map(d => `<option value="${d.id}">${d.data().nome}</option>`).join('');
+
+            ui.trophyForm.innerHTML = `
+                <input type="hidden" id="trophy-id" value="${trophy.id}">
+                <div class="form-grid">
+                    <div><label>GPlayer Vencedor</label><select id="form-gplayer">${usersHTML}</select></div>
+                    <div><label>Competição</label><select id="form-competicao"><option value="">Nenhuma</option>${competitionsHTML}</select></div>
+                    <div><label>Clube</label><select id="form-clube"><option value="">Nenhum</option>${clubsHTML}</select></div>
+                    <div><label>Texto Livre</label><input type="text" id="form-texto-livre" placeholder="Ex: Melhor Marcador"></div>
+                    <div><label>Ativo</label><select id="form-ativo"><option value="yes">Yes</option><option value="no">No</option></select></div>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" id="save-btn">Salvar Alterações</button>
+                    <button type="button" id="delete-btn">Apagar Troféu</button>
+                </div>`;
+
+            // Preenche os valores
+            document.getElementById('form-gplayer').value = trophy.userId;
+            document.getElementById('form-competicao').value = trophy.competicaoId || "";
+            document.getElementById('form-clube').value = trophy.clubeId || "";
+            document.getElementById('form-texto-livre').value = trophy.tipo === 'Extra' ? trophy.texto : "";
+            document.getElementById('form-ativo').value = trophy.ativo;
+            
+            ui.formContainer.style.display = 'block';
+        }
+        
+        async function handleUserChange() {
+            const userId = ui.userSelect.value;
+            const season = ui.seasonSelect.value;
+            ui.formContainer.style.display = 'none'; // Esconde o formulário ao trocar de user
+
+            if (!userId) {
+                ui.userTrophiesList.style.display = 'none';
+                return;
+            }
+            
+            ui.userTrophiesLoader.style.display = 'block';
+            ui.userTrophiesList.style.display = 'none';
+
+            const allTrophies = await getTrophiesBySeason(season);
+            const userTrophies = allTrophies.filter(t => t.userId === userId);
+            
+            renderTrophyList(userTrophies, ui.userTrophiesList);
+            
+            ui.userTrophiesLoader.style.display = 'none';
+            ui.userTrophiesList.style.display = 'block';
+        }
+
+        async function handleModalSeasonChange() {
+            const season = ui.modalSeasonSelect.value;
+            ui.allTrophiesLoader.style.display = 'block';
+            ui.allTrophiesList.innerHTML = '';
+            const trophies = await getTrophiesBySeason(season);
+            renderTrophyList(trophies, ui.allTrophiesList);
+            ui.allTrophiesLoader.style.display = 'none';
+        }
+
+        async function main() {
+            const [seasonsSnap, usersSnap] = await Promise.all([
+                getDocs(collection(db, 'paineis/configuracoes_gerais/temporadas')),
+                getDocs(query(collection(db, 'users'), where('natabela', '==', 'Yes')))
+            ]);
+
+            const seasons = seasonsSnap.docs.map(d => d.data().nome).sort().reverse();
+            [ui.seasonSelect, ui.modalSeasonSelect].forEach(sel => sel.innerHTML = seasons.map(s => `<option value="${s}">${s}</option>`).join(''));
+            usersSnap.forEach(doc => ui.userSelect.innerHTML += `<option value="${doc.id}">${doc.data().nometabela}</option>`);
+
+            // --- Event Listeners ---
+            ui.seasonSelect.addEventListener('change', () => { ui.userSelect.value = ''; handleUserChange(); });
+            ui.userSelect.addEventListener('change', handleUserChange);
+            ui.listViewBtn.addEventListener('click', () => { ui.modal.style.display = 'flex'; handleModalSeasonChange(); });
+            ui.modalCloseBtn.addEventListener('click', () => ui.modal.style.display = 'none');
+            ui.modalSeasonSelect.addEventListener('change', handleModalSeasonChange);
+
+            // Delegação de eventos para os botões "Editar"
+            document.addEventListener('click', (e) => {
+                if (e.target.classList.contains('edit-btn')) {
+                    const id = e.target.dataset.id;
+                    const season = e.target.dataset.season;
+                    populateForm(id, season);
+                    if (ui.modal.style.display === 'flex') {
+                        ui.modal.style.display = 'none';
+                    }
+                    window.scrollTo(0, document.body.scrollHeight); // Rola para o formulário
+                }
+            });
+
+            // Listener para o formulário (Salvar e Apagar)
+            ui.trophyForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const id = document.getElementById('trophy-id').value;
+                const gplayerSelect = document.getElementById('form-gplayer');
+                const ativo = document.getElementById('form-ativo').value;
+                const data = {
+                    userId: gplayerSelect.value,
+                    nometabela: gplayerSelect.options[gplayerSelect.selectedIndex].text,
+                    competicaoId: document.getElementById('form-competicao').value || null,
+                    clubeId: document.getElementById('form-clube').value || null,
+                    textoLivre: document.getElementById('form-texto-livre').value.trim() || null,
+                    ativo: ativo,
+                    dataativo: ativo === 'yes' ? Timestamp.now() : null
+                };
+                // Lógica de atualização
+                await updateDoc(doc(db, 'trofeus', id), data);
+                alert('Troféu atualizado com sucesso!');
+                cache.trophies = {}; // Limpa o cache para forçar recarga
+                handleUserChange(); // Atualiza a lista
+            });
+
+            ui.trophyForm.addEventListener('click', async (e) => {
+                if (e.target.id === 'delete-btn') {
+                    if (confirm('Tem a certeza que deseja apagar este troféu?')) {
+                        const id = document.getElementById('trophy-id').value;
+                        await deleteDoc(doc(db, 'trofeus', id));
+                        alert('Troféu apagado com sucesso!');
+                        ui.formContainer.style.display = 'none';
+                        cache.trophies = {}; // Limpa o cache
+                        handleUserChange();
+                    }
+                }
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', main);
+    </script>
+</body>
+</html>
