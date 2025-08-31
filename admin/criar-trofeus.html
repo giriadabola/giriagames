@@ -93,37 +93,89 @@
             return null;
         }
 
-        async function loadPageData(temporada) {
+     async function loadPageData(temporada) {
             resetCache();
             [ui.filterGridContainer, ui.trofeuForm].forEach(el => el.style.display = 'none');
             [ui.loaders.filters, ui.loaders.form].forEach(l => l.style.display = 'block');
             ui.loaders.filters.textContent = 'A carregar dados da temporada...';
-            await Promise.all([loadTopFilters(temporada), loadForm(temporada)]);
-            setupEventListeners(temporada);
+            
+            // A chamada para setupEventListeners foi REMOVIDA daqui
+            await Promise.all([loadTopFilters(temporada), loadForm(temporada)]); 
         }
 
-        async function loadTopFilters(temporada) {
-            const jogosQuery = query(collection(db, 'jogos'), where('temporada', '==', temporada));
-            const jogosSnapshot = await getDocs(jogosQuery);
-            cache.jogosDaTemporada = jogosSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            if (cache.jogosDaTemporada.length === 0) {
-                ui.loaders.filters.textContent = 'Nenhum jogo encontrado para esta temporada.';
-                ui.filterGridContainer.innerHTML = ''; return;
-            }
-            const counts = { competicao: {}, equipa: {} };
-            for (const jogo of cache.jogosDaTemporada) {
-                counts.competicao[jogo.competicaoId] = (counts.competicao[jogo.competicaoId] || 0) + 1;
-                counts.equipa[jogo.equipaCasaId] = (counts.equipa[jogo.equipaCasaId] || 0) + 1;
-                counts.equipa[jogo.equipaForaId] = (counts.equipa[jogo.equipaForaId] || 0) + 1;
-            }
-            await Promise.all([...Object.keys(counts.competicao).map(id => fetchAndCache('competicoes', id)), ...Object.keys(counts.equipa).map(id => fetchAndCache('clubes', id))]);
-            await Promise.all([...new Set(Object.values(cache.clubes).map(c => c.paisId).filter(Boolean))].map(id => fetchAndCache('paises', id)));
-            ui.filterGridContainer.innerHTML = `<div><label for="filtro-competicao">Por Competição</label><select id="filtro-competicao"><option value="">Selecione...</option></select></div><div><label for="filtro-equipa">Por Equipa</label><select id="filtro-equipa"><option value="">Selecione...</option></select></div><button id="reset-filters">Reset</button>`;
-            const fc = document.getElementById('filtro-competicao'), fe = document.getElementById('filtro-equipa');
-            Object.keys(counts.competicao).forEach(id => { if (cache.competicoes[id]) fc.innerHTML += `<option value="${id}">${cache.competicoes[id].nome} - (${counts.competicao[id]})</option>`; });
-            Object.keys(counts.equipa).forEach(id => { if (cache.clubes[id]) fe.innerHTML += `<option value="${id}">${cache.clubes[id].nome} <em>(${(cache.paises[cache.clubes[id].paisId]?.nome) || 'N/A'})</em> - (${counts.equipa[id]})</option>`; });
-            ui.loaders.filters.style.display = 'none';
-            ui.filterGridContainer.style.display = 'grid';
+        // A função já não precisa do parâmetro 'temporada'
+        function setupEventListeners() {
+            ui.filterGridContainer.addEventListener('change', (e) => {
+                // Lê o valor da temporada no momento do evento
+                const temporada = ui.seasonSelect.value; 
+
+                if (e.target.id === 'filtro-competicao') {
+                    const id = e.target.value, fe = document.getElementById('filtro-equipa'), cs = document.getElementById('competicao'), cl = document.getElementById('clube');
+                    if (id) { fe.disabled = true; cl.disabled = true; cs.disabled = false; cs.value = id; findTopGPlayerForCompetition(id, temporada); } 
+                    else { fe.disabled = false; }
+                }
+                if (e.target.id === 'filtro-equipa') {
+                    const id = e.target.value, fc = document.getElementById('filtro-competicao'), cs = document.getElementById('competicao'), cl = document.getElementById('clube');
+                    if (id) { fc.disabled = true; cs.disabled = true; cl.disabled = false; cl.value = id; } 
+                    else { fc.disabled = false; }
+                }
+            });
+
+            ui.trofeuForm.addEventListener('input', (e) => {
+                if (e.target.id === 'texto-livre') {
+                    const hasText = e.target.value.trim() !== '', fc = document.getElementById('filtro-competicao'), fe = document.getElementById('filtro-equipa'), cs = document.getElementById('competicao'), cl = document.getElementById('clube');
+                    [cs, cl, fc, fe].forEach(el => { if(el) el.disabled = hasText; });
+                    if (hasText) [cs, cl, fc, fe].forEach(el => { if(el) el.value = ''; });
+                }
+            });
+
+            ui.filterGridContainer.addEventListener('click', (e) => {
+                if (e.target.id === 'reset-filters') {
+                    resetFormAndFilters();
+                }
+            });
+
+            ui.trofeuForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                // Lê o valor da temporada no momento do evento
+                const temporada = ui.seasonSelect.value; 
+
+                const gp = document.getElementById('gplayer'), cs = document.getElementById('competicao'), cl = document.getElementById('clube'), tl = document.getElementById('texto-livre'), sa = document.getElementById('status-ativo');
+                if (!gp.value) return alert("Selecione um GPlayer Vencedor.");
+                let tipo = "Geral", descricao = "Prémio Geral", imagem = null;
+                const imagemClubeComp = 'https://cdn-icons-png.flaticon.com/512/889/889518.png';
+                const imagemExtra = 'https://cdn-icons-png.flaticon.com/512/1986/1986987.png';
+                if (tl.value.trim()) { tipo = "Extra"; descricao = tl.value.trim(); imagem = imagemExtra; }
+                else if (cl.value) { tipo = "Clube"; descricao = cl.options[cl.selectedIndex].text; imagem = imagemClubeComp; }
+                else if (cs.value) { tipo = "Competição"; descricao = cs.options[cs.selectedIndex].text; imagem = imagemClubeComp; }
+                const trophyData = { temporada: temporada, userId: gp.value, nometabela: gp.options[gp.selectedIndex].text, texto: descricao, competicaoId: cs.value || null, clubeId: cl.value || null, tipo: tipo, imagem: imagem, timestamp: new Date(), ativo: sa.value, dataativo: sa.value === 'yes' ? new Date() : null };
+
+                try {
+                    await addDoc(collection(db, 'trofeus'), trophyData);
+                    alert(`Troféu do tipo "${tipo}" criado para ${trophyData.nometabela}!`);
+                    resetFormAndFilters();
+                } catch (error) { console.error("Erro ao criar troféu:", error); alert("Ocorreu um erro ao guardar o troféu."); }
+            });
+        }
+
+        async function main() {
+            const temporadasRef = collection(db, 'paineis/configuracoes_gerais/temporadas');
+            const [temporadasSnap, configDoc] = await Promise.all([getDocs(temporadasRef), getDoc(doc(db, 'paineis', 'configuracoes_gerais'))]);
+            const temporadas = temporadasSnap.docs.map(d => d.data().nome).sort().reverse();
+            temporadas.forEach(t => ui.seasonSelect.innerHTML += `<option value="${t}">${t}</option>`);
+            if (configDoc.exists()) ui.seasonSelect.value = configDoc.data().temporadaAtual;
+            
+            // Listeners que só precisam ser definidos uma vez
+            ui.seasonSelect.addEventListener('change', () => loadPageData(ui.seasonSelect.value));
+            ui.addSeasonBtn.addEventListener('click', () => ui.modal.style.display = 'flex');
+            ui.modalCloseBtn.addEventListener('click', () => { ui.modal.style.display = 'none'; ui.newSeasonError.style.display = 'none'; ui.newSeasonNameInput.value = ''; });
+            ui.saveSeasonBtn.addEventListener('click', handleSaveSeason);
+
+            // Carga inicial dos dados
+            await loadPageData(ui.seasonSelect.value);
+
+            // Anexa os listeners dinâmicos APENAS UMA VEZ
+            setupEventListeners();
         }
 
         async function loadForm() {
