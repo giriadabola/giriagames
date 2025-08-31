@@ -120,404 +120,462 @@
     </div>
 
     <script type="module">
-        // 3. O script da página foi limpo
-        // Importa a variável 'db' do guardião central e outras funções do Firestore
-        import { db } from './js/auth-guard.js';
-        import { collection, addDoc, query, where, getDocs, doc, getDoc, updateDoc, deleteDoc, arrayUnion, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+    // Importa a variável 'db' do guardião central e outras funções do Firestore
+    import { db } from './js/auth-guard.js';
+    import { collection, addDoc, query, where, getDocs, doc, getDoc, updateDoc, deleteDoc, arrayUnion, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-        // A inicialização do Firebase foi REMOVIDA daqui
+    let selectedGameId = null;
+    let selectedEquipaCasaId = null;
+    let selectedEquipaForaId = null;
+    let originalEquipaCasaId = null;
+    let originalEquipaForaId = null;
 
-        let selectedGameId = null;
-        let selectedEquipaCasaId = null;
-        let selectedEquipaForaId = null;
-        let originalEquipaCasaId = null;
-        let originalEquipaForaId = null;
+    // --- FUNÇÕES NOVAS E CORRIGIDAS ---
 
-        function updateGameName() {
-            const equipaCasaNome = document.getElementById('equipa-casa').value || 'Equipa Casa';
-            const equipaForaNome = document.getElementById('equipa-fora').value || 'Equipa Fora';
-            const dataJogo = document.getElementById('data-jogo').value || 'Data';
-            const ronda = document.getElementById('ronda').value || 'Ronda';
-            const gameName = `${equipaCasaNome} vs ${equipaForaNome} - ${dataJogo} - Ronda ${ronda}`;
-            document.getElementById('nome-jogo').value = gameName;
+    // NOVO: Função auxiliar para formatar datas do Firebase para os inputs, mostrando a hora local correta.
+    function formatDateToLocalInput(date, type = 'datetime') {
+        if (!date || !(date instanceof Date)) return '';
+
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+
+        if (type === 'date') {
+            return `${year}-${month}-${day}`;
         }
+        if (type === 'time') {
+            return `${hours}:${minutes}`;
+        }
+        return `${year}-${month}-${day}T${hours}:${minutes}`;
+    }
 
-        async function searchClubs(searchTerm, inputId, resultsListId, imageElementId, selectedClubIdVariable) {
-            const clubesRef = collection(db, 'clubes');
-            const searchTermLower = searchTerm.toLowerCase();
-            let q;
-            if (searchTerm) { q = query(clubesRef); }
-            else { document.getElementById(resultsListId).innerHTML = ''; return []; }
+    // NOVO: Lógica de preenchimento para "Início dos Palpites" (terça-feira às 08:00)
+    function updateInicioPalpiteDefault() {
+        const gameDateInput = document.getElementById('data-jogo');
+        const inicioPalpiteInput = document.getElementById('inicio-palpite');
 
-            try {
-                const querySnapshot = await getDocs(q);
-                const results = [];
-                for (const clubDoc of querySnapshot.docs) {
-                    const club = { id: clubDoc.id, ...clubDoc.data() };
-                    if (club.nome.toLowerCase().includes(searchTermLower)) {
-                        if (club.paisId) {
-                            const paisDoc = await getDoc(doc(db, 'paises', club.paisId));
-                            if (paisDoc.exists()) { club.paisNome = paisDoc.data().nome; }
-                        }
-                        results.push(club);
+        if (!gameDateInput.value) return;
+
+        const gameDate = new Date(gameDateInput.value + 'T00:00:00Z');
+        const dayOfWeek = gameDate.getUTCDay();
+        let daysToSubtract = (dayOfWeek - 2 + 7) % 7;
+        gameDate.setUTCDate(gameDate.getUTCDate() - daysToSubtract);
+
+        const year = gameDate.getUTCFullYear();
+        const month = String(gameDate.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(gameDate.getUTCDate()).padStart(2, '0');
+        
+        inicioPalpiteInput.value = `${year}-${month}-${day}T08:00`;
+    }
+
+    // NOVO: Lógica de preenchimento para "Fim dos Palpites" (sexta-feira às 20:00)
+    function updateFimPalpite() {
+        const gameDateInput = document.getElementById('data-jogo');
+        const fimPalpiteInput = document.getElementById('fim-palpite');
+
+        if (!gameDateInput.value) return;
+
+        const gameDate = new Date(gameDateInput.value + 'T00:00:00Z');
+        const dayOfWeek = gameDate.getUTCDay();
+        let daysToSubtract = (dayOfWeek - 5 + 7) % 7;
+        gameDate.setUTCDate(gameDate.getUTCDate() - daysToSubtract);
+
+        const year = gameDate.getUTCFullYear();
+        const month = String(gameDate.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(gameDate.getUTCDate()).padStart(2, '0');
+        
+        fimPalpiteInput.value = `${year}-${month}-${day}T20:00`;
+    }
+
+    // --- FUNÇÕES ORIGINAIS (sem alterações) ---
+    function updateGameName() {
+        const equipaCasaNome = document.getElementById('equipa-casa').value || 'Equipa Casa';
+        const equipaForaNome = document.getElementById('equipa-fora').value || 'Equipa Fora';
+        const dataJogo = document.getElementById('data-jogo').value || 'Data';
+        const ronda = document.getElementById('ronda').value || 'Ronda';
+        const gameName = `${equipaCasaNome} vs ${equipaForaNome} - ${dataJogo} - Ronda ${ronda}`;
+        document.getElementById('nome-jogo').value = gameName;
+    }
+
+    async function searchClubs(searchTerm, inputId, resultsListId, imageElementId, selectedClubIdVariable) {
+        const clubesRef = collection(db, 'clubes');
+        const searchTermLower = searchTerm.toLowerCase();
+        let q;
+        if (searchTerm) { q = query(clubesRef); }
+        else { document.getElementById(resultsListId).innerHTML = ''; return []; }
+
+        try {
+            const querySnapshot = await getDocs(q);
+            const results = [];
+            for (const clubDoc of querySnapshot.docs) {
+                const club = { id: clubDoc.id, ...clubDoc.data() };
+                if (club.nome.toLowerCase().includes(searchTermLower)) {
+                    if (club.paisId) {
+                        const paisDoc = await getDoc(doc(db, 'paises', club.paisId));
+                        if (paisDoc.exists()) { club.paisNome = paisDoc.data().nome; }
                     }
+                    results.push(club);
                 }
-                const resultsList = document.getElementById(resultsListId);
-                resultsList.innerHTML = '';
-                if (results.length > 0) {
-                    results.forEach(club => {
-                        const optionDiv = document.createElement('div');
-                        optionDiv.classList.add('search-option');
-                        optionDiv.textContent = `${club.nome}${club.paisNome ? ` (${club.paisNome})` : ''}`;
-                        optionDiv.addEventListener('click', () => {
-                            document.getElementById(inputId).value = club.nome;
-                            document.getElementById(resultsListId).innerHTML = '';
-                            document.getElementById(imageElementId).innerHTML = club.imagem ? `<img src="${club.imagem}" class="club-image" alt="${club.nome}">` : '<i class="fas fa-shield-alt"></i>';
-                            document.getElementById(imageElementId).className = club.imagem ? 'club-image' : 'club-image placeholder';
-                            if (inputId === 'equipa-casa') { selectedEquipaCasaId = club.id; }
-                            else if (inputId === 'equipa-fora') { selectedEquipaForaId = club.id; }
-                            updateGameName();
-                        });
-                        resultsList.appendChild(optionDiv);
+            }
+            const resultsList = document.getElementById(resultsListId);
+            resultsList.innerHTML = '';
+            if (results.length > 0) {
+                results.forEach(club => {
+                    const optionDiv = document.createElement('div');
+                    optionDiv.classList.add('search-option');
+                    optionDiv.textContent = `${club.nome}${club.paisNome ? ` (${club.paisNome})` : ''}`;
+                    optionDiv.addEventListener('click', () => {
+                        document.getElementById(inputId).value = club.nome;
+                        document.getElementById(resultsListId).innerHTML = '';
+                        document.getElementById(imageElementId).innerHTML = club.imagem ? `<img src="${club.imagem}" class="club-image" alt="${club.nome}">` : '<i class="fas fa-shield-alt"></i>';
+                        document.getElementById(imageElementId).className = club.imagem ? 'club-image' : 'club-image placeholder';
+                        if (inputId === 'equipa-casa') { selectedEquipaCasaId = club.id; }
+                        else if (inputId === 'equipa-fora') { selectedEquipaForaId = club.id; }
+                        updateGameName();
                     });
-                }
-            } catch (error) { console.error('Erro ao buscar clubes:', error); }
-        }
-
-        async function loadCompetitions() {
-            try {
-                const competicoesRef = collection(db, 'competicoes');
-                const querySnapshot = await getDocs(competicoesRef);
-                const competicaoSelect = document.getElementById('competicao');
-                competicaoSelect.innerHTML = '<option value="">Selecione uma competição</option>';
-                querySnapshot.forEach(docSnap => {
-                    const competicao = docSnap.data();
-                    const option = document.createElement('option');
-                    option.value = docSnap.id;
-                    option.textContent = competicao.nome;
-                    competicaoSelect.appendChild(option);
+                    resultsList.appendChild(optionDiv);
                 });
-                competicaoSelect.addEventListener('change', async (e) => {
-                    const competicaoId = e.target.value;
-                    const competicaoImage = document.getElementById('competicao-image');
-                    if (competicaoId) {
-                        const competicaoDoc = await getDoc(doc(db, 'competicoes', competicaoId));
-                        const competicaoData = competicaoDoc.data();
-                        if (competicaoData && competicaoData.imagem) {
-                            competicaoImage.innerHTML = `<img src="${competicaoData.imagem}" class="club-image" alt="${competicaoData.nome}">`;
-                            competicaoImage.className = 'club-image';
-                        } else {
-                            competicaoImage.innerHTML = '<i class="fas fa-trophy"></i>';
-                            competicaoImage.className = 'club-image placeholder';
-                        }
+            }
+        } catch (error) { console.error('Erro ao buscar clubes:', error); }
+    }
+
+    async function loadCompetitions() {
+        try {
+            const competicoesRef = collection(db, 'competicoes');
+            const querySnapshot = await getDocs(competicoesRef);
+            const competicaoSelect = document.getElementById('competicao');
+            competicaoSelect.innerHTML = '<option value="">Selecione uma competição</option>';
+            querySnapshot.forEach(docSnap => {
+                const competicao = docSnap.data();
+                const option = document.createElement('option');
+                option.value = docSnap.id;
+                option.textContent = competicao.nome;
+                competicaoSelect.appendChild(option);
+            });
+            competicaoSelect.addEventListener('change', async (e) => {
+                const competicaoId = e.target.value;
+                const competicaoImage = document.getElementById('competicao-image');
+                if (competicaoId) {
+                    const competicaoDoc = await getDoc(doc(db, 'competicoes', competicaoId));
+                    const competicaoData = competicaoDoc.data();
+                    if (competicaoData && competicaoData.imagem) {
+                        competicaoImage.innerHTML = `<img src="${competicaoData.imagem}" class="club-image" alt="${competicaoData.nome}">`;
+                        competicaoImage.className = 'club-image';
                     } else {
                         competicaoImage.innerHTML = '<i class="fas fa-trophy"></i>';
                         competicaoImage.className = 'club-image placeholder';
                     }
-                });
-            } catch (error) { console.error('Erro ao carregar competições:', error); }
-        }
-
-        async function getLatestRound() {
-            const jogosRef = collection(db, 'jogos');
-            const querySnapshot = await getDocs(jogosRef);
-            let latestRound = 1;
-            querySnapshot.forEach(docSnap => {
-                const ronda = docSnap.data().ronda || 1;
-                if (ronda > latestRound) latestRound = ronda;
-            });
-            return latestRound;
-        }
-
-        async function getMods() {
-            const modsRef = collection(db, 'mods');
-            const querySnapshot = await getDocs(modsRef);
-            return querySnapshot.docs.map(docSnap => ({ id: docSnap.id, nome: docSnap.data().nomeMod }));
-        }
-
-        function formatDate(timestamp) {
-            if (!timestamp) return 'Data não disponível';
-            try {
-                const date = timestamp.toDate();
-                return date.toLocaleDateString('pt-BR') + ' ' + date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-            } catch (e) {
-                console.error("Error formatting date:", e);
-                return 'Data inválida';
-            }
-        }
-
-        function createGameCard(game, homeTeamData, awayTeamData) {
-            if (!game) return '';
-            const defaultImage = 'https://via.placeholder.com/60';
-            const defaultName = 'Time não encontrado';
-            const homeTeam = { image: homeTeamData?.imagem || defaultImage, name: homeTeamData?.nome || defaultName };
-            const awayTeam = { image: awayTeamData?.imagem || defaultImage, name: awayTeamData?.nome || defaultName };
-            const gameDate = game.dataJogo ? formatDate(game.dataJogo) : 'Data não disponível';
-            return `<div class="game-card"><div class="teams-container"><div class="team"><img src="${homeTeam.image}" alt="${homeTeam.name}" class="team-img"><span class="team-name">${homeTeam.name}</span></div><span class="vs">VS</span><div class="team"><img src="${awayTeam.image}" alt="${awayTeam.name}" class="team-img"><span class="team-name">${awayTeam.name}</span></div></div><div class="game-info">${gameDate}</div><button class="edit-btn" data-game-id="${game.id}">Editar</button></div>`;
-        }
-
-        async function fetchRecentGames() {
-            const gamesContainer = document.getElementById('recentGames');
-            try {
-                const gamesRef = collection(db, 'jogos');
-                const q = query(gamesRef, orderBy('dataJogo', 'desc'), limit(5));
-                const querySnapshot = await getDocs(q);
-                if (querySnapshot.empty) { gamesContainer.innerHTML = '<div class="error">Nenhum jogo encontrado.</div>'; return; }
-                let gamesHTML = '';
-                for (const gameDocSnapshot of querySnapshot.docs) {
-                    const game = { id: gameDocSnapshot.id, ...gameDocSnapshot.data() };
-                    let homeTeamData = null, awayTeamData = null;
-                    try {
-                        const homeTeamDoc = await getDoc(doc(db, 'clubes', game.equipaCasaId));
-                        homeTeamData = homeTeamDoc.exists() ? homeTeamDoc.data() : null;
-                    } catch (error) { console.error("Error fetching home team data:", error); }
-                    try {
-                        const awayTeamDoc = await getDoc(doc(db, 'clubes', game.equipaForaId));
-                        awayTeamData = awayTeamDoc.exists() ? awayTeamDoc.data() : null;
-                    } catch (error) { console.error("Error fetching away team data:", error); }
-                    gamesHTML += createGameCard(game, homeTeamData, awayTeamData);
+                } else {
+                    competicaoImage.innerHTML = '<i class="fas fa-trophy"></i>';
+                    competicaoImage.className = 'club-image placeholder';
                 }
-                gamesContainer.innerHTML = gamesHTML;
-            } catch (error) {
-                console.error('Error fetching recent games:', error);
-                gamesContainer.innerHTML = '<div class="error">Erro ao carregar jogos. Por favor, tente novamente.</div>';
-            }
-        }
+            });
+        } catch (error) { console.error('Erro ao carregar competições:', error); }
+    }
 
-        async function searchGames(searchTerm) {
-            const searchResultsContainer = document.getElementById('searchResults');
-            searchResultsContainer.innerHTML = '<div class="loading">Pesquisando jogos...</div>';
-            try {
-                const gamesRef = collection(db, 'jogos');
-                const querySnapshot = await getDocs(gamesRef);
-                let filteredGamesHTML = '';
-                if (querySnapshot.empty) { searchResultsContainer.innerHTML = '<div class="error">Nenhum jogo encontrado.</div>'; return; }
-                for (const gameDocSnapshot of querySnapshot.docs) {
-                    const game = { id: gameDocSnapshot.id, ...gameDocSnapshot.data() };
-                    let homeTeamData = null, awayTeamData = null, competitionData = null;
-                    try {
-                        const homeTeamDoc = await getDoc(doc(db, 'clubes', game.equipaCasaId));
-                        if (homeTeamDoc && homeTeamDoc.exists()) { homeTeamData = homeTeamDoc.data(); }
-                        else { console.error(`Document for equipaCasaId ${game.equipaCasaId} not found.`); }
-                    } catch (error) { console.error("Error fetching home team data:", error, `equipaCasaId: ${game.equipaCasaId}`); }
-                    try {
-                        const awayTeamDoc = await getDoc(doc(db, 'clubes', game.equipaForaId));
-                        if (awayTeamDoc && awayTeamDoc.exists()) { awayTeamData = awayTeamDoc.data(); }
-                        else { console.error(`Document for equipaForaId ${game.equipaForaId} not found.`); }
-                    } catch (error) { console.error("Error fetching away team data:", error, `equipaForaId: ${game.equipaForaId}`); }
-                    try {
-                        const competitionDoc = await getDoc(doc(db, 'competicoes', game.competicaoId));
-                        competitionData = competitionDoc.exists() ? competitionDoc.data() : null;
-                    } catch (error) { console.error("Error fetching competition data:", error); }
-                    if (searchTerm.trim() === '') {
+    async function getLatestRound() {
+        const jogosRef = collection(db, 'jogos');
+        const querySnapshot = await getDocs(jogosRef);
+        let latestRound = 1;
+        querySnapshot.forEach(docSnap => {
+            const ronda = docSnap.data().ronda || 1;
+            if (ronda > latestRound) latestRound = ronda;
+        });
+        return latestRound;
+    }
+
+    async function getMods() {
+        const modsRef = collection(db, 'mods');
+        const querySnapshot = await getDocs(modsRef);
+        return querySnapshot.docs.map(docSnap => ({ id: docSnap.id, nome: docSnap.data().nomeMod }));
+    }
+
+    function formatDate(timestamp) {
+        if (!timestamp) return 'Data não disponível';
+        try {
+            const date = timestamp.toDate();
+            return date.toLocaleDateString('pt-BR') + ' ' + date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        } catch (e) {
+            console.error("Error formatting date:", e);
+            return 'Data inválida';
+        }
+    }
+
+    function createGameCard(game, homeTeamData, awayTeamData) {
+        if (!game) return '';
+        const defaultImage = 'https://via.placeholder.com/60';
+        const defaultName = 'Time não encontrado';
+        const homeTeam = { image: homeTeamData?.imagem || defaultImage, name: homeTeamData?.nome || defaultName };
+        const awayTeam = { image: awayTeamData?.imagem || defaultImage, name: awayTeamData?.nome || defaultName };
+        const gameDate = game.dataJogo ? formatDate(game.dataJogo) : 'Data não disponível';
+        return `<div class="game-card"><div class="teams-container"><div class="team"><img src="${homeTeam.image}" alt="${homeTeam.name}" class="team-img"><span class="team-name">${homeTeam.name}</span></div><span class="vs">VS</span><div class="team"><img src="${awayTeam.image}" alt="${awayTeam.name}" class="team-img"><span class="team-name">${awayTeam.name}</span></div></div><div class="game-info">${gameDate}</div><button class="edit-btn" data-game-id="${game.id}">Editar</button></div>`;
+    }
+
+    async function fetchRecentGames() {
+        const gamesContainer = document.getElementById('recentGames');
+        try {
+            const gamesRef = collection(db, 'jogos');
+            const q = query(gamesRef, orderBy('dataJogo', 'desc'), limit(5));
+            const querySnapshot = await getDocs(q);
+            if (querySnapshot.empty) { gamesContainer.innerHTML = '<div class="error">Nenhum jogo encontrado.</div>'; return; }
+            let gamesHTML = '';
+            for (const gameDocSnapshot of querySnapshot.docs) {
+                const game = { id: gameDocSnapshot.id, ...gameDocSnapshot.data() };
+                let homeTeamData = null, awayTeamData = null;
+                try {
+                    const homeTeamDoc = await getDoc(doc(db, 'clubes', game.equipaCasaId));
+                    homeTeamData = homeTeamDoc.exists() ? homeTeamDoc.data() : null;
+                } catch (error) { console.error("Error fetching home team data:", error); }
+                try {
+                    const awayTeamDoc = await getDoc(doc(db, 'clubes', game.equipaForaId));
+                    awayTeamData = awayTeamDoc.exists() ? awayTeamDoc.data() : null;
+                } catch (error) { console.error("Error fetching away team data:", error); }
+                gamesHTML += createGameCard(game, homeTeamData, awayTeamData);
+            }
+            gamesContainer.innerHTML = gamesHTML;
+        } catch (error) {
+            console.error('Error fetching recent games:', error);
+            gamesContainer.innerHTML = '<div class="error">Erro ao carregar jogos. Por favor, tente novamente.</div>';
+        }
+    }
+
+    async function searchGames(searchTerm) {
+        const searchResultsContainer = document.getElementById('searchResults');
+        searchResultsContainer.innerHTML = '<div class="loading">Pesquisando jogos...</div>';
+        try {
+            const gamesRef = collection(db, 'jogos');
+            const querySnapshot = await getDocs(gamesRef);
+            let filteredGamesHTML = '';
+            if (querySnapshot.empty) { searchResultsContainer.innerHTML = '<div class="error">Nenhum jogo encontrado.</div>'; return; }
+            for (const gameDocSnapshot of querySnapshot.docs) {
+                const game = { id: gameDocSnapshot.id, ...gameDocSnapshot.data() };
+                let homeTeamData = null, awayTeamData = null, competitionData = null;
+                try {
+                    const homeTeamDoc = await getDoc(doc(db, 'clubes', game.equipaCasaId));
+                    if (homeTeamDoc && homeTeamDoc.exists()) { homeTeamData = homeTeamDoc.data(); }
+                    else { console.error(`Document for equipaCasaId ${game.equipaCasaId} not found.`); }
+                } catch (error) { console.error("Error fetching home team data:", error, `equipaCasaId: ${game.equipaCasaId}`); }
+                try {
+                    const awayTeamDoc = await getDoc(doc(db, 'clubes', game.equipaForaId));
+                    if (awayTeamDoc && awayTeamDoc.exists()) { awayTeamData = awayTeamDoc.data(); }
+                    else { console.error(`Document for equipaForaId ${game.equipaForaId} not found.`); }
+                } catch (error) { console.error("Error fetching away team data:", error, `equipaForaId: ${game.equipaForaId}`); }
+                try {
+                    const competitionDoc = await getDoc(doc(db, 'competicoes', game.competicaoId));
+                    competitionData = competitionDoc.exists() ? competitionDoc.data() : null;
+                } catch (error) { console.error("Error fetching competition data:", error); }
+                if (searchTerm.trim() === '') {
+                    filteredGamesHTML += createSearchResultItem(game, homeTeamData, awayTeamData, competitionData);
+                } else {
+                    const searchTermLower = searchTerm.toLowerCase();
+                    const homeTeamName = homeTeamData?.nome?.toLowerCase() || '';
+                    const awayTeamName = awayTeamData?.nome?.toLowerCase() || '';
+                    const competitionName = competitionData?.nome?.toLowerCase() || '';
+                    if (homeTeamName.includes(searchTermLower) || awayTeamName.includes(searchTermLower) || competitionName.includes(searchTermLower)) {
                         filteredGamesHTML += createSearchResultItem(game, homeTeamData, awayTeamData, competitionData);
-                    } else {
-                        const searchTermLower = searchTerm.toLowerCase();
-                        const homeTeamName = homeTeamData?.nome?.toLowerCase() || '';
-                        const awayTeamName = awayTeamData?.nome?.toLowerCase() || '';
-                        const competitionName = competitionData?.nome?.toLowerCase() || '';
-                        if (homeTeamName.includes(searchTermLower) || awayTeamName.includes(searchTermLower) || competitionName.includes(searchTermLower)) {
-                            filteredGamesHTML += createSearchResultItem(game, homeTeamData, awayTeamData, competitionData);
-                        }
                     }
                 }
-                if (filteredGamesHTML === '') { searchResultsContainer.innerHTML = searchTerm.trim() === '' ? '<div class="error">Nenhum jogo encontrado.</div>' : '<div class="error">Nenhum jogo encontrado com este termo.</div>'; }
-                else { searchResultsContainer.innerHTML = filteredGamesHTML; }
-            } catch (error) {
-                console.error('Erro ao pesquisar jogos:', error);
-                searchResultsContainer.innerHTML = '<div class="error">Erro ao pesquisar jogos. Por favor, tente novamente.</div>';
             }
+            if (filteredGamesHTML === '') { searchResultsContainer.innerHTML = searchTerm.trim() === '' ? '<div class="error">Nenhum jogo encontrado.</div>' : '<div class="error">Nenhum jogo encontrado com este termo.</div>'; }
+            else { searchResultsContainer.innerHTML = filteredGamesHTML; }
+        } catch (error) {
+            console.error('Erro ao pesquisar jogos:', error);
+            searchResultsContainer.innerHTML = '<div class="error">Erro ao pesquisar jogos. Por favor, tente novamente.</div>';
         }
+    }
 
-        function createSearchResultItem(game, homeTeamData, awayTeamData, competitionData) {
-            const defaultImage = 'https://via.placeholder.com/40';
-            const defaultCompetitionImage = 'https://via.placeholder.com/30';
-            const homeTeam = { image: homeTeamData?.imagem || defaultImage, name: homeTeamData?.nome || 'Time não encontrado' };
-            const awayTeam = { image: awayTeamData?.imagem || defaultImage, name: awayTeamData?.nome || 'Time não encontrado' };
-            const competition = { image: competitionData?.imagem || defaultCompetitionImage, name: competitionData?.nome || 'Competição não encontrada' };
-            const gameDate = game.dataJogo ? formatDate(game.dataJogo) : 'Data não disponível';
-            const gameRonda = game.ronda || 'N/A';
-            const gameTemporada = game.temporada || 'N/A';
-            return `<div class="search-result-item"><div class="search-result-teams"><div class="search-result-team"><img src="${homeTeam.image}" alt="${homeTeam.name}"><span>${homeTeam.name}</span></div><span>vs</span><div class="search-result-team"><img src="${awayTeam.image}" alt="${awayTeam.name}"><span>${awayTeam.name}</span></div></div><div class="search-result-competition"><img src="${competition.image}" alt="${competition.name}"><span>${competition.name}</span></div><div class="search-result-date">${gameDate}</div><div class="search-result-round-season"><span>Ronda: ${gameRonda}</span><span>Temporada: ${gameTemporada}</span></div><button class="search-result-edit-btn" data-game-id="${game.id}">Editar</button></div>`;
+    function createSearchResultItem(game, homeTeamData, awayTeamData, competitionData) {
+        const defaultImage = 'https://via.placeholder.com/40';
+        const defaultCompetitionImage = 'https://via.placeholder.com/30';
+        const homeTeam = { image: homeTeamData?.imagem || defaultImage, name: homeTeamData?.nome || 'Time não encontrado' };
+        const awayTeam = { image: awayTeamData?.imagem || defaultImage, name: awayTeamData?.nome || 'Time não encontrado' };
+        const competition = { image: competitionData?.imagem || defaultCompetitionImage, name: competitionData?.nome || 'Competição não encontrada' };
+        const gameDate = game.dataJogo ? formatDate(game.dataJogo) : 'Data não disponível';
+        const gameRonda = game.ronda || 'N/A';
+        const gameTemporada = game.temporada || 'N/A';
+        return `<div class="search-result-item"><div class="search-result-teams"><div class="search-result-team"><img src="${homeTeam.image}" alt="${homeTeam.name}"><span>${homeTeam.name}</span></div><span>vs</span><div class="search-result-team"><img src="${awayTeam.image}" alt="${awayTeam.name}"><span>${awayTeam.name}</span></div></div><div class="search-result-competition"><img src="${competition.image}" alt="${competition.name}"><span>${competition.name}</span></div><div class="search-result-date">${gameDate}</div><div class="search-result-round-season"><span>Ronda: ${gameRonda}</span><span>Temporada: ${gameTemporada}</span></div><button class="search-result-edit-btn" data-game-id="${game.id}">Editar</button></div>`;
+    }
+
+    // --- FUNÇÃO DE CARREGAR JOGO (ALTERADA) ---
+    async function loadGameForEdit(gameId) {
+        selectedGameId = gameId;
+        try {
+            const gameDoc = await getDoc(doc(db, 'jogos', gameId));
+            if (gameDoc.exists()) {
+                const gameData = gameDoc.data();
+                originalEquipaCasaId = gameData.equipaCasaId;
+                originalEquipaForaId = gameData.equipaForaId;
+                
+                const homeTeamDoc = await getDoc(doc(db, 'clubes', gameData.equipaCasaId));
+                const awayTeamDoc = await getDoc(doc(db, 'clubes', gameData.equipaForaId));
+                const competitionDoc = await getDoc(doc(db, 'competicoes', gameData.competicaoId));
+
+                const homeTeamData = homeTeamDoc.exists() ? homeTeamDoc.data() : {};
+                const awayTeamData = awayTeamDoc.exists() ? awayTeamDoc.data() : {};
+                const competitionData = competitionDoc.exists() ? competitionDoc.data() : {};
+
+                // CORRIGIDO: Converte Timestamps para objetos Date locais antes de preencher
+                const gameDate = gameData.dataJogo ? gameData.dataJogo.toDate() : null;
+                const inicioPalpiteDate = gameData.inicioIntervalo ? gameData.inicioIntervalo.toDate() : null;
+                const fimPalpiteDate = gameData.fimIntervalo ? gameData.fimIntervalo.toDate() : null;
+
+                document.getElementById('equipa-casa').value = gameData.equipaCasa;
+                document.getElementById('equipa-fora').value = gameData.equipaFora;
+                document.getElementById('competicao').value = gameData.competicaoId;
+                
+                // CORRIGIDO: Usa a nova função para exibir a hora local correta nos inputs
+                document.getElementById('data-jogo').value = formatDateToLocalInput(gameDate, 'date');
+                document.getElementById('hora-jogo').value = formatDateToLocalInput(gameDate, 'time');
+                document.getElementById('inicio-palpite').value = formatDateToLocalInput(inicioPalpiteDate, 'datetime');
+                document.getElementById('fim-palpite').value = formatDateToLocalInput(fimPalpiteDate, 'datetime');
+                
+                document.getElementById('ronda').value = gameData.ronda;
+                document.getElementById('temporada').value = gameData.temporada;
+                document.getElementById('numero-palpites').value = gameData.numeroPalpites;
+                document.getElementById('mods').value = gameData.modId || '';
+                document.getElementById('anexado').value = gameData.anexado || '1x';
+                document.getElementById('nome-jogo').value = gameData.nomeJogo;
+
+                const equipaCasaImage = document.getElementById('equipa-casa-image');
+                equipaCasaImage.innerHTML = homeTeamData.imagem ? `<img src="${homeTeamData.imagem}" class="club-image" alt="${homeTeamData.nome}">` : '<i class="fas fa-shield-alt"></i>';
+                equipaCasaImage.className = homeTeamData.imagem ? 'club-image' : 'club-image placeholder';
+
+                const equipaForaImage = document.getElementById('equipa-fora-image');
+                equipaForaImage.innerHTML = awayTeamData.imagem ? `<img src="${awayTeamData.imagem}" class="club-image" alt="${awayTeamData.nome}">` : '<i class="fas fa-shield-alt"></i>';
+                equipaForaImage.className = awayTeamData.imagem ? 'club-image' : 'club-image placeholder';
+
+                const competicaoImage = document.getElementById('competicao-image');
+                competicaoImage.innerHTML = competitionData.imagem ? `<img src="${competitionData.imagem}" class="club-image" alt="${competitionData.nome}">` : '<i class="fas fa-trophy"></i>';
+                competicaoImage.className = competitionData.imagem ? 'club-image' : 'club-image placeholder';
+
+                selectedEquipaCasaId = gameData.equipaCasaId;
+                selectedEquipaForaId = gameData.equipaForaId;
+
+                const formTitle = document.querySelector('.form-container h2');
+                if (formTitle) { formTitle.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+            } else { alert('Jogo não encontrado.'); }
+        } catch (error) {
+            console.error('Erro ao carregar jogo para edição:', error);
+            alert('Erro ao carregar jogo para edição. Por favor, tente novamente.');
         }
+    }
 
-        async function loadGameForEdit(gameId) {
-            selectedGameId = gameId;
-            try {
-                const gameDoc = await getDoc(doc(db, 'jogos', gameId));
-                if (gameDoc.exists()) {
-                    const gameData = gameDoc.data();
-                    originalEquipaCasaId = gameData.equipaCasaId;
-                    originalEquipaForaId = gameData.equipaForaId;
-                    const homeTeamDoc = await getDoc(doc(db, 'clubes', gameData.equipaCasaId));
-                    let awayTeamData = null;
-                    try {
-                        const awayTeamDoc = await getDoc(doc(db, 'clubes', gameData.equipaForaId));
-                        awayTeamData = awayTeamDoc.exists() ? awayTeamDoc.data() : null;
-                    } catch (error) { console.error("Error fetching away team data:", error); }
-                    const competitionDoc = await getDoc(doc(db, 'competicoes', gameData.competicaoId));
-                    const homeTeamData = homeTeamDoc.data();
-                    const competitionData = competitionDoc.data();
-                    document.getElementById('equipa-casa').value = gameData.equipaCasa;
-                    document.getElementById('equipa-fora').value = gameData.equipaFora;
-                    document.getElementById('competicao').value = gameData.competicaoId;
-                    const gameDate = gameData.dataJogo ? gameData.dataJogo.toDate() : null;
-                    const formTitle = document.querySelector('.form-container h2');
-                    if (formTitle) { formTitle.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
-                    const inicioPalpiteDate = gameData.inicioIntervalo ? gameData.inicioIntervalo.toDate() : null;
-                    const fimPalpiteDate = gameData.fimIntervalo ? gameData.fimIntervalo.toDate() : null;
-                    document.getElementById('data-jogo').value = gameDate ? gameDate.toISOString().slice(0, 10) : '';
-                    document.getElementById('hora-jogo').value = gameDate ? gameDate.toISOString().slice(11, 16) : '';
-                    document.getElementById('ronda').value = gameData.ronda;
-                    document.getElementById('temporada').value = gameData.temporada;
-                    document.getElementById('inicio-palpite').value = inicioPalpiteDate ? inicioPalpiteDate.toISOString().slice(0, 16) : '';
-                    document.getElementById('fim-palpite').value = fimPalpiteDate ? fimPalpiteDate.toISOString().slice(0, 16) : '';
-                    document.getElementById('numero-palpites').value = gameData.numeroPalpites;
-                    document.getElementById('mods').value = gameData.modId || '';
-                    document.getElementById('anexado').value = gameData.anexado || '1x';
-                    document.getElementById('nome-jogo').value = gameData.nomeJogo;
-                    const equipaCasaImage = document.getElementById('equipa-casa-image');
-                    if (homeTeamData && homeTeamData.imagem) { equipaCasaImage.innerHTML = `<img src="${homeTeamData.imagem}" class="club-image" alt="${homeTeamData.nome}">`; equipaCasaImage.className = 'club-image'; }
-                    else { equipaCasaImage.innerHTML = '<i class="fas fa-shield-alt"></i>'; equipaCasaImage.className = 'club-image placeholder'; }
-                    const equipaForaImage = document.getElementById('equipa-fora-image');
-                    if (awayTeamData && awayTeamData.imagem) { equipaForaImage.innerHTML = `<img src="${awayTeamData.imagem}" class="club-image" alt="${awayTeamData.nome}">`; equipaForaImage.className = 'club-image'; }
-                    else { equipaForaImage.innerHTML = '<i class="fas fa-shield-alt"></i>'; equipaForaImage.className = 'club-image placeholder'; }
-                    const competicaoImage = document.getElementById('competicao-image');
-                    if (competitionData && competitionData.imagem) { competicaoImage.innerHTML = `<img src="${competitionData.imagem}" class="club-image" alt="${competitionData.nome}">`; competicaoImage.className = 'club-image'; }
-                    else { competicaoImage.innerHTML = '<i class="fas fa-trophy"></i>'; competicaoImage.className = 'club-image placeholder'; }
-                    selectedEquipaCasaId = gameData.equipaCasaId;
-                    selectedEquipaForaId = gameData.equipaForaId;
-                } else { alert('Jogo não encontrado.'); }
-            } catch (error) {
-                console.error('Erro ao carregar jogo para edição:', error);
-                alert('Erro ao carregar jogo para edição. Por favor, tente novamente.');
-            }
-        }
-
-        document.addEventListener('DOMContentLoaded', async () => {
-            const form = document.getElementById('editar-jogo-form');
-            const equipaCasaInput = document.getElementById('equipa-casa');
-            const equipaForaInput = document.getElementById('equipa-fora');
-            const competicaoSelect = document.getElementById('competicao');
-            const roundSelect = document.getElementById('ronda');
-            const modsSelect = document.getElementById('mods');
-            const temporadaInput = document.getElementById('temporada');
-            
-            await loadCompetitions();
-            
-            const mods = await getMods();
-            mods.forEach(mod => {
-                const option = document.createElement('option');
-                option.value = mod.id;
-                option.textContent = mod.nome;
-                modsSelect.appendChild(option);
-            });
-            
-            const latestRound = await getLatestRound();
-            for (let i = 1; i <= 50; i++) {
-                const option = document.createElement('option');
-                option.value = i;
-                option.textContent = `Ronda ${i}`;
-                if (i === latestRound) option.selected = true;
-                roundSelect.appendChild(option);
-            }
-            
-            equipaCasaInput.addEventListener('input', (e) => searchClubs(e.target.value, 'equipa-casa', 'equipa-casa-list', 'equipa-casa-image', 'selectedEquipaCasaId'));
-            equipaForaInput.addEventListener('input', (e) => searchClubs(e.target.value, 'equipa-fora', 'equipa-fora-list', 'equipa-fora-image', 'selectedEquipaForaId'));
-            
-            document.getElementById('data-jogo').addEventListener('change', updateGameName);
-            document.getElementById('ronda').addEventListener('change', updateGameName);
-            
-            recentGames.addEventListener('click', (event) => {
-                if (event.target.classList.contains('edit-btn')) {
-                    loadGameForEdit(event.target.dataset.gameId);
-                }
-            });
-            
-            searchResults.addEventListener('click', (event) => {
-                if (event.target.classList.contains('search-result-edit-btn')) {
-                    loadGameForEdit(event.target.dataset.gameId);
-                }
-            });
-            
-            document.getElementById('gameSearchInput').addEventListener('input', (event) => searchGames(event.target.value.trim()));
-            
-            function updatePredictionEndTime() {
-                const gameDate = document.getElementById('data-jogo').value;
-                const gameTime = document.getElementById('hora-jogo').value;
-                if (gameDate && gameTime) {
-                    const gameDateTime = new Date(`${gameDate}T${gameTime}`);
-                    const predictionEndTime = new Date(gameDateTime.getTime() - 3600000); // 1 hour before
-                    const year = predictionEndTime.getFullYear();
-                    const month = String(predictionEndTime.getMonth() + 1).padStart(2, '0');
-                    const day = String(predictionEndTime.getDate()).padStart(2, '0');
-                    const hours = String(predictionEndTime.getHours()).padStart(2, '0');
-                    const minutes = String(predictionEndTime.getMinutes()).padStart(2, '0');
-                    document.getElementById('fim-palpite').value = `${year}-${month}-${day}T${hours}:${minutes}`;
-                }
-            }
-            
-            document.getElementById('data-jogo').addEventListener('change', updatePredictionEndTime);
-            document.getElementById('hora-jogo').addEventListener('change', updatePredictionEndTime);
-            
-            form.addEventListener('submit', async (e) => {
-                e.preventDefault();
-                if (!selectedEquipaCasaId || !selectedEquipaForaId || !selectedGameId) {
-                    alert('Por favor, selecione ambas as equipas e um jogo para editar.');
-                    return;
-                }
-                try {
-                    const updatedGameData = {
-                        equipaCasaId: selectedEquipaCasaId,
-                        equipaCasa: equipaCasaInput.value,
-                        equipaForaId: selectedEquipaForaId,
-                        equipaFora: equipaForaInput.value,
-                        competicaoId: competicaoSelect.value,
-                        competicao: competicaoSelect.options[competicaoSelect.selectedIndex].text,
-                        dataJogo: new Date(document.getElementById('data-jogo').value + 'T' + document.getElementById('hora-jogo').value),
-                        ronda: parseInt(document.getElementById('ronda').value),
-                        temporada: temporadaInput.value,
-                        nomeJogo: document.getElementById('nome-jogo').value,
-                        inicioIntervalo: new Date(document.getElementById('inicio-palpite').value),
-                        fimIntervalo: new Date(document.getElementById('fim-palpite').value),
-                        numeroPalpites: parseInt(document.getElementById('numero-palpites').value),
-                        modId: document.getElementById('mods').value || null,
-                        anexado: document.getElementById('anexado').value
-                    };
-                    await updateDoc(doc(db, 'jogos', selectedGameId), updatedGameData);
-                    if (selectedEquipaCasaId !== originalEquipaCasaId) { await updateClubGamesSubcollection(selectedGameId, originalEquipaCasaId, selectedEquipaCasaId, 'clubes', 'equipaCasaId'); }
-                    if (selectedEquipaForaId !== originalEquipaForaId) { await updateClubGamesSubcollection(selectedGameId, originalEquipaForaId, selectedEquipaForaId, 'clubes', 'equipaForaId'); }
-                    alert('Jogo atualizado com sucesso!');
-                    window.location.reload();
-                    window.scrollTo(0, 0);
-                } catch (error) {
-                    console.error('Erro ao atualizar jogo:', error);
-                    alert('Erro ao atualizar jogo. Por favor, tente novamente.');
-                }
-            });
-
-            async function updateClubGamesSubcollection(gameId, originalClubId, newClubId, collectionName, teamType) {
-                if (originalClubId && originalClubId !== newClubId) {
-                    try {
-                        const originalClubGamesRef = collection(db, collectionName, originalClubId, 'jogos');
-                        const gameQuery = query(originalClubGamesRef, where('jogoId', '==', gameId));
-                        const gameQuerySnapshot = await getDocs(gameQuery);
-                        gameQuerySnapshot.forEach(async (docToDelete) => {
-                            await deleteDoc(doc(originalClubGamesRef, docToDelete.id));
-                        });
-                    } catch (error) { console.error(`Error deleting game from original club ${teamType}:`, error); }
-                }
-                if (newClubId) {
-                    try {
-                        const newClubGamesRef = collection(db, collectionName, newClubId, 'jogos');
-                        await addDoc(newClubGamesRef, { jogoId: gameId });
-                    } catch (error) { console.error(`Error adding game to new club ${teamType}:`, error); }
-                }
-            }
-            
-            fetchRecentGames();
-            loadCompetitions();
+    // --- CÓDIGO PRINCIPAL (DOMContentLoaded) ---
+    document.addEventListener('DOMContentLoaded', async () => {
+        const form = document.getElementById('editar-jogo-form');
+        const equipaCasaInput = document.getElementById('equipa-casa');
+        const equipaForaInput = document.getElementById('equipa-fora');
+        const roundSelect = document.getElementById('ronda');
+        const modsSelect = document.getElementById('mods');
+        const temporadaInput = document.getElementById('temporada');
+        
+        await loadCompetitions();
+        
+        const mods = await getMods();
+        mods.forEach(mod => {
+            const option = document.createElement('option');
+            option.value = mod.id;
+            option.textContent = mod.nome;
+            modsSelect.appendChild(option);
         });
-    </script>
+        
+        const latestRound = await getLatestRound();
+        for (let i = 1; i <= 50; i++) {
+            const option = document.createElement('option');
+            option.value = i;
+            option.textContent = `Ronda ${i}`;
+            if (i === latestRound) option.selected = true;
+            roundSelect.appendChild(option);
+        }
+        
+        // --- LIGAÇÃO DOS EVENTOS (ALTERADO) ---
+        equipaCasaInput.addEventListener('input', (e) => searchClubs(e.target.value, 'equipa-casa', 'equipa-casa-list', 'equipa-casa-image', 'selectedEquipaCasaId'));
+        equipaForaInput.addEventListener('input', (e) => searchClubs(e.target.value, 'equipa-fora', 'equipa-fora-list', 'equipa-fora-image', 'selectedEquipaForaId'));
+        
+        const dataJogoInput = document.getElementById('data-jogo');
+        dataJogoInput.addEventListener('change', updateGameName);
+        dataJogoInput.addEventListener('change', updateInicioPalpiteDefault); // Adiciona a nova lógica
+        dataJogoInput.addEventListener('change', updateFimPalpite);          // Adiciona a nova lógica
+
+        document.getElementById('ronda').addEventListener('change', updateGameName);
+        
+        recentGames.addEventListener('click', (event) => {
+            if (event.target.classList.contains('edit-btn')) {
+                loadGameForEdit(event.target.dataset.gameId);
+            }
+        });
+        
+        searchResults.addEventListener('click', (event) => {
+            if (event.target.classList.contains('search-result-edit-btn')) {
+                loadGameForEdit(event.target.dataset.gameId);
+            }
+        });
+        
+        document.getElementById('gameSearchInput').addEventListener('input', (event) => searchGames(event.target.value.trim()));
+        
+        // --- SUBMISSÃO DO FORMULÁRIO (ALTERADO) ---
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!selectedEquipaCasaId || !selectedEquipaForaId || !selectedGameId) {
+                alert('Por favor, selecione ambas as equipas e um jogo para editar.');
+                return;
+            }
+            try {
+                // CORRIGIDO: Constrói as datas com 'Z' para garantir a gravação correta em UTC
+                const updatedGameData = {
+                    equipaCasaId: selectedEquipaCasaId,
+                    equipaCasa: equipaCasaInput.value,
+                    equipaForaId: selectedEquipaForaId,
+                    equipaFora: equipaForaInput.value,
+                    competicaoId: document.getElementById('competicao').value,
+                    competicao: document.getElementById('competicao').options[document.getElementById('competicao').selectedIndex].text,
+                    dataJogo: new Date(document.getElementById('data-jogo').value + 'T' + document.getElementById('hora-jogo').value + 'Z'),
+                    ronda: parseInt(document.getElementById('ronda').value),
+                    temporada: temporadaInput.value,
+                    nomeJogo: document.getElementById('nome-jogo').value,
+                    inicioIntervalo: new Date(document.getElementById('inicio-palpite').value + 'Z'),
+                    fimIntervalo: new Date(document.getElementById('fim-palpite').value + 'Z'),
+                    numeroPalpites: parseInt(document.getElementById('numero-palpites').value),
+                    modId: document.getElementById('mods').value || null,
+                    anexado: document.getElementById('anexado').value
+                };
+                await updateDoc(doc(db, 'jogos', selectedGameId), updatedGameData);
+                
+                if (selectedEquipaCasaId !== originalEquipaCasaId) { await updateClubGamesSubcollection(selectedGameId, originalEquipaCasaId, selectedEquipaCasaId, 'clubes', 'equipaCasaId'); }
+                if (selectedEquipaForaId !== originalEquipaForaId) { await updateClubGamesSubcollection(selectedGameId, originalEquipaForaId, selectedEquipaForaId, 'clubes', 'equipaForaId'); }
+
+                alert('Jogo atualizado com sucesso!');
+                window.location.reload();
+                window.scrollTo(0, 0);
+            } catch (error) {
+                console.error('Erro ao atualizar jogo:', error);
+                alert('Erro ao atualizar jogo. Por favor, tente novamente.');
+            }
+        });
+
+        async function updateClubGamesSubcollection(gameId, originalClubId, newClubId, collectionName, teamType) {
+            if (originalClubId && originalClubId !== newClubId) {
+                try {
+                    const originalClubGamesRef = collection(db, collectionName, originalClubId, 'jogos');
+                    const gameQuery = query(originalClubGamesRef, where('jogoId', '==', gameId));
+                    const gameQuerySnapshot = await getDocs(gameQuery);
+                    gameQuerySnapshot.forEach(async (docToDelete) => {
+                        await deleteDoc(doc(originalClubGamesRef, docToDelete.id));
+                    });
+                } catch (error) { console.error(`Error deleting game from original club ${teamType}:`, error); }
+            }
+            if (newClubId) {
+                try {
+                    const newClubGamesRef = collection(db, collectionName, newClubId, 'jogos');
+                    await addDoc(newClubGamesRef, { jogoId: gameId });
+                } catch (error) { console.error(`Error adding game to new club ${teamType}:`, error); }
+            }
+        }
+        
+        fetchRecentGames();
+    });
+</script>
 </body>
 </html>
