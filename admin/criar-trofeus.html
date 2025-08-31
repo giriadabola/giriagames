@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Criar Troféu - G EMPIRE</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <script type="module" src="js/auth-guard.js"></script>
+    <style>
+        body { display: none; flex-direction: column; align-items: center; background-color: #f4f7f9; font-family: Arial, sans-serif; margin: 0; }
+        .content { position: relative; width: 100%; max-width: 900px; margin: 20px; padding: 30px; background: white; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        h1 { text-align: center; color: #333; margin-bottom: 20px; }
+        .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 20px; }
+        .season-selector { display: flex; flex-direction: column; }
+        #add-season-btn { font-size: 1.5em; color: #007bff; cursor: pointer; transition: color 0.2s; }
+        #add-season-btn:hover { color: #0056b3; }
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; display: none; justify-content: center; align-items: center; }
+        .modal-content { background: white; padding: 25px; border-radius: 8px; width: 90%; max-width: 400px; box-shadow: 0 5px 20px rgba(0,0,0,0.2); }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .modal-header h3 { margin: 0; }
+        .modal-close { font-size: 1.5em; cursor: pointer; border: none; background: none; }
+        #new-season-error { color: #dc3545; font-size: 0.9em; margin-top: 10px; display: none; }
+        .filters, .form-container { margin-bottom: 30px; border: 1px solid #e0e0e0; padding: 20px; border-radius: 8px; }
+        h2 { color: #555; border-bottom: 2px solid #007bff; padding-bottom: 10px; margin-top: 0; margin-bottom: 20px; font-size: 1.2em; }
+        .filter-grid { display: grid; grid-template-columns: 1fr 1fr 120px; gap: 15px; align-items: center; }
+        .form-grid { display: grid; grid-template-columns: 1fr; gap: 15px; }
+        label { font-weight: bold; margin-bottom: 5px; display: block; color: #666; }
+        select, input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 1em; background-color: #fff; box-sizing: border-box; }
+        select:disabled, input:disabled { background-color: #e9ecef; cursor: not-allowed; }
+        button { background-color: #28a745; color: white; padding: 12px 20px; border: none; border-radius: 4px; font-size: 1em; cursor: pointer; transition: background-color 0.3s; }
+        button:hover { background-color: #218838; }
+        #reset-filters { background-color: #dc3545; }
+        #reset-filters:hover { background-color: #c82333; }
+        .loader { text-align: center; padding: 20px; font-size: 1.2em; color: #555; }
+    </style>
+</head>
+<body>
+    <main class="content">
+        <h1><i class="fas fa-trophy"></i> Criar Troféu</h1>
+        <div class="page-header">
+            <div class="season-selector"><label for="season-select">Selecionar Temporada</label><select id="season-select"></select></div>
+            <i id="add-season-btn" class="fas fa-plus-circle" title="Adicionar Nova Temporada"></i>
+        </div>
+        <div class="filters">
+            <h2>Filtros Rápidos</h2>
+            <div id="filters-loader" class="loader">Selecione uma temporada para carregar os dados.</div>
+            <div class="filter-grid" id="filter-grid-container" style="display: none;"></div>
+        </div>
+        <div class="form-container">
+            <h2>Detalhes do Troféu</h2>
+            <div id="form-loader" class="loader">A carregar...</div>
+            <form id="trofeu-form" style="display:none;"></form>
+        </div>
+    </main>
+    <div id="add-season-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header"><h3>Criar Nova Temporada</h3><button class="modal-close">&times;</button></div>
+            <div>
+                <label for="new-season-name">Nome da Temporada (ex: 2026/2027)</label>
+                <input type="text" id="new-season-name" placeholder="2026/2027"><div id="new-season-error"></div>
+            </div><br><button id="save-season-btn">Gravar</button>
+        </div>
+    </div>
+    <script type="module">
+        import { db } from './js/auth-guard.js';
+        import { collection, getDocs, doc, getDoc, query, where, addDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+        const cache = {};
+        const ui = {
+            seasonSelect: document.getElementById('season-select'),
+            addSeasonBtn: document.getElementById('add-season-btn'),
+            modal: document.getElementById('add-season-modal'),
+            modalCloseBtn: document.querySelector('.modal-close'),
+            newSeasonNameInput: document.getElementById('new-season-name'),
+            newSeasonError: document.getElementById('new-season-error'),
+            saveSeasonBtn: document.getElementById('save-season-btn'),
+            filterGridContainer: document.getElementById('filter-grid-container'),
+            trofeuForm: document.getElementById('trofeu-form'),
+            loaders: { filters: document.getElementById('filters-loader'), form: document.getElementById('form-loader') }
+        };
+
+        function resetCache() { cache.competicoes = {}; cache.clubes = {}; cache.paises = {}; cache.jogosDaTemporada = null; }
+
+        async function fetchAndCache(collectionName, id) {
+            if (cache[collectionName]?.[id]) return cache[collectionName][id];
+            const docRef = doc(db, collectionName, id);
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists()) {
+                if (!cache[collectionName]) cache[collectionName] = {};
+                cache[collectionName][id] = { id: docSnap.id, ...docSnap.data() };
+                return cache[collectionName][id];
+            }
+            return null;
+        }
+
+        async function loadPageData(temporada) {
+            resetCache();
+            [ui.filterGridContainer, ui.trofeuForm].forEach(el => el.style.display = 'none');
+            [ui.loaders.filters, ui.loaders.form].forEach(l => l.style.display = 'block');
+            ui.loaders.filters.textContent = 'A carregar dados da temporada...';
+            await Promise.all([loadTopFilters(temporada), loadForm(temporada)]);
+            setupEventListeners(temporada);
+        }
+
+        async function loadTopFilters(temporada) {
+            const jogosQuery = query(collection(db, 'jogos'), where('temporada', '==', temporada));
+            const jogosSnapshot = await getDocs(jogosQuery);
+            cache.jogosDaTemporada = jogosSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            if (cache.jogosDaTemporada.length === 0) {
+                ui.loaders.filters.textContent = 'Nenhum jogo encontrado para esta temporada.';
+                ui.filterGridContainer.innerHTML = ''; return;
+            }
+            const counts = { competicao: {}, equipa: {} };
+            for (const jogo of cache.jogosDaTemporada) {
+                counts.competicao[jogo.competicaoId] = (counts.competicao[jogo.competicaoId] || 0) + 1;
+                counts.equipa[jogo.equipaCasaId] = (counts.equipa[jogo.equipaCasaId] || 0) + 1;
+                counts.equipa[jogo.equipaForaId] = (counts.equipa[jogo.equipaForaId] || 0) + 1;
+            }
+            await Promise.all([...Object.keys(counts.competicao).map(id => fetchAndCache('competicoes', id)), ...Object.keys(counts.equipa).map(id => fetchAndCache('clubes', id))]);
+            await Promise.all([...new Set(Object.values(cache.clubes).map(c => c.paisId).filter(Boolean))].map(id => fetchAndCache('paises', id)));
+            ui.filterGridContainer.innerHTML = `<div><label for="filtro-competicao">Por Competição</label><select id="filtro-competicao"><option value="">Selecione...</option></select></div><div><label for="filtro-equipa">Por Equipa</label><select id="filtro-equipa"><option value="">Selecione...</option></select></div><button id="reset-filters">Reset</button>`;
+            const fc = document.getElementById('filtro-competicao'), fe = document.getElementById('filtro-equipa');
+            Object.keys(counts.competicao).forEach(id => { if (cache.competicoes[id]) fc.innerHTML += `<option value="${id}">${cache.competicoes[id].nome} - (${counts.competicao[id]})</option>`; });
+            Object.keys(counts.equipa).forEach(id => { if (cache.clubes[id]) fe.innerHTML += `<option value="${id}">${cache.clubes[id].nome} <em>(${(cache.paises[cache.clubes[id].paisId]?.nome) || 'N/A'})</em> - (${counts.equipa[id]})</option>`; });
+            ui.loaders.filters.style.display = 'none';
+            ui.filterGridContainer.style.display = 'grid';
+        }
+
+        async function loadForm() {
+            // =====================================================================
+            // NOVO CAMPO "ATIVO" ADICIONADO AO HTML DO FORMULÁRIO
+            // =====================================================================
+            ui.trofeuForm.innerHTML = `
+                <div class="form-grid">
+                    <div><label for="gplayer">GPlayer Vencedor</label><select id="gplayer" required><option value="">Selecione...</option></select><div id="gplayer-loader" class="loader" style="display: none;"></div></div>
+                    <div><label for="competicao">Competição</label><select id="competicao"><option value="">Nenhuma</option></select></div>
+                    <div><label for="clube">Clube</label><select id="clube"><option value="">Nenhum</option></select></div>
+                    <div><label for="texto-livre">Texto Livre</label><input type="text" id="texto-livre" placeholder="Ex: Melhor Marcador"></div>
+                    <div>
+                        <label for="status-ativo">Ativo</label>
+                        <select id="status-ativo">
+                            <option value="yes" selected>Yes</option>
+                            <option value="no">No</option>
+                        </select>
+                    </div>
+                </div><br><button type="submit">Criar Troféu</button>`;
+
+            const [usersSnap, compSnap, clubesSnap] = await Promise.all([getDocs(query(collection(db, 'users'), where('natabela', '==', 'Yes'))), getDocs(collection(db, 'competicoes')), getDocs(collection(db, 'clubes'))]);
+            const gp = document.getElementById('gplayer'), cs = document.getElementById('competicao'), cl = document.getElementById('clube');
+            usersSnap.forEach(doc => gp.innerHTML += `<option value="${doc.id}">${doc.data().nometabela}</option>`);
+            compSnap.forEach(doc => cs.innerHTML += `<option value="${doc.id}">${doc.data().nome}</option>`);
+            clubesSnap.forEach(doc => cl.innerHTML += `<option value="${doc.id}">${doc.data().nome}</option>`);
+            ui.loaders.form.style.display = 'none';
+            ui.trofeuForm.style.display = 'block';
+        }
+        
+        async function findTopGPlayerForCompetition(competicaoId, temporada) {
+            const gp = document.getElementById('gplayer'), loader = document.getElementById('gplayer-loader');
+            gp.disabled = true; loader.style.display = 'block'; loader.textContent = 'A calcular...';
+            const jogosIds = new Set(cache.jogosDaTemporada.filter(j => j.competicaoId === competicaoId).map(j => j.id));
+            if (jogosIds.size === 0) {
+                loader.textContent = 'Sem jogos para calcular.'; setTimeout(() => loader.style.display = 'none', 2000); gp.disabled = false; return;
+            }
+            const palpitesQuery = query(collection(db, 'palpites'), where('temporada', '==', temporada));
+            const palpitesSnap = await getDocs(palpitesQuery);
+            const scores = {};
+            palpitesSnap.forEach(doc => {
+                const p = doc.data();
+                if (jogosIds.has(p.jogoId) && p.TotalPontosGanhos > 0) scores[p.userId] = (scores[p.userId] || 0) + p.TotalPontosGanhos;
+            });
+            gp.value = Object.keys(scores).length > 0 ? Object.keys(scores).reduce((a, b) => scores[a] > scores[b] ? a : b) : "";
+            gp.disabled = false; loader.style.display = 'none';
+        }
+
+        function setupEventListeners(temporada) {
+            ui.filterGridContainer.addEventListener('change', (e) => {
+                if (e.target.id === 'filtro-competicao') {
+                    const id = e.target.value, fe = document.getElementById('filtro-equipa'), cs = document.getElementById('competicao'), cl = document.getElementById('clube');
+                    if (id) { fe.disabled = true; cl.disabled = true; cs.disabled = false; cs.value = id; findTopGPlayerForCompetition(id, temporada); } 
+                    else { fe.disabled = false; }
+                }
+                if (e.target.id === 'filtro-equipa') {
+                    const id = e.target.value, fc = document.getElementById('filtro-competicao'), cs = document.getElementById('competicao'), cl = document.getElementById('clube');
+                    if (id) { fc.disabled = true; cs.disabled = true; cl.disabled = false; cl.value = id; } 
+                    else { fc.disabled = false; }
+                }
+            });
+
+            ui.trofeuForm.addEventListener('input', (e) => {
+                if (e.target.id === 'texto-livre') {
+                    const hasText = e.target.value.trim() !== '', fc = document.getElementById('filtro-competicao'), fe = document.getElementById('filtro-equipa'), cs = document.getElementById('competicao'), cl = document.getElementById('clube');
+                    [cs, cl, fc, fe].forEach(el => { if(el) el.disabled = hasText; });
+                    if (hasText) [cs, cl, fc, fe].forEach(el => { if(el) el.value = ''; });
+                }
+            });
+
+            ui.filterGridContainer.addEventListener('click', (e) => {
+                if (e.target.id === 'reset-filters') {
+                    const elements = ['filtro-competicao', 'filtro-equipa', 'gplayer', 'competicao', 'clube', 'texto-livre', 'status-ativo'];
+                    elements.forEach(id => { const el = document.getElementById(id); if(el) el.value = (id === 'status-ativo' ? 'yes' : ''); });
+                    ['filtro-competicao', 'filtro-equipa', 'competicao', 'clube'].forEach(id => { const el = document.getElementById(id); if(el) el.disabled = false; });
+                }
+            });
+
+            // =====================================================================
+            // LÓGICA DE SUBMISSÃO DO FORMULÁRIO TOTALMENTE REESCRITA
+            // =====================================================================
+            ui.trofeuForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const gp = document.getElementById('gplayer'), cs = document.getElementById('competicao'), cl = document.getElementById('clube'), tl = document.getElementById('texto-livre'), sa = document.getElementById('status-ativo');
+                
+                if (!gp.value) return alert("Selecione um GPlayer Vencedor.");
+
+                // Lógica para definir tipo, descrição e imagem
+                let tipo = "Geral", descricao = "Prémio Geral", imagem = null;
+                const imagemClubeComp = 'https://cdn-icons-png.flaticon.com/512/889/889518.png';
+                const imagemExtra = 'https://cdn-icons-png.flaticon.com/512/1986/1986987.png';
+
+                if (tl.value.trim()) {
+                    tipo = "Extra";
+                    descricao = tl.value.trim();
+                    imagem = imagemExtra;
+                } else if (cl.value) {
+                    tipo = "Clube";
+                    descricao = cl.options[cl.selectedIndex].text;
+                    imagem = imagemClubeComp;
+                } else if (cs.value) {
+                    tipo = "Competição";
+                    descricao = cs.options[cs.selectedIndex].text;
+                    imagem = imagemClubeComp;
+                }
+
+                const trophyData = {
+                    temporada: temporada,
+                    userId: gp.value,
+                    nometabela: gp.options[gp.selectedIndex].text,
+                    texto: descricao,
+                    competicaoId: cs.value || null,
+                    clubeId: cl.value || null,
+                    tipo: tipo,
+                    imagem: imagem,
+                    timestamp: new Date(),
+                    ativo: sa.value,
+                    dataativo: sa.value === 'yes' ? new Date() : null
+                };
+
+                try {
+                    await addDoc(collection(db, 'trofeus'), trophyData);
+                    alert(`Troféu do tipo "${tipo}" criado para ${trophyData.nometabela}!`);
+                    document.getElementById('reset-filters').click();
+                } catch (error) { console.error("Erro ao criar troféu:", error); alert("Ocorreu um erro ao guardar o troféu."); }
+            });
+        }
+        
+        async function handleSaveSeason() {
+            const name = ui.newSeasonNameInput.value.trim();
+            if (!name) { ui.newSeasonError.textContent = "O nome não pode estar vazio."; ui.newSeasonError.style.display = 'block'; return; }
+            const temporadasRef = collection(db, 'paineis/configuracoes_gerais/temporadas');
+            if (!(await getDocs(query(temporadasRef, where('nome', '==', name)))).empty) {
+                ui.newSeasonError.textContent = "Esta temporada já existe."; ui.newSeasonError.style.display = 'block';
+            } else {
+                await addDoc(temporadasRef, { nome: name });
+                ui.modal.style.display = 'none';
+                ui.seasonSelect.innerHTML += `<option value="${name}">${name}</option>`;
+                Array.from(ui.seasonSelect.options).sort((a, b) => b.text.localeCompare(a.text)).forEach(opt => ui.seasonSelect.add(opt));
+                ui.seasonSelect.value = name;
+                ui.seasonSelect.dispatchEvent(new Event('change'));
+            }
+        }
+
+        async function main() {
+            const temporadasRef = collection(db, 'paineis/configuracoes_gerais/temporadas');
+            const [temporadasSnap, configDoc] = await Promise.all([getDocs(temporadasRef), getDoc(doc(db, 'paineis', 'configuracoes_gerais'))]);
+            const temporadas = temporadasSnap.docs.map(d => d.data().nome).sort().reverse();
+            temporadas.forEach(t => ui.seasonSelect.innerHTML += `<option value="${t}">${t}</option>`);
+            if (configDoc.exists()) ui.seasonSelect.value = configDoc.data().temporadaAtual;
+            
+            ui.seasonSelect.addEventListener('change', () => loadPageData(ui.seasonSelect.value));
+            ui.addSeasonBtn.addEventListener('click', () => ui.modal.style.display = 'flex');
+            ui.modalCloseBtn.addEventListener('click', () => { ui.modal.style.display = 'none'; ui.newSeasonError.style.display = 'none'; ui.newSeasonNameInput.value = ''; });
+            ui.saveSeasonBtn.addEventListener('click', handleSaveSeason);
+
+            loadPageData(ui.seasonSelect.value);
+        }
+
+        document.addEventListener('DOMContentLoaded', main);
+    </script>
+</body>
+</html>
