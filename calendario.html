@@ -45,7 +45,7 @@
             color: #ffffff;
             font-size: 1.3em;
             text-align: center;
-            cursor: pointer; /* Indica que o cabeçalho é clicável */
+            cursor: pointer;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -53,7 +53,7 @@
         
         /* ESTILO PARA A RONDA ATUAL */
         .round-container.current-round {
-            background-color: #e7f5ff; /* Fundo azul claro para destaque */
+            background-color: #e7f5ff;
             border: 2px solid #2176ff;
             box-shadow: 0 6px 20px rgba(33, 118, 255, 0.2);
         }
@@ -63,16 +63,19 @@
 
         /* ESTILO PARA A PRÓXIMA RONDA */
         .round-container.next-round {
-            background-color: #fffbe6; /* Fundo âmbar/amarelo claro */
-            border: 2px solid #ffc107;   /* Borda âmbar */
-            box-shadow: 0 6px 20px rgba(255, 193, 7, 0.2); /* Sombra âmbar suave */
+            background-color: #fffbe6;
+            border: 2px solid #ffc107;
+            box-shadow: 0 6px 20px rgba(255, 193, 7, 0.2);
         }
         .round-container.next-round .round-header {
              background-color: #ffc107;
-             color: #333; /* Texto mais escuro para melhor contraste */
+             color: #333;
         }
+        
+        /* NOVO: Estilo combinado para os ícones "Now" e "Next" */
+        .round-container.current-round .round-header h2 i,
         .round-container.next-round .round-header h2 i {
-            margin-right: 10px;
+            margin-right: 10px; /* Adiciona espaço entre o ícone e o texto */
         }
 
         /* ESTILOS PARA O TOGGLE (ABRIR/FECHAR) */
@@ -80,45 +83,26 @@
              transition: transform 0.3s ease-in-out;
         }
         .round-content-wrapper {
-            max-height: 2000px; /* Um valor alto inicial para garantir que o conteúdo caiba */
+            max-height: 2000px;
             overflow: hidden;
-            transition: max-height 0.5s ease-in-out; /* Animação suave */
+            transition: max-height 0.5s ease-in-out;
         }
         .round-container.collapsed .round-content-wrapper {
-            max-height: 0; /* Colapsa o conteúdo */
+            max-height: 0;
         }
         .round-container.collapsed .toggle-icon {
-            transform: rotate(-90deg); /* Roda a seta */
+            transform: rotate(-90deg);
         }
 
-        .competition-list {
-            padding: 10px 15px;
-            border-bottom: 1px solid #f0f0f0;
-        }
-        .round-container .competition-list:last-child {
-            border-bottom: none;
-        }
-
-        .competition-header {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 10px;
-        }
+        .competition-list { padding: 10px 15px; border-bottom: 1px solid #f0f0f0; }
+        .round-container .competition-list:last-child { border-bottom: none; }
+        .competition-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
         .competition-header img { width: 25px; height: 25px; object-fit: contain; }
         .competition-header h3 { font-size: 1.1em; color: #333; }
-
-        .game-list-item {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 12px 0 12px 35px;
-            border-top: 1px solid #eee;
-        }
+        .game-list-item { display: flex; align-items: center; justify-content: space-between; padding: 12px 0 12px 35px; border-top: 1px solid #eee; }
         .game-teams { display: flex; align-items: center; gap: 8px; font-size: 0.95em; }
         .game-teams .vs { color: #888; font-weight: bold; }
         .game-datetime { font-size: 0.85em; color: #666; text-align: right; flex-shrink: 0; }
-        
         .no-games { text-align: center; color: #666; padding: 20px; background: white; border-radius: 8px; margin: 20px 0; }
     </style>
 </head>
@@ -131,9 +115,7 @@
     <div id="main-content-wrapper" style="display: none;">
         <div class="content">
             <h1>Calendário de Jogos</h1>
-            <div id="calendar-container">
-                <!-- Os jogos agrupados por ronda serão carregados aqui -->
-            </div>
+            <div id="calendar-container"></div>
         </div>
 
         <nav class="bottom-menu">
@@ -179,21 +161,17 @@
                 return;
             }
 
-            // 1. Determinar a RONDA ATUAL
             let currentRoundNumber = Infinity;
             allGames.forEach(game => {
                 if (game.inicioIntervalo && game.fimIntervalo) {
                     const inicio = game.inicioIntervalo.toDate();
                     const fim = game.fimIntervalo.toDate();
                     if (now >= inicio && now <= fim) {
-                        if (game.ronda < currentRoundNumber) {
-                            currentRoundNumber = game.ronda;
-                        }
+                        if (game.ronda < currentRoundNumber) currentRoundNumber = game.ronda;
                     }
                 }
             });
             
-            // 2. Se nenhuma ronda estiver ativa, encontrar a PRÓXIMA
             let nextRoundNumber = null;
             if (currentRoundNumber === Infinity) {
                 currentRoundNumber = null;
@@ -205,7 +183,6 @@
                 }
             }
 
-            // 3. Agrupar jogos
             const groupedData = {};
             for (const game of allGames) {
                 if (!game.ronda || !game.competicaoId) continue;
@@ -216,9 +193,7 @@
                 groupedData[game.ronda][game.competicaoId].games.push(game);
             }
 
-            // 4. Renderizar o HTML
             const sortedRounds = Object.keys(groupedData).sort((a, b) => Number(a) - Number(b));
-
             for (const roundNumber of sortedRounds) {
                 const isCurrent = (Number(roundNumber) === currentRoundNumber);
                 const isNext = (Number(roundNumber) === nextRoundNumber);
@@ -228,7 +203,6 @@
                 if (isCurrent) roundClasses += ' current-round';
                 else if (isNext) roundClasses += ' next-round';
 
-                // Rondas que não são a atual nem a próxima começam fechadas
                 if (!isCurrent && !isNext) {
                     roundClasses += ' collapsed';
                 }
@@ -237,8 +211,11 @@
                 const roundHeader = document.createElement('div');
                 roundHeader.className = 'round-header';
                 
+                // --- NOVO: Lógica de cabeçalho com "Now" e "Next" ---
                 let headerHTML = '';
-                if (isNext) {
+                if (isCurrent) {
+                    headerHTML = `<h2><i class="fas fa-play-circle"></i> Now: Ronda ${roundNumber}</h2>`;
+                } else if (isNext) {
                     headerHTML = `<h2><i class="fas fa-forward"></i> Next: Ronda ${roundNumber}</h2>`;
                 } else {
                     headerHTML = `<h2>Ronda ${roundNumber}</h2>`;
@@ -267,7 +244,6 @@
                         const gameDate = game.dataJogo.toDate();
                         const formattedDate = gameDate.toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' });
                         const formattedTime = gameDate.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
-
                         const gameElement = document.createElement('div');
                         gameElement.className = 'game-list-item';
                         gameElement.innerHTML = `<div class="game-teams"><span>${game.equipaCasa}</span><span class="vs">vs</span><span>${game.equipaFora}</span></div><div class="game-datetime">${formattedDate} - ${formattedTime}</div>`;
@@ -279,14 +255,12 @@
                 container.appendChild(roundContainer);
             }
 
-            // 5. Adicionar lógica de Toggle
             document.querySelectorAll('.round-header').forEach(header => {
                 header.addEventListener('click', () => {
                     header.closest('.round-container').classList.toggle('collapsed');
                 });
             });
 
-            // 6. Adicionar lógica de Scroll Automático
             const highlightedRound = document.querySelector('.current-round, .next-round');
             if (highlightedRound) {
                 highlightedRound.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -300,7 +274,6 @@
         }
     }
 
-    // --- Ponto de Entrada da Página ---
     onAuthStateChanged(auth, async (user) => {
         if (user) {
             const userInfo = await getUserStatus(user.uid);
