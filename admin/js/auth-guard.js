@@ -16,10 +16,12 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
+// Roles permitidas para aceder à página
 const ROLES_PERMITIDAS = ["ruler", "estafeta"];
 
 onAuthStateChanged(auth, async (user) => {
     if (user) {
+        // Se o utilizador está autenticado, verifica o seu estatuto
         const userDocRef = doc(db, "users", user.uid);
         const userDoc = await getDoc(userDocRef);
         
@@ -27,26 +29,29 @@ onAuthStateChanged(auth, async (user) => {
             // 1. Mostra o corpo da página para todos os utilizadores permitidos ("ruler", "estafeta")
             document.body.style.display = 'flex';
             
-            // ============================================================
-            // == NOVA LÓGICA PARA MOSTRAR O CARD ESPECIAL PARA O "RULER" ==
-            // ============================================================
-            // 2. Verifica se o utilizador tem o estatuto específico de "ruler"
+            // 2. Verifica se o utilizador tem o estatuto específico de "ruler" para mostrar os cards especiais
             if (userDoc.data().estatuto === 'ruler') {
+                // Mostra o card "G Empire Eye"
                 const eyeCard = document.getElementById('eye-card');
                 if (eyeCard) {
-                    // Mostra o card "Eye", que por padrão está escondido
-                    // Usamos 'flex' para manter a consistência com o display dos outros cards
                     eyeCard.style.display = 'flex';
                 }
+
+                // Mostra o card "Troféus"
+                const trofeusCard = document.getElementById('trofeus-card');
+                if (trofeusCard) {
+                    trofeusCard.style.display = 'flex';
+                }
             }
-            // ============================================================
 
         } else {
             // Utilizador autenticado, mas sem o estatuto correto
+            console.warn("Acesso negado: o utilizador não tem a role permitida.");
             window.location.replace('/acesso-negado.html');
         }
     } else {
         // Utilizador não autenticado
+        console.log("Utilizador não autenticado, a redirecionar para o login.");
         window.location.replace('/login.html');
     }
 });
