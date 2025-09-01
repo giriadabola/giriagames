@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Empire - Ggames</title>
+    <title>Empire - G EMPIRE</title>
         <link rel="icon" type="image/png" href="https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhTl6Ljabwgx-VXdZz8FcAoygQprujSsCoXc32Y_iU0FjYVPu1B6MffWwp8gcCVuV8TWn39FRk9OIe1nc-esubVJYmdLsTptAoR9GyqNuw4R5MBaeaoWXTc3JaqH2YVNtEmfReQqohvQKvHiI0XwE5na2ty2B9Bt4oELxYv2BaZ7R3UmeylpiVEiIbiLnCB/s320/soccer-ball-png.webp">
 
     <!-- Font Awesome for icons -->
@@ -820,8 +820,8 @@
     </button>
 
     <!-- JavaScript Module -->
-    <script src="config.js"></script>
         <!-- JavaScript Module -->
+         <script src="config.js"></script>
         <script type="module">
             // --- Firebase Imports ---
             import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
@@ -830,16 +830,7 @@
 
             console.log("Empire Page Script: Module loading initiated.");
 
-            // --- Firebase Configuration ---
-            const firebaseConfig = {
-                 apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0", // IMPORTANT: Hide in production
-                 authDomain: "g-games-8a8fc.firebaseapp.com",
-                 projectId: "g-games-8a8fc",
-                 storageBucket: "g-games-8a8fc.appspot.com",
-                 messagingSenderId: "689897349449",
-                 appId: "1:689897349449:web:536599794579901beb7a98",
-                 measurementId: "G-GTTPJ6G5MD"
-            };
+
 
             // --- Firebase Initialization ---
             console.log("Empire Page Script: Initializing Firebase app...");
@@ -861,6 +852,7 @@
             let selectedFilosofia = null; // For filosofia choice flow
             let selectedStadiumForPurchase = null; // For stadium purchase flow
             let selectedItemForPurchase = null; // For item purchase flow
+            let empireParentItemIds = null;
 
             // --- Utility Functions ---
 
@@ -947,6 +939,30 @@
             }
             // --- Fim das Funções Auxiliares (Intervalo) ---
 
+            async function loadEmpireParentMap() {
+    if (empireParentItemIds !== null) {
+        // Se o mapa já foi carregado, não faz nada.
+        console.log("loadEmpireParentMap: Mapa de pais já está em cache. A saltar a leitura da BD.");
+        return;
+    }
+    console.log("loadEmpireParentMap: Primeira chamada. A ler a BD para construir o mapa de pais...");
+    try {
+        const allItemsSnapshot = await getDocs(collection(db, 'empireitens'));
+        const parentIds = new Set();
+        allItemsSnapshot.forEach(doc => {
+            const data = doc.data();
+            if (data.anexadoItemId) {
+                parentIds.add(data.anexadoItemId);
+            }
+        });
+        empireParentItemIds = parentIds; // Armazena o resultado na variável global
+        console.log(`loadEmpireParentMap: Mapa construído. ${empireParentItemIds.size} itens pais encontrados.`);
+    } catch (error) {
+        console.error("loadEmpireParentMap: Falha ao construir o mapa de pais:", error);
+        // Em caso de erro, cria um Set vazio para que a app não quebre
+        empireParentItemIds = new Set();
+    }
+}
 
             /**
              * Verifica se um item está disponível hoje com base na sua string de disponibilidade.
@@ -1017,9 +1033,58 @@
 
 
             // --- Filosofia Choice Flow Functions ---
-            function showPopup(filosofia) {
-                 console.log("showPopup: Showing popup for filosofia selection:", filosofia); selectedFilosofia = filosofia; const popup = document.getElementById('popup-overlay'); const popupTitle = popup?.querySelector('.popup-title'); const itemsGrid = popup?.querySelector('.items-grid'); const escolherButton = document.getElementById('escolher-filosofia-btn'); if (!popup || !popupTitle || !itemsGrid || !escolherButton) { console.error("showPopup: Essential elements for filosofia popup not found."); return; } popupTitle.textContent = filosofia.nome || 'Escolha a Filosofia'; itemsGrid.innerHTML = '<p>A carregar itens...</p>'; escolherButton.style.display = 'inline-block'; const filosofiaItemsQuery = query( collection(db, 'empireitens'), where('anexadoItemId', '==', filosofia.id), where('noMercado', '==', true), orderBy('ordem', 'asc') ); console.log("showPopup: Querying items for filosofia ID:", filosofia.id); getDocs(filosofiaItemsQuery).then((snapshot) => { const itemsByType = {}; let totalItems = 0; snapshot.forEach((doc) => { const item = { id: doc.id, ...doc.data() }; const tipo = item.tipo || 'Outros'; if (!itemsByType[tipo]) itemsByType[tipo] = []; itemsByType[tipo].push(item); totalItems++; }); const sortedTypes = Object.keys(itemsByType).sort(); let itemIndex = 0; itemsGrid.innerHTML = ''; if (totalItems === 0) { itemsGrid.innerHTML = '<p>Nenhum item associado.</p>'; } else { sortedTypes.forEach(tipo => { const typeHeader = document.createElement('div'); typeHeader.className = 'type-header'; typeHeader.textContent = tipo; itemsGrid.appendChild(typeHeader); itemsByType[tipo].forEach((item) => { const itemCard = document.createElement('div'); itemCard.className = 'item-card'; itemCard.innerHTML = `<img src="${item.imagem || 'placeholder.png'}" alt="${item.nome || ''}" class="item-image"><div class="item-name">${item.nome || 'Item'}</div><div class="item-nota">${item.nota || 'N/A'}</div>`; itemCard.addEventListener('click', () => window.showNestedPopup(item)); itemsGrid.appendChild(itemCard); requestAnimationFrame(() => { setTimeout(() => { itemCard.classList.add('visible'); }, itemIndex * 100); }); itemIndex++; }); }); } }).catch(error => { console.error(`showPopup: Error fetching items for filosofia ${filosofia.id}:`, error); itemsGrid.innerHTML = '<p style="color:red;">Erro ao carregar itens.</p>'; }); popup.classList.add('active');
+       async function showPopup(filosofia) {
+    console.log("showPopup (Smart Click): Mostrando popup para a filosofia:", filosofia);
+    selectedFilosofia = filosofia;
+    const popup = document.getElementById('popup-overlay');
+    const popupTitle = popup?.querySelector('.popup-title');
+    const itemsGrid = popup?.querySelector('.items-grid');
+    const escolherButton = document.getElementById('escolher-filosofia-btn');
+
+    if (!popup || !popupTitle || !itemsGrid || !escolherButton) return;
+
+    popupTitle.textContent = filosofia.nome || 'Escolha a Filosofia';
+    itemsGrid.innerHTML = '<p>A carregar itens...</p>';
+    escolherButton.style.display = 'inline-block';
+    popup.classList.add('active');
+
+    try {
+        await loadEmpireParentMap(); // Garante que o nosso mapa global está carregado
+
+        const filosofiaItemsQuery = query(collection(db, 'empireitens'), where('anexadoItemId', '==', filosofia.id), where('noMercado', '==', true), orderBy('ordem', 'asc'));
+        const snapshot = await getDocs(filosofiaItemsQuery);
+        const itemsToDisplay = [];
+        snapshot.forEach(doc => itemsToDisplay.push({ id: doc.id, ...doc.data() }));
+
+        itemsGrid.innerHTML = '';
+        if (itemsToDisplay.length === 0) {
+            itemsGrid.innerHTML = '<p>Nenhum item associado.</p>';
+            return;
+        }
+
+        itemsToDisplay.forEach((item, itemIndex) => {
+            const itemCard = document.createElement('div');
+            itemCard.className = 'item-card';
+            itemCard.innerHTML = `<img src="${item.imagem || 'placeholder.png'}" alt="${item.nome || ''}" class="item-image"><div class="item-name">${item.nome || 'Item'}</div><div class="item-nota">${item.nota || 'N/A'}</div>`;
+            
+            if (empireParentItemIds.has(item.id)) {
+                itemCard.style.cursor = 'pointer';
+                itemCard.addEventListener('click', () => window.showNestedPopup(item));
+            } else {
+                itemCard.style.cursor = 'default';
             }
+
+            itemsGrid.appendChild(itemCard);
+            requestAnimationFrame(() => {
+                setTimeout(() => itemCard.classList.add('visible'), itemIndex * 100);
+            });
+        });
+    } catch (error) {
+        console.error(`showPopup: Erro ao obter itens para a filosofia ${filosofia.id}:`, error);
+        itemsGrid.innerHTML = '<p style="color:red;">Erro ao carregar itens.</p>';
+    }
+}
+
             function closePopup() {
                  console.log("closePopup: Closing filosofia selection popup."); const popup = document.getElementById('popup-overlay'); if (popup) popup.classList.remove('active'); selectedFilosofia = null;
             }
@@ -1034,17 +1099,112 @@
              }
 
             // --- Nested Item Popup Logic ---
-            window.showNestedPopup = function(parentItem) {
-                 console.log("showNestedPopup: Showing nested popup for parent item:", parentItem); if (!parentItem || !parentItem.id) { console.error("showNestedPopup: Invalid parentItem data."); return; } const nestedPopup = document.getElementById('nested-popup'); const popupTitle = nestedPopup?.querySelector('.popup-title'); const itemsGrid = nestedPopup?.querySelector('.items-grid'); if (!nestedPopup || !popupTitle || !itemsGrid) { console.error("showNestedPopup: Nested popup elements not found."); return; } popupTitle.textContent = `Itens anexados a: ${parentItem.nome || 'Item'}`; itemsGrid.innerHTML = '<p>A carregar itens...</p>'; console.log(`showNestedPopup: Fetching items where anexadoItemId == ${parentItem.id}`); const itemsQuery = query( collection(db, 'empireitens'), where('anexadoItemId', '==', parentItem.id), where('noMercado', '==', true), orderBy('ordem', 'asc') ); getDocs(itemsQuery).then((snapshot) => { const itemsByType = {}; let totalItems = 0; snapshot.forEach((doc) => { const item = { id: doc.id, ...doc.data() }; const tipo = item.tipo || 'Outros'; if (!itemsByType[tipo]) itemsByType[tipo] = []; itemsByType[tipo].push(item); totalItems++; }); const sortedTypes = Object.keys(itemsByType).sort(); let itemIndex = 0; itemsGrid.innerHTML = ''; if (totalItems === 0) { itemsGrid.innerHTML = '<p>Nenhum item anexado.</p>'; } else { sortedTypes.forEach(tipo => { const typeHeader = document.createElement('div'); typeHeader.className = 'type-header'; typeHeader.textContent = tipo; itemsGrid.appendChild(typeHeader); itemsByType[tipo].forEach((item) => { const itemCard = document.createElement('div'); itemCard.className = 'item-card'; itemCard.innerHTML = `<img src="${item.imagem || 'placeholder.png'}" alt="${item.nome || ''}" class="item-image"><div class="item-name">${item.nome || 'Item'}</div><div class="item-nota">${item.nota || 'N/A'}</div>`; itemCard.addEventListener('click', () => window.showNestedPopup(item)); itemsGrid.appendChild(itemCard); requestAnimationFrame(() => { setTimeout(() => { itemCard.classList.add('visible'); }, itemIndex * 100); }); itemIndex++; }); }); } }).catch(error => { console.error(`showNestedPopup: Error fetching nested items for ${parentItem.id}:`, error); itemsGrid.innerHTML = '<p style="color:red;">Erro ao carregar.</p>'; }); nestedPopup.classList.add('active');
-            };
+           
+            window.showNestedPopup = async function(parentItem) {
+    console.log("showNestedPopup (Smart Click): Mostrando popup para o item:", parentItem);
+    if (!parentItem || !parentItem.id) return;
+
+    const nestedPopup = document.getElementById('nested-popup');
+    const popupTitle = nestedPopup?.querySelector('.popup-title');
+    const itemsGrid = nestedPopup?.querySelector('.items-grid');
+    if (!nestedPopup || !popupTitle || !itemsGrid) return;
+
+    popupTitle.textContent = `Itens anexados a: ${parentItem.nome || 'Item'}`;
+    itemsGrid.innerHTML = '<p>A carregar itens...</p>';
+    nestedPopup.classList.add('active');
+
+    try {
+        await loadEmpireParentMap(); // Garante que o mapa está carregado
+
+        const itemsQuery = query(collection(db, 'empireitens'), where('anexadoItemId', '==', parentItem.id), where('noMercado', '==', true), orderBy('ordem', 'asc'));
+        const snapshot = await getDocs(itemsQuery);
+        
+        const itemsToDisplay = [];
+        snapshot.forEach(doc => itemsToDisplay.push({ id: doc.id, ...doc.data() }));
+
+        itemsGrid.innerHTML = '';
+        if (itemsToDisplay.length === 0) {
+            itemsGrid.innerHTML = '<p>Nenhum item anexado.</p>';
+            return;
+        }
+
+        itemsToDisplay.forEach((item, itemIndex) => {
+            const itemCard = document.createElement('div');
+            itemCard.className = 'item-card';
+            itemCard.innerHTML = `<img src="${item.imagem || 'placeholder.png'}" alt="${item.nome || ''}" class="item-image"><div class="item-name">${item.nome || 'Item'}</div><div class="item-nota">${item.nota || 'N/A'}</div>`;
+
+            if (empireParentItemIds.has(item.id)) {
+                itemCard.style.cursor = 'pointer';
+                itemCard.addEventListener('click', () => window.showNestedPopup(item));
+            } else {
+                itemCard.style.cursor = 'default';
+            }
+
+            itemsGrid.appendChild(itemCard);
+            requestAnimationFrame(() => {
+                setTimeout(() => itemCard.classList.add('visible'), itemIndex * 100);
+            });
+        });
+    } catch (error) {
+        console.error(`showNestedPopup: Erro ao obter itens para ${parentItem.id}:`, error);
+        itemsGrid.innerHTML = '<p style="color:red;">Erro ao carregar.</p>';
+    }
+};
+
             window.closeNestedPopup = function() {
                  console.log("closeNestedPopup: Closing nested popup."); const popup = document.getElementById('nested-popup'); if (popup) popup.classList.remove('active');
             };
 
             // --- Stadium-Specific Popup Logic ---
-            async function showStadiumDetailsPopup(stadium) {
-                 console.log("showStadiumDetailsPopup: Showing ATTACHED ITEMS for stadium:", stadium); const popup = document.getElementById('stadium-details-popup'); const title = popup?.querySelector('.popup-title'); const itemsGrid = document.getElementById('stadium-attached-items-grid'); if (!popup || !title || !itemsGrid ) { console.error("showStadiumDetailsPopup: Stadium details popup elements not found."); return; } title.textContent = `Itens Anexados a: ${stadium.nome || 'Estádio'}`; itemsGrid.innerHTML = '<p>A carregar...</p>'; const attachedItemsQuery = query( collection(db, 'empireitens'), where('anexadoItemId', '==', stadium.id), where('noMercado', '==', true), orderBy('ordem', 'asc') ); try { const snapshot = await getDocs(attachedItemsQuery); const itemsByType = {}; let totalItems = 0; snapshot.forEach(doc => { const item = { id: doc.id, ...doc.data() }; const tipo = item.tipo || 'Outros'; if (!itemsByType[tipo]) itemsByType[tipo] = []; itemsByType[tipo].push(item); totalItems++; }); const sortedTypes = Object.keys(itemsByType).sort(); itemsGrid.innerHTML = ''; if (totalItems === 0) { itemsGrid.innerHTML = '<p>Nenhum item anexado.</p>'; } else { let itemIndex = 0; sortedTypes.forEach(tipo => { const typeHeader = document.createElement('div'); typeHeader.className = 'type-header'; typeHeader.textContent = tipo; itemsGrid.appendChild(typeHeader); itemsByType[tipo].forEach(item => { const itemCard = document.createElement('div'); itemCard.className = 'item-card'; itemCard.innerHTML = `<img src="${item.imagem || 'placeholder.png'}" alt="${item.nome || ''}" class="item-image"><div class="item-name">${item.nome || 'Item'}</div><div class="item-nota">${item.nota || 'N/A'}</div>`; itemCard.addEventListener('click', () => window.showNestedPopup(item)); itemsGrid.appendChild(itemCard); requestAnimationFrame(() => { setTimeout(() => { itemCard.classList.add('visible'); }, itemIndex * 100); }); itemIndex++; }); }); } } catch (error) { console.error(`showStadiumDetailsPopup: Error loading items for ${stadium.id}:`, error); itemsGrid.innerHTML = '<p style="color:red;">Erro ao carregar.</p>'; } popup.classList.add('active');
+          async function showStadiumDetailsPopup(stadium) {
+    console.log("showStadiumDetailsPopup (Smart Click): Mostrando ITENS ANEXADOS para o estádio:", stadium);
+    const popup = document.getElementById('stadium-details-popup');
+    const title = popup?.querySelector('.popup-title');
+    const itemsGrid = document.getElementById('stadium-attached-items-grid');
+    if (!popup || !title || !itemsGrid) return;
+
+    title.textContent = `Itens Anexados a: ${stadium.nome || 'Estádio'}`;
+    itemsGrid.innerHTML = '<p>A carregar...</p>';
+    popup.classList.add('active');
+
+    try {
+        await loadEmpireParentMap(); // Garante que o mapa está carregado
+
+        const attachedItemsQuery = query(collection(db, 'empireitens'), where('anexadoItemId', '==', stadium.id), where('noMercado', '==', true), orderBy('ordem', 'asc'));
+        const snapshot = await getDocs(attachedItemsQuery);
+        
+        const itemsToDisplay = [];
+        snapshot.forEach(doc => itemsToDisplay.push({ id: doc.id, ...doc.data() }));
+
+        itemsGrid.innerHTML = '';
+        if (itemsToDisplay.length === 0) {
+            itemsGrid.innerHTML = '<p>Nenhum item anexado.</p>';
+            return;
+        }
+
+        itemsToDisplay.forEach((item, itemIndex) => {
+            const itemCard = document.createElement('div');
+            itemCard.className = 'item-card';
+            itemCard.innerHTML = `<img src="${item.imagem || 'placeholder.png'}" alt="${item.nome || ''}" class="item-image"><div class="item-name">${item.nome || 'Item'}</div><div class="item-nota">${item.nota || 'N/A'}</div>`;
+
+            if (empireParentItemIds.has(item.id)) {
+                itemCard.style.cursor = 'pointer';
+                itemCard.addEventListener('click', () => window.showNestedPopup(item));
+            } else {
+                itemCard.style.cursor = 'default';
             }
+
+            itemsGrid.appendChild(itemCard);
+            requestAnimationFrame(() => {
+                setTimeout(() => itemCard.classList.add('visible'), itemIndex * 100);
+            });
+        });
+    } catch (error) {
+        console.error(`showStadiumDetailsPopup: Erro ao carregar itens para ${stadium.id}:`, error);
+        itemsGrid.innerHTML = '<p style="color:red;">Erro ao carregar.</p>';
+    }
+}
+
             function closeStadiumDetailsPopup() {
                  console.log("closeStadiumDetailsPopup: Closing stadium details popup."); const popup = document.getElementById('stadium-details-popup'); if (popup) popup.classList.remove('active');
             }
@@ -1192,190 +1352,150 @@
                     // Dar tempo suficiente para ler o popup de sucesso ou aviso
                     setTimeout(() => location.reload(), 3000);
 
-                } catch (error) { // Catch para a transação principal ou getLatestSeason
-                    console.error("confirmStadiumPurchase: Operation failed:", error);
-                    closeInfoPopup(); // Fecha o "Processando..."
-                    const displayError = error.message || 'Falha na compra. Tente novamente.';
-                    showInfoPopup("Erro na Compra", displayError);
-                    selectedStadiumForPurchase = null;
-                }
+               } catch (error) { // Catch para a transação principal ou getLatestSeason
+    console.error("confirmStadiumPurchase: A operação falhou:", error);
+    closeInfoPopup(); // Fecha o popup "Processando..."
+
+    // <<< LÓGICA DE ERRO MODIFICADA >>>
+    let displayError;
+
+    if (error.message.includes("Saldo insuficiente")) {
+        // Embora a sua lógica atual não verifique saldo aqui, é bom ter esta regra
+        displayError = "Saldo Insuficiente";
+    } else if (error.message.includes("lock existente")) {
+        displayError = "Este estádio já foi adquirido por outro império.";
+    } else if (error.message.includes("Já possui um estádio")) {
+        displayError = "A sua conta já possui um estádio.";
+    } else {
+        // Mensagem genérica para outros erros
+        displayError = "Ocorreu uma falha inesperada. Tente novamente.";
+    }
+
+    showInfoPopup("Erro na Compra", displayError);
+    selectedStadiumForPurchase = null;
+}
             }
 
 
             // --- Empire Shop & Item Purchase Flow Functions ---
 
             /** Shows the popup for purchasing items attached to the owned stadium - COM CHIPS DE TIPO e REGRA NÍVEL 2 */
-            async function showEmpireShopPopup(stadiumId, ownedTypeLevelSet) { // <-- Recebe o Set
-                 const sophiaItemId = "gNgWEazHSFzTJJKMtzLL"; // Mantido para referência, se necessário
-                 console.log(`%c[DEBUG] showEmpireShopPopup (Chip+Nivel2 Rule): Called`, 'color: cyan; font-weight: bold;');
-                 console.log(`%c[DEBUG] > Stadium ID received: ${stadiumId}`, 'color: cyan;');
-                 console.log(`%c[DEBUG] > User owned Type:Level combinations:`, 'color: cyan;', ownedTypeLevelSet); // Log do Set
+          async function showEmpireShopPopup(stadiumId, ownedTypeLevelSet) {
+    console.log(`%c[DEBUG] showEmpireShopPopup (Chip+Nivel2+SmartClick): Called`, 'color: cyan; font-weight: bold;');
+    const shopPopup = document.getElementById('empire-shop-popup');
+    const itemsGrid = document.getElementById('empire-shop-items-grid');
+    if (!shopPopup || !itemsGrid || !currentUser) return;
 
-                 const shopPopup = document.getElementById('empire-shop-popup');
-                 const itemsGrid = document.getElementById('empire-shop-items-grid');
-                 if (!shopPopup || !itemsGrid || !currentUser) {
-                      console.error("showEmpireShopPopup: Shop popup elements or currentUser not found.");
-                      if(shopPopup) shopPopup.classList.remove('active');
-                      return;
-                  }
+    itemsGrid.innerHTML = '<p style="color: #a99a7c; text-align: center; grid-column: 1 / -1;">A carregar itens disponíveis...</p>';
+    shopPopup.classList.add('active');
 
-                 itemsGrid.innerHTML = '<p style="color: #a99a7c; text-align: center; grid-column: 1 / -1;">A carregar itens disponíveis...</p>';
-                 shopPopup.classList.add('active');
+    try {
+        // <<< ADICIONE ESTA LINHA >>>
+        // Primeiro, garantimos que o nosso "mapa" de itens que têm filhos está carregado.
+        await loadEmpireParentMap(); 
 
-                 let userHasBoughtToday = false;
-                 let ownedItemNamesSet = new Set(); // Ainda precisamos dos nomes para a verificação 'isOwned'
+        // --- PASSO 1: Verificar Limite de Compra Diário e Obter Nomes Possuídos ---
+        let userHasBoughtToday = false;
+        let ownedItemNamesSet = new Set();
+        const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+        const tomorrowStart = new Date(todayStart); tomorrowStart.setDate(todayStart.getDate() + 1);
 
-                 try {
-                     // --- PASSO 1: Verificar Limite de Compra Diário e Obter Nomes Possuídos ---
-                     console.log("%c[DEBUG] Step 1: Checking daily purchase limit and fetching owned names...", 'color: yellow;');
-                     const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
-                     const tomorrowStart = new Date(todayStart); tomorrowStart.setDate(todayStart.getDate() + 1);
+        const dailyPurchaseQuery = query(collection(db, 'movimentos'), where('userId', '==', currentUser.uid), where('tipo', '==', 'Empire'), where('movimentoData', '>=', todayStart), where('movimentoData', '<', tomorrowStart), limit(1));
+        const ownedItemsQuery = query(collection(db, 'movimentos'), where('userId', '==', currentUser.uid), where('tipo', '==', 'Empire'));
+        const [dailyPurchaseSnapshot, ownedItemsSnapshot] = await Promise.all([ getDocs(dailyPurchaseQuery), getDocs(ownedItemsQuery) ]);
 
-                     // Query para limite diário
-                     const dailyPurchaseQuery = query( collection(db, 'movimentos'), where('userId', '==', currentUser.uid), where('tipo', '==', 'Empire'), where('movimentoData', '>=', todayStart), where('movimentoData', '<', tomorrowStart), limit(1) );
-                     // Query para nomes possuídos (para a verificação 'isOwned')
-                     const ownedItemsQuery = query( collection(db, 'movimentos'), where('userId', '==', currentUser.uid), where('tipo', '==', 'Empire') );
+        userHasBoughtToday = !dailyPurchaseSnapshot.empty;
+        ownedItemsSnapshot.forEach(doc => {
+            const movData = doc.data();
+            if (movData.itemEmpire) ownedItemNamesSet.add(movData.itemEmpire);
+        });
 
-                     const [dailyPurchaseSnapshot, ownedItemsSnapshot] = await Promise.all([
-                         getDocs(dailyPurchaseQuery),
-                         getDocs(ownedItemsQuery)
-                     ]);
+        // --- PASSO 2: Buscar Itens Potenciais ---
+        const purchasableItemsQuery = query(collection(db, 'empireitens'), where('anexadoItemId', '==', stadiumId), where('noMercado', '==', true));
+        const querySnapshot = await getDocs(purchasableItemsQuery);
+        const rawFetchedItems = [];
+        querySnapshot.forEach(doc => rawFetchedItems.push({ id: doc.id, ...doc.data() }));
 
-                     userHasBoughtToday = !dailyPurchaseSnapshot.empty;
-                     ownedItemsSnapshot.forEach(doc => {
-                         const movData = doc.data();
-                         if (movData.itemEmpire) {
-                             ownedItemNamesSet.add(movData.itemEmpire);
-                         }
-                     });
-                     console.log(`%c[DEBUG] > User has bought an Empire item today? ${userHasBoughtToday}`, 'color: yellow;');
-                     console.log(`%c[DEBUG] > User owned item names:`, 'color: yellow;', ownedItemNamesSet);
+        // --- PASSO 3: Filtrar e Renderizar ---
+        const itemsToDisplay = rawFetchedItems.filter(item => item.valor !== undefined && item.valor !== null);
+        itemsGrid.innerHTML = '';
 
-                     // --- PASSO 2: Buscar Itens Potenciais ---
-                     console.log(`%c[DEBUG] Step 2: Querying empireitens where anexadoItemId == ${stadiumId} AND noMercado == true`, 'color: yellow;');
-                    const purchasableItemsQuery = query(
-                        collection(db, 'empireitens'),
-                        where('anexadoItemId', '==', stadiumId),
-                        where('noMercado', '==', true)
-                        // orderBy('ordem', 'asc') // Re-adicionar se ordem específica for crucial
-                    );
-                     const querySnapshot = await getDocs(purchasableItemsQuery);
-                     const rawFetchedItems = []; querySnapshot.forEach(doc => rawFetchedItems.push({ id: doc.id, ...doc.data() }));
-                     console.log(`%c[DEBUG] > Raw items fetched (count: ${rawFetchedItems.length})`, 'color: lightblue;');
-                     // Logs específicos da Sophia podem ser removidos se não forem mais necessários
+        if (itemsToDisplay.length === 0) {
+            itemsGrid.innerHTML = '<p>Nenhum item adicional encontrado.</p>';
+            return;
+        }
 
-                     // --- PASSO 3: Filtrar Itens com Preço ---
-                     console.log("%c[DEBUG] Step 3: Filtering items by price...", 'color: yellow;');
-                     const itemsToDisplay = rawFetchedItems.filter(item => item.valor !== undefined && item.valor !== null);
-                     console.log(`%c[DEBUG] > Items to display after price filter (count: ${itemsToDisplay.length}):`, 'color: yellow;', itemsToDisplay.map(i => ({id: i.id, nome: i.nome, tipo: i.tipo, valor: i.valor, nivel: i.nivel})));
+        itemsToDisplay.forEach((item, index) => {
+            const itemCard = document.createElement('div');
+            itemCard.className = 'item-card';
+            itemCard.style.opacity = 0; itemCard.style.transform = 'translateY(20px)';
+            
+            // Lógica de verificação (posse, disponibilidade, nível)
+            const isOwned = ownedItemNamesSet.has(item.nome);
+            const isAvailableToday = isItemAvailableToday(item.diaDisponivel || item.dataMercado);
+            let needsLevel1 = item.nivel === 'Nível 2';
+            let hasLevel1 = needsLevel1 ? ownedTypeLevelSet.has(`${item.tipo}:Nível 1`) : true;
+            const isDisabled = isOwned || !isAvailableToday || userHasBoughtToday || (needsLevel1 && !hasLevel1);
+            let disabledReason = isOwned ? 'Já Possuído' : (userHasBoughtToday ? 'Limite Diário Atingido' : (!isAvailableToday ? 'Indisponível Hoje' : (needsLevel1 && !hasLevel1 ? 'Requer Nível 1' : '')));
 
+            // Construir o HTML do Cartão
+            const itemType = item.tipo || '???';
+            const nivelDisplay = item.nivel ? ` <span style="font-size:0.8em; color:#aaa;">(${item.nivel})</span>` : '';
+            itemCard.innerHTML = `
+                <span class="item-type-chip">${itemType}</span>
+                <img src="${item.imagem || 'placeholder.png'}" alt="${item.nome || ''}" class="item-image">
+                <div class="item-name">${item.nome || 'Item'}${nivelDisplay}</div>
+                <div class="item-nota" style="min-height: 3em; margin-bottom: 8px;">${item.nota || '...'}</div>
+                <div class="item-nota" style="color: #c9a959; font-weight: bold; margin-bottom: 10px;">${item.valor || '?'} GCoins</div>
+                <button class="popup-button buy-item-btn" style="padding: 5px 10px; font-size: 14px;" ${isDisabled ? 'disabled' : ''}>Comprar</button>
+                <span class="disabled-reason">${disabledReason}</span>
+            `;
 
-                     // --- PASSO 4: Renderizar Itens (com verificação de Nível 2) ---
-                     itemsGrid.innerHTML = ''; // Limpa o "A carregar..."
-                     console.log("%c[DEBUG] Step 4: Rendering item cards (Chip + Nivel2 Rule Layout)...", 'color: yellow;');
-
-                     if (itemsToDisplay.length === 0) {
-                         itemsGrid.innerHTML = '<p>Nenhum item adicional encontrado.</p>';
-                         console.log('%c[DEBUG] > No items to display after filtering.', 'color: orange;');
-                         return;
-                     }
-
-                     itemsToDisplay.forEach((item, index) => {
-                         const logColor = 'gray'; // Simplificado, logs de Sophia removidos para clareza
-                         console.log(`%c[DEBUG] >> Processing card for Item: ${item.nome} (ID: ${item.id}, Tipo: ${item.tipo}, Nível: ${item.nivel})`, `color: ${logColor};`);
-
-                         const itemCard = document.createElement('div');
-                         itemCard.className = 'item-card';
-                         itemCard.style.opacity = 0; itemCard.style.transform = 'translateY(20px)';
-
-                         try {
-                             // Verificar Posse, Disponibilidade, Limite Diário
-                             const isOwned = ownedItemNamesSet.has(item.nome); // Verifica nome
-                             console.log(`%c[DEBUG]     > Is Owned (by name)? ${isOwned}`, `color: ${logColor};`);
-
-                             const availabilityCheckRule = item.diaDisponivel || item.dataMercado;
-                             const isAvailableToday = isItemAvailableToday(availabilityCheckRule);
-                             console.log(`%c[DEBUG]     > Availability Rule: ${availabilityCheckRule || 'N/A'}`, `color: ${logColor};`);
-                             console.log(`%c[DEBUG]     > Is Available Today? ${isAvailableToday}`, `color: ${logColor};`);
-
-                             console.log(`%c[DEBUG]     > User Has Bought Today? ${userHasBoughtToday}`, `color: ${logColor};`);
-
-                             // *** NOVA VERIFICAÇÃO: Requisito de Nível 1 ***
-                             let needsLevel1 = false; // O item precisa do nível 1?
-                             let hasLevel1 = true;    // O user tem o nível 1 necessário? (Assume true inicialmente)
-
-                             if (item.nivel === 'Nível 2') {
-                                 needsLevel1 = true;
-                                 const requiredLevel1Key = `${item.tipo}:Nível 1`; // Ex: "Decoração:Nível 1"
-                                 hasLevel1 = ownedTypeLevelSet.has(requiredLevel1Key); // Verifica no Set
-                                 console.log(`%c[DEBUG]     > Item is Nível 2. Requires '${requiredLevel1Key}'. User has it? ${hasLevel1}`, `color: ${logColor};`);
-                             } else {
-                                 console.log(`%c[DEBUG]     > Item is not Nível 2 or nivel undefined. Skipping Level 1 check.`, `color: ${logColor};`);
-                             }
-
-                             // Determinar se o botão deve ser desativado
-                             const isDisabled = isOwned || !isAvailableToday || userHasBoughtToday || (needsLevel1 && !hasLevel1);
-                             console.log(`%c[DEBUG]     > Is Button Disabled? ${isDisabled}`, `color: ${logColor};`);
-
-                             // Determinar a razão da desativação
-                             let disabledReason = '';
-                             if (isOwned) { disabledReason = 'Já Possuído'; }
-                             else if (userHasBoughtToday) { disabledReason = 'Limite Diário Atingido'; }
-                             else if (!isAvailableToday) { disabledReason = 'Indisponível Hoje'; }
-                             else if (needsLevel1 && !hasLevel1) { disabledReason = 'Requer Nível 1'; } // Nova razão
-                             console.log(`%c[DEBUG]     > Disabled Reason: ${disabledReason || 'N/A'}`, `color: ${logColor};`);
-
-                             // Construir o HTML do Cartão
-                             const itemType = item.tipo || '???';
-                             const nivelDisplay = item.nivel ? ` <span style="font-size:0.8em; color:#aaa;">(${item.nivel})</span>` : ''; // Mostra nível ao lado do nome
-                             itemCard.innerHTML = `
-                                 <span class="item-type-chip">${itemType}</span>
-                                 <img src="${item.imagem || 'placeholder.png'}" alt="${item.nome || ''}" class="item-image">
-                                 <div class="item-name">${item.nome || 'Item'}${nivelDisplay}</div>
-                                 <div class="item-nota" style="min-height: 3em; margin-bottom: 8px;">${item.nota || '...'}</div>
-                                 <div class="item-nota" style="color: #c9a959; font-weight: bold; margin-bottom: 10px;">${item.valor || '?'} GCoins</div>
-                                 <button class="popup-button buy-item-btn" style="padding: 5px 10px; font-size: 14px;" ${isDisabled ? 'disabled' : ''}>Comprar</button>
-                                 <span class="disabled-reason">${disabledReason}</span>
-                             `;
-
-                             // Listener do Botão
-                             if (!isDisabled) {
-                                 const buyButton = itemCard.querySelector('.buy-item-btn');
-                                 if (buyButton) {
-                                     buyButton.onclick = (event) => { event.stopPropagation(); initiateItemPurchase(item); };
-                                 } else { console.warn(`%c[DEBUG] No buy button found for enabled item "${item.nome}"`, `color: ${logColor};`); }
-                             }
-
-                             // Listener do Cartão
-                             itemCard.addEventListener('click', (event) => {
-                                 if (event.target.tagName !== 'BUTTON' || event.target.disabled) {
-                                     window.showNestedPopup(item); // Permite ver detalhes mesmo se desativado/já comprado
-                                 }
-                             });
-
-                             // Adicionar Cartão e Animar
-                             itemsGrid.appendChild(itemCard);
-                              requestAnimationFrame(() => {
-                                 setTimeout(() => {
-                                     itemCard.style.opacity = '1';
-                                     itemCard.style.transform = 'translateY(0)';
-                                     itemCard.classList.add('visible');
-                                 }, index * 100);
-                             });
-
-                         } catch (renderError) {
-                             console.error(`%c[DEBUG] !!! ERROR rendering card for item: "${item.nome || '???'}" (ID: ${item.id})`, `color: ${logColor};`, item, renderError);
-                         }
-                     });
-
-                     console.log(`%c[DEBUG] Finished rendering loop. Total cards attempted: ${itemsToDisplay.length}`, 'color: yellow;');
-
-                 } catch (error) {
-                      console.error("%c[DEBUG] Error during showEmpireShopPopup:", 'color: red;', error);
-                      itemsGrid.innerHTML = `<p style="color:red;">Erro loja: ${error.message}</p>`;
-                 }
-                 console.log(`%c[DEBUG] showEmpireShopPopup (Chip+Nivel2 Rule Layout): Function End`, 'color: cyan; font-weight: bold;');
+            // Listener do Botão de Compra
+            if (!isDisabled) {
+                const buyButton = itemCard.querySelector('.buy-item-btn');
+                if (buyButton) buyButton.onclick = (event) => { event.stopPropagation(); initiateItemPurchase(item); };
             }
+
+            // <<< SUBSTITUA O BLOCO ANTIGO DO LISTENER DO CARTÃO POR ESTE NOVO BLOCO >>>
+            // *** NOVA LÓGICA DE CLIQUE INTELIGENTE ***
+            const hasChildren = empireParentItemIds.has(item.id);
+
+            if (hasChildren) {
+                // Se tem filhos, torna o cartão clicável para ver detalhes.
+                itemCard.style.cursor = 'pointer';
+                itemCard.addEventListener('click', (event) => {
+                    // Previne que o clique no botão de comprar abra o popup de detalhes.
+                    if (event.target.tagName !== 'BUTTON' || event.target.disabled) {
+                        window.showNestedPopup(item);
+                    }
+                });
+            } else {
+                // Se não tem filhos, o cartão não é clicável.
+                itemCard.style.cursor = 'default';
+                // Nenhum listener é adicionado.
+            }
+
+            // Adicionar Cartão e Animar
+            itemsGrid.appendChild(itemCard);
+            requestAnimationFrame(() => {
+                setTimeout(() => {
+                    itemCard.style.opacity = '1';
+                    itemCard.style.transform = 'translateY(0)';
+                    itemCard.classList.add('visible');
+                }, index * 100);
+            });
+        });
+    } catch (error) {
+        console.error("%c[DEBUG] Error during showEmpireShopPopup:", 'color: red;', error);
+        itemsGrid.innerHTML = `<p style="color:red;">Erro loja: ${error.message}</p>`;
+    }
+    console.log(`%c[DEBUG] showEmpireShopPopup (Chip+Nivel2+SmartClick): Function End`, 'color: cyan; font-weight: bold;');
+}
+
+
+
+
 
             function closeEmpireShopPopup() {
                  console.log("closeEmpireShopPopup: Closing empire shop."); const popup = document.getElementById('empire-shop-popup'); if (popup) popup.classList.remove('active');
@@ -1496,15 +1616,28 @@
                       console.log("confirmItemPurchase: Purchase successful. Reloading page...");
                       setTimeout(() => location.reload(), 1500); // Reload happens, clearing the processing message
 
-                 } catch (error) { // This is the main catch block for the whole purchase process
-                      console.error("confirmItemPurchase: Purchase failed:", error);
-                      // *** CHANGED: Show error with OK button (ensure persistent is closed implicitly) ***
-                      const displayError = error.message.includes("insufficiente") || error.message.includes("disponível") || error.message.includes("Limite Diário") || error.message.includes("Requisito: Nível 1")
-                          ? error.message
-                          : `Falha: ${error.message || 'Tente novamente.'}`;
-                      showInfoPopup("Erro na Compra", displayError); // persistent = false (default)
-                      selectedItemForPurchase = null;
-                 } // Closes the catch (error) block
+                } catch (error) { // Este é o bloco catch principal do processo de compra
+    console.error("confirmItemPurchase: A compra falhou:", error);
+
+    // <<< LÓGICA DE ERRO MODIFICADA >>>
+    let displayError; // Variável para a nossa mensagem limpa
+
+    if (error.message.includes("Saldo insuficiente")) {
+        displayError = "Saldo Insuficiente";
+    } else if (error.message.includes("Limite Diário Atingido")) {
+        displayError = "Você já atingiu o limite de uma compra por dia.";
+    } else if (error.message.includes("Item não disponível hoje")) {
+        displayError = "Este item não está disponível para compra hoje.";
+    } else if (error.message.includes("Requisito: Nível 1")) {
+        displayError = "É necessário possuir o Nível 1 deste tipo de item primeiro.";
+    } else {
+        // Para qualquer outro erro inesperado, mostramos uma mensagem genérica
+        displayError = "Ocorreu uma falha inesperada. Tente novamente.";
+    }
+
+    showInfoPopup("Erro na Compra", displayError); // Mostra a nossa mensagem limpa
+    selectedItemForPurchase = null;
+} // Closes the catch (error) block
             } // Closes the async function confirmItemPurchase(confirmed)
 
 
@@ -1658,152 +1791,127 @@
             }
 
             /** Displays the final state: owned items WITHOUT type headers, using TYPE CHIPS */
-            async function displayOwnedEmpireState(userData) {
-                 console.log(`displayOwnedEmpireState (No Headers, Chips): Starting for user ${userData.uid} who owns stadium: ${userData.estadio}`);
-                 let container, list, title, userImagePlaceholder, shopButtonPlaceholder;
-                 let ownedStadiumId = null;
-                 let acquiredItemsDetails = []; // Array de objetos { name, type, level }
-                 let ownedTypeLevelSet = new Set(); // Set de strings "Tipo:Nível"
+      async function displayOwnedEmpireState(userData) {
+    console.log(`displayOwnedEmpireState (Chips+SmartClick): Starting for user ${userData.uid}`);
+    let container, list, title, userImagePlaceholder, shopButtonPlaceholder;
+    let ownedStadiumId = null;
+    let acquiredItemsDetails = [];
+    let ownedTypeLevelSet = new Set();
 
-                 try {
-                     container = document.getElementById('filosofias-container'); list = document.getElementById('filosofias-list'); title = container.querySelector('h2'); userImagePlaceholder = document.getElementById('user-image-placeholder'); shopButtonPlaceholder = document.getElementById('shop-button-placeholder');
-                     if (!container || !list || !title || !userImagePlaceholder || !shopButtonPlaceholder) throw new Error("DOM elements missing!");
-                     list.innerHTML = '<p>A carregar seu império...</p>'; // Mensagem inicial
-                     title.textContent = 'Seu Império Estabelecido'; container.style.display = 'block'; container.style.position = 'relative'; container.style.zIndex = '1'; userImagePlaceholder.innerHTML = ''; shopButtonPlaceholder.innerHTML = '';
-                 } catch (domError) { console.error("displayOwnedEmpireState: DOM access ERROR:", domError); return; }
+    try {
+        container = document.getElementById('filosofias-container'); list = document.getElementById('filosofias-list'); title = container.querySelector('h2'); userImagePlaceholder = document.getElementById('user-image-placeholder'); shopButtonPlaceholder = document.getElementById('shop-button-placeholder');
+        if (!container || !list || !title || !userImagePlaceholder || !shopButtonPlaceholder) throw new Error("DOM elements missing!");
+        list.innerHTML = '<p>A carregar seu império...</p>';
+        title.textContent = 'Seu Império Estabelecido'; container.style.display = 'block'; userImagePlaceholder.innerHTML = ''; shopButtonPlaceholder.innerHTML = '';
+        
+        // <<< ADICIONE ESTA LINHA >>>
+        // Primeiro, garantimos que o nosso "mapa" de itens que têm filhos está carregado.
+        await loadEmpireParentMap();
 
-                 // --- Step 1: Stadium Details & Background ---
-                 try {
-                      const stadiumQuery = query( collection(db, 'empireitens'), where('nome', '==', userData.estadio), where('tipo', '==', 'Estádio'), limit(1)); const stadiumSnapshot = await getDocs(stadiumQuery);
-                      if (!stadiumSnapshot.empty) {
-                           const stadiumDoc = stadiumSnapshot.docs[0];
-                           ownedStadiumId = stadiumDoc.id;
-                           console.log(`displayOwnedEmpireState: Found stadium ID: ${ownedStadiumId}`);
-                           const stadiumData = stadiumDoc.data();
-                           const stadiumImageUrl = stadiumData.imagem;
-                           if (stadiumImageUrl) {
-                                const existingBg = document.getElementById('empire-background-image');
-                                if (existingBg) existingBg.remove();
-                                const backgroundDiv = document.createElement('div');
-                                backgroundDiv.id = 'empire-background-image';
-                                Object.assign(backgroundDiv.style, { position: 'fixed', top: '0', left: '0', width: '100vw', height: '100vh', backgroundImage: `url('${stadiumImageUrl}')`, backgroundSize: 'cover', backgroundPosition: 'center center', opacity: '0.48', zIndex: '-1', pointerEvents: 'none' });
-                                document.body.appendChild(backgroundDiv);
-                                console.log("displayOwnedEmpireState: Background applied.");
-                            } else { console.warn("No stadium image URL."); }
-                        } else { console.warn(`Stadium "${userData.estadio}" not found.`); }
-                 } catch (error) { console.error("Error fetching stadium:", error); }
+    } catch (domError) { console.error("displayOwnedEmpireState: DOM access ERROR:", domError); return; }
 
-                  // --- Step 2: Get Acquired Items Details (com tipo e nível) ---
-                  try {
-                      const movimentosQuery = query(collection(db, 'movimentos'), where('userId', '==', userData.uid), where('tipo', '==', 'Empire'));
-                      const movimentosSnapshot = await getDocs(movimentosQuery);
-                      acquiredItemsDetails = []; ownedTypeLevelSet.clear();
-                       movimentosSnapshot.forEach(doc => {
-                          const movData = doc.data();
-                          // Apenas itens que não sejam Filosofia ou Estádio
-                          if (movData.itemEmpire && movData.empireTipo && movData.empireTipo !== 'Filosofia' && movData.empireTipo !== 'Estádio') {
-                              const itemDetail = {
-                                  name: movData.itemEmpire,
-                                  type: movData.empireTipo,
-                                  // Assume 'Nível 1' se não estiver especificado no movimento (para compatibilidade)
-                                  level: movData.nivel || 'Nível 1'
-                              };
-                              acquiredItemsDetails.push(itemDetail);
-                              // Adiciona ao Set para verificação rápida na loja
-                              ownedTypeLevelSet.add(`${itemDetail.type}:${itemDetail.level}`);
-                          }
-                      });
-                      console.log(`User owns ${acquiredItemsDetails.length} other Empire items.`);
-                      console.log(`Owned Type/Level combinations:`, ownedTypeLevelSet);
-                      // *Não* limpa a lista aqui ainda, espera ter itens para renderizar
-
-                      // --- Step 3: Render Owned Items (SEM AGRUPAMENTO, COM CHIPS) ---
-                      if (acquiredItemsDetails.length === 0) {
-                          list.innerHTML = '<p>Não adquiriu outros itens ainda.</p>'; // Mensagem se não houver itens
-                      } else {
-                          // Busca detalhes completos dos itens (imagem, nota, etc.) para renderizar
-                          const itemPromises = [];
-                          acquiredItemsDetails.forEach(ownedItem => {
-                              const itemQuery = query(collection(db, 'empireitens'), where('nome', '==', ownedItem.name), limit(1));
-                              itemPromises.push(getDocs(itemQuery));
-                          });
-                          const itemSnapshots = await Promise.all(itemPromises);
-
-                          const itemsToDisplay = [];
-                          itemSnapshots.forEach((snapshot, index) => {
-                              if (!snapshot.empty) {
-                                  itemsToDisplay.push({ id: snapshot.docs[0].id, ...snapshot.docs[0].data() });
-                              } else {
-                                  console.warn(`Could not find details in 'empireitens' for item: "${acquiredItemsDetails[index].name}"`);
-                                  // Opcional: adicionar mesmo sem detalhes completos
-                                  // itemsToDisplay.push({ nome: acquiredItemsDetails[index].name, tipo: acquiredItemsDetails[index].type, nivel: acquiredItemsDetails[index].level, imagem: 'placeholder.png', nota: 'Detalhes não encontrados' });
-                              }
-                          });
-
-                          // Ordenar os itens (ainda útil para ordem visual consistente)
-                          itemsToDisplay.sort((a, b) => (a.ordem || 0) - (b.ordem || 0) || a.nome.localeCompare(b.nome));
-                          console.log(`Rendering ${itemsToDisplay.length} acquired item cards directly (with chips)...`);
-
-                          list.innerHTML = ''; // Limpa o "A carregar..." AGORA, antes de adicionar os cartões
-
-                          // *** LOOP ÚNICO PARA RENDERIZAR TODOS OS ITENS ***
-                          itemsToDisplay.forEach((item, index) => { // Usa o index do loop principal
-                              const itemCard = document.createElement('div');
-                              itemCard.className = 'item-card'; // Garante position: relative para o chip
-                              itemCard.style.opacity = 0;
-                              itemCard.style.transform = 'translateY(20px)';
-
-                              const itemType = item.tipo || '???'; // Obtém o tipo
-                              const nivelDisplay = item.nivel ? ` <span style="font-size:0.8em; color:#aaa;">(${item.nivel})</span>` : '';
-
-                              // *** ADICIONA O CHIP DE TIPO AQUI ***
-                              itemCard.innerHTML = `
-                                  <span class="item-type-chip">${itemType}</span>  <!-- O Chip Inteligente -->
-                                  <img src="${item.imagem || 'placeholder.png'}" alt="${item.nome || ''}" class="item-image">
-                                  <div class="item-name">${item.nome || 'Item'}${nivelDisplay}</div>
-                                  <div class="item-nota">${item.nota || 'N/A'}</div>
-                              `;
-
-                              // Adiciona listener para abrir detalhes (se aplicável)
-                              itemCard.addEventListener('click', () => window.showNestedPopup(item));
-
-                              list.appendChild(itemCard); // Adiciona o cartão diretamente à lista
-
-                              // Animação usando o index do loop principal
-                              requestAnimationFrame(() => {
-                                  setTimeout(() => {
-                                      itemCard.style.opacity = '1';
-                                      itemCard.style.transform = 'translateY(0)';
-                                      itemCard.classList.add('visible');
-                                  }, index * 100); // Usa o 'index' do loop forEach
-                              });
-                          });
-                          console.log("Finished rendering acquired items with chips.");
-                      }
-
-                      // --- Step 4: Add User Image (Left) & Shop Button (Right) ---
-                      userImagePlaceholder.innerHTML = '';
-                      if (userData.data?.imagem) {
-                           const userImage = document.createElement('img'); userImage.src = userData.data.imagem; userImage.alt = "Perfil"; userImage.style.width = '45px'; userImage.style.height = '45px'; userImage.style.borderRadius = '50%'; userImage.style.objectFit = 'cover'; userImage.style.border = '2px solid #c9a959'; userImage.style.cursor = 'pointer'; userImage.onclick = () => window.location.href = 'profile.html'; userImagePlaceholder.appendChild(userImage);
-                        } else { console.log("No user image found."); }
-
-                      shopButtonPlaceholder.innerHTML = '';
-                      if (ownedStadiumId) {
-                          console.log("Adding Shop button.");
-                          const shopButton = document.createElement('button');
-                          shopButton.className = 'popup-button';
-                          shopButton.innerHTML = '<i class="fas fa-shopping-cart" style="margin-right: 5px;"></i>Loja';
-                          shopButton.style.padding = '8px 15px';
-                          // Passa o Set correto para a loja
-                          shopButton.onclick = () => showEmpireShopPopup(ownedStadiumId, ownedTypeLevelSet);
-                          shopButtonPlaceholder.appendChild(shopButton);
-                      } else { console.warn("Shop button not added (no stadium ID)."); }
-
-                 } catch (error) {
-                     console.error("Error displaying acquired items/UI:", error);
-                     list.innerHTML = `<p style="color:red;">Erro ao carregar seus itens: ${error.message}</p>`; // Mensagem de erro na lista
-                 }
+    // --- Step 1: Stadium Details & Background ---
+    try {
+        const stadiumQuery = query(collection(db, 'empireitens'), where('nome', '==', userData.estadio), where('tipo', '==', 'Estádio'), limit(1));
+        const stadiumSnapshot = await getDocs(stadiumQuery);
+        if (!stadiumSnapshot.empty) {
+            const stadiumDoc = stadiumSnapshot.docs[0];
+            ownedStadiumId = stadiumDoc.id;
+            const stadiumData = stadiumDoc.data();
+            if (stadiumData.imagem) {
+                const existingBg = document.getElementById('empire-background-image');
+                if (existingBg) existingBg.remove();
+                const backgroundDiv = document.createElement('div');
+                backgroundDiv.id = 'empire-background-image';
+                Object.assign(backgroundDiv.style, { position: 'fixed', top: '0', left: '0', width: '100vw', height: '100vh', backgroundImage: `url('${stadiumData.imagem}')`, backgroundSize: 'cover', backgroundPosition: 'center center', opacity: '0.48', zIndex: '-1', pointerEvents: 'none' });
+                document.body.appendChild(backgroundDiv);
             }
+        }
+    } catch (error) { console.error("Error fetching stadium:", error); }
+
+    // --- Step 2 & 3: Get Acquired Items and Render Them ---
+    try {
+        const movimentosQuery = query(collection(db, 'movimentos'), where('userId', '==', userData.uid), where('tipo', '==', 'Empire'));
+        const movimentosSnapshot = await getDocs(movimentosQuery);
+        acquiredItemsDetails = []; ownedTypeLevelSet.clear();
+        movimentosSnapshot.forEach(doc => {
+            const movData = doc.data();
+            if (movData.itemEmpire && movData.empireTipo && movData.empireTipo !== 'Filosofia' && movData.empireTipo !== 'Estádio') {
+                const itemDetail = { name: movData.itemEmpire, type: movData.empireTipo, level: movData.nivel || 'Nível 1' };
+                acquiredItemsDetails.push(itemDetail);
+                ownedTypeLevelSet.add(`${itemDetail.type}:${itemDetail.level}`);
+            }
+        });
+
+        if (acquiredItemsDetails.length === 0) {
+            list.innerHTML = '<p>Não adquiriu outros itens ainda.</p>';
+        } else {
+            const itemPromises = acquiredItemsDetails.map(ownedItem => getDocs(query(collection(db, 'empireitens'), where('nome', '==', ownedItem.name), limit(1))));
+            const itemSnapshots = await Promise.all(itemPromises);
+
+            const itemsToDisplay = itemSnapshots.map((snapshot, index) => snapshot.empty ? null : { id: snapshot.docs[0].id, ...snapshot.docs[0].data() }).filter(item => item !== null);
+            itemsToDisplay.sort((a, b) => (a.ordem || 0) - (b.ordem || 0) || a.nome.localeCompare(b.nome));
+            list.innerHTML = '';
+
+            itemsToDisplay.forEach((item, index) => {
+                const itemCard = document.createElement('div');
+                itemCard.className = 'item-card';
+                itemCard.style.opacity = 0;
+                itemCard.style.transform = 'translateY(20px)';
+                const itemType = item.tipo || '???';
+                const nivelDisplay = item.nivel ? ` <span style="font-size:0.8em; color:#aaa;">(${item.nivel})</span>` : '';
+                itemCard.innerHTML = `
+                    <span class="item-type-chip">${itemType}</span>
+                    <img src="${item.imagem || 'placeholder.png'}" alt="${item.nome || ''}" class="item-image">
+                    <div class="item-name">${item.nome || 'Item'}${nivelDisplay}</div>
+                    <div class="item-nota">${item.nota || 'N/A'}</div>
+                `;
+
+                // <<< SUBSTITUA O ANTIGO LISTENER POR ESTE BLOCO DE LÓGICA >>>
+                // *** APLICAÇÃO DA REGRA DE CLIQUE INTELIGENTE ***
+                if (empireParentItemIds.has(item.id)) {
+                    // Se o item tem filhos, torna-o clicável.
+                    itemCard.style.cursor = 'pointer';
+                    itemCard.addEventListener('click', () => window.showNestedPopup(item));
+                } else {
+                    // Se não tem filhos, o cartão não é clicável.
+                    itemCard.style.cursor = 'default';
+                }
+
+                list.appendChild(itemCard);
+                requestAnimationFrame(() => {
+                    setTimeout(() => {
+                        itemCard.style.opacity = '1';
+                        itemCard.style.transform = 'translateY(0)';
+                        itemCard.classList.add('visible');
+                    }, index * 100);
+                });
+            });
+        }
+
+        // --- Step 4: Add User Image (Left) & Shop Button (Right) ---
+        if (userData.data?.imagem) {
+            const userImage = document.createElement('img');
+            userImage.src = userData.data.imagem;
+            userImage.alt = "Perfil";
+            Object.assign(userImage.style, { width: '45px', height: '45px', borderRadius: '50%', objectFit: 'cover', border: '2px solid #c9a959', cursor: 'pointer' });
+            userImage.onclick = () => window.location.href = 'profile.html';
+            userImagePlaceholder.appendChild(userImage);
+        }
+
+        if (ownedStadiumId) {
+            const shopButton = document.createElement('button');
+            shopButton.className = 'popup-button';
+            shopButton.innerHTML = '<i class="fas fa-shopping-cart" style="margin-right: 5px;"></i>Loja';
+            shopButton.style.padding = '8px 15px';
+            shopButton.onclick = () => showEmpireShopPopup(ownedStadiumId, ownedTypeLevelSet);
+            shopButtonPlaceholder.appendChild(shopButton);
+        }
+    } catch (error) {
+        console.error("Error displaying acquired items/UI:", error);
+        list.innerHTML = `<p style="color:red;">Erro ao carregar seus itens: ${error.message}</p>`;
+    }
+}
 
 
             // --- Funções para Popup Outros Impérios ---
