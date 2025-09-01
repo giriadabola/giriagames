@@ -248,16 +248,16 @@
 
     <!-- Wrapper para todo o conteúdo principal, começa escondido -->
     <div id="main-content-wrapper" style="display: none;">
-        <div class="top-right-buttons">
-            <a href="calendario.html" class="action-button calendar-button">
-                <i class="fas fa-calendar-alt"></i>
-                Calendário
-            </a>
-            <a href="mods.html" class="action-button mods-button">
-                <i class="fas fa-star"></i>
-                Mods
-            </a>
-        </div>
+       <div class="top-right-buttons">
+    <a href="calendario.html" class="action-button calendar-button" id="calendar-btn">
+        <i class="fas fa-calendar-alt"></i>
+        Calendário
+    </a>
+    <a href="mods.html" class="action-button mods-button" id="mods-btn">
+        <i class="fas fa-star"></i>
+        Mods
+    </a>
+</div>
 
         <div class="content">
             <h1>1x WhatIf...</h1>
@@ -294,9 +294,36 @@
     async function loadMenuSettings() { return getDoc(doc(db, 'paineis', 'paineis menu')).then(d => d.exists() ? d.data() : {}); }
     async function checkPageAccess(userStatus, menuSettings) { if (!menuSettings || menuSettings['1x'] !== 'on') { if (!userStatus || userStatus !== 'ruler') { window.location.href = '404.html'; return false; } } return true; }
     function updateMenuVisibility(menuSettings) { if (!menuSettings) return; document.querySelectorAll('.menu-item').forEach(item => { const key = item.getAttribute('href').replace('.html', ''); if (menuSettings[key] === 'off') item.style.display = 'none'; }); }
-    async function getUserStatus(userId) { const userDoc = doc(db, 'users', userId); const docSnap = await getDoc(userDoc); if (docSnap.exists()) { const userData = docSnap.data(); return { estatuto: userData.estatuto, aceite: userData.aceite }; } else { return null; } }
-    async function setupPageAccess() { try { const menuSettings = await loadMenuSettings(); const hasPageAccess = await checkPageAccess(currentUserStatus, menuSettings); if (!hasPageAccess) { return; } updateMenuVisibility(menuSettings); } catch (error) { window.location.href = '404.html'; } }
+    function updateTopRightButtonsVisibility(menuSettings) {
+    if (!menuSettings) return; // Se não houver configurações, não faz nada
 
+    const calendarBtn = document.getElementById('calendar-btn');
+    const modsBtn = document.getElementById('mods-btn');
+
+    if (calendarBtn && menuSettings.calendario === 'off') {
+        calendarBtn.style.display = 'none';
+    }
+
+    if (modsBtn && menuSettings.mods === 'off') {
+        modsBtn.style.display = 'none';
+    }
+}
+    async function getUserStatus(userId) { const userDoc = doc(db, 'users', userId); const docSnap = await getDoc(userDoc); if (docSnap.exists()) { const userData = docSnap.data(); return { estatuto: userData.estatuto, aceite: userData.aceite }; } else { return null; } }
+async function setupPageAccess() {
+    try {
+        const menuSettings = await loadMenuSettings();
+        const hasPageAccess = await checkPageAccess(currentUserStatus, menuSettings);
+        if (!hasPageAccess) {
+            return;
+        }
+        updateMenuVisibility(menuSettings);
+        // ADICIONE ESTA LINHA AQUI
+        updateTopRightButtonsVisibility(menuSettings); 
+        
+    } catch (error) {
+        window.location.href = '404.html';
+    }
+}
     async function loadActiveGames() {
         const gamesContainer = document.getElementById('games-container');
         const now = new Date();
