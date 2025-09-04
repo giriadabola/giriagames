@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Criar Jogadores Palpites - G EMPIRE</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <script type="module" src="js/auth-guard.js"></script>
+    <style>
+        /* --- ESTILOS GERAIS (sem alterações) --- */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { min-height: 100vh; background-color: #f0f0f0; font-family: Arial, sans-serif; transition: background-color 0.4s ease; }
+        .top-menu { position: fixed; top: 0; left: 0; width: 100%; background-color: #ffffff; box-shadow: 0 2px 10px rgba(0,0,0,0.1); padding: 12px 0; display: flex; justify-content: center; gap: 24px; align-items: center; z-index: 1000; }
+        .menu-item { text-decoration: none; color: #666; transition: color 0.3s ease; font-weight: 500; padding: 8px 16px; border-radius: 4px; font-size: 14px; line-height: 1.4; display: flex; align-items: center; gap: 8px; }
+        .menu-item:hover, .menu-item.active { color: #2176ff; background-color: rgba(33, 118, 255, 0.1); }
+        .content { padding: 80px 20px 20px; max-width: 1200px; margin: 0 auto; }
+        h1 { color: #333; margin-bottom: 30px; text-align: center; position: relative; }
+        .form-container { max-width: 600px; margin: 0 auto; background-color: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .form-group { margin-bottom: 20px; position: relative; }
+        .form-group label { display: block; margin-bottom: 8px; color: #333; font-weight: 500; }
+        .form-group input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px; transition: border-color 0.3s ease; }
+        .form-group input:focus { outline: none; border-color: #2176ff; }
+        #pais-list { position: absolute; top: 100%; left: 0; right: 0; background-color: #ffffff; border: 1px solid #ddd; border-radius: 4px; max-height: 200px; overflow-y: auto; z-index: 1000; }
+        .search-option { padding: 10px; cursor: pointer; transition: background-color 0.3s ease; }
+        .search-option:hover { background-color: #f5f5f5; }
+        .submit-btn { background-color: #2176ff; color: #ffffff; border: none; padding: 12px 24px; border-radius: 4px; font-size: 16px; font-weight: 500; cursor: pointer; transition: background-color 0.3s ease; width: 100%; }
+        .submit-btn:hover { background-color: #1a5cc4; }
+        .submit-btn:disabled { background-color: #cccccc; cursor: not-allowed; }
+        .validation-message { margin-top: 5px; font-size: 14px; min-height: 20px; }
+        .validation-message.warning { color: #ffa500; }
+        .validation-message.error { color: #ff0000; }
+        .validation-message.success { color: #4CAF50; }
+        #search-fab { position: fixed; bottom: 25px; right: 25px; width: 56px; height: 56px; background-color: #2176ff; color: white; border: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 24px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); cursor: pointer; z-index: 1001; transition: background-color 0.3s; }
+        #search-fab:hover { background-color: #1a5cc4; }
+        .popup-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); z-index: 2000; }
+        .popup-container { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: white; padding: 20px; border-radius: 8px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); width: 90%; max-width: 500px; z-index: 2001; }
+        .popup-container h2 { margin-bottom: 15px; }
+        #player-search-input { width: 100%; padding: 10px; font-size: 16px; margin-bottom: 10px; }
+        #search-results { max-height: 300px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; }
+        #search-results .result-item { padding: 12px; cursor: pointer; border-bottom: 1px solid #eee; }
+        #search-results .result-item:last-child { border-bottom: none; }
+        #search-results .result-item:hover { background-color: #f0f0f0; }
+        #search-results .result-item.selected { background-color: #dbeaff; font-weight: bold; }
+        #search-results .result-item small { color: #666; display: block; }
+        #edit-player-btn { margin-top: 15px; width: 100%; }
+        body.edit-mode { background-color: #eef3ff; }
+        .form-buttons .save-btn, .form-buttons .cancel-btn { display: none; margin-top: 10px;}
+        .edit-mode .form-buttons .submit-btn { display: none; }
+        .edit-mode .form-buttons .save-btn, .edit-mode .form-buttons .cancel-btn { display: block; }
+        .save-btn { background-color: #4CAF50; }
+        .save-btn:hover { background-color: #388E3C; }
+        .cancel-btn { background-color: #888; }
+        .cancel-btn:hover { background-color: #666; }
+    </style>
+</head>
+<body style="display: none;">
+    <!-- O seu HTML (nav, content, form, etc.) -->
+    <nav class="top-menu">
+        <a href="engrenagem.html" class="menu-item"><i class="fas fa-home"></i></a>
+        <a href="criar-gplayer.html" class="menu-item"><i class="fas fa-user"></i> CRIAR GPLAYER</a>
+        <a href="criar-jogo.html" class="menu-item"><i class="fas fa-gamepad"></i> CRIAR JOGO</a>
+        <a href="criar-jogadores.html" class="menu-item active"><i class="fas fa-users"></i> CRIAR JOGADORES</a>
+        <a href="criar-clubes.html" class="menu-item"><i class="fas fa-shield-alt"></i> CRIAR CLUBES</a>
+        <a href="criar-competicoes.html" class="menu-item"><i class="fas fa-trophy"></i> CRIAR COMPETIÇÕES</a>
+        <a href="criar-pais.html" class="menu-item"><i class="fas fa-globe"></i> CRIAR PAÍS</a>
+        <a href="criar-mods.html" class="menu-item"><i class="fas fa-puzzle-piece"></i> CRIAR MODS</a>
+        <a href="criar-odds.html" class="menu-item"><i class="fas fa-percentage"></i> CRIAR ODDS</a>
+    </nav>
+
+    <div class="content">
+        <h1>Criar Jogadores Palpites</h1>
+        <div class="form-container">
+            <form id="criar-palpite-form">
+                <div class="form-group">
+                    <label for="nome-jogador">Nome do Jogador</label>
+                    <input type="text" id="nome-jogador" required>
+                    <div id="nome-validation" class="validation-message"></div>
+                </div>
+                <div class="form-group">
+                    <label for="outro-nome">Outro Nome (Opcional)</label>
+                    <input type="text" id="outro-nome">
+                    <div id="outro-nome-validation" class="validation-message"></div>
+                </div>
+                <div class="form-group">
+                    <label for="pais-jogador">País do Jogador</label>
+                    <input type="text" id="pais-jogador" placeholder="Digite para pesquisar..." required>
+                    <div id="pais-list"></div>
+                </div>
+                <div class="form-buttons">
+                    <button type="submit" class="submit-btn" id="submit-btn">Gravar</button>
+                    <button type="button" class="submit-btn save-btn" id="save-edit-btn">Salvar Alterações</button>
+                    <button type="button" class="submit-btn cancel-btn" id="cancel-edit-btn">Cancelar Edição</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <button id="search-fab"><i class="fas fa-search"></i></button>
+
+    <div class="popup-overlay" id="search-overlay">
+        <div class="popup-container">
+            <h2>Pesquisar e Editar Jogador</h2>
+            <input type="text" id="player-search-input" placeholder="Pesquisar por nome ou outro nome...">
+            <div id="search-results"></div>
+            <button class="submit-btn" id="edit-player-btn" disabled>EDITAR</button>
+        </div>
+    </div>
+
+    <script type="module">
+        import { db } from './js/auth-guard.js';
+        import { collection, addDoc, getDocs, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        // --- Elementos do DOM ---
+        const body = document.body;
+        const form = document.getElementById('criar-palpite-form');
+        const nomeInput = document.getElementById('nome-jogador');
+        const outroNomeInput = document.getElementById('outro-nome');
+        const paisInput = document.getElementById('pais-jogador');
+        const paisList = document.getElementById('pais-list');
+        const nomeValidationDiv = document.getElementById('nome-validation');
+        const outroNomeValidationDiv = document.getElementById('outro-nome-validation');
+        const saveEditBtn = document.getElementById('save-edit-btn');
+        const cancelEditBtn = document.getElementById('cancel-edit-btn');
+        const searchFab = document.getElementById('search-fab');
+        const searchOverlay = document.getElementById('search-overlay');
+        const searchInput = document.getElementById('player-search-input');
+        const searchResultsDiv = document.getElementById('search-results');
+        const editPlayerBtn = document.getElementById('edit-player-btn');
+        
+        // --- Variáveis de estado ---
+        let selectedPaisId = null; let selectedPaisName = null;
+        let nomeDebounceTimer; let searchDebounceTimer;
+        let isEditMode = false; let editingDocId = null;
+        let selectedPlayerForEdit = null;
+        let allPlayersCache = [];
+
+        // --- Funções Auxiliares ---
+        async function getAllPlayers() {
+            if (allPlayersCache.length === 0) {
+                console.log("Cache de jogadores vazio. A carregar do Firestore...");
+                try {
+                    const querySnapshot = await getDocs(collection(db, 'jogadorespalpites'));
+                    allPlayersCache = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    console.log(`Carregados ${allPlayersCache.length} jogadores.`);
+                } catch (error) {
+                    console.error("Erro ao carregar todos os jogadores:", error);
+                }
+            }
+            return allPlayersCache;
+        }
+
+        // --- Funções Principais ---
+
+        async function searchPlayers(searchTerm) {
+            if (searchTerm.length < 3) { searchResultsDiv.innerHTML = ''; return; }
+            const players = await getAllPlayers();
+            const searchTermLower = searchTerm.toLowerCase();
+            const results = players.filter(player => {
+                const nome = player.nome || "";
+                const nomeextra = player.nomeextra || "";
+                return nome.toLowerCase().includes(searchTermLower) || nomeextra.toLowerCase().includes(searchTermLower);
+            });
+            displaySearchResults(results);
+        }
+
+        // CORREÇÃO: Função de validação em tempo real agora é case-insensitive
+        async function validateNome() {
+            if (isEditMode) return;
+            const nomeValue = nomeInput.value.trim();
+            outroNomeValidationDiv.textContent = '';
+            if (nomeValue.length < 3) { nomeValidationDiv.textContent = ''; return; }
+            
+            const players = await getAllPlayers();
+            const nomeValueLower = nomeValue.toLowerCase();
+
+            const nameExists = players.some(player => (player.nome || "").toLowerCase() === nomeValueLower);
+
+            if (nameExists) {
+                nomeValidationDiv.textContent = 'Este nome já existe. Se for um jogador diferente, preencha o campo "Outro Nome".';
+                nomeValidationDiv.className = 'validation-message warning';
+            } else {
+                nomeValidationDiv.textContent = '';
+                nomeValidationDiv.className = 'validation-message';
+            }
+        }
+        
+        function openSearchPopup() { 
+            allPlayersCache = []; // Limpa o cache ao abrir para garantir dados atualizados
+            searchOverlay.style.display = 'block'; 
+        }
+        
+        // ... As outras funções (displaySearchResults, enter/exitEditMode, etc.) permanecem as mesmas
+        function closeSearchPopup() {
+            searchOverlay.style.display = 'none';
+            searchInput.value = ''; searchResultsDiv.innerHTML = '';
+            editPlayerBtn.disabled = true; selectedPlayerForEdit = null;
+        }
+
+        function displaySearchResults(results) {
+            searchResultsDiv.innerHTML = '';
+            if (results.length === 0) { searchResultsDiv.innerHTML = '<p style="padding: 10px; color: #888;">Nenhum resultado encontrado.</p>'; return; }
+            results.forEach(player => {
+                const item = document.createElement('div');
+                item.className = 'result-item';
+                item.innerHTML = `${player.nome}<small>${player.nomeextra || 'Sem nome extra'} - ${player.pais}</small>`;
+                item.addEventListener('click', () => {
+                    const currentSelected = searchResultsDiv.querySelector('.selected');
+                    if (currentSelected) currentSelected.classList.remove('selected');
+                    item.classList.add('selected');
+                    selectedPlayerForEdit = player;
+                    editPlayerBtn.disabled = false;
+                });
+                searchResultsDiv.appendChild(item);
+            });
+        }
+
+        function enterEditMode() {
+            if (!selectedPlayerForEdit) return;
+            isEditMode = true; editingDocId = selectedPlayerForEdit.id;
+            body.classList.add('edit-mode');
+            nomeInput.value = selectedPlayerForEdit.nome;
+            outroNomeInput.value = selectedPlayerForEdit.nomeextra || '';
+            paisInput.value = selectedPlayerForEdit.pais;
+            selectedPaisId = selectedPlayerForEdit.paisId;
+            selectedPaisName = selectedPlayerForEdit.pais;
+            closeSearchPopup();
+        }
+
+        function exitEditMode() {
+            isEditMode = false; editingDocId = null; selectedPaisId = null; selectedPaisName = null;
+            body.classList.remove('edit-mode');
+            form.reset();
+            nomeValidationDiv.textContent = ''; outroNomeValidationDiv.textContent = '';
+        }
+
+        async function searchCountries(searchTerm) {
+            const paisesRef = collection(db, 'paises');
+            const searchTermLower = searchTerm.toLowerCase();
+            const querySnapshot = await getDocs(paisesRef);
+            return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(country => country.nome.toLowerCase().includes(searchTermLower));
+        }
+
+        // --- Event Listeners ---
+        searchFab.addEventListener('click', openSearchPopup);
+        searchOverlay.addEventListener('click', (e) => { if (e.target === searchOverlay) closeSearchPopup(); });
+        searchInput.addEventListener('input', () => { clearTimeout(searchDebounceTimer); searchDebounceTimer = setTimeout(() => searchPlayers(searchInput.value), 400); });
+        editPlayerBtn.addEventListener('click', enterEditMode);
+        cancelEditBtn.addEventListener('click', exitEditMode);
+
+        nomeInput.addEventListener('input', () => {
+            clearTimeout(nomeDebounceTimer);
+            nomeDebounceTimer = setTimeout(validateNome, 500);
+        });
+
+        paisInput.addEventListener('input', async (e) => {
+            const searchTerm = e.target.value.trim();
+            selectedPaisId = null; selectedPaisName = null;
+            if (searchTerm.length < 2) { paisList.innerHTML = ''; return; }
+            const countries = await searchCountries(searchTerm);
+            paisList.innerHTML = '';
+            countries.forEach(country => {
+                const div = document.createElement('div');
+                div.className = 'search-option'; div.textContent = country.nome;
+                div.addEventListener('click', () => {
+                    paisInput.value = country.nome;
+                    selectedPaisId = country.id; selectedPaisName = country.nome;
+                    paisList.innerHTML = '';
+                });
+                paisList.appendChild(div);
+            });
+        });
+
+        saveEditBtn.addEventListener('click', async () => {
+            // ... (código para salvar edição, não precisa de alterações)
+            if (!editingDocId) return;
+            const nomeValue = nomeInput.value.trim();
+            const outroNomeValue = outroNomeInput.value.trim();
+            if (!nomeValue || !selectedPaisId) { alert('Nome e País são obrigatórios.'); return; }
+            saveEditBtn.disabled = true; saveEditBtn.textContent = 'A salvar...';
+            try {
+                const playerDocRef = doc(db, 'jogadorespalpites', editingDocId);
+                await updateDoc(playerDocRef, {
+                    nome: nomeValue,
+                    nomeextra: outroNomeValue,
+                    pais: selectedPaisName,
+                    paisId: selectedPaisId
+                });
+                allPlayersCache = []; // Limpa o cache para forçar recarregamento na próxima ação
+                alert('Jogador atualizado com sucesso!');
+                exitEditMode();
+            } catch (error) {
+                console.error("Erro ao atualizar: ", error);
+                alert("Ocorreu um erro ao salvar as alterações.");
+            } finally {
+                saveEditBtn.disabled = false;
+                saveEditBtn.textContent = 'Salvar Alterações';
+            }
+        });
+
+        // CORREÇÃO: Lógica de submit agora é case-insensitive
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (isEditMode) return;
+            const submitBtn = document.getElementById('submit-btn');
+            submitBtn.disabled = true; submitBtn.textContent = 'A gravar...';
+            nomeValidationDiv.textContent = ''; outroNomeValidationDiv.textContent = '';
+            
+            const nomeValue = nomeInput.value.trim();
+            const outroNomeValue = outroNomeInput.value.trim();
+
+            if (!nomeValue || !selectedPaisId) {
+                alert('Por favor, preencha o nome do jogador e selecione um país válido.');
+                submitBtn.disabled = false; submitBtn.textContent = 'Gravar';
+                return;
+            }
+            
+            try {
+                const players = await getAllPlayers();
+                const nomeValueLower = nomeValue.toLowerCase();
+                const outroNomeValueLower = outroNomeValue.toLowerCase();
+
+                const isDuplicate = players.some(player =>
+                    (player.nome || "").toLowerCase() === nomeValueLower &&
+                    (player.nomeextra || "").toLowerCase() === outroNomeValueLower
+                );
+
+                if (isDuplicate) {
+                    outroNomeValidationDiv.textContent = 'Este jogador (com este nome e "outro nome") já existe na base de dados.';
+                    outroNomeValidationDiv.className = 'validation-message error';
+                } else {
+                    await addDoc(collection(db, 'jogadorespalpites'), {
+                        nome: nomeValue,
+                        nomeextra: outroNomeValue,
+                        paisId: selectedPaisId,
+                        pais: selectedPaisName,
+                        dataCriacao: new Date()
+                    });
+                    
+                    allPlayersCache = []; // Limpa o cache para incluir o novo jogador na próxima verificação
+                    nomeValidationDiv.textContent = 'Jogador-palpite criado com sucesso!';
+                    nomeValidationDiv.className = 'validation-message success';
+                    form.reset(); selectedPaisId = null; selectedPaisName = null;
+                    setTimeout(() => { nomeValidationDiv.textContent = ''; nomeValidationDiv.className = 'validation-message'; }, 4000);
+                }
+            } catch (error) {
+                console.error("Erro ao gravar: ", error);
+                alert("Ocorreu um erro ao gravar.");
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Gravar';
+            }
+        });
+    </script>
+</body>
+</html>
