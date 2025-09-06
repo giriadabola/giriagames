@@ -161,27 +161,53 @@
                 return;
             }
 
-            let currentRoundNumber = Infinity;
-            allGames.forEach(game => {
-                if (game.inicioIntervalo && game.fimIntervalo) {
-                    const inicio = game.inicioIntervalo.toDate();
-                    const fim = game.fimIntervalo.toDate();
-                    if (now >= inicio && now <= fim) {
-                        if (game.ronda < currentRoundNumber) currentRoundNumber = game.ronda;
-                    }
-                }
-            });
-            
-            let nextRoundNumber = null;
-            if (currentRoundNumber === Infinity) {
-                currentRoundNumber = null;
-                for (const game of allGames) {
-                    if (game.dataJogo.toDate() > now) {
-                        nextRoundNumber = game.ronda;
-                        break;
-                    }
-                }
+         let currentRoundNumber = null;
+let nextRoundNumber = null;
+
+// 1. Tenta encontrar uma ronda ATUAL (lógica ligeiramente melhorada)
+let potentialCurrentRounds = [];
+allGames.forEach(game => {
+    if (game.inicioIntervalo && game.fimIntervalo) {
+        const inicio = game.inicioIntervalo.toDate();
+        const fim = game.fimIntervalo.toDate();
+        if (now >= inicio && now <= fim) {
+            potentialCurrentRounds.push(game.ronda);
+        }
+    }
+});
+if (potentialCurrentRounds.length > 0) {
+    currentRoundNumber = Math.min(...potentialCurrentRounds); // Pega a de menor número
+}
+
+// 2. Se NENHUMA ronda for atual, então procuramos a última e a próxima
+if (currentRoundNumber === null) {
+
+    // 2a. ENCONTRA A ÚLTIMA RONDA QUE ESTEVE ATIVA
+    let lastActiveRoundNumber = null;
+    let latestEndTime = new Date(0); // Uma data muito antiga para começar a comparação
+
+    allGames.forEach(game => {
+        if (game.fimIntervalo) {
+            const endTime = game.fimIntervalo.toDate();
+            // Se o intervalo já terminou e foi mais recente que o último que guardamos
+            if (endTime < now && endTime > latestEndTime) {
+                latestEndTime = endTime;
+                lastActiveRoundNumber = game.ronda;
             }
+        }
+    });
+
+    // 2b. PROCURA A PRÓXIMA RONDA, EXCLUINDO A QUE JÁ FOI "NOW"
+    for (const game of allGames) {
+        // A condição agora é dupla:
+        // 1. O jogo tem que ser no futuro
+        // 2. A ronda do jogo NÃO PODE ser a última que esteve ativa
+        if (game.dataJogo.toDate() > now && game.ronda !== lastActiveRoundNumber) {
+            nextRoundNumber = game.ronda; // Encontrou a verdadeira próxima ronda
+            break; // Para a busca
+        }
+    }
+}
 
             const groupedData = {};
             for (const game of allGames) {
