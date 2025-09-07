@@ -831,8 +831,65 @@
     }
 }
 
+ .manual-display {
+            background: linear-gradient(135deg, #0288d1, #01579b); /* Tom de azul */
+            box-shadow: 0 4px 15px rgba(2, 136, 209, 0.3);
+            border-radius: 12px;
+            padding: 15px;
+            position: relative;
+            overflow: hidden;
+            color: white;
+            text-align: center;
+            flex: 1;
+            min-width: 120px;
+            max-width: 250px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .manual-display .display-icon::before {
+            font-family: 'Font Awesome 6 Free';
+            content: '\f518'; /* ícone fa-book-open */
+        }
+
+        /* Estilos para o botão Troféus */
+        .trophies-display {
+            background: linear-gradient(135deg, #af9500, #6c5c00); /* Tom de dourado */
+            box-shadow: 0 4px 15px rgba(175, 149, 0, 0.3);
+            border-radius: 12px;
+            padding: 15px;
+            position: relative;
+            overflow: hidden;
+            color: white;
+            text-align: center;
+            flex: 1;
+            min-width: 120px;
+            max-width: 250px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .trophies-display .display-icon::before {
+            font-family: 'Font Awesome 6 Free';
+            content: '\f091'; /* ícone fa-trophy */
+        }
 
 
+          .debt-display,
+        .return-display,
+        .squad-display,
+        .minigames-display {
+            margin-top: 0;
+        }
+
+        /* Adiciona a margem a todos os contentores de botões */
+        .stats-displays-container {
+            margin-top: 15px; /* Aumentei o valor para a mudança ser bem visível */
+        }
 
 
     </style>
@@ -914,6 +971,21 @@
         </div>
     </div>
 
+    <div class="stats-displays-container">
+               <a href="trophies.html" id="trophiesDisplay" class="trophies-display ripple-effect" style="text-decoration: none; display: none;">
+                <div class="display-icon"></div>
+                <div class="display-value" style="font-size: 48px;"><i class="fas fa-trophy"></i></div>
+                <div class="display-label">Troféus</div>
+            </a>
+        
+        <a href="manual.html" id="manualDisplay" class="manual-display ripple-effect" style="text-decoration: none; display: none;">
+                <div class="display-icon"></div>
+                <div class="display-value" style="font-size: 48px;"><i class="fas fa-book-open"></i></div>
+                <div class="display-label">Manual</div>
+            </a>
+
+
+        </div>
 
      <!-- Mini Games Popup -->
      <div class="popup-overlay" id="miniGamesPopup">
@@ -977,6 +1049,8 @@
         const quemGanhaDisplay = miniGamesPopup.querySelector('.quem-ganha-display');
         const mythsDisplay = miniGamesPopup.querySelector('.myths-display');
         const logoutBtn = document.getElementById('logoutBtn');
+         const manualDisplay = document.getElementById('manualDisplay');
+        const trophiesDisplay = document.getElementById('trophiesDisplay');
 
         // Bottom Menu Items
         const bottomMenuHome = document.querySelector('.bottom-menu a[href="1x.html"]');
@@ -1390,7 +1464,7 @@
                 }
             } catch (error) {
                 console.error("Error fetching menu settings:", error);
-                 return { '1x': 'off', bank: 'off', empire: 'off', market: 'off', profile: 'off', rankings: 'off', team: 'off' };
+                return { '1x': 'off', bank: 'off', empire: 'off', market: 'off', profile: 'off', rankings: 'off', team: 'off', manual: 'off', trofeus: 'off' };
             }
         }
 
@@ -1401,6 +1475,8 @@
             if (bottomMenuEmpire) bottomMenuEmpire.style.display = menuSettings.empire === 'on' ? 'flex' : 'none';
             if (bottomMenuRankings) bottomMenuRankings.style.display = menuSettings.rankings === 'on' ? 'flex' : 'none';
             if (bottomMenuProfile) bottomMenuProfile.style.display = menuSettings.profile === 'on' ? 'flex' : 'none';
+            if (manualDisplay) manualDisplay.style.display = menuSettings.manual === 'on' ? 'flex' : 'none';
+            if (trophiesDisplay) trophiesDisplay.style.display = menuSettings.trofeus === 'on' ? 'flex' : 'none';
         }
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -1408,7 +1484,7 @@
             content.style.display = 'none';
         });
 
-      onAuthStateChanged(auth, async (user) => {
+    onAuthStateChanged(auth, async (user) => {
     if (unsubscribePanelListener) {
          unsubscribePanelListener();
          unsubscribePanelListener = null;
@@ -1427,9 +1503,10 @@
     if (user) {
         try {
             const userDocRef = doc(db, 'users', user.uid);
-            const [userDocSnap, menuSettings] = await Promise.all([
+            // CORREÇÃO: Trocamos a leitura do painel de menu pelo de perfil aqui também para consistência.
+            const [userDocSnap, panelSettings] = await Promise.all([
                 getDoc(userDocRef),
-                fetchMenuSettings()
+                fetchPanelSettings() // Usamos as configurações do perfil para tudo
             ]);
 
             if (!userDocSnap.exists() || userDocSnap.data().aceite !== "Yes") {
@@ -1438,20 +1515,17 @@
                 return;
             }
 
-            // CÓDIGO ATUALIZADO ADICIONADO AQUI
             try {
-                // A referência 'userDocRef' já foi criada acima, por isso podemos reutilizá-la
-                await updateDoc(userDocRef, {
-                    ultimoacesso: serverTimestamp()
-                });
+                await updateDoc(userDocRef, { ultimoacesso: serverTimestamp() });
             } catch (error) {
                 console.error("Erro ao atualizar o campo ultimoacesso: ", error);
             }
-            // FIM DA ATUALIZAÇÃO
 
             const userData = userDocSnap.data();
             const userStatus = userData.estatuto || null;
 
+            // Para o acesso à página, continuamos a ler do painel de menu, que é o correto para isso
+            const menuSettings = await fetchMenuSettings();
             const canAccessProfilePage = menuSettings.profile === 'on' || userStatus === 'ruler';
 
             if (!canAccessProfilePage) {
@@ -1459,10 +1533,11 @@
                  window.location.href = '404.html';
                  return;
             }
-
+            
+            // A visibilidade do menu inferior continua a ser controlada pelo 'paineis menu'
             applyMenuVisibility(menuSettings);
 
-            initialPanelSettings = await fetchPanelSettings();
+            initialPanelSettings = panelSettings; // Usamos as configurações já carregadas
 
             if (initialPanelSettings) {
                 gcoinsDisplay.style.display = initialPanelSettings.GCoin === 'on' ? 'flex' : 'none';
@@ -1470,20 +1545,25 @@
                 returnDisplay.style.display = initialPanelSettings.devolver === 'on' ? 'flex' : 'none';
                 squadDisplayLink.style.display = initialPanelSettings.myteam === 'on' ? 'block' : 'none';
                 minigamesDisplay.style.display = initialPanelSettings.minigames === 'on' ? 'flex' : 'none';
+                if (manualDisplay) manualDisplay.style.display = initialPanelSettings.manual === 'on' ? 'flex' : 'none';
+                if (trophiesDisplay) trophiesDisplay.style.display = initialPanelSettings.trofeus === 'on' ? 'flex' : 'none';
 
                 const miniGamesDisplayVisible = initialPanelSettings.minigames === 'on';
                 if (jornadaEuroDisplay) jornadaEuroDisplay.style.display = miniGamesDisplayVisible && initialPanelSettings.world26 === 'on' ? 'block' : 'none';
                 if (quemGanhaDisplay) quemGanhaDisplay.style.display = miniGamesDisplayVisible && initialPanelSettings.quemganha === 'on' ? 'block' : 'none';
             } else {
+                // Fallback caso as configurações não carreguem
                 gcoinsDisplay.style.display = 'flex';
                 debtDisplay.style.display = 'flex';
                 returnDisplay.style.display = 'flex';
                 squadDisplayLink.style.display = 'block';
                 minigamesDisplay.style.display = 'flex';
+                if (manualDisplay) manualDisplay.style.display = 'flex';
+                if (trophiesDisplay) trophiesDisplay.style.display = 'flex';
                 if (jornadaEuroDisplay) jornadaEuroDisplay.style.display = 'block';
                 if (quemGanhaDisplay) quemGanhaDisplay.style.display = 'block';
 
-                initialPanelSettings = { GCoin: 'on', dividas: 'on', devolver: 'on', myteam: 'on', minigames: 'on', world26: 'on', quemganha: 'on' };
+                initialPanelSettings = { GCoin: 'on', dividas: 'on', devolver: 'on', myteam: 'on', minigames: 'on', world26: 'on', quemganha: 'on', manual: 'on', trofeus: 'on' };
             }
 
             const panelSettingsDocRef = doc(db, 'paineis', 'paineis perfil');
@@ -1501,7 +1581,8 @@
 
                 const currentSettings = docSnap.data();
 
-                const fieldsToCheck = ['GCoin', 'dividas', 'devolver', 'myteam', 'minigames', 'world26', 'quemganha', 'myths'];
+                // ===== AQUI ESTÁ A CORREÇÃO PRINCIPAL =====
+                const fieldsToCheck = ['GCoin', 'dividas', 'devolver', 'myteam', 'minigames', 'world26', 'quemganha', 'myths', 'manual', 'trofeus'];
                 let changed = false;
                 for (const field of fieldsToCheck) {
                     if (initialPanelSettings && currentSettings && currentSettings[field] !== initialPanelSettings[field]) {
