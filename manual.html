@@ -37,22 +37,18 @@
         #content-body { line-height: 1.6; color: #333; }
         #content-body h1, #content-body h2 { margin-top: 1.5em; margin-bottom: 0.5em; color: #222; }
         #content-body p { margin-bottom: 1em; }
-        
-        /* --- REGRA DE CSS CORRIGIDA PARA ALINHAMENTO DA IMAGEM --- */
-        #content-body img {
-            max-width: 100%;
-            vertical-align: middle; /* Alinha a imagem com o meio do texto */
-            margin: 0 0.3em;       /* Remove a margem vertical e adiciona uma pequena margem horizontal */
-        }
-
+        #content-body img { max-width: 100%; vertical-align: middle; margin: 0 0.3em; }
         manual-link { color: #2176ff; text-decoration: underline; cursor: pointer; font-weight: bold; }
-        .modal-backdrop { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); z-index: 2000; display: none; justify-content: center; align-items: center; padding: 15px; }
-        .modal-content { background: white; padding: 20px; border-radius: 8px; width: 100%; max-width: 600px; max-height: 90vh; overflow-y: auto; box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
+        .modal-backdrop { position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; padding: 15px; transition: background-color 0.3s ease; }
+        .modal-backdrop.has-opaque-background { background-color: rgba(0,0,0,0.6); }
+        .modal-backdrop.has-translucent-background { background-color: rgba(0,0,0,0.1); }
+        .modal-content { background: white; padding: 20px; border-radius: 8px; width: 100%; max-width: 600px; max-height: 90vh; overflow-y: auto; box-shadow: 0 5px 15px rgba(0,0,0,0.3); transition: transform 0.3s ease, opacity 0.3s ease; }
         .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 15px; }
         .modal-header h3 { margin: 0; }
-        #modal-close-btn { background: none; border: none; font-size: 24px; cursor: pointer; }
+        .modal-close-btn { background: none; border: none; font-size: 24px; cursor: pointer; }
         .topic-content-block { background: #fff; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
         .topic-content-block h3 { margin-top: 0; padding-bottom: 10px; border-bottom: 1px solid #eee; margin-bottom: 15px; }
+        .modal-backdrop.is-underneath .modal-content { transform: scale(0.95); opacity: 0.3; }
         @media (max-width: 768px) {
             .manual-container { display: block; height: auto; }
             #menu-toggle-btn { display: block; }
@@ -89,7 +85,15 @@
             <a href="profile.html" class="menu-item"><i class="fas fa-user"></i></a>
         </nav>
     </div>
-    <div id="link-modal" class="modal-backdrop"><div class="modal-content"><div class="modal-header"><h3 id="modal-title"></h3><button id="modal-close-btn">&times;</button></div><div id="modal-body"></div></div></div>
+    <div id="modal-template" class="modal-backdrop" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title"></h3>
+                <button class="modal-close-btn">&times;</button>
+            </div>
+            <div class="modal-body"></div>
+        </div>
+    </div>
 
 <script src="config.js"></script>
 <script type="module">
@@ -108,17 +112,15 @@
     const contentBody = document.getElementById('content-body');
     const menuToggleBtn = document.getElementById('menu-toggle-btn');
     const mobileOverlay = document.getElementById('mobile-overlay');
-    const linkModal = document.getElementById('link-modal');
-    const modalTitle = document.getElementById('modal-title');
-    const modalBody = document.getElementById('modal-body');
-    const modalCloseBtn = document.getElementById('modal-close-btn');
+    
     let manualDataCache = new Map();
+    let modalZIndex = 2000;
 
     async function getUserStatus(userId) { return getDoc(doc(db, 'users', userId)).then(d => d.exists() ? { estatuto: d.data().estatuto, aceite: d.data().aceite } : null); }
     async function loadMenuSettings() { return getDoc(doc(db, 'paineis', 'paineis menu')).then(d => d.exists() ? d.data() : {}); }
     function checkPageAccess(userStatus, menuSettings) { return (menuSettings['manual'] === 'on' || userStatus === 'ruler'); }
     function updateMenuVisibility(menuSettings) { document.querySelectorAll('.bottom-menu .menu-item').forEach(i => { const k = i.getAttribute('href').replace('.html', ''); if (menuSettings[k] === 'off') i.style.display = 'none'; }); }
-
+    
     async function buildSidebar() {
         const themes = [];
         const topicsByParent = new Map();
@@ -142,36 +144,55 @@
         navContainer.innerHTML = navHTML;
     }
 
-    function displayTopicContent(docId) {
+    function displayTopicContent(docId) { if (!manualDataCache.has(docId)) return; const data = manualDataCache.get(docId); contentTitle.textContent = data.title; contentBody.innerHTML = data.content; }
+    
+    function displayThemeContent(themeId) { if (!manualDataCache.has(themeId)) return; const themeData = manualDataCache.get(themeId); contentTitle.textContent = themeData.title; const childTopics = []; manualDataCache.forEach((item) => { if (item.type === 'Tópico' && item.parentId === themeId) childTopics.push(item); }); childTopics.sort((a, b) => (a.posicao ?? Infinity) - (b.posicao ?? Infinity)); if (childTopics.length === 0) contentBody.innerHTML = '<p>Este tema não possui tópicos visíveis.</p>'; else { let contentHTML = ''; childTopics.forEach(topic => { contentHTML += `<div class="topic-content-block"><h3>${topic.title}</h3><div>${topic.content}</div></div>`; }); contentBody.innerHTML = contentHTML; } }
+    
+    function createAndShowModal(docId) {
         if (!manualDataCache.has(docId)) return;
         const data = manualDataCache.get(docId);
-        contentTitle.textContent = data.title;
-        contentBody.innerHTML = data.content;
-    }
 
-    function displayThemeContent(themeId) {
-        if (!manualDataCache.has(themeId)) return;
-        const themeData = manualDataCache.get(themeId);
-        contentTitle.textContent = themeData.title;
-        const childTopics = [];
-        manualDataCache.forEach((item) => {
-            if (item.type === 'Tópico' && item.parentId === themeId) {
-                childTopics.push(item);
-            }
+        // Usamos :not(#modal-template) para ignorar o template oculto
+        const existingModals = document.querySelectorAll('.modal-backdrop:not(#modal-template)');
+        
+        existingModals.forEach(modal => {
+            modal.classList.add('is-underneath');
+            modal.classList.remove('has-opaque-background');
+            modal.classList.add('has-translucent-background');
         });
-        childTopics.sort((a, b) => (a.posicao ?? Infinity) - (b.posicao ?? Infinity));
-        if (childTopics.length === 0) {
-            contentBody.innerHTML = '<p>Este tema não possui tópicos visíveis.</p>';
-        } else {
-            let contentHTML = '';
-            childTopics.forEach(topic => {
-                contentHTML += `<div class="topic-content-block"><h3>${topic.title}</h3><div>${topic.content}</div></div>`;
-            });
-            contentBody.innerHTML = contentHTML;
+
+        const template = document.getElementById('modal-template');
+        const newModal = template.cloneNode(true);
+        newModal.removeAttribute('id');
+        newModal.style.zIndex = modalZIndex++;
+        newModal.classList.add('has-opaque-background');
+        newModal.querySelector('.modal-title').textContent = data.title;
+        newModal.querySelector('.modal-body').innerHTML = data.content;
+        document.body.appendChild(newModal);
+        newModal.style.display = 'flex';
+    }
+    
+    function closeTopmostModal() {
+        // Usamos :not(#modal-template) aqui também para consistência
+        const allModals = document.querySelectorAll('.modal-backdrop:not(#modal-template)');
+        if (allModals.length === 0) return;
+
+        const topModal = Array.from(allModals).reduce((a, b) => parseInt(a.style.zIndex) > parseInt(b.style.zIndex) ? a : b);
+        if (topModal) {
+            topModal.remove();
+            modalZIndex--;
+        }
+
+        const remainingModals = document.querySelectorAll('.modal-backdrop:not(#modal-template)');
+        if (remainingModals.length > 0) {
+            const newTopModal = Array.from(remainingModals).reduce((a, b) => parseInt(a.style.zIndex) > parseInt(b.style.zIndex) ? a : b);
+            if (newTopModal) {
+                newTopModal.classList.remove('is-underneath');
+                newTopModal.classList.remove('has-translucent-background');
+                newTopModal.classList.add('has-opaque-background');
+            }
         }
     }
-
-    async function showContentInModal(docId) { if (!manualDataCache.has(docId)) return; const data = manualDataCache.get(docId); modalTitle.textContent = data.title; modalBody.innerHTML = data.content; linkModal.style.display = 'flex'; }
 
     function initializeAppManual() {
         buildSidebar();
@@ -189,12 +210,17 @@
             }
             if (window.innerWidth <= 768) document.body.classList.remove('nav-open');
         });
-        contentBody.addEventListener('click', e => { const link = e.target.closest('manual-link'); if (link && link.dataset.id) { e.preventDefault(); showContentInModal(link.dataset.id); } });
         menuToggleBtn.addEventListener('click', () => document.body.classList.toggle('nav-open'));
         mobileOverlay.addEventListener('click', () => document.body.classList.remove('nav-open'));
-        modalCloseBtn.addEventListener('click', () => linkModal.style.display = 'none');
-        linkModal.addEventListener('click', e => { if (e.target === linkModal) linkModal.style.display = 'none'; });
     }
+
+    document.body.addEventListener('click', e => {
+        const manualLink = e.target.closest('manual-link');
+        if (manualLink && manualLink.dataset.id) { e.preventDefault(); createAndShowModal(manualLink.dataset.id); return; }
+        const closeButton = e.target.closest('.modal-close-btn');
+        if (closeButton) { closeTopmostModal(); return; }
+        if (e.target.classList.contains('modal-backdrop')) { if (parseInt(e.target.style.zIndex) === modalZIndex - 1) { closeTopmostModal(); } }
+    });
 
     onAuthStateChanged(auth, async (user) => {
         if (user) {
