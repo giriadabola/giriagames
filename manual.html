@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
         body { min-height: 100vh; background-color: #f0f0f0; font-family: Arial, sans-serif; overflow-x: hidden; }
         .content-wrapper { padding-bottom: 80px; }
         .bottom-menu { position: fixed; bottom: 0; left: 0; width: 100%; background-color: #ffffff; box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1); padding: 12px 0; display: flex; justify-content: center; gap: 32px; align-items: center; z-index: 1000; }
@@ -22,22 +23,22 @@
         .main-header h1 { font-size: 1.5em; color: #333; margin: 0; }
         .manual-container { display: flex; height: calc(100vh - 58px); }
         #manual-nav { flex: 0 0 300px; background: #fff; padding: 15px; overflow-y: auto; border-right: 1px solid #e0e0e0; transition: transform 0.3s ease-in-out; }
-        #manual-nav ul { list-style: none; }
-        .theme-item .theme-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 10px; cursor: pointer; border-radius: 5px; }
-        .theme-item .theme-header:hover { background-color: #f5f5f5; }
-        .theme-item .theme-title { font-weight: bold; color: #333; flex-grow: 1; }
-        .theme-item .toggle-icon { transition: transform 0.3s ease; }
-        .theme-item.collapsed .toggle-icon { transform: rotate(-90deg); }
-        .topic-list { max-height: 1000px; overflow: hidden; transition: max-height 0.5s ease-in-out; padding-left: 15px; }
-        .theme-item.collapsed .topic-list { max-height: 0; }
-        .topic-item { padding: 10px 15px; cursor: pointer; border-radius: 5px; color: #555; font-size: 0.95em; }
-        .topic-item:hover { background-color: #f5f5f5; }
+        
+        #manual-nav ul { list-style: none; padding: 0; }
+        #manual-nav ul ul { padding-left: 20px; }
+        .list-item-header { display: flex; align-items: center; gap: 5px; padding: 10px; cursor: pointer; border-radius: 5px; }
+        .toggle-icon { transition: transform 0.2s ease-in-out; width: 16px; text-align: center; }
+        .list-item.collapsed > .list-item-header .toggle-icon { transform: rotate(-90deg); }
+        .list-item.collapsed > ul { display: none; }
+        .item-title { flex-grow: 1; }
         .nav-item.active { background-color: #e7f5ff !important; color: #2176ff; font-weight: bold; }
+        .list-item-header:not(.active):hover { background-color: #f5f5f5; }
+
         #manual-content { flex: 1; padding: 25px; overflow-y: auto; background: #f9f9f9; }
         #content-body { line-height: 1.6; color: #333; }
         #content-body h1, #content-body h2 { margin-top: 1.5em; margin-bottom: 0.5em; color: #222; }
         #content-body p { margin-bottom: 1em; }
-        #content-body img { max-width: 100%; vertical-align: middle; margin: 0 0.3em; }
+        #content-body img { max-width: 100%; height: auto; vertical-align: middle; margin: 0 0.3em; }
         manual-link { color: #2176ff; text-decoration: underline; cursor: pointer; font-weight: bold; }
         .modal-backdrop { position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; padding: 15px; transition: background-color 0.3s ease; }
         .modal-backdrop.has-opaque-background { background-color: rgba(0,0,0,0.6); }
@@ -46,9 +47,17 @@
         .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 15px; }
         .modal-header h3 { margin: 0; }
         .modal-close-btn { background: none; border: none; font-size: 24px; cursor: pointer; }
+        .modal-backdrop.is-underneath .modal-content { transform: scale(0.95); opacity: 0.3; }
+        
+        .topic-pickcards-container { background: #fff; padding: 15px; border-radius: 8px; margin-bottom: 25px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .topic-pickcards-container h4 { margin-top: 0; margin-bottom: 10px; font-size: 1em; color: #555; }
+        .topic-pickcard { display: inline-block; background-color: #e7f5ff; color: #2176ff; padding: 8px 12px; border-radius: 20px; text-decoration: none; margin-right: 8px; margin-bottom: 8px; font-size: 0.9em; font-weight: 500; transition: background-color 0.2s ease; }
+        .topic-pickcard:hover { background-color: #d0eaff; }
         .topic-content-block { background: #fff; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
         .topic-content-block h3 { margin-top: 0; padding-bottom: 10px; border-bottom: 1px solid #eee; margin-bottom: 15px; }
-        .modal-backdrop.is-underneath .modal-content { transform: scale(0.95); opacity: 0.3; }
+        .element-content-block { border-left: 3px solid #e0eafc; padding-left: 15px; margin-top: 20px; margin-left: 5px; }
+        .element-content-block h4 { margin-top: 0; margin-bottom: 10px; color: #333; }
+        
         @media (max-width: 768px) {
             .manual-container { display: block; height: auto; }
             #menu-toggle-btn { display: block; }
@@ -112,9 +121,11 @@
     const contentBody = document.getElementById('content-body');
     const menuToggleBtn = document.getElementById('menu-toggle-btn');
     const mobileOverlay = document.getElementById('mobile-overlay');
+    const manualContent = document.getElementById('manual-content');
     
     let manualDataCache = new Map();
     let modalZIndex = 2000;
+    let scrollObserver = null;
 
     async function getUserStatus(userId) { return getDoc(doc(db, 'users', userId)).then(d => d.exists() ? { estatuto: d.data().estatuto, aceite: d.data().aceite } : null); }
     async function loadMenuSettings() { return getDoc(doc(db, 'paineis', 'paineis menu')).then(d => d.exists() ? d.data() : {}); }
@@ -124,43 +135,143 @@
     async function buildSidebar() {
         const themes = [];
         const topicsByParent = new Map();
-        manualDataCache.forEach((data, id) => {
-            if (data.type === 'Tema') themes.push({ id, ...data });
-            else if (data.type === 'Tópico') {
-                if (!topicsByParent.has(data.parentId)) topicsByParent.set(data.parentId, []);
-                topicsByParent.get(data.parentId).push({ id, ...data });
+        const elementsByParent = new Map();
+        manualDataCache.forEach(data => {
+            switch (data.type) {
+                case 'Tema': themes.push(data); break;
+                case 'Tópico':
+                    if (!topicsByParent.has(data.parentId)) topicsByParent.set(data.parentId, []);
+                    topicsByParent.get(data.parentId).push(data);
+                    break;
+                case 'Elemento':
+                    if (!elementsByParent.has(data.topicParentId)) elementsByParent.set(data.topicParentId, []);
+                    elementsByParent.get(data.topicParentId).push(data);
+                    break;
             }
         });
         themes.sort((a, b) => a.title.localeCompare(b.title));
-        let navHTML = '<ul>';
-        for (const theme of themes) {
-            navHTML += `<li class="theme-item collapsed" data-id="${theme.id}"><div class="theme-header nav-item"><span class="theme-title">${theme.title}</span><i class="fas fa-chevron-down toggle-icon"></i></div><ul class="topic-list">`;
+        const navUl = document.createElement('ul');
+        themes.forEach(theme => {
             const topics = topicsByParent.get(theme.id) || [];
             topics.sort((a, b) => (a.posicao ?? Infinity) - (b.posicao ?? Infinity));
-            for (const topic of topics) navHTML += `<li class="topic-item nav-item" data-id="${topic.id}">${topic.title}</li>`;
-            navHTML += `</ul></li>`;
-        }
-        navHTML += '</ul>';
-        navContainer.innerHTML = navHTML;
+            const hasChildren = topics.length > 0;
+            const themeLi = createListItem(theme, hasChildren);
+            if (hasChildren) {
+                const topicUl = document.createElement('ul');
+                topics.forEach(topic => {
+                    const elements = elementsByParent.get(topic.id) || [];
+                    elements.sort((a,b) => a.title.localeCompare(b.title));
+                    const topicHasChildren = elements.length > 0;
+                    const topicLi = createListItem(topic, topicHasChildren);
+                    if (topicHasChildren) {
+                        const elementUl = document.createElement('ul');
+                        elements.forEach(element => {
+                            const elementLi = createListItem(element, false);
+                            elementUl.appendChild(elementLi);
+                        });
+                        topicLi.appendChild(elementUl);
+                    }
+                    topicUl.appendChild(topicLi);
+                });
+                themeLi.appendChild(topicUl);
+            }
+            navUl.appendChild(themeLi);
+        });
+        navContainer.innerHTML = '';
+        navContainer.appendChild(navUl);
     }
 
-    function displayTopicContent(docId) { if (!manualDataCache.has(docId)) return; const data = manualDataCache.get(docId); contentTitle.textContent = data.title; contentBody.innerHTML = data.content; }
+    function createListItem(data, isCollapsible) {
+        const li = document.createElement('li');
+        li.className = 'list-item';
+        if (isCollapsible) li.classList.add('collapsed');
+        const header = document.createElement('div');
+        header.className = 'list-item-header nav-item';
+        header.dataset.id = data.id;
+        header.dataset.type = data.type;
+        let iconClass = isCollapsible ? 'fa-chevron-right' : 'fa-minus';
+        let iconStyle = isCollapsible ? '' : 'style="font-size: 0.5em; opacity: 0.5; vertical-align: middle;"';
+        header.innerHTML = `<i class="fas ${iconClass} toggle-icon" ${iconStyle}></i><span class="item-title">${data.title}</span>`;
+        li.appendChild(header);
+        return li;
+    }
+
+    function displayTopicContent(docId) {
+        if (scrollObserver) scrollObserver.disconnect();
+        if (!manualDataCache.has(docId)) return;
+        const data = manualDataCache.get(docId);
+        contentTitle.textContent = data.title;
+        contentBody.innerHTML = data.content;
+    }
     
-    function displayThemeContent(themeId) { if (!manualDataCache.has(themeId)) return; const themeData = manualDataCache.get(themeId); contentTitle.textContent = themeData.title; const childTopics = []; manualDataCache.forEach((item) => { if (item.type === 'Tópico' && item.parentId === themeId) childTopics.push(item); }); childTopics.sort((a, b) => (a.posicao ?? Infinity) - (b.posicao ?? Infinity)); if (childTopics.length === 0) contentBody.innerHTML = '<p>Este tema não possui tópicos visíveis.</p>'; else { let contentHTML = ''; childTopics.forEach(topic => { contentHTML += `<div class="topic-content-block"><h3>${topic.title}</h3><div>${topic.content}</div></div>`; }); contentBody.innerHTML = contentHTML; } }
+    function displayThemeContent(themeId) {
+        if (scrollObserver) scrollObserver.disconnect();
+        if (!manualDataCache.has(themeId)) return;
+        const themeData = manualDataCache.get(themeId);
+        contentTitle.textContent = themeData.title;
+        const childTopics = Array.from(manualDataCache.values()).filter(item => item.type === 'Tópico' && item.parentId === themeId)
+                                .sort((a, b) => (a.posicao ?? Infinity) - (b.posicao ?? Infinity));
+        if (childTopics.length === 0) {
+            contentBody.innerHTML = themeData.content || '<p>Este tema não possui tópicos visíveis.</p>';
+            return;
+        }
+        let pickcardsHTML = '<div class="topic-pickcards-container"><h4>Tópicos:</h4>';
+        childTopics.forEach(topic => pickcardsHTML += `<a href="#topic-${topic.id}" class="topic-pickcard">${topic.title}</a>`);
+        pickcardsHTML += '</div>';
+        
+        let contentHTML = themeData.content ? `<div class="theme-intro">${themeData.content}</div>` : '';
+        childTopics.forEach(topic => {
+            contentHTML += `<div class="topic-content-block scroll-spy-target" data-type="Tópico" id="topic-${topic.id}"><h3>${topic.title}</h3><div>${topic.content}</div>`;
+            const childElements = Array.from(manualDataCache.values()).filter(item => item.type === 'Elemento' && item.topicParentId === topic.id)
+                                    .sort((a, b) => a.title.localeCompare(b.title));
+            if (childElements.length > 0) {
+                childElements.forEach(element => {
+                    contentHTML += `<div class="element-content-block scroll-spy-target" data-type="Elemento" id="element-${element.id}"><h4>${element.title}</h4><div>${element.content}</div></div>`;
+                });
+            }
+            contentHTML += `</div>`;
+        });
+        contentBody.innerHTML = pickcardsHTML + contentHTML;
+        
+        const sections = contentBody.querySelectorAll('.scroll-spy-target');
+        const observerOptions = {
+            root: manualContent,
+            rootMargin: '0px 0px -60% 0px',
+            threshold: 0
+        };
+
+        const observerCallback = (entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const id = entry.target.id.replace(/^(topic-|element-)/, '');
+                    navContainer.querySelectorAll('.nav-item.active').forEach(item => item.classList.remove('active'));
+                    
+                    const activeNavItem = navContainer.querySelector(`.nav-item[data-id="${id}"]`);
+                    if (activeNavItem) {
+                        let current = activeNavItem;
+                        while(current) {
+                            current.classList.add('active');
+                            const parentLi = current.closest('ul')?.closest('li.list-item');
+                            current = parentLi ? parentLi.querySelector('.nav-item') : null;
+                        }
+                    }
+                }
+            });
+        };
+        
+        scrollObserver = new IntersectionObserver(observerCallback, observerOptions);
+        sections.forEach(section => scrollObserver.observe(section));
+    }
     
     function createAndShowModal(docId) {
         if (!manualDataCache.has(docId)) return;
         const data = manualDataCache.get(docId);
-
-        // Usamos :not(#modal-template) para ignorar o template oculto
         const existingModals = document.querySelectorAll('.modal-backdrop:not(#modal-template)');
-        
         existingModals.forEach(modal => {
             modal.classList.add('is-underneath');
             modal.classList.remove('has-opaque-background');
             modal.classList.add('has-translucent-background');
         });
-
         const template = document.getElementById('modal-template');
         const newModal = template.cloneNode(true);
         newModal.removeAttribute('id');
@@ -173,16 +284,10 @@
     }
     
     function closeTopmostModal() {
-        // Usamos :not(#modal-template) aqui também para consistência
         const allModals = document.querySelectorAll('.modal-backdrop:not(#modal-template)');
         if (allModals.length === 0) return;
-
         const topModal = Array.from(allModals).reduce((a, b) => parseInt(a.style.zIndex) > parseInt(b.style.zIndex) ? a : b);
-        if (topModal) {
-            topModal.remove();
-            modalZIndex--;
-        }
-
+        if (topModal) { topModal.remove(); modalZIndex--; }
         const remainingModals = document.querySelectorAll('.modal-backdrop:not(#modal-template)');
         if (remainingModals.length > 0) {
             const newTopModal = Array.from(remainingModals).reduce((a, b) => parseInt(a.style.zIndex) > parseInt(b.style.zIndex) ? a : b);
@@ -197,18 +302,36 @@
     function initializeAppManual() {
         buildSidebar();
         navContainer.addEventListener('click', e => {
-            const navItem = e.target.closest('.nav-item');
-            if (!navItem) return;
-            document.querySelectorAll('.nav-item.active').forEach(el => el.classList.remove('active'));
-            navItem.classList.add('active');
-            if (navItem.classList.contains('theme-header')) {
-                const themeItem = navItem.closest('.theme-item');
-                themeItem.classList.toggle('collapsed');
-                displayThemeContent(themeItem.dataset.id); 
-            } else if (navItem.classList.contains('topic-item')) {
-                displayTopicContent(navItem.dataset.id); 
+            const header = e.target.closest('.list-item-header');
+            if (!header) return;
+            const parentLi = header.parentElement;
+            const id = header.dataset.id;
+            const type = header.dataset.type;
+
+            if (type === 'Tema') {
+                if (parentLi.classList.contains('collapsed')) {
+                    parentLi.classList.remove('collapsed');
+                    parentLi.querySelectorAll('.list-item').forEach(subLi => subLi.classList.remove('collapsed'));
+                } else {
+                    parentLi.classList.add('collapsed');
+                }
+            } else if (type === 'Tópico' && parentLi.querySelector('ul')) {
+                parentLi.classList.toggle('collapsed');
             }
-            if (window.innerWidth <= 768) document.body.classList.remove('nav-open');
+            
+            document.querySelectorAll('.nav-item.active').forEach(el => el.classList.remove('active'));
+            header.classList.add('active');
+
+            switch(type) {
+                case 'Tema':
+                    displayThemeContent(id);
+                    break;
+                case 'Tópico':
+                case 'Elemento':
+                    displayTopicContent(id);
+                    break;
+            }
+            if (window.innerWidth <= 768) { document.body.classList.remove('nav-open'); }
         });
         menuToggleBtn.addEventListener('click', () => document.body.classList.toggle('nav-open'));
         mobileOverlay.addEventListener('click', () => document.body.classList.remove('nav-open'));
