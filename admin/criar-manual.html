@@ -36,7 +36,22 @@
         #new-note-btn { width: 100%; margin-bottom: 15px; background-color: #2176ff; color: white; }
         #save-btn { background-color: #28a745; color: white; }
         #delete-btn { background-color: #dc3545; color: white; }
-        .editor-toolbar { display: flex; gap: 5px; background-color: #f9f9f9; border: 1px solid #ccc; border-bottom: none; padding: 8px; border-radius: 4px 4px 0 0; }
+        .editor-toolbar {
+            /* Propriedades Adicionadas para fixar a barra */
+            position: -webkit-sticky;
+            position: sticky;
+            top: 80px; /* Alinhado com o padding do .content */
+            z-index: 900;
+
+            /* Propriedades Originais */
+            display: flex;
+            gap: 5px;
+            background-color: #f9f9f9;
+            border: 1px solid #ccc;
+            border-bottom: none;
+            padding: 8px;
+            border-radius: 4px 4px 0 0;
+        }
         .toolbar-btn { background: #fff; border: 1px solid #ccc; border-radius: 3px; cursor: pointer; padding: 5px 10px; font-size: 14px; }
         .toolbar-btn:hover { background-color: #f0f0f0; }
         #note-content { width: 100%; min-height: 300px; padding: 10px; border: 1px solid #ccc; border-radius: 0 0 4px 4px; font-size: 16px; line-height: 1.5; background-color: #fff; resize: vertical; overflow-y: auto; }
@@ -65,6 +80,9 @@
         .checkbox-group input[type="checkbox"] { width: auto; cursor: pointer; }
         #save-confirmation-indicator { position: absolute; bottom: 25px; right: 25px; background-color: #28a745; color: white; width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 24px; box-shadow: 0 3px 8px rgba(0,0,0,0.2); opacity: 0; transform: scale(0.5); transition: opacity 0.3s ease, transform 0.3s ease; pointer-events: none; }
         #save-confirmation-indicator.visible { opacity: 1; transform: scale(1); }
+        #scale-controls { position: absolute; top: -15px; left: -15px; display: flex; gap: 5px; pointer-events: auto; }
+        #scale-controls button { width: 28px; height: 28px; border-radius: 50%; border: 1px solid #ffffff; background-color: #2176ff; color: white; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 5px rgba(0,0,0,0.2); padding: 0; }
+        #scale-controls button:hover { background-color: #0056b3; }
     </style>
 </head>
 <body>
@@ -97,7 +115,13 @@
                     <div class="checkbox-group"><input type="checkbox" id="note-visible"><label for="note-visible">visível?</label></div>
                     <div class="button-group" style="margin-top: 20px;"><button type="submit" id="save-btn"><i class="fas fa-save"></i> Guardar</button><button type="button" id="delete-btn" style="display: none;"><i class="fas fa-trash"></i> Apagar</button></div>
                 </form>
-                <div id="image-resizer"><div class="resize-handle br"></div></div>
+                <div id="image-resizer">
+                    <div id="scale-controls">
+                        <button id="scale-down-btn" title="Diminuir 10%"><i class="fas fa-minus"></i></button>
+                        <button id="scale-up-btn" title="Aumentar 10%"><i class="fas fa-plus"></i></button>
+                    </div>
+                    <div class="resize-handle br"></div>
+                </div>
                 <div id="save-confirmation-indicator"><i class="fas fa-check"></i></div>
             </div>
         </div>
@@ -124,16 +148,137 @@
         const reorderBtn=document.getElementById('reorder-btn'),reorderModal=document.getElementById('reorder-modal'),reorderThemeSelect=document.getElementById('reorder-theme-selector'),reorderTopicList=document.getElementById('reorder-topic-list'),reorderSaveBtn=document.getElementById('reorder-save-btn'),reorderCancelBtn=document.getElementById('reorder-cancel-btn');
         const reorderTypeSelect=document.getElementById('reorder-type-selector'),reorderThemeContainer=document.getElementById('reorder-theme-selector-container');
         const editorPanel=document.querySelector('.editor-panel'),imageResizer=document.getElementById('image-resizer'),saveIndicator=document.getElementById('save-confirmation-indicator');
-        
+        const scaleDownBtn = document.getElementById('scale-down-btn');
+        const scaleUpBtn = document.getElementById('scale-up-btn');
+
         let currentSelectedLi=null,selectedModalItem=null,savedSelection=null,currentLinkElement=null;
         let currentImage=null,isResizing=false,resizeStartX,resizeStartWidth;
+        let explicacoesMap = new Map(); // <-- Variável para auto-linking
+
+        // --- Funções do Auto-Link --- //
+
+        /**
+         * Função para escapar caracteres especiais para uso em Expressões Regulares.
+         */
+        function escapeRegex(string) {
+            return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        }
+
+        /**
+         * Carrega todos os documentos do tipo "Explicação" do Firestore
+         * e armazena-os num Map para acesso rápido (Título -> ID).
+         */
+ async function loadExplicacoesParaAutoLink() {
+    try {
+        const q = query(collection(db, "manual"), where("type", "==", "Explicação"));
+        const snapshot = await getDocs(q);
+        explicacoesMap.clear(); // Limpa o mapa antes de preencher
+
+        // Elemento temporário para extrair texto puro do HTML
+        const tempDiv = document.createElement('div');
+        // Expressão Regular para encontrar e remover a maioria dos emojis e símbolos Unicode
+        const emojiRegex = /(?:[\u2700-\u27bf]|(?:\ud83c[\udde6-\uddff]){2}|[\ud800-\udbff][\udc00-\udfff]|[\u0023-\u0039]\ufe0f?\u20e3|\u3299|\u3297|\u303d|\u3030|\u24c2|\ud83c[\udd70-\udd71]|\ud83c[\udd7e-\udd7f]|\ud83c\udd8e|\ud83c[\udd91-\udd9a]|\ud83c[\udde6-\uddff]|\ud83c[\ude01-\ude02]|\ud83c\ude1a|\ud83c\ude2f|\ud83c[\ude32-\ude3a]|\ud83c[\ude50-\ude51]|\u203c|\u2049|[\u25aa-\u25ab]|\u25b6|\u25c0|[\u25fb-\u25fe]|\u00a9|\u00ae|\u2122|\u2139|\ud83c\udc04|[\u2600-\u26ff]|\u2b05|\u2b06|\u2b07|\u2b1b|\u2b1c|\u2b50|\u2b55|\u231a|\u231b|\u2328|\u23cf|[\u23e9-\u23f3]|[\u23f8-\u23fa]|\ud83c\udccf|\u2934|\u2935|[\u2190-\u21ff])/g;
+
+        snapshot.forEach(doc => {
+            const titleWithHtml = doc.data().title;
+            if (!titleWithHtml) return;
+
+            // Passo 1: Remover HTML para obter texto puro (que ainda pode ter emojis)
+            tempDiv.innerHTML = titleWithHtml;
+            const textWithEmojis = (tempDiv.textContent || tempDiv.innerText);
+
+            // Passo 2: Remover emojis e fazer trim final
+            const cleanTextTitle = textWithEmojis.replace(emojiRegex, '').trim();
+
+            // Apenas adiciona se o título de texto puro e limpo não for vazio
+            if (cleanTextTitle) {
+                explicacoesMap.set(cleanTextTitle, doc.id);
+            }
+        });
+        console.log(`Carregadas ${explicacoesMap.size} explicações para auto-linking.`, explicacoesMap);
+    } catch (error) {
+        console.error("Erro ao carregar explicações para auto-link:", error);
+    }
+}
+
+        /**
+         * Função que é chamada no evento 'keyup' do editor para verificar e criar links automaticamente.
+         */
+       function handleAutoLink(e) {
+    // Só aciona a verificação em teclas que indicam o fim de uma palavra/frase
+    if (![' ', 'Enter', ',', '.', ';'].includes(e.key)) {
+        return;
+    }
+
+    const sel = window.getSelection();
+    if (!sel.rangeCount) return;
+
+    const range = sel.getRangeAt(0);
+    const currentNode = range.startContainer;
+
+    // Garante que estamos a trabalhar num nó de texto e que não estamos já dentro de um link
+    if (currentNode.nodeType !== Node.TEXT_NODE || currentNode.parentNode.tagName === 'MANUAL-LINK') {
+        return;
+    }
+
+    const textContent = currentNode.textContent;
+    
+    // Itera sobre todas as "Explicações" que carregámos
+    explicacoesMap.forEach((id, title) => {
+        // Usa uma expressão regular com \b (word boundary) e o flag 'i' (insensitive)
+        const regex = new RegExp(`\\b(${escapeRegex(title)})\\b`, 'gi'); // <--- A ÚNICA MUDANÇA ESTÁ AQUI
+        let match;
         
+        // Procura pela expressão no conteúdo do nó de texto atual
+        while ((match = regex.exec(textContent)) !== null) {
+            // Se encontrarmos uma correspondência, procedemos à substituição
+            const matchIndex = match.index;
+            const matchedText = match[1];
+
+            // Preserva a posição do cursor
+            const originalOffset = range.startOffset;
+
+            // Divide o nó de texto em três: antes do link, o texto do link, e depois do link
+            const textAfterNode = currentNode.splitText(matchIndex + matchedText.length);
+            const textToLinkNode = currentNode.splitText(matchIndex);
+
+            // Cria o novo elemento <manual-link>
+            const linkNode = document.createElement('manual-link');
+            linkNode.dataset.id = id;
+            linkNode.textContent = matchedText; // Mantém a caixa que o utilizador escreveu
+
+            // Substitui o nó de texto pelo novo link
+            currentNode.parentNode.replaceChild(linkNode, textToLinkNode);
+            
+            // Restaura a posição do cursor para depois do link que foi inserido
+            const newRange = document.createRange();
+            // Coloca o cursor no início do nó de texto que vem a seguir ao link
+            newRange.setStart(textAfterNode, originalOffset - (matchIndex + matchedText.length));
+            newRange.collapse(true);
+            sel.removeAllRanges();
+            sel.addRange(newRange);
+        }
+    });
+}
+
+        // --- Funções Originais do Editor --- //
+
         function formatDoc(command, value = null) { noteContentInput.focus(); document.execCommand(command, false, value); }
         function insertImage() { const url = prompt("Introduza o URL da imagem:"); if (url) { const imgTag = `<img src="${url}" style="max-width: 100%; height: auto;">`; formatDoc('insertHTML', imgTag); } }
         function insertTwoColumns() { const html = `<p>&nbsp;</p><table style="width:100%; border-collapse: collapse;"><tbody><tr><td style="width:50%; padding:10px; border:1px dashed #ccc; vertical-align:top;"><p>Coluna 1...</p></td><td style="width:50%; padding:10px; border:1px dashed #ccc; vertical-align:top;"><p>Coluna 2...</p></td></tr></tbody></table><p>&nbsp;</p>`; formatDoc('insertHTML', html); }
         function saveSelection() { const sel = window.getSelection(); if (sel.rangeCount > 0) savedSelection = sel.getRangeAt(0); }
         function restoreSelection() { if (savedSelection) { const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(savedSelection); } }
         
+        function scaleImage(scaleFactor) {
+            if (!currentImage) return;
+            const currentWidth = currentImage.offsetWidth;
+            const newWidth = currentWidth * scaleFactor;
+            if (newWidth < 20) return; 
+            currentImage.style.width = `${newWidth}px`;
+            currentImage.style.height = 'auto';
+            showImageResizer(currentImage);
+        }
+
         async function loadNoteForEditing(id, listItem){
             hideImageResizer();
             const docRef = doc(db,"manual", id);
@@ -202,6 +347,7 @@
                 saveIndicator.classList.add('visible');
                 setTimeout(() => { saveIndicator.classList.remove('visible'); }, 2000);
                 await loadNotesList(); 
+                if (type === 'Explicação') await loadExplicacoesParaAutoLink(); // Recarrega explicações se uma for salva
             } catch(err) {
                 console.error("Erro ao guardar nota: ", err);
                 alert("Erro ao guardar nota.");
@@ -272,7 +418,7 @@
             return li;
         }
         
-        async function deleteNote(){const e=noteIdInput.value;e&&confirm("Tem a certeza?")&&(await deleteDoc(doc(db,"manual",e)),alert("Nota apagada!"),prepareNewNoteForm(),await loadNotesList())}
+        async function deleteNote(){const e=noteIdInput.value;if(e&&confirm("Tem a certeza?")){const t=await getDoc(doc(db,"manual",e)),o=t.data()?.type;await deleteDoc(doc(db,"manual",e)),alert("Nota apagada!"),prepareNewNoteForm(),await loadNotesList(),"Explicação"===o&&await loadExplicacoesParaAutoLink()}}
         async function populateThemeSelector(){parentThemeSelect.innerHTML='<option value="">Selecione um Tema</option>';const e=query(collection(db,"manual"),where("type","==","Tema"),orderBy("title")),t=await getDocs(e);t.forEach(e=>{parentThemeSelect.innerHTML+=`<option value="${e.id}">${e.data().title}</option>`})}
         async function populateTopicSelector(e){parentTopicSelect.innerHTML='<option value="">Selecione um Tópico</option>';if(!e)return;const t=query(collection(db,"manual"),where("type","==","Tópico"),where("parentId","==",e),orderBy("title")),o=await getDocs(t);o.forEach(e=>{parentTopicSelect.innerHTML+=`<option value="${e.id}">${e.data().title}</option>`})}
         async function handleTypeChange(){const e=noteTypeSelect.value;parentSelectorsContainer.style.display="none",themeSelectorContainer.style.display="none",topicSelectorContainer.style.display="none","Tópico"===e?(await populateThemeSelector(),parentSelectorsContainer.style.display="block",themeSelectorContainer.style.display="block"):"Elemento"===e&&(await populateThemeSelector(),parentSelectorsContainer.style.display="block",themeSelectorContainer.style.display="block",topicSelectorContainer.style.display="block",await populateTopicSelector(parentThemeSelect.value))}
@@ -319,8 +465,10 @@
 
         function initializeAppEditor() {
             document.body.style.display = 'flex'; 
-            loadNotesList(); 
+            loadNotesList();
+            loadExplicacoesParaAutoLink(); // <-- Carrega as explicações para o auto-link
             prepareNewNoteForm();
+
             notesList.addEventListener('click', e => {
                 const t = e.target.closest('.list-item-header'); if (!t) return;
                 const o = t.parentElement, n = o.dataset.id;
@@ -346,12 +494,18 @@
             reorderSaveBtn.addEventListener('click', saveNewOrder);
             reorderTopicList.addEventListener('dragstart', e => { "LI" === e.target.tagName && e.target.classList.add('dragging') }); reorderTopicList.addEventListener('dragend', e => { "LI" === e.target.tagName && e.target.classList.remove('dragging') });
             reorderTopicList.addEventListener('dragover', e => { e.preventDefault(); const t = getDragAfterElement(reorderTopicList, e.clientY), o = document.querySelector('.dragging'); o && (null == t ? reorderTopicList.appendChild(o) : reorderTopicList.insertBefore(o, t)) });
+            
             noteContentInput.addEventListener('click', e => {
                 const t = e.target.closest('manual-link');
                 "IMG" === e.target.tagName ? (e.preventDefault(), showImageResizer(e.target)) : t || e.target.closest('#image-resizer') || hideImageResizer();
                 t ? (e.preventDefault(), showLinkContextMenu(t, e), hideImageResizer()) : e.target.closest('#image-resizer') || (linkContextMenu.style.display = 'none')
             });
+
+            noteContentInput.addEventListener('keyup', handleAutoLink); // <-- Adiciona o event listener para o auto-link
+
             imageResizer.querySelector('.resize-handle.br').addEventListener('mousedown', startResize);
+            scaleDownBtn.addEventListener('click', () => scaleImage(0.9));
+            scaleUpBtn.addEventListener('click', () => scaleImage(1.1));
         }
         
         onAuthStateChanged(auth, async (user) => { initializeAppEditor(); });
