@@ -258,6 +258,14 @@
             /* O popup genérico para itens anexados precisa ficar ACIMA dos outros popups (como a Loja) */
             z-index: 1003;
         }
+
+
+ #item-confirmation-popup.popup-overlay {
+            /* Garante que a confirmação de compra de item fique acima de TODOS os outros popups */
+            z-index: 1004;
+        }
+
+
         .close-button { /* Style for the 'X' close button */
             position: absolute;
             top: 10px;
@@ -1065,8 +1073,18 @@
         itemsToDisplay.forEach((item, itemIndex) => {
             const itemCard = document.createElement('div');
             itemCard.className = 'item-card';
-            itemCard.innerHTML = `<img src="${item.imagem || 'placeholder.png'}" alt="${item.nome || ''}" class="item-image"><div class="item-name">${item.nome || 'Item'}</div><div class="item-nota">${item.nota || 'N/A'}</div>`;
-            
+          const imageUrl = item.imagem || 'placeholder.png'; // Define a imagem inicial
+itemCard.innerHTML = `
+    <img 
+        src="${imageUrl}" 
+        alt="${item.nome || ''}" 
+        class="item-image" 
+        onerror="this.onerror=null; this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iMTAwIiB2aWV3Qm94PSIwIDAgMjQgMjQiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzZCNjA0MiIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiPjxyZWN0IHg9IjMiIHk9IjMiIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgcng9IjIiIHJ5PSIyIj48L3JlY3Q+PGNpcmNsZSBjeD0iOC41IiBjeT0iOC41IiByPSIxLjUiPjwvY2lyY2xlPjxwb2x5bGluZSBwb2ludHM9IjIxIDE1IDExIDUgMyAxMyI+PC9wb2x5bGluZT48L3N2Zz4=';"
+    >
+    <div class="item-name">${item.nome || 'Item'}</div>
+    <div class="item-nota">${item.nota || 'N/A'}</div>
+`;
+
             if (empireParentItemIds.has(item.id)) {
                 itemCard.style.cursor = 'pointer';
                 itemCard.addEventListener('click', () => window.showNestedPopup(item));
@@ -1100,8 +1118,8 @@
 
             // --- Nested Item Popup Logic ---
            
-            window.showNestedPopup = async function(parentItem) {
-    console.log("showNestedPopup (Smart Click): Mostrando popup para o item:", parentItem);
+    window.showNestedPopup = async function(parentItem) {
+    console.log("showNestedPopup (FINAL COM REGRA PAI): Mostrando popup para:", parentItem);
     if (!parentItem || !parentItem.id) return;
 
     const nestedPopup = document.getElementById('nested-popup');
@@ -1114,8 +1132,27 @@
     nestedPopup.classList.add('active');
 
     try {
-        await loadEmpireParentMap(); // Garante que o mapa está carregado
+        await loadEmpireParentMap();
 
+        // --- PASSO 1: BUSCAR O ESTADO ATUAL DO USUÁRIO ---
+        let userHasBoughtToday = false;
+        let ownedItemNamesSet = new Set();
+        let ownedTypeLevelSet = new Set();
+        const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+        const tomorrowStart = new Date(todayStart); tomorrowStart.setDate(todayStart.getDate() + 1);
+
+        const dailyPurchaseQuery = query(collection(db, 'movimentos'), where('userId', '==', currentUser.uid), where('tipo', '==', 'Empire'), where('movimentoData', '>=', todayStart), where('movimentoData', '<', tomorrowStart), limit(1));
+        const ownedItemsQuery = query(collection(db, 'movimentos'), where('userId', '==', currentUser.uid), where('tipo', '==', 'Empire'));
+        const [dailyPurchaseSnapshot, ownedItemsSnapshot] = await Promise.all([ getDocs(dailyPurchaseQuery), getDocs(ownedItemsQuery) ]);
+
+        userHasBoughtToday = !dailyPurchaseSnapshot.empty;
+        ownedItemsSnapshot.forEach(doc => {
+            const movData = doc.data();
+            if (movData.itemEmpire) ownedItemNamesSet.add(movData.itemEmpire);
+            if (movData.empireTipo && movData.nivel) ownedTypeLevelSet.add(`${movData.empireTipo}:${movData.nivel}`);
+        });
+
+        // --- PASSO 2: BUSCAR ITENS ANEXADOS ---
         const itemsQuery = query(collection(db, 'empireitens'), where('anexadoItemId', '==', parentItem.id), where('noMercado', '==', true), orderBy('ordem', 'asc'));
         const snapshot = await getDocs(itemsQuery);
         
@@ -1131,11 +1168,57 @@
         itemsToDisplay.forEach((item, itemIndex) => {
             const itemCard = document.createElement('div');
             itemCard.className = 'item-card';
-            itemCard.innerHTML = `<img src="${item.imagem || 'placeholder.png'}" alt="${item.nome || ''}" class="item-image"><div class="item-name">${item.nome || 'Item'}</div><div class="item-nota">${item.nota || 'N/A'}</div>`;
 
-            if (empireParentItemIds.has(item.id)) {
+            // --- PASSO 3: LÓGICA DE VALIDAÇÃO COMPLETA (COM A NOVA REGRA) ---
+            const isOwned = ownedItemNamesSet.has(item.nome);
+            const isAvailableToday = isItemAvailableToday(item.diaDisponivel || item.dataMercado);
+            let needsLevel1 = item.nivel === 'Nível 2';
+            let hasLevel1 = needsLevel1 ? ownedTypeLevelSet.has(`${item.tipo}:Nível 1`) : true;
+            const isPurchasable = item.valor !== undefined && item.valor !== null;
+
+            // <<< NOVA REGRA >>>
+            const hasParentItem = ownedItemNamesSet.has(parentItem.nome);
+            // <<< FIM DA NOVA REGRA >>>
+
+            const isDisabled = isOwned || !isAvailableToday || userHasBoughtToday || (needsLevel1 && !hasLevel1) || !isPurchasable || !hasParentItem;
+            
+            // <<< NOVA REGRA >>> Mensagem de erro atualizada
+            let disabledReason = 
+                !hasParentItem ? `Requer: ${parentItem.nome}` : 
+                (isOwned ? 'Já Possuído' : 
+                (userHasBoughtToday ? 'Limite Diário Atingido' : 
+                (!isAvailableToday ? 'Indisponível Hoje' : 
+                (needsLevel1 && !hasLevel1 ? 'Requer Nível 1' : 
+                (!isPurchasable ? 'Não está à venda' : '')))));
+            // <<< FIM DA NOVA REGRA >>>
+            
+            // --- PASSO 4: GERAR HTML E ADICIONAR LISTENERS ---
+            const purchaseBlockHTML = isPurchasable ? `
+                <div class="item-nota" style="color: #c9a959; font-weight: bold; margin-bottom: 10px;">${item.valor} GCoins</div>
+                <button class="popup-button buy-item-btn" style="padding: 5px 10px; font-size: 14px;" ${isDisabled ? 'disabled' : ''}>Comprar</button>
+                <span class="disabled-reason">${disabledReason}</span>
+            ` : `<div style="min-height: 4.5em;"></div>`;
+
+            itemCard.innerHTML = `
+                <img src="${item.imagem || 'placeholder.png'}" alt="${item.nome || ''}" class="item-image">
+                <div class="item-name">${item.nome || 'Item'}</div>
+                <div class="item-nota" style="min-height: 2em; margin-bottom: 8px;">${item.nota || '...'}</div>
+                ${purchaseBlockHTML}
+            `;
+
+            if (!isDisabled && isPurchasable) {
+                const buyButton = itemCard.querySelector('.buy-item-btn');
+                if (buyButton) buyButton.onclick = (event) => { event.stopPropagation(); initiateItemPurchase(item); };
+            }
+
+            const hasChildren = empireParentItemIds.has(item.id);
+            if (hasChildren) {
                 itemCard.style.cursor = 'pointer';
-                itemCard.addEventListener('click', () => window.showNestedPopup(item));
+                itemCard.addEventListener('click', (event) => {
+                    if (event.target.tagName !== 'BUTTON') {
+                        window.showNestedPopup(item);
+                    }
+                });
             } else {
                 itemCard.style.cursor = 'default';
             }
@@ -1146,10 +1229,11 @@
             });
         });
     } catch (error) {
-        console.error(`showNestedPopup: Erro ao obter itens para ${parentItem.id}:`, error);
+        console.error(`showNestedPopup (FINAL): Erro ao obter itens para ${parentItem.id}:`, error);
         itemsGrid.innerHTML = '<p style="color:red;">Erro ao carregar.</p>';
     }
 };
+
 
             window.closeNestedPopup = function() {
                  console.log("closeNestedPopup: Closing nested popup."); const popup = document.getElementById('nested-popup'); if (popup) popup.classList.remove('active');
