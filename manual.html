@@ -55,7 +55,7 @@
 
         #manual-content { flex: 1; padding: 25px; overflow-y: auto; background: #f9f9f9; }
         #content-body { line-height: 1.6; color: #333; }
-        #content-body h1, #content-body h2 { margin-top: 1.5em; margin-bottom: 0.5em; color: #222; }
+        #content-body h1, #content-body h2, #content-body h3 { margin-top: 1.5em; margin-bottom: 0.5em; color: #222; }
         #content-body p { margin-bottom: 1em; }
         #content-body img { max-width: 100%; height: auto; vertical-align: middle; margin: 0 0.3em; }
         manual-link { color: #2176ff; text-decoration: underline; cursor: pointer; font-weight: bold; }
@@ -90,12 +90,19 @@
         .search-highlight { background-color: #fff3cd; font-weight: bold; color: #664d03; border-radius: 3px; padding: 1px 3px; }
         /* ############################################## */
 
+        /* ##### ESTILOS ADICIONADOS PARA FAQ ##### */
+        #faq-container { margin-top: 40px; }
+        #faq-container h3 { border-bottom: 2px solid #e0e0e0; padding-bottom: 10px; margin-bottom: 20px; font-size: 1.4em; }
+        .faq-item { background-color: #fff; border: 1px solid #e0e0e0; border-radius: 8px; margin-bottom: 10px; overflow: hidden; }
+        .faq-question { width: 100%; background: none; border: none; text-align: left; padding: 15px; font-size: 1.1em; cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-weight: 600; color: #333; }
+        .faq-icon { transition: transform 0.3s ease; }
+        .faq-item.active .faq-icon { transform: rotate(45deg); }
+        .faq-answer { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out; background-color: #fafafa; }
+        .faq-answer-content { padding: 0 20px 20px 20px; color: #555; line-height: 1.7; }
+        /* ######################################### */
+        
         @media (max-width: 768px) {
-            /* Adicionado para bloquear o scroll do fundo com pop-up aberto */
-            body.modal-open {
-                overflow: hidden;
-            }
-
+            body.modal-open { overflow: hidden; }
             .manual-container { display: block; height: auto; }
             #menu-toggle-btn { display: block; }
             #manual-nav { position: fixed; top: 0; left: 0; width: 280px; height: 100%; z-index: 1500; transform: translateX(-100%); border-right: 1px solid #ccc; }
@@ -126,6 +133,9 @@
                             <input type="text" id="manual-search-input" placeholder="Pesquisar no manual..." autocomplete="off">
                         </div>
                         <div id="search-results-container"></div>
+
+                        <!-- ##### ADICIONADO: Container para as Perguntas Frequentes ##### -->
+                        <div id="faq-container"></div>
                     </div>
                 </main>
             </div>
@@ -300,6 +310,36 @@
         sections.forEach(section => scrollObserver.observe(section));
     }
     
+    // ##### ADICIONADO: Função para mostrar as Perguntas Frequentes #####
+    function displayFaqsOnHomePage() {
+        const faqContainer = document.getElementById('faq-container');
+        if (!faqContainer) return;
+
+        const faqs = Array.from(manualDataCache.values())
+            .filter(item => item.type === 'Pergunta')
+            .sort((a, b) => a.title.localeCompare(b.title));
+
+        if (faqs.length === 0) {
+            faqContainer.style.display = 'none';
+            return;
+        }
+
+        let faqsHTML = `<h3>Perguntas Frequentes</h3>`;
+        faqsHTML += faqs.map(faq => `
+            <div class="faq-item">
+                <button class="faq-question">
+                    <span>${faq.title}</span>
+                    <i class="fas fa-plus faq-icon"></i>
+                </button>
+                <div class="faq-answer">
+                    <div class="faq-answer-content">${faq.content}</div>
+                </div>
+            </div>
+        `).join('');
+        
+        faqContainer.innerHTML = faqsHTML;
+    }
+
     function createAndShowModal(docId) {
         if (!manualDataCache.has(docId)) return;
         const data = manualDataCache.get(docId);
@@ -319,7 +359,6 @@
         document.body.appendChild(newModal);
         newModal.style.display = 'flex';
         
-        // Bloqueia o scroll do fundo da página em dispositivos móveis.
         if (window.innerWidth <= 768) {
             document.body.classList.add('modal-open');
         }
@@ -332,11 +371,9 @@
         if (topModal) { topModal.remove(); modalZIndex--; }
         const remainingModals = document.querySelectorAll('.modal-backdrop:not(#modal-template)');
         
-        // Se não houver mais modais abertos, reativa o scroll do fundo.
         if (remainingModals.length === 0 && window.innerWidth <= 768) {
             document.body.classList.remove('modal-open');
         } 
-        // Se ainda houver modais, garante que o modal de topo está visível
         else if (remainingModals.length > 0) {
             const newTopModal = Array.from(remainingModals).reduce((a, b) => parseInt(a.style.zIndex) > parseInt(b.style.zIndex) ? a : b);
             if (newTopModal) {
@@ -351,7 +388,6 @@
         document.querySelectorAll('.modal-backdrop:not(#modal-template)').forEach(modal => modal.remove());
         modalZIndex = 2000;
 
-        // Garante que o scroll do fundo seja reativado.
         if (window.innerWidth <= 768) {
             document.body.classList.remove('modal-open');
         }
@@ -369,49 +405,19 @@
         navItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
-    function initializeAppManual() {
+ function initializeAppManual() {
         buildSidebar();
+        displayFaqsOnHomePage();
 
-        // Adiciona funcionalidade de recarregar a página ao clicar no título principal.
+        // Listener do título do cabeçalho modificado
         const headerTitle = document.querySelector('.main-header h1');
         if (headerTitle) {
-            headerTitle.addEventListener('click', () => {
-                location.reload();
-            });
+            // ALTERADO AQUI: Em vez de location.reload(), chama a nova função
+            headerTitle.addEventListener('click', displayHomePage);
         }
 
-        // ##### CÓDIGO DE BUSCA CONECTADO #####
-        const searchInput = document.getElementById('manual-search-input');
-        const resultsContainer = document.getElementById('search-results-container');
-        
-        if (searchInput && resultsContainer) {
-            searchInput.addEventListener('input', (e) => {
-                const query = e.target.value.trim();
-                if (query) {
-                    const searchResults = performSearch(query);
-                    displaySearchResults(searchResults, query);
-                } else {
-                    resultsContainer.innerHTML = '';
-                }
-            });
-
-            resultsContainer.addEventListener('click', (e) => {
-                const resultItem = e.target.closest('.search-result-item');
-                if (resultItem) {
-                    const docId = resultItem.dataset.id;
-                    const docType = resultItem.dataset.type;
-
-                    if (docType === 'Tema' || docType === 'Tópico' || docType === 'Elemento') {
-                        navigateToManualItem(docId);
-                    } else {
-                        createAndShowModal(docId);
-                    }
-                    searchInput.value = '';
-                    resultsContainer.innerHTML = '';
-                }
-            });
-        }
-        // #####################################
+        // A lógica da pesquisa agora é chamada através da nova função
+        initializeSearch();
         
         navContainer.addEventListener('click', e => {
             const header = e.target.closest('.list-item-header');
@@ -421,9 +427,7 @@
             const parentLi = header.parentElement;
             
             if (isToggleClick) {
-                if (parentLi.querySelector('ul')) {
-                    parentLi.classList.toggle('collapsed');
-                }
+                if (parentLi.querySelector('ul')) { parentLi.classList.toggle('collapsed'); }
                 return;
             }
 
@@ -445,13 +449,9 @@
             }
             
             switch(type) {
-                case 'Tema':
-                    displayThemeContent(id);
-                    break;
+                case 'Tema': displayThemeContent(id); break;
                 case 'Tópico':
-                case 'Elemento':
-                    displayTopicContent(id);
-                    break;
+                case 'Elemento': displayTopicContent(id); break;
             }
 
             if (window.innerWidth <= 768) {
@@ -459,11 +459,30 @@
             }
         });
 
+        manualContent.addEventListener('click', e => {
+            const question = e.target.closest('.faq-question');
+            if (!question) return;
+
+            const faqItem = question.parentElement;
+            const answer = faqItem.querySelector('.faq-answer');
+            const icon = question.querySelector('.faq-icon');
+
+            const isActive = faqItem.classList.toggle('active');
+
+            if (isActive) {
+                answer.style.maxHeight = answer.scrollHeight + "px";
+                icon.classList.replace('fa-plus', 'fa-minus');
+            } else {
+                answer.style.maxHeight = null;
+                icon.classList.replace('fa-minus', 'fa-plus');
+            }
+        });
+
         menuToggleBtn.addEventListener('click', () => document.body.classList.toggle('nav-open'));
         mobileOverlay.addEventListener('click', () => document.body.classList.remove('nav-open'));
     }
+    
 
-    // ##### FUNÇÕES DE BUSCA ADICIONADAS #####
     function performSearch(query) {
         if (query.length < 2) return [];
 
@@ -473,22 +492,14 @@
 
         manualDataCache.forEach(item => {
             let score = 0;
-            if (!item.title) return; // Ignora itens sem título
+            if (!item.title) return;
 
-            if (item.title.toLowerCase().includes(lowerCaseQuery)) {
-                score += 5;
-            }
-            if (item.type && item.type.toLowerCase().includes(lowerCaseQuery)) {
-                score += 2;
-            }
+            if (item.title.toLowerCase().includes(lowerCaseQuery)) { score += 5; }
+            if (item.type && item.type.toLowerCase().includes(lowerCaseQuery)) { score += 2; }
             const contentMatches = (item.content || '').match(searchRegex);
-            if (contentMatches) {
-                score += contentMatches.length;
-            }
+            if (contentMatches) { score += contentMatches.length; }
             
-            if (score > 0) {
-                results.push({ id: item.id, title: item.title, type: item.type, content: item.content || '', score: score });
-            }
+            if (score > 0) { results.push({ id: item.id, title: item.title, type: item.type, content: item.content || '', score: score }); }
         });
         return results.sort((a, b) => b.score - a.score);
     }
@@ -499,7 +510,7 @@
         const firstIndex = lowerCaseContent.indexOf(lowerCaseQuery);
 
         if (firstIndex === -1) {
-            const cleanContent = content.replace(/<[^>]*>?/gm, ' '); // Remove HTML tags para o snippet
+            const cleanContent = content.replace(/<[^>]*>?/gm, ' ');
             return cleanContent.substring(0, 150) + (cleanContent.length > 150 ? '...' : '');
         }
 
@@ -535,7 +546,65 @@
         }).join('');
     }
 
-    // O listener para <manual-link> continua a ter a lógica de pop-up
+    function displayHomePage() {
+        if (scrollObserver) scrollObserver.disconnect();
+        
+        // Restaura o HTML do conteúdo principal para o estado inicial
+        manualContent.innerHTML = `
+            <h2 id="content-title">Bem-vindo ao Manual</h2>
+            <div id="content-body">
+                <p>Selecione um tema ou tópico na barra de navegação à esquerda ou use a pesquisa abaixo para encontrar conteúdo.</p>
+                <div class="search-bar-container">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="manual-search-input" placeholder="Pesquisar no manual..." autocomplete="off">
+                </div>
+                <div id="search-results-container"></div>
+                <div id="faq-container"></div>
+            </div>
+        `;
+        
+        // Recarrega as perguntas frequentes e reinicializa a pesquisa
+        displayFaqsOnHomePage();
+        initializeSearch();
+
+        // Remove a classe 'active' de todos os itens da navegação lateral
+        navContainer.querySelectorAll('.nav-item.active').forEach(el => el.classList.remove('active'));
+    }
+
+    // ##### ADICIONADO: Função para isolar a lógica da pesquisa #####
+    function initializeSearch() {
+        const searchInput = document.getElementById('manual-search-input');
+        const resultsContainer = document.getElementById('search-results-container');
+        
+        if (searchInput && resultsContainer) {
+            searchInput.addEventListener('input', (e) => {
+                const query = e.target.value.trim();
+                if (query) {
+                    const searchResults = performSearch(query);
+                    displaySearchResults(searchResults, query);
+                } else {
+                    resultsContainer.innerHTML = '';
+                }
+            });
+
+            resultsContainer.addEventListener('click', (e) => {
+                const resultItem = e.target.closest('.search-result-item');
+                if (resultItem) {
+                    const docId = resultItem.dataset.id;
+                    const docType = resultItem.dataset.type;
+
+                    if (docType === 'Tema' || docType === 'Tópico' || docType === 'Elemento') {
+                        navigateToManualItem(docId);
+                    } else {
+                        createAndShowModal(docId);
+                    }
+                    searchInput.value = '';
+                    resultsContainer.innerHTML = '';
+                }
+            });
+        }
+    }
+
     document.body.addEventListener('click', e => {
         const manualLink = e.target.closest('manual-link');
         if (manualLink && manualLink.dataset.id) {
