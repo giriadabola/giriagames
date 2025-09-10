@@ -370,271 +370,252 @@
     <!-- 3. SCRIPT DA PÁGINA FOI MODIFICADO PARA USAR O GUARDIÃO -->
     <script type="module">
         // Importa o 'db' do guardião central e outras funções do Firestore
-      import { db } from './js/auth-guard.js';
-        import { collection, getDocs, addDoc, serverTimestamp, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+     import { db } from './js/auth-guard.js';
+import { collection, getDocs, addDoc, serverTimestamp, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-        // REMOVIDO: 'firebaseConfig' e a inicialização 'initializeApp(firebaseConfig)'
+// Global variables for Choices.js instances
+let competicoesChoicesInstance = null;
+let compradoPorChoicesInstance = null;
 
-        // Global variables for Choices.js instances
-        let competicoesChoicesInstance = null;
-        let compradoPorChoicesInstance = null;
-
-        // --- Load Competitions ---
-        async function loadCompeticoes() {
-            const competicoesSelect = document.getElementById('competicoes');
-            if (!competicoesSelect) {
-                console.error("Elemento #competicoes não encontrado.");
-                return;
-            }
-            try {
-                const competicoesCol = collection(db, 'competicoes');
-                const competicoesSnapshot = await getDocs(competicoesCol);
-                const choicesData = [];
-                competicoesSnapshot.forEach((doc) => {
-                    const data = doc.data();
-                    if (data.nome) {
-                        choicesData.push({ value: doc.id, label: data.nome });
-                    }
-                });
-                choicesData.sort((a, b) => a.label.localeCompare(b.label));
-
-                if (competicoesChoicesInstance) competicoesChoicesInstance.destroy();
-
-                competicoesChoicesInstance = new Choices(competicoesSelect, {
-                    removeItemButton: true,
-                    placeholder: true,
-                    placeholderValue: 'Selecione as competições...',
-                    choices: choicesData,
-                    searchPlaceholderValue: "Pesquisar competições...",
-                    itemSelectText: '',
-                    shouldSort: false,
-                    maxItemCount: -1,
-                    position: 'bottom'
-                });
-            } catch (error) {
-                console.error("Erro ao carregar competições:", error);
-                if (competicoesChoicesInstance) competicoesChoicesInstance.destroy();
-                competicoesSelect.innerHTML = '<option value="" disabled>Erro ao carregar</option>';
-            }
-        }
-
-        // --- Load Users (Modified for Choices.js) ---
-        async function loadUsers() {
-            const compradoPorSelect = document.getElementById('compradoPor');
-            if (!compradoPorSelect) {
-                 console.error("Elemento #compradoPor não encontrado.");
-                 return;
-            }
-
-            const usersCol = collection(db, 'users');
-            try {
-                const querySnapshot = await getDocs(usersCol);
-                const choicesData = [];
-
-                if (!querySnapshot.empty) {
-                    const users = [];
-                    querySnapshot.forEach((doc) => {
-                        const data = doc.data();
-                        if (data.nomeDeUsuario) {
-                            users.push({ id: doc.id, nomeDeUsuario: data.nomeDeUsuario });
-                        }
-                    });
-                    users.sort((a, b) => a.nomeDeUsuario.localeCompare(b.nomeDeUsuario));
-                    users.forEach(user => {
-                        choicesData.push({ value: user.id, label: user.nomeDeUsuario });
-                    });
-                }
-
-                 if (compradoPorChoicesInstance) {
-                     compradoPorChoicesInstance.destroy();
-                 }
-
-                 compradoPorChoicesInstance = new Choices(compradoPorSelect, {
-                     removeItemButton: true,
-                     placeholder: true,
-                     placeholderValue: 'Selecione os usuários...',
-                     choices: choicesData,
-                     searchPlaceholderValue: "Pesquisar usuários...",
-                     itemSelectText: '',
-                     shouldSort: false,
-                     maxItemCount: -1,
-                     position: 'bottom'
-                 });
-
-            } catch (error) {
-                console.error("Erro ao carregar usuários para Choices.js:", error);
-                 if (compradoPorChoicesInstance) {
-                     compradoPorChoicesInstance.destroy();
-                 }
-                 compradoPorSelect.innerHTML = '';
-            }
-        }
-
-        // --- START: MODIFIED Function to Load Anexado Options ---
-        async function loadAnexadoOptions() {
-            const anexadoSelect = document.getElementById('anexadoItem');
-            if (!anexadoSelect) {
-                console.error("Elemento #anexadoItem não encontrado.");
-                return;
-            }
-            // Reset options (keep the initial disabled placeholder)
-            anexadoSelect.innerHTML = anexadoSelect.options[0].outerHTML; // Keep only the first option (placeholder)
-
-            try {
-                const itemsCol = collection(db, 'empireitens');
-                // Create queries for both 'Filosofia' and 'Estádio' types
-                const qFilosofia = query(itemsCol, where("tipo", "==", "Filosofia"));
-                const qEstadio = query(itemsCol, where("tipo", "==", "Estádio"));
-
-                // Fetch documents for both queries
-                const [filosofiaSnapshot, estadioSnapshot] = await Promise.all([
-                    getDocs(qFilosofia),
-                    getDocs(qEstadio)
-                ]);
-
-                const combinedItems = [];
-                // Process Filosofia items
-                filosofiaSnapshot.forEach((doc) => {
-                    const data = doc.data();
-                    if (data.nome) { // Ensure item has a name
-                        combinedItems.push({
-                            id: doc.id,
-                            nome: data.nome,
-                            tipo: data.tipo // Store the type for formatting
-                        });
-                    }
-                });
-                // Process Estádio items
-                estadioSnapshot.forEach((doc) => {
-                    const data = doc.data();
-                    if (data.nome) { // Ensure item has a name
-                        combinedItems.push({
-                            id: doc.id,
-                            nome: data.nome,
-                            tipo: data.tipo // Store the type for formatting
-                        });
-                    }
-                });
-
-                // Sort combined items alphabetically by the formatted string "Tipo: Nome"
-                combinedItems.sort((a, b) => {
-                    const textA = `${a.tipo}: ${a.nome}`;
-                    const textB = `${b.tipo}: ${b.nome}`;
-                    return textA.localeCompare(textB);
-                });
-
-                // Populate the select dropdown
-                combinedItems.forEach(item => {
-                    const option = document.createElement('option');
-                    option.value = item.id; // Use Firestore document ID as the value
-                    option.textContent = `${item.tipo}: ${item.nome}`; // Display "Tipo: Nome"
-                    anexadoSelect.appendChild(option);
-                });
-
-            } catch (error) {
-                console.error("Erro ao carregar opções de Anexado (Filosofia/Estádio):", error);
-                 // Reset to placeholder on error
-                 anexadoSelect.innerHTML = anexadoSelect.options[0].outerHTML;
-                 // Optionally add an error message option (but keep it simple here)
-                 const errorOption = document.createElement('option');
-                 errorOption.textContent = "Erro ao carregar itens";
-                 errorOption.disabled = true;
-                 anexadoSelect.appendChild(errorOption);
-            }
-        }
-        // --- END: MODIFIED Function ---
-
-
-        // --- Handle Form Submission (Unchanged logic, but relies on correct anexadoItemId value) ---
-        async function handleFormSubmit(event) {
-            event.preventDefault();
-            const form = event.target;
-            const submitButton = form.querySelector('.submit-button');
-            if (!submitButton) return;
-
-            submitButton.disabled = true;
-            submitButton.textContent = 'A Criar...';
-
-            // Get values from form fields
-            const tipo = form.tipo.value;
-            const nome = form.nome.value;
-            const imagem = form.imagem.value;
-            const anexadoItemId = form.anexadoItem.value; // Still gets the correct ID from option.value
-            const valorInput = form.valor.value;
-            const nota = form.nota.value;
-            const nivel = form.nivel.value;
-            const noMercadoValue = form.noMercado.value;
-            const ordemValue = form.ordem.value;
-
-            // Get selected competitions using Choices.js API
-            const selectedCompeticoes = competicoesChoicesInstance ? competicoesChoicesInstance.getValue(true) : [];
-
-            // Get selected users using Choices.js API
-            const selectedUsers = compradoPorChoicesInstance ? compradoPorChoicesInstance.getValue(true) : [];
-
-
-            // Prepare data object for Firestore
-            const itemData = {
-                tipo: tipo,
-                nome: nome,
-                noMercado: noMercadoValue === 'sim',
-                ...(imagem && { imagem: imagem }),
-                ...(anexadoItemId && { anexadoItemId: anexadoItemId }), // Add anexadoItemId if selected (value is the ID)
-                ...(valorInput && { valor: parseFloat(valorInput) || 0 }),
-                ...(nota && { nota: nota }),
-                ...(nivel && { nivel: nivel }),
-                ...(ordemValue && { ordem: parseInt(ordemValue, 10) }),
-                ...(selectedUsers.length > 0 && { compradoPorUids: selectedUsers }),
-                ...(selectedCompeticoes.length > 0 && { competicoesIds: selectedCompeticoes }),
-                criadoEm: serverTimestamp()
-            };
-
-            try {
-                 const empireItensCol = collection(db, 'empireitens');
-                 const docRef = await addDoc(empireItensCol, itemData);
-                 console.log("Item criado com ID:", docRef.id);
-                 alert('Item do Império criado com sucesso!');
-
-                 // Reset form
-                 form.reset();
-
-                 // Reset Choices.js selections
-                 if (competicoesChoicesInstance) {
-                    competicoesChoicesInstance.setChoiceByValue([]);
-                 }
-                 if (compradoPorChoicesInstance) {
-                    compradoPorChoicesInstance.setChoiceByValue([]);
-                 }
-                 // Explicitly reset single select fields to their placeholder state
-                 if (form.anexadoItem) form.anexadoItem.value = ""; // Reset the 'anexado' dropdown
-                 if (form.nivel) form.nivel.value = "";
-                 if (form.noMercado) form.noMercado.value = "";
-                 if (form.ordem) form.ordem.value = "";
-
-            } catch (error) {
-                console.error("Erro ao criar item:", error);
-                alert('Erro ao criar o item. Verifique a consola para mais detalhes.');
-            } finally {
-                 submitButton.disabled = false;
-                 submitButton.textContent = 'Criar Item';
-            }
-        }
-
-        // --- DOMContentLoaded Listener (Unchanged) ---
-        document.addEventListener('DOMContentLoaded', () => {
-            // Load dynamic data
-            loadCompeticoes();
-            loadUsers();
-            loadAnexadoOptions(); // Calls the modified function
-
-            // Add form submit listener
-            const empireItemForm = document.getElementById('empire-item-form');
-            if (empireItemForm) {
-                empireItemForm.addEventListener('submit', handleFormSubmit);
-            } else {
-                console.error("Formulário #empire-item-form não encontrado!");
+// --- Load Competitions ---
+async function loadCompeticoes() {
+    const competicoesSelect = document.getElementById('competicoes');
+    if (!competicoesSelect) {
+        console.error("Elemento #competicoes não encontrado.");
+        return;
+    }
+    try {
+        const competicoesCol = collection(db, 'competicoes');
+        const competicoesSnapshot = await getDocs(competicoesCol);
+        const choicesData = [];
+        competicoesSnapshot.forEach((doc) => {
+            const data = doc.data();
+            if (data.nome) {
+                choicesData.push({ value: doc.id, label: data.nome });
             }
         });
+        choicesData.sort((a, b) => a.label.localeCompare(b.label));
+
+        if (competicoesChoicesInstance) competicoesChoicesInstance.destroy();
+
+        competicoesChoicesInstance = new Choices(competicoesSelect, {
+            removeItemButton: true,
+            placeholder: true,
+            placeholderValue: 'Selecione as competições...',
+            choices: choicesData,
+            searchPlaceholderValue: "Pesquisar competições...",
+            itemSelectText: '',
+            shouldSort: false,
+            maxItemCount: -1,
+            position: 'bottom'
+        });
+    } catch (error) {
+        console.error("Erro ao carregar competições:", error);
+        if (competicoesChoicesInstance) competicoesChoicesInstance.destroy();
+        competicoesSelect.innerHTML = '<option value="" disabled>Erro ao carregar</option>';
+    }
+}
+
+// --- Load Users (Modified for Choices.js) ---
+async function loadUsers() {
+    const compradoPorSelect = document.getElementById('compradoPor');
+    if (!compradoPorSelect) {
+         console.error("Elemento #compradoPor não encontrado.");
+         return;
+    }
+
+    const usersCol = collection(db, 'users');
+    try {
+        const querySnapshot = await getDocs(usersCol);
+        const choicesData = [];
+
+        if (!querySnapshot.empty) {
+            const users = [];
+            querySnapshot.forEach((doc) => {
+                const data = doc.data();
+                if (data.nomeDeUsuario) {
+                    users.push({ id: doc.id, nomeDeUsuario: data.nomeDeUsuario });
+                }
+            });
+            users.sort((a, b) => a.nomeDeUsuario.localeCompare(b.nomeDeUsuario));
+            users.forEach(user => {
+                choicesData.push({ value: user.id, label: user.nomeDeUsuario });
+            });
+        }
+
+         if (compradoPorChoicesInstance) {
+             compradoPorChoicesInstance.destroy();
+         }
+
+         compradoPorChoicesInstance = new Choices(compradoPorSelect, {
+             removeItemButton: true,
+             placeholder: true,
+             placeholderValue: 'Selecione os usuários...',
+             choices: choicesData,
+             searchPlaceholderValue: "Pesquisar usuários...",
+             itemSelectText: '',
+             shouldSort: false,
+             maxItemCount: -1,
+             position: 'bottom'
+         });
+
+    } catch (error) {
+        console.error("Erro ao carregar usuários para Choices.js:", error);
+         if (compradoPorChoicesInstance) {
+             compradoPorChoicesInstance.destroy();
+         }
+         compradoPorSelect.innerHTML = '';
+    }
+}
+
+// --- START: MODIFIED Function to Load Anexado Options ---
+async function loadAnexadoOptions() {
+    const anexadoSelect = document.getElementById('anexadoItem');
+    if (!anexadoSelect) {
+        console.error("Elemento #anexadoItem não encontrado.");
+        return;
+    }
+    // Reset options (keep the initial disabled placeholder)
+    anexadoSelect.innerHTML = anexadoSelect.options[0].outerHTML;
+
+    try {
+        const itemsCol = collection(db, 'empireitens');
+        
+        // ALTERAÇÃO: Removemos os filtros 'where' para buscar TODOS os itens.
+        const itemsSnapshot = await getDocs(itemsCol);
+
+        const allItems = [];
+        
+        // Processa TODOS os itens retornados
+        itemsSnapshot.forEach((doc) => {
+            const data = doc.data();
+            // Garante que o item tenha um nome e um tipo para exibição
+            if (data.nome && data.tipo) { 
+                allItems.push({
+                    id: doc.id,
+                    nome: data.nome,
+                    tipo: data.tipo
+                });
+            }
+        });
+
+        // Ordena a lista combinada por "Tipo: Nome"
+        allItems.sort((a, b) => {
+            const textA = `${a.tipo}: ${a.nome}`;
+            const textB = `${b.tipo}: ${b.nome}`;
+            return textA.localeCompare(textB);
+        });
+
+        // Popula o menu suspenso com todos os itens
+        allItems.forEach(item => {
+            const option = document.createElement('option');
+            option.value = item.id; // O valor continua sendo o ID do documento
+            option.textContent = `${item.tipo}: ${item.nome}`; // O texto de exibição é "Tipo: Nome"
+            anexadoSelect.appendChild(option);
+        });
+
+    } catch (error) {
+        console.error("Erro ao carregar todas as opções de Anexado:", error);
+         anexadoSelect.innerHTML = anexadoSelect.options[0].outerHTML;
+         const errorOption = document.createElement('option');
+         errorOption.textContent = "Erro ao carregar itens";
+         errorOption.disabled = true;
+         anexadoSelect.appendChild(errorOption);
+    }
+}
+// --- END: MODIFIED Function ---
+
+
+// --- Handle Form Submission (Unchanged logic, but relies on correct anexadoItemId value) ---
+async function handleFormSubmit(event) {
+    event.preventDefault();
+    const form = event.target;
+    const submitButton = form.querySelector('.submit-button');
+    if (!submitButton) return;
+
+    submitButton.disabled = true;
+    submitButton.textContent = 'A Criar...';
+
+    // Get values from form fields
+    const tipo = form.tipo.value;
+    const nome = form.nome.value;
+    const imagem = form.imagem.value;
+    const anexadoItemId = form.anexadoItem.value; // Still gets the correct ID from option.value
+    const valorInput = form.valor.value;
+    const nota = form.nota.value;
+    const nivel = form.nivel.value;
+    const noMercadoValue = form.noMercado.value;
+    const ordemValue = form.ordem.value;
+
+    // Get selected competitions using Choices.js API
+    const selectedCompeticoes = competicoesChoicesInstance ? competicoesChoicesInstance.getValue(true) : [];
+
+    // Get selected users using Choices.js API
+    const selectedUsers = compradoPorChoicesInstance ? compradoPorChoicesInstance.getValue(true) : [];
+
+
+    // Prepare data object for Firestore
+    const itemData = {
+        tipo: tipo,
+        nome: nome,
+        noMercado: noMercadoValue === 'sim',
+        ...(imagem && { imagem: imagem }),
+        ...(anexadoItemId && { anexadoItemId: anexadoItemId }), // Add anexadoItemId if selected (value is the ID)
+        ...(valorInput && { valor: parseFloat(valorInput) || 0 }),
+        ...(nota && { nota: nota }),
+        ...(nivel && { nivel: nivel }),
+        ...(ordemValue && { ordem: parseInt(ordemValue, 10) }),
+        ...(selectedUsers.length > 0 && { compradoPorUids: selectedUsers }),
+        ...(selectedCompeticoes.length > 0 && { competicoesIds: selectedCompeticoes }),
+        criadoEm: serverTimestamp()
+    };
+
+    try {
+         const empireItensCol = collection(db, 'empireitens');
+         const docRef = await addDoc(empireItensCol, itemData);
+         console.log("Item criado com ID:", docRef.id);
+         alert('Item do Império criado com sucesso!');
+
+         // Reset form
+         form.reset();
+
+         // Reset Choices.js selections
+         if (competicoesChoicesInstance) {
+            competicoesChoicesInstance.setChoiceByValue([]);
+         }
+         if (compradoPorChoicesInstance) {
+            compradoPorChoicesInstance.setChoiceByValue([]);
+         }
+         // Explicitly reset single select fields to their placeholder state
+         if (form.anexadoItem) form.anexadoItem.value = ""; // Reset the 'anexado' dropdown
+         if (form.nivel) form.nivel.value = "";
+         if (form.noMercado) form.noMercado.value = "";
+         if (form.ordem) form.ordem.value = "";
+
+    } catch (error) {
+        console.error("Erro ao criar item:", error);
+        alert('Erro ao criar o item. Verifique a consola para mais detalhes.');
+    } finally {
+         submitButton.disabled = false;
+         submitButton.textContent = 'Criar Item';
+    }
+}
+
+// --- DOMContentLoaded Listener (Unchanged) ---
+document.addEventListener('DOMContentLoaded', () => {
+    // Load dynamic data
+    loadCompeticoes();
+    loadUsers();
+    loadAnexadoOptions(); // Calls the modified function
+
+    // Add form submit listener
+    const empireItemForm = document.getElementById('empire-item-form');
+    if (empireItemForm) {
+        empireItemForm.addEventListener('submit', handleFormSubmit);
+    } else {
+        console.error("Formulário #empire-item-form não encontrado!");
+    }
+});
     </script>
 
 </body>
