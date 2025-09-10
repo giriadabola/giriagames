@@ -441,537 +441,562 @@
 
       <script type="module">
         // Importa 'db' e 'auth' do nosso guardião central. (CORRIGIDO)
-        import { db, auth } from './js/auth-guard.js';
-        
-        // Importa as funções específicas do Firestore que esta página precisa.
-        import {
-            collection, getDocs, doc, getDoc, updateDoc, serverTimestamp,
-            query, where, addDoc, orderBy, limit
-        } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+      // Importa 'db' e 'auth' do nosso guardião central.
+import { db, auth } from './js/auth-guard.js';
 
-        // Importa a função onAuthStateChanged para saber quando inicializar a página.
-        import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+// Importa as funções específicas do Firestore que esta página precisa.
+import {
+    collection, getDocs, doc, getDoc, updateDoc, serverTimestamp,
+    query, where, addDoc, orderBy, limit
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-        // --- Variáveis Globais e Elementos do DOM ---
-        let competicoesChoicesInstance = null;
-        let compradoPorChoicesInstance = null;
-        const itemListDiv = document.getElementById('item-list');
-        const itemEditFormContainer = document.getElementById('item-edit-form-container');
-        const itemEditForm = document.getElementById('item-edit-form');
-        const itemIdInput = document.getElementById('item-id');
-        const backButton = document.getElementById('back-to-list-button');
-        const searchInput = document.getElementById('search-input');
-        const slotIconTrigger = document.getElementById('slot-icon-trigger');
-        const slotPopupOverlay = document.getElementById('slot-popup-overlay');
-        const slotPopupCloseButton = document.getElementById('slot-popup-close-button');
-        const slotForm = document.getElementById('slot-form');
-        const popupPrecoInput = document.getElementById('popup-preco');
-        const popupValorRealTirarButton = document.getElementById('popup-valorreal-tirar');
-        const popupValorRealDarButton = document.getElementById('popup-valorreal-dar');
-        const popupValorRealHiddenInput = document.getElementById('popup-valorreal-hidden');
-        const popupTemporadaInput = document.getElementById('popup-temporada');
-        const popupUserIdSelect = document.getElementById('popup-userId');
-        const popupSaveButton = document.getElementById('popup-save-button');
-        const popupItemEmpireInput = document.getElementById('popup-itemEmpire');
-        const popupEmpireTipoInput = document.getElementById('popup-empireTipo');
-        const popupEstadoInput = document.getElementById('popup-estado');
-        const popupTipoInput = document.getElementById('popup-tipo');
+// Importa a função onAuthStateChanged para saber quando inicializar a página.
+import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
-        // --- Funções de Carregamento de Dados ---
-        async function loadCompeticoes() {
-             const competicoesSelect = document.getElementById('competicoes');
-             if (!competicoesSelect) return;
-             try {
-                 const competicoesCol = collection(db, 'competicoes');
-                 const competicoesSnapshot = await getDocs(competicoesCol);
-                 const choicesData = [];
-                 competicoesSnapshot.forEach((doc) => {
-                     const data = doc.data();
-                     if (data.nome) choicesData.push({ value: doc.id, label: data.nome });
-                 });
-                 choicesData.sort((a, b) => a.label.localeCompare(b.label));
+// --- Variáveis Globais e Elementos do DOM ---
+let competicoesChoicesInstance = null;
+let compradoPorChoicesInstance = null;
+const itemListDiv = document.getElementById('item-list');
+const itemEditFormContainer = document.getElementById('item-edit-form-container');
+const itemEditForm = document.getElementById('item-edit-form');
+const itemIdInput = document.getElementById('item-id');
+const backButton = document.getElementById('back-to-list-button');
+const searchInput = document.getElementById('search-input');
+const slotIconTrigger = document.getElementById('slot-icon-trigger');
+const slotPopupOverlay = document.getElementById('slot-popup-overlay');
+const slotPopupCloseButton = document.getElementById('slot-popup-close-button');
+const slotForm = document.getElementById('slot-form');
+const popupPrecoInput = document.getElementById('popup-preco');
+const popupValorRealTirarButton = document.getElementById('popup-valorreal-tirar');
+const popupValorRealDarButton = document.getElementById('popup-valorreal-dar');
+const popupValorRealHiddenInput = document.getElementById('popup-valorreal-hidden');
+const popupTemporadaInput = document.getElementById('popup-temporada');
+const popupUserIdSelect = document.getElementById('popup-userId');
+const popupSaveButton = document.getElementById('popup-save-button');
+const popupItemEmpireInput = document.getElementById('popup-itemEmpire');
+const popupEmpireTipoInput = document.getElementById('popup-empireTipo');
+const popupEstadoInput = document.getElementById('popup-estado');
+const popupTipoInput = document.getElementById('popup-tipo');
 
-                 if (competicoesChoicesInstance) competicoesChoicesInstance.destroy();
-                 competicoesChoicesInstance = new Choices(competicoesSelect, { removeItemButton: true, placeholder: true, placeholderValue: 'Selecione...', choices: choicesData, searchPlaceholderValue: "Pesquisar...", itemSelectText: '', shouldSort: false, maxItemCount: -1, position: 'bottom' });
-             } catch (error) {
-                 console.error("Erro ao carregar competições:", error);
-                 if(competicoesSelect) competicoesSelect.innerHTML = '<option value="" disabled>Erro</option>';
-             }
-        }
+// --- Funções de Carregamento de Dados ---
+async function loadCompeticoes() {
+     const competicoesSelect = document.getElementById('competicoes');
+     if (!competicoesSelect) return;
+     try {
+         const competicoesCol = collection(db, 'competicoes');
+         const competicoesSnapshot = await getDocs(competicoesCol);
+         const choicesData = [];
+         competicoesSnapshot.forEach((doc) => {
+             const data = doc.data();
+             if (data.nome) choicesData.push({ value: doc.id, label: data.nome });
+         });
+         choicesData.sort((a, b) => a.label.localeCompare(b.label));
 
-        async function loadUsers() {
-             const compradoPorSelect = document.getElementById('compradoPor');
-             if (!compradoPorSelect) return;
-             try {
-                 const usersCol = collection(db, 'users');
-                 const querySnapshot = await getDocs(usersCol);
-                 const choicesData = [];
-                 if (!querySnapshot.empty) {
-                     const users = [];
-                     querySnapshot.forEach((doc) => {
-                         const data = doc.data();
-                         if (data.nomeDeUsuario) users.push({ id: doc.id, nomeDeUsuario: data.nomeDeUsuario });
-                     });
-                     users.sort((a, b) => a.nomeDeUsuario.localeCompare(b.nomeDeUsuario));
-                     users.forEach(user => choicesData.push({ value: user.id, label: user.nomeDeUsuario }));
-                 }
+         if (competicoesChoicesInstance) competicoesChoicesInstance.destroy();
+         competicoesChoicesInstance = new Choices(competicoesSelect, { removeItemButton: true, placeholder: true, placeholderValue: 'Selecione...', choices: choicesData, searchPlaceholderValue: "Pesquisar...", itemSelectText: '', shouldSort: false, maxItemCount: -1, position: 'bottom' });
+     } catch (error) {
+         console.error("Erro ao carregar competições:", error);
+         if(competicoesSelect) competicoesSelect.innerHTML = '<option value="" disabled>Erro</option>';
+     }
+}
 
-                 if (compradoPorChoicesInstance) compradoPorChoicesInstance.destroy();
-                 compradoPorChoicesInstance = new Choices(compradoPorSelect, { removeItemButton: true, placeholder: true, placeholderValue: 'Selecione...', choices: choicesData, searchPlaceholderValue: "Pesquisar...", itemSelectText: '', shouldSort: false, maxItemCount: -1, position: 'bottom' });
-             } catch (error) {
-                 console.error("Erro ao carregar usuários:", error);
-                  if (compradoPorChoicesInstance) { compradoPorChoicesInstance.destroy(); }
-             }
-        }
-
-        async function loadAnexadoOptions() {
-             const anexadoSelect = document.getElementById('anexadoItem');
-             if (!anexadoSelect) { console.error("Elemento #anexadoItem não encontrado."); return; }
-             const placeholderOptionHTML = anexadoSelect.querySelector('option[value=""]')?.outerHTML || '<option value="" selected enable>-- Selecione Item Anexado (Opcional) --</option>';
-             anexadoSelect.innerHTML = placeholderOptionHTML;
-
-             try {
-                 const itemsCol = collection(db, 'empireitens');
-                 const qFilosofia = query(itemsCol, where("tipo", "==", "Filosofia"));
-                 const qEstadio = query(itemsCol, where("tipo", "==", "Estádio"));
-                 const [filosofiaSnapshot, estadioSnapshot] = await Promise.all([ getDocs(qFilosofia), getDocs(qEstadio) ]);
-                 const combinedItems = [];
-                 filosofiaSnapshot.forEach((doc) => { const data = doc.data(); if (data.nome) { combinedItems.push({ id: doc.id, nome: data.nome, tipo: data.tipo }); } });
-                 estadioSnapshot.forEach((doc) => { const data = doc.data(); if (data.nome) { combinedItems.push({ id: doc.id, nome: data.nome, tipo: data.tipo }); } });
-                 combinedItems.sort((a, b) => { const textA = `${a.tipo}: ${a.nome}`; const textB = `${b.tipo}: ${b.nome}`; return textA.localeCompare(textB); });
-                 combinedItems.forEach(item => { const option = document.createElement('option'); option.value = item.id; option.textContent = `${item.tipo}: ${item.nome}`; anexadoSelect.appendChild(option); });
-             } catch (error) {
-                 console.error("Erro ao carregar opções de Anexado (Filosofia/Estádio):", error);
-                 anexadoSelect.innerHTML = placeholderOptionHTML;
-                 const errorOption = document.createElement('option'); errorOption.textContent = "Erro ao carregar itens"; errorOption.disabled = true; anexadoSelect.appendChild(errorOption);
-             }
-        }
-        
-        async function fetchLatestSeason() {
-            if (!popupTemporadaInput) return;
-            popupTemporadaInput.value = "Carregando...";
-            popupTemporadaInput.readOnly = true;
-            try {
-                const jogosCol = collection(db, 'jogos');
-                const q = query(jogosCol, orderBy('temporada', 'desc'), limit(1));
-                const querySnapshot = await getDocs(q);
-
-                if (!querySnapshot.empty) {
-                    const latestJogo = querySnapshot.docs[0].data();
-                    let temporada = latestJogo.temporada;
-                    if (typeof temporada === 'string' && temporada.includes('/')) {
-                        temporada = temporada.replace('/', '');
-                        popupTemporadaInput.value = temporada;
-                    } else if (typeof temporada === 'string') {
-                         console.warn("Formato de temporada não esperado (usando valor direto):", latestJogo.temporada);
-                         popupTemporadaInput.value = temporada;
-                    } else {
-                        console.warn("Tipo ou formato de temporada inesperado:", latestJogo.temporada);
-                        popupTemporadaInput.value = "Erro formato";
-                    }
-                } else {
-                    console.warn("Nenhuma temporada encontrada na coleção 'jogos'. Defina manualmente ou configure um valor padrão.");
-                    popupTemporadaInput.value = "N/A";
-                }
-            } catch (error) {
-                console.error("Erro ao buscar a temporada mais recente:", error);
-                popupTemporadaInput.value = "Erro ao carregar";
-            }
-        }
-
-        async function fetchUsersForPopup() {
-            if (!popupUserIdSelect) return;
-            popupUserIdSelect.innerHTML = '<option value="" selected disabled>-- Selecione o Usuário --</option>';
-            try {
-                const usersCol = collection(db, 'users');
-                const querySnapshot = await getDocs(usersCol);
-                const usersData = [];
-                querySnapshot.forEach((doc) => {
-                    const data = doc.data();
-                    let displayName = data.nomeDeUsuario || data.nome || doc.id;
-                    if (displayName) {
-                        usersData.push({ id: doc.id, name: displayName });
-                    }
-                });
-                usersData.sort((a, b) => a.name.localeCompare(b.name));
-                usersData.forEach(user => {
-                    const option = document.createElement('option');
-                    option.value = user.id;
-                    option.textContent = user.name;
-                    popupUserIdSelect.appendChild(option);
-                });
-            } catch (error) {
-                console.error("Erro ao carregar usuários para o popup:", error);
-                const errorOption = document.createElement('option');
-                errorOption.textContent = "Erro ao carregar";
-                errorOption.disabled = true;
-                popupUserIdSelect.appendChild(errorOption);
-            }
-        }
-        
-        // --- Funções de Exibição e Interação com Itens ---
-        let allItems = [];
-        function filterItems(searchText) {
-             const normalizedSearch = searchText.toLowerCase().trim();
-             const filteredItems = allItems.filter(item => {
-                 const nome = (item.nome || '').toLowerCase();
-                 const tipo = (item.tipo || '').toLowerCase();
-                 return nome.includes(normalizedSearch) || tipo.includes(normalizedSearch);
+async function loadUsers() {
+     const compradoPorSelect = document.getElementById('compradoPor');
+     if (!compradoPorSelect) return;
+     try {
+         const usersCol = collection(db, 'users');
+         const querySnapshot = await getDocs(usersCol);
+         const choicesData = [];
+         if (!querySnapshot.empty) {
+             const users = [];
+             querySnapshot.forEach((doc) => {
+                 const data = doc.data();
+                 if (data.nomeDeUsuario) users.push({ id: doc.id, nomeDeUsuario: data.nomeDeUsuario });
              });
-             displayItems(filteredItems);
-        }
-        function displayItems(items) {
-             if (!itemListDiv) return;
-             itemListDiv.innerHTML = '';
-             if (items.length === 0) {
-                 itemListDiv.innerHTML = '<p>Nenhum item encontrado.</p>';
-                 return;
-             }
-             items.forEach((item) => {
-                 const card = document.createElement('div');
-                 card.className = 'item-card';
-                 card.onclick = () => {
-                     if (auth.currentUser) {
-                        loadItemDetails(item.id);
-                     } else {
-                         alert("Faça login para editar itens.");
-                     }
-                 };
-                 card.innerHTML = `
-                    <div class="item-info">
-                        <h3>${item.nome || 'Item sem nome'}</h3>
-                        <p>Tipo: ${item.tipo || 'N/A'}</p>
-                    </div>
-                    <div class="item-actions">
-                        <i class="fas fa-edit"></i>
-                    </div>`;
-                 itemListDiv.appendChild(card);
-             });
-        }
-        async function loadItems() {
-             if (!itemListDiv) return;
-             const itemsCollection = collection(db, 'empireitens');
-             itemListDiv.innerHTML = '<p>Carregando itens...</p>';
-             try {
-                 const querySnapshot = await getDocs(itemsCollection);
-                 allItems = [];
-                 if (querySnapshot.empty) {
-                    displayItems([]);
-                    return;
-                 }
-                 querySnapshot.forEach((doc) => {
-                     allItems.push({ id: doc.id, ...doc.data() });
-                 });
-                 allItems.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
-                 displayItems(allItems);
+             users.sort((a, b) => a.nomeDeUsuario.localeCompare(b.nomeDeUsuario));
+             users.forEach(user => choicesData.push({ value: user.id, label: user.nomeDeUsuario }));
+         }
 
-                 if (searchInput && !searchInput.listenerAttached) {
-                     searchInput.addEventListener('input', (e) => filterItems(e.target.value));
-                     searchInput.listenerAttached = true;
-                 }
-             } catch (error) {
-                 console.error('Error loading items:', error);
-                 itemListDiv.innerHTML = '<p style="color: red;">Erro ao carregar itens.</p>';
-             }
-        }
+         if (compradoPorChoicesInstance) compradoPorChoicesInstance.destroy();
+         compradoPorChoicesInstance = new Choices(compradoPorSelect, { removeItemButton: true, placeholder: true, placeholderValue: 'Selecione...', choices: choicesData, searchPlaceholderValue: "Pesquisar...", itemSelectText: '', shouldSort: false, maxItemCount: -1, position: 'bottom' });
+     } catch (error) {
+         console.error("Erro ao carregar usuários:", error);
+          if (compradoPorChoicesInstance) { compradoPorChoicesInstance.destroy(); }
+     }
+}
 
-        async function loadItemDetails(itemId) {
-             if (!itemEditForm || !itemIdInput || !auth.currentUser) { return; }
-             await loadAnexadoOptions();
+// --- START: MODIFIED Function to Load Anexado Options ---
+async function loadAnexadoOptions() {
+    const anexadoSelect = document.getElementById('anexadoItem');
+    if (!anexadoSelect) {
+        console.error("Elemento #anexadoItem não encontrado.");
+        return;
+    }
+    // Mantém o placeholder original
+    const placeholderOptionHTML = anexadoSelect.querySelector('option[value=""]')?.outerHTML || '<option value="" selected enable>-- Selecione Item Anexado (Opcional) --</option>';
+    anexadoSelect.innerHTML = placeholderOptionHTML;
+
+    try {
+        const itemsCol = collection(db, 'empireitens');
+        
+        // ALTERAÇÃO: Busca todos os itens sem filtro de tipo
+        const itemsSnapshot = await getDocs(itemsCol);
+
+        const allItems = [];
+        itemsSnapshot.forEach((doc) => {
+            const data = doc.data();
+            if (data.nome && data.tipo) {
+                allItems.push({
+                    id: doc.id,
+                    nome: data.nome,
+                    tipo: data.tipo
+                });
+            }
+        });
+
+        // Ordena a lista por "Tipo: Nome"
+        allItems.sort((a, b) => {
+            const textA = `${a.tipo}: ${a.nome}`;
+            const textB = `${b.tipo}: ${b.nome}`;
+            return textA.localeCompare(textB);
+        });
+
+        // Popula o menu suspenso
+        allItems.forEach(item => {
+            const option = document.createElement('option');
+            option.value = item.id;
+            option.textContent = `${item.tipo}: ${item.nome}`;
+            anexadoSelect.appendChild(option);
+        });
+
+    } catch (error) {
+        console.error("Erro ao carregar todas as opções de Anexado:", error);
+        anexadoSelect.innerHTML = placeholderOptionHTML;
+        const errorOption = document.createElement('option');
+        errorOption.textContent = "Erro ao carregar itens";
+        errorOption.disabled = true;
+        anexadoSelect.appendChild(errorOption);
+    }
+}
+// --- END: MODIFIED Function ---
+
+async function fetchLatestSeason() {
+    if (!popupTemporadaInput) return;
+    popupTemporadaInput.value = "Carregando...";
+    popupTemporadaInput.readOnly = true;
+    try {
+        const jogosCol = collection(db, 'jogos');
+        const q = query(jogosCol, orderBy('temporada', 'desc'), limit(1));
+        const querySnapshot = await getDocs(q);
+
+        if (!querySnapshot.empty) {
+            const latestJogo = querySnapshot.docs[0].data();
+            let temporada = latestJogo.temporada;
+            if (typeof temporada === 'string' && temporada.includes('/')) {
+                temporada = temporada.replace('/', '');
+                popupTemporadaInput.value = temporada;
+            } else if (typeof temporada === 'string') {
+                 console.warn("Formato de temporada não esperado (usando valor direto):", latestJogo.temporada);
+                 popupTemporadaInput.value = temporada;
+            } else {
+                console.warn("Tipo ou formato de temporada inesperado:", latestJogo.temporada);
+                popupTemporadaInput.value = "Erro formato";
+            }
+        } else {
+            console.warn("Nenhuma temporada encontrada na coleção 'jogos'. Defina manualmente ou configure um valor padrão.");
+            popupTemporadaInput.value = "N/A";
+        }
+    } catch (error) {
+        console.error("Erro ao buscar a temporada mais recente:", error);
+        popupTemporadaInput.value = "Erro ao carregar";
+    }
+}
+
+async function fetchUsersForPopup() {
+    if (!popupUserIdSelect) return;
+    popupUserIdSelect.innerHTML = '<option value="" selected disabled>-- Selecione o Usuário --</option>';
+    try {
+        const usersCol = collection(db, 'users');
+        const querySnapshot = await getDocs(usersCol);
+        const usersData = [];
+        querySnapshot.forEach((doc) => {
+            const data = doc.data();
+            let displayName = data.nomeDeUsuario || data.nome || doc.id;
+            if (displayName) {
+                usersData.push({ id: doc.id, name: displayName });
+            }
+        });
+        usersData.sort((a, b) => a.name.localeCompare(b.name));
+        usersData.forEach(user => {
+            const option = document.createElement('option');
+            option.value = user.id;
+            option.textContent = user.name;
+            popupUserIdSelect.appendChild(option);
+        });
+    } catch (error) {
+        console.error("Erro ao carregar usuários para o popup:", error);
+        const errorOption = document.createElement('option');
+        errorOption.textContent = "Erro ao carregar";
+        errorOption.disabled = true;
+        popupUserIdSelect.appendChild(errorOption);
+    }
+}
+
+// --- Funções de Exibição e Interação com Itens ---
+let allItems = [];
+function filterItems(searchText) {
+     const normalizedSearch = searchText.toLowerCase().trim();
+     const filteredItems = allItems.filter(item => {
+         const nome = (item.nome || '').toLowerCase();
+         const tipo = (item.tipo || '').toLowerCase();
+         return nome.includes(normalizedSearch) || tipo.includes(normalizedSearch);
+     });
+     displayItems(filteredItems);
+}
+function displayItems(items) {
+     if (!itemListDiv) return;
+     itemListDiv.innerHTML = '';
+     if (items.length === 0) {
+         itemListDiv.innerHTML = '<p>Nenhum item encontrado.</p>';
+         return;
+     }
+     items.forEach((item) => {
+         const card = document.createElement('div');
+         card.className = 'item-card';
+         card.onclick = () => {
+             if (auth.currentUser) {
+                loadItemDetails(item.id);
+             } else {
+                 alert("Faça login para editar itens.");
+             }
+         };
+         card.innerHTML = `
+            <div class="item-info">
+                <h3>${item.nome || 'Item sem nome'}</h3>
+                <p>Tipo: ${item.tipo || 'N/A'}</p>
+            </div>
+            <div class="item-actions">
+                <i class="fas fa-edit"></i>
+            </div>`;
+         itemListDiv.appendChild(card);
+     });
+}
+async function loadItems() {
+     if (!itemListDiv) return;
+     const itemsCollection = collection(db, 'empireitens');
+     itemListDiv.innerHTML = '<p>Carregando itens...</p>';
+     try {
+         const querySnapshot = await getDocs(itemsCollection);
+         allItems = [];
+         if (querySnapshot.empty) {
+            displayItems([]);
+            return;
+         }
+         querySnapshot.forEach((doc) => {
+             allItems.push({ id: doc.id, ...doc.data() });
+         });
+         allItems.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+         displayItems(allItems);
+
+         if (searchInput && !searchInput.listenerAttached) {
+             searchInput.addEventListener('input', (e) => filterItems(e.target.value));
+             searchInput.listenerAttached = true;
+         }
+     } catch (error) {
+         console.error('Error loading items:', error);
+         itemListDiv.innerHTML = '<p style="color: red;">Erro ao carregar itens.</p>';
+     }
+}
+
+async function loadItemDetails(itemId) {
+     if (!itemEditForm || !itemIdInput || !auth.currentUser) { return; }
+     await loadAnexadoOptions(); // A função modificada será chamada aqui
+
+     try {
+         const itemDocRef = doc(db, 'empireitens', itemId);
+         const itemDocSnap = await getDoc(itemDocRef);
+
+         if (itemDocSnap.exists()) {
+             const item = itemDocSnap.data();
+             itemEditForm.reset();
+
+             itemIdInput.value = itemId;
+             itemEditForm.tipo.value = item.tipo || '';
+             itemEditForm.nome.value = item.nome || '';
+             itemEditForm.imagem.value = item.imagem || '';
+             itemEditForm.valor.value = item.valor !== undefined ? item.valor : '';
+             itemEditForm.nota.value = item.nota || '';
+             itemEditForm.nivel.value = item.nivel || '';
+             itemEditForm.noMercado.value = item.noMercado === true ? 'sim' : (item.noMercado === false ? 'nao' : '');
+             itemEditForm.ordem.value = item.ordem || '';
+
+             const anexadoSelect = itemEditForm.querySelector('#anexadoItem');
+             if (anexadoSelect) {
+                 anexadoSelect.value = item.anexadoItemId || '';
+                 if (item.anexadoItemId && !anexadoSelect.querySelector(`option[value="${item.anexadoItemId}"]`)) {
+                     console.warn(`Anexado ID "${item.anexadoItemId}" não encontrado nas opções.`);
+                 }
+             }
+
+             if (competicoesChoicesInstance) {
+                 competicoesChoicesInstance.removeActiveItems();
+                 if (item.competicoesIds && Array.isArray(item.competicoesIds)) {
+                     competicoesChoicesInstance.setChoiceByValue(item.competicoesIds);
+                 }
+             }
+
+             if (compradoPorChoicesInstance) {
+                 compradoPorChoicesInstance.removeActiveItems();
+                 if (item.compradoPorUids && Array.isArray(item.compradoPorUids)) {
+                     compradoPorChoicesInstance.setChoiceByValue(item.compradoPorUids);
+                 }
+             }
+
+             if(itemListDiv) itemListDiv.style.display = 'none';
+             if(itemEditFormContainer) itemEditFormContainer.style.display = 'block';
+
+         } else {
+             console.error('Item não encontrado com ID:', itemId);
+             alert('Item não encontrado.');
+         }
+     } catch (error) {
+         console.error('Erro ao carregar detalhes do item:', error);
+         alert('Erro ao carregar detalhes do item.');
+         if(itemEditFormContainer) itemEditFormContainer.style.display = 'none';
+         if(itemListDiv) itemListDiv.style.display = 'block';
+     }
+}
+
+// --- Funções do Popup ---
+function openPopup() {
+    if (!slotPopupOverlay || !auth.currentUser) {
+        if (!auth.currentUser) alert("Faça login para adicionar um movimento.");
+        return;
+    }
+    if(slotForm) slotForm.reset();
+    if(popupEmpireTipoInput) popupEmpireTipoInput.value = "Extra";
+    if(popupEstadoInput) popupEstadoInput.value = "Empire Paid";
+    if(popupTipoInput) popupTipoInput.value = "Empire";
+    if(popupTemporadaInput) popupTemporadaInput.value = "";
+    if(popupUserIdSelect) popupUserIdSelect.innerHTML = '<option value="" selected disabled>-- Carregando Usuários --</option>';
+    resetValorRealState();
+    fetchLatestSeason();
+    fetchUsersForPopup();
+    slotPopupOverlay.classList.add('visible');
+}
+
+function closePopup() {
+    if (!slotPopupOverlay) return;
+    slotPopupOverlay.classList.remove('visible');
+    setTimeout(() => {
+       if(slotForm) slotForm.reset();
+       resetValorRealState();
+       if(popupEmpireTipoInput) popupEmpireTipoInput.value = "Extra";
+       if(popupEstadoInput) popupEstadoInput.value = "Empire Paid";
+       if(popupTipoInput) popupTipoInput.value = "Empire";
+       if(popupTemporadaInput) popupTemporadaInput.value = "";
+       if(popupUserIdSelect) popupUserIdSelect.innerHTML = '<option value="" selected disabled>-- Selecione o Usuário --</option>';
+    }, 300);
+}
+
+function resetValorRealState() {
+     if (popupValorRealHiddenInput) popupValorRealHiddenInput.value = '';
+     if (popupValorRealTirarButton) popupValorRealTirarButton.classList.remove('active');
+     if (popupValorRealDarButton) popupValorRealDarButton.classList.remove('active');
+}
+
+function handleValorRealClick(isTirar) {
+    if (!popupPrecoInput || !popupValorRealHiddenInput) return;
+    const precoValue = parseFloat(popupPrecoInput.value);
+    if (isNaN(precoValue) || popupPrecoInput.value.trim() === '') {
+        alert("Por favor, insira um valor numérico válido no campo 'Preço' antes de selecionar 'Tirar' ou 'Dar'.");
+        resetValorRealState(); return;
+    }
+    const calculatedValue = isTirar ? -Math.abs(precoValue) : Math.abs(precoValue);
+    popupValorRealHiddenInput.value = calculatedValue;
+    if (popupValorRealTirarButton) popupValorRealTirarButton.classList.toggle('active', isTirar);
+    if (popupValorRealDarButton) popupValorRealDarButton.classList.toggle('active', !isTirar);
+}
+
+// --- Ponto de Entrada e Inicialização da Página ---
+function initializePage() {
+    // Carrega os dados iniciais necessários para os formulários
+    Promise.all([
+        loadCompeticoes(),
+        loadUsers(),
+        // loadAnexadoOptions() não precisa ser chamado aqui, pois é chamado dentro de loadItemDetails
+    ]);
+    
+    // Carrega a lista principal de itens
+    loadItems();
+
+    // Anexa todos os event listeners
+    if (itemEditForm) {
+        itemEditForm.addEventListener('submit', async (e) => {
+             e.preventDefault();
+             if (!auth.currentUser) { alert("Faça login para salvar alterações."); return; }
+             const submitButton = itemEditForm.querySelector('.submit-button');
+             if (!submitButton) return;
+             submitButton.disabled = true; submitButton.textContent = 'A Salvar...';
+             const itemId = itemIdInput.value;
+             if (!itemId) { alert("Erro: ID do item não encontrado."); submitButton.disabled = false; submitButton.textContent = 'Salvar Alterações'; return; }
+
+             const tipo = itemEditForm.tipo.value;
+             const nome = itemEditForm.nome.value;
+             const imagem = itemEditForm.imagem.value;
+             const anexadoItemId = itemEditForm.anexadoItem.value;
+             const valorInput = itemEditForm.valor.value;
+             const nota = itemEditForm.nota.value;
+             const nivel = itemEditForm.nivel.value;
+             const noMercadoValue = itemEditForm.noMercado.value;
+             const ordemValue = itemEditForm.ordem.value;
+             const selectedCompeticoes = competicoesChoicesInstance ? competicoesChoicesInstance.getValue(true) : [];
+             const selectedUsers = compradoPorChoicesInstance ? compradoPorChoicesInstance.getValue(true) : [];
+
+             const updatedData = {
+                 tipo: tipo, nome: nome, noMercado: noMercadoValue === 'sim',
+                 atualizadoEm: serverTimestamp(),
+                 compradoPorUids: Array.isArray(selectedUsers) ? selectedUsers : [],
+                 competicoesIds: Array.isArray(selectedCompeticoes) ? selectedCompeticoes : [],
+             };
+             if (imagem) updatedData.imagem = imagem;
+             if (valorInput !== '' && !isNaN(parseFloat(valorInput))) updatedData.valor = parseFloat(valorInput); else if (itemEditForm.valor.hasAttribute('value')) updatedData.valor = null;
+             if (nota) updatedData.nota = nota; else if (itemEditForm.nota.hasAttribute('value')) updatedData.nota = null;
+             if (nivel) updatedData.nivel = nivel; else if (itemEditForm.nivel.hasAttribute('value')) updatedData.nivel = null;
+             if (ordemValue && !isNaN(parseInt(ordemValue, 10))) updatedData.ordem = parseInt(ordemValue, 10); else if (itemEditForm.ordem.hasAttribute('value')) updatedData.ordem = null;
+             if (anexadoItemId) { updatedData.anexadoItemId = anexadoItemId; } else { updatedData.anexadoItemId = null; }
 
              try {
                  const itemDocRef = doc(db, 'empireitens', itemId);
-                 const itemDocSnap = await getDoc(itemDocRef);
-
-                 if (itemDocSnap.exists()) {
-                     const item = itemDocSnap.data();
-                     itemEditForm.reset();
-
-                     itemIdInput.value = itemId;
-                     itemEditForm.tipo.value = item.tipo || '';
-                     itemEditForm.nome.value = item.nome || '';
-                     itemEditForm.imagem.value = item.imagem || '';
-                     itemEditForm.valor.value = item.valor !== undefined ? item.valor : '';
-                     itemEditForm.nota.value = item.nota || '';
-                     itemEditForm.nivel.value = item.nivel || '';
-                     itemEditForm.noMercado.value = item.noMercado === true ? 'sim' : (item.noMercado === false ? 'nao' : '');
-                     itemEditForm.ordem.value = item.ordem || '';
-
-                     const anexadoSelect = itemEditForm.querySelector('#anexadoItem');
-                     if (anexadoSelect) {
-                         anexadoSelect.value = item.anexadoItemId || '';
-                         if (item.anexadoItemId && !anexadoSelect.querySelector(`option[value="${item.anexadoItemId}"]`)) {
-                             console.warn(`Anexado ID "${item.anexadoItemId}" não encontrado nas opções.`);
-                         }
-                     }
-
-                     if (competicoesChoicesInstance) {
-                         competicoesChoicesInstance.removeActiveItems();
-                         if (item.competicoesIds && Array.isArray(item.competicoesIds)) {
-                             competicoesChoicesInstance.setChoiceByValue(item.competicoesIds);
-                         }
-                     }
-
-                     if (compradoPorChoicesInstance) {
-                         compradoPorChoicesInstance.removeActiveItems();
-                         if (item.compradoPorUids && Array.isArray(item.compradoPorUids)) {
-                             compradoPorChoicesInstance.setChoiceByValue(item.compradoPorUids);
-                         }
-                     }
-
-                     if(itemListDiv) itemListDiv.style.display = 'none';
-                     if(itemEditFormContainer) itemEditFormContainer.style.display = 'block';
-
-                 } else {
-                     console.error('Item não encontrado com ID:', itemId);
-                     alert('Item não encontrado.');
-                 }
-             } catch (error) {
-                 console.error('Erro ao carregar detalhes do item:', error);
-                 alert('Erro ao carregar detalhes do item.');
+                 await updateDoc(itemDocRef, updatedData);
+                 alert('Item atualizado com sucesso!');
                  if(itemEditFormContainer) itemEditFormContainer.style.display = 'none';
                  if(itemListDiv) itemListDiv.style.display = 'block';
+                 await loadItems();
+             } catch (error) {
+                 console.error('Erro ao atualizar item:', error);
+                 alert('Erro ao atualizar item.');
+             } finally {
+                 submitButton.disabled = false; submitButton.textContent = 'Salvar Alterações';
              }
-        }
-        
-        // --- Funções do Popup ---
-        function openPopup() {
-            if (!slotPopupOverlay || !auth.currentUser) {
-                if (!auth.currentUser) alert("Faça login para adicionar um movimento.");
+        });
+    }
+
+    if (backButton) {
+        backButton.addEventListener('click', () => {
+             if(itemEditFormContainer) itemEditFormContainer.style.display = 'none';
+             if(itemListDiv) itemListDiv.style.display = 'block';
+             if(itemEditForm) itemEditForm.reset();
+             if (competicoesChoicesInstance) competicoesChoicesInstance.removeActiveItems();
+             if (compradoPorChoicesInstance) compradoPorChoicesInstance.removeActiveItems();
+             if(itemIdInput) itemIdInput.value = '';
+             if(itemEditForm.tipo) itemEditForm.tipo.value = "";
+             if(itemEditForm.anexadoItem) itemEditForm.anexadoItem.value = "";
+             if(itemEditForm.nivel) itemEditForm.nivel.value = "";
+             if(itemEditForm.noMercado) itemEditForm.noMercado.value = "";
+             if(itemEditForm.ordem) itemEditForm.ordem.value = "";
+        });
+    }
+
+    if (slotIconTrigger) slotIconTrigger.addEventListener('click', openPopup);
+    if (slotPopupCloseButton) slotPopupCloseButton.addEventListener('click', closePopup);
+    if (slotPopupOverlay) slotPopupOverlay.addEventListener('click', (event) => { if (event.target === slotPopupOverlay) closePopup(); });
+    if (popupValorRealTirarButton) popupValorRealTirarButton.addEventListener('click', () => handleValorRealClick(true));
+    if (popupValorRealDarButton) popupValorRealDarButton.addEventListener('click', () => handleValorRealClick(false));
+    if(popupPrecoInput) popupPrecoInput.addEventListener('input', () => { if (popupValorRealHiddenInput?.value !== '') resetValorRealState(); });
+    
+    if (slotForm) {
+        slotForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!popupSaveButton || !auth.currentUser) { if (!auth.currentUser) alert("Faça login para gravar."); return; }
+            popupSaveButton.disabled = true; popupSaveButton.textContent = 'A Gravar...';
+
+            const preco = popupPrecoInput.value.trim();
+            const itemEmpire = popupItemEmpireInput.value.trim();
+            const userId = popupUserIdSelect.value;
+            const valorReal = popupValorRealHiddenInput.value;
+            const temporada = popupTemporadaInput.value;
+            const empireTipo = popupEmpireTipoInput.value.trim();
+            const estado = popupEstadoInput.value.trim();
+            const tipo = popupTipoInput.value.trim();
+
+            let isValid = true; let errorMessage = "Por favor, corrija:\n";
+            if (!itemEmpire) { isValid = false; errorMessage += "- 'Item Empire' é obrigatório.\n"; }
+            if (!preco || isNaN(parseFloat(preco))) { isValid = false; errorMessage += "- 'Preço' deve ser número.\n"; }
+            if (!valorReal || isNaN(parseFloat(valorReal))) { isValid = false; errorMessage += "- Selecione 'Tirar'/'Dar'.\n"; }
+            if (!userId) { isValid = false; errorMessage += "- Selecione 'Usuário'.\n"; }
+            if (!temporada || temporada === "Carregando..." || temporada.includes("Erro") || temporada === "N/A") { isValid = false; errorMessage += "- 'Temporada' inválida.\n"; }
+            if (!empireTipo) { isValid = false; errorMessage += "- 'Empire Tipo' obrigatório.\n"; }
+            if (!estado) { isValid = false; errorMessage += "- 'Estado' obrigatório.\n"; }
+            if (!tipo) { isValid = false; errorMessage += "- 'Tipo' obrigatório.\n"; }
+
+            if (!isValid) {
+                alert(errorMessage);
+                popupSaveButton.disabled = false; popupSaveButton.textContent = 'Gravar Movimento';
                 return;
             }
-            if(slotForm) slotForm.reset();
-            if(popupEmpireTipoInput) popupEmpireTipoInput.value = "Extra";
-            if(popupEstadoInput) popupEstadoInput.value = "Empire Paid";
-            if(popupTipoInput) popupTipoInput.value = "Empire";
-            if(popupTemporadaInput) popupTemporadaInput.value = "";
-            if(popupUserIdSelect) popupUserIdSelect.innerHTML = '<option value="" selected disabled>-- Carregando Usuários --</option>';
-            resetValorRealState();
-            fetchLatestSeason();
-            fetchUsersForPopup();
-            slotPopupOverlay.classList.add('visible');
-        }
 
-        function closePopup() {
-            if (!slotPopupOverlay) return;
-            slotPopupOverlay.classList.remove('visible');
-            setTimeout(() => {
-               if(slotForm) slotForm.reset();
-               resetValorRealState();
-               if(popupEmpireTipoInput) popupEmpireTipoInput.value = "Extra";
-               if(popupEstadoInput) popupEstadoInput.value = "Empire Paid";
-               if(popupTipoInput) popupTipoInput.value = "Empire";
-               if(popupTemporadaInput) popupTemporadaInput.value = "";
-               if(popupUserIdSelect) popupUserIdSelect.innerHTML = '<option value="" selected disabled>-- Selecione o Usuário --</option>';
-            }, 300);
-        }
-        
-        function resetValorRealState() {
-             if (popupValorRealHiddenInput) popupValorRealHiddenInput.value = '';
-             if (popupValorRealTirarButton) popupValorRealTirarButton.classList.remove('active');
-             if (popupValorRealDarButton) popupValorRealDarButton.classList.remove('active');
-        }
+            const movimentoData = {
+                empireTipo: empireTipo, estado: estado, itemEmpire: itemEmpire,
+                preco: parseFloat(preco), valorreal: parseFloat(valorReal),
+                temporada: temporada, tipo: tipo, userId: userId,
+                movimentoData: serverTimestamp(),
+                userName: popupUserIdSelect.selectedOptions[0]?.textContent || userId
+            };
 
-        function handleValorRealClick(isTirar) {
-            if (!popupPrecoInput || !popupValorRealHiddenInput) return;
-            const precoValue = parseFloat(popupPrecoInput.value);
-            if (isNaN(precoValue) || popupPrecoInput.value.trim() === '') {
-                alert("Por favor, insira um valor numérico válido no campo 'Preço' antes de selecionar 'Tirar' ou 'Dar'.");
-                resetValorRealState(); return;
-            }
-            const calculatedValue = isTirar ? -Math.abs(precoValue) : Math.abs(precoValue);
-            popupValorRealHiddenInput.value = calculatedValue;
-            if (popupValorRealTirarButton) popupValorRealTirarButton.classList.toggle('active', isTirar);
-            if (popupValorRealDarButton) popupValorRealDarButton.classList.toggle('active', !isTirar);
-        }
+          try {
+            const movimentosCollectionRef = collection(db, 'movimentos');
+            const docRef = await addDoc(movimentosCollectionRef, movimentoData);
+            console.log("Movimento gravado com ID: ", docRef.id);
 
-        // --- Ponto de Entrada e Inicialização da Página ---
-        function initializePage() {
-            // Carrega os dados iniciais necessários para os formulários
-            Promise.all([
-                loadCompeticoes(),
-                loadUsers(),
-                loadAnexadoOptions()
-            ]);
+            const movimentosQuery = query(collection(db, 'movimentos'),
+                where("userId", "==", userId),
+                where("temporada", "==", temporada),
+                where("estado", "!=", "Dívida")
+            );
+
+            const movimentosSnapshot = await getDocs(movimentosQuery);
+            let totalGcoinsRecalculado = 0;
             
-            // Carrega a lista principal de itens
-            loadItems();
+            movimentosSnapshot.forEach(movDoc => {
+                const movData = movDoc.data();
+                if (typeof movData.valorreal === 'number') {
+                    totalGcoinsRecalculado += movData.valorreal;
+                }
+            });
 
-            // Anexa todos os event listeners
-            if (itemEditForm) {
-                itemEditForm.addEventListener('submit', async (e) => {
-                     e.preventDefault();
-                     if (!auth.currentUser) { alert("Faça login para salvar alterações."); return; }
-                     const submitButton = itemEditForm.querySelector('.submit-button');
-                     if (!submitButton) return;
-                     submitButton.disabled = true; submitButton.textContent = 'A Salvar...';
-                     const itemId = itemIdInput.value;
-                     if (!itemId) { alert("Erro: ID do item não encontrado."); submitButton.disabled = false; submitButton.textContent = 'Salvar Alterações'; return; }
-
-                     const tipo = itemEditForm.tipo.value;
-                     const nome = itemEditForm.nome.value;
-                     const imagem = itemEditForm.imagem.value;
-                     const anexadoItemId = itemEditForm.anexadoItem.value;
-                     const valorInput = itemEditForm.valor.value;
-                     const nota = itemEditForm.nota.value;
-                     const nivel = itemEditForm.nivel.value;
-                     const noMercadoValue = itemEditForm.noMercado.value;
-                     const ordemValue = itemEditForm.ordem.value;
-                     const selectedCompeticoes = competicoesChoicesInstance ? competicoesChoicesInstance.getValue(true) : [];
-                     const selectedUsers = compradoPorChoicesInstance ? compradoPorChoicesInstance.getValue(true) : [];
-
-                     const updatedData = {
-                         tipo: tipo, nome: nome, noMercado: noMercadoValue === 'sim',
-                         atualizadoEm: serverTimestamp(),
-                         compradoPorUids: Array.isArray(selectedUsers) ? selectedUsers : [],
-                         competicoesIds: Array.isArray(selectedCompeticoes) ? selectedCompeticoes : [],
-                     };
-                     if (imagem) updatedData.imagem = imagem;
-                     if (valorInput !== '' && !isNaN(parseFloat(valorInput))) updatedData.valor = parseFloat(valorInput); else if (itemEditForm.valor.hasAttribute('value')) updatedData.valor = null;
-                     if (nota) updatedData.nota = nota; else if (itemEditForm.nota.hasAttribute('value')) updatedData.nota = null;
-                     if (nivel) updatedData.nivel = nivel; else if (itemEditForm.nivel.hasAttribute('value')) updatedData.nivel = null;
-                     if (ordemValue && !isNaN(parseInt(ordemValue, 10))) updatedData.ordem = parseInt(ordemValue, 10); else if (itemEditForm.ordem.hasAttribute('value')) updatedData.ordem = null;
-                     if (anexadoItemId) { updatedData.anexadoItemId = anexadoItemId; } else { updatedData.anexadoItemId = null; }
-
-                     try {
-                         const itemDocRef = doc(db, 'empireitens', itemId);
-                         await updateDoc(itemDocRef, updatedData);
-                         alert('Item atualizado com sucesso!');
-                         if(itemEditFormContainer) itemEditFormContainer.style.display = 'none';
-                         if(itemListDiv) itemListDiv.style.display = 'block';
-                         await loadItems();
-                     } catch (error) {
-                         console.error('Erro ao atualizar item:', error);
-                         alert('Erro ao atualizar item.');
-                     } finally {
-                         submitButton.disabled = false; submitButton.textContent = 'Salvar Alterações';
-                     }
-                });
-            }
-
-            if (backButton) {
-                backButton.addEventListener('click', () => {
-                     if(itemEditFormContainer) itemEditFormContainer.style.display = 'none';
-                     if(itemListDiv) itemListDiv.style.display = 'block';
-                     if(itemEditForm) itemEditForm.reset();
-                     if (competicoesChoicesInstance) competicoesChoicesInstance.removeActiveItems();
-                     if (compradoPorChoicesInstance) compradoPorChoicesInstance.removeActiveItems();
-                     if(itemIdInput) itemIdInput.value = '';
-                     if(itemEditForm.tipo) itemEditForm.tipo.value = "";
-                     if(itemEditForm.anexadoItem) itemEditForm.anexadoItem.value = "";
-                     if(itemEditForm.nivel) itemEditForm.nivel.value = "";
-                     if(itemEditForm.noMercado) itemEditForm.noMercado.value = "";
-                     if(itemEditForm.ordem) itemEditForm.ordem.value = "";
-                });
-            }
-
-            if (slotIconTrigger) slotIconTrigger.addEventListener('click', openPopup);
-            if (slotPopupCloseButton) slotPopupCloseButton.addEventListener('click', closePopup);
-            if (slotPopupOverlay) slotPopupOverlay.addEventListener('click', (event) => { if (event.target === slotPopupOverlay) closePopup(); });
-            if (popupValorRealTirarButton) popupValorRealTirarButton.addEventListener('click', () => handleValorRealClick(true));
-            if (popupValorRealDarButton) popupValorRealDarButton.addEventListener('click', () => handleValorRealClick(false));
-            if(popupPrecoInput) popupPrecoInput.addEventListener('input', () => { if (popupValorRealHiddenInput?.value !== '') resetValorRealState(); });
+            const userDocRef = doc(db, 'users', userId);
+            const temporadaGcoinsField = `${temporada}GCoins`;
             
-            if (slotForm) {
-                slotForm.addEventListener('submit', async (e) => {
-                    e.preventDefault();
-                    if (!popupSaveButton || !auth.currentUser) { if (!auth.currentUser) alert("Faça login para gravar."); return; }
-                    popupSaveButton.disabled = true; popupSaveButton.textContent = 'A Gravar...';
+            await updateDoc(userDocRef, {
+                [temporadaGcoinsField]: totalGcoinsRecalculado
+            });
+            
+            console.log(`Saldo de GCoins do utilizador ${userId} reconciliado para: ${totalGcoinsRecalculado}`);
+            
+            alert('Movimento gravado e saldo do utilizador atualizado com sucesso!');
+            closePopup();
 
-                    const preco = popupPrecoInput.value.trim();
-                    const itemEmpire = popupItemEmpireInput.value.trim();
-                    const userId = popupUserIdSelect.value;
-                    const valorReal = popupValorRealHiddenInput.value;
-                    const temporada = popupTemporadaInput.value;
-                    const empireTipo = popupEmpireTipoInput.value.trim();
-                    const estado = popupEstadoInput.value.trim();
-                    const tipo = popupTipoInput.value.trim();
-
-                    let isValid = true; let errorMessage = "Por favor, corrija:\n";
-                    if (!itemEmpire) { isValid = false; errorMessage += "- 'Item Empire' é obrigatório.\n"; }
-                    if (!preco || isNaN(parseFloat(preco))) { isValid = false; errorMessage += "- 'Preço' deve ser número.\n"; }
-                    if (!valorReal || isNaN(parseFloat(valorReal))) { isValid = false; errorMessage += "- Selecione 'Tirar'/'Dar'.\n"; }
-                    if (!userId) { isValid = false; errorMessage += "- Selecione 'Usuário'.\n"; }
-                    if (!temporada || temporada === "Carregando..." || temporada.includes("Erro") || temporada === "N/A") { isValid = false; errorMessage += "- 'Temporada' inválida.\n"; }
-                    if (!empireTipo) { isValid = false; errorMessage += "- 'Empire Tipo' obrigatório.\n"; }
-                    if (!estado) { isValid = false; errorMessage += "- 'Estado' obrigatório.\n"; }
-                    if (!tipo) { isValid = false; errorMessage += "- 'Tipo' obrigatório.\n"; }
-
-                    if (!isValid) {
-                        alert(errorMessage);
-                        popupSaveButton.disabled = false; popupSaveButton.textContent = 'Gravar Movimento';
-                        return;
-                    }
-
-                    const movimentoData = {
-                        empireTipo: empireTipo, estado: estado, itemEmpire: itemEmpire,
-                        preco: parseFloat(preco), valorreal: parseFloat(valorReal),
-                        temporada: temporada, tipo: tipo, userId: userId,
-                        movimentoData: serverTimestamp(),
-                        userName: popupUserIdSelect.selectedOptions[0]?.textContent || userId
-                    };
-
-                  try {
-    // PASSO 1: Grava a nova transação (o seu código original)
-    const movimentosCollectionRef = collection(db, 'movimentos');
-    const docRef = await addDoc(movimentosCollectionRef, movimentoData);
-    console.log("Movimento gravado com ID: ", docRef.id);
-
-    // --- INÍCIO DA NOVA LÓGICA DE RECONCILIAÇÃO ---
-
-    // PASSO 2: Prepara a query para buscar TODOS os movimentos do utilizador na temporada
-    const movimentosQuery = query(collection(db, 'movimentos'),
-        where("userId", "==", userId),
-        where("temporada", "==", temporada),
-        where("estado", "!=", "Dívida") // Boa prática: Ignora dívidas no cálculo de GCoins
-    );
-
-    // PASSO 3: Executa a query e calcula o novo total
-    const movimentosSnapshot = await getDocs(movimentosQuery);
-    let totalGcoinsRecalculado = 0;
-    
-    movimentosSnapshot.forEach(movDoc => {
-        const movData = movDoc.data();
-        if (typeof movData.valorreal === 'number') {
-            totalGcoinsRecalculado += movData.valorreal;
+        } catch (error) {
+            console.error('Erro ao gravar movimento ou ao atualizar GCoins:', error);
+            alert('Ocorreu um erro. Verifique a consola para mais detalhes.');
+        } finally {
+            popupSaveButton.disabled = false;
+            popupSaveButton.textContent = 'Gravar Movimento';
         }
-    });
-
-    // PASSO 4: Atualiza o documento do utilizador com o novo saldo total
-    const userDocRef = doc(db, 'users', userId);
-    const temporadaGcoinsField = `${temporada}GCoins`;
-    
-    await updateDoc(userDocRef, {
-        [temporadaGcoinsField]: totalGcoinsRecalculado
-    });
-    
-    console.log(`Saldo de GCoins do utilizador ${userId} reconciliado para: ${totalGcoinsRecalculado}`);
-    
-    // --- FIM DA NOVA LÓGICA DE RECONCILIAÇÃO ---
-
-    alert('Movimento gravado e saldo do utilizador atualizado com sucesso!');
-    closePopup();
-
-} catch (error) {
-    console.error('Erro ao gravar movimento ou ao atualizar GCoins:', error);
-    alert('Ocorreu um erro. Verifique a consola para mais detalhes.');
-} finally {
-    popupSaveButton.disabled = false;
-    popupSaveButton.textContent = 'Gravar Movimento';
-}
-                });
-            }
-        }
-        
-        // Ponto de entrada que verifica o estado de autenticação antes de rodar qualquer coisa.
-        onAuthStateChanged(auth, (user) => {
-            if (user) {
-                // Se o usuário está aqui, o guardião já validou as permissões.
-                // Agora, podemos inicializar com segurança a funcionalidade da página.
-                initializePage();
-            }
-            // Não há 'else' porque o auth-guard.js já trata do redirecionamento.
         });
+    }
+}
+
+// Ponto de entrada que verifica o estado de autenticação antes de rodar qualquer coisa.
+onAuthStateChanged(auth, (user) => {
+    if (user) {
+        // Se o usuário está aqui, o guardião já validou as permissões.
+        // Agora, podemos inicializar com segurança a funcionalidade da página.
+        initializePage();
+    }
+    // Não há 'else' porque o auth-guard.js já trata do redirecionamento.
+});
 
     </script>
   
