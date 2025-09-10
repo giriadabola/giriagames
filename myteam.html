@@ -272,38 +272,37 @@
             border-radius: 50%;
         }
 
-        .position {
-            position: absolute;
-            width: 30px; /* Tamanho original da "bola" */
-            height: 30px; /* Tamanho original da "bola" */
-            background-color: rgba(0, 0, 0, 0.5);
-            border-radius: 50%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            cursor: pointer;
-            font-size: 20px;
-            color: white;
-            transition: background-color 0.3s ease;
-            border: none;
-        }
+      .position {
+    position: absolute;
+    width: 30px; /* Tamanho original do círculo invisível */
+    height: 30px; /* Tamanho original do círculo invisível */
+    background-color: rgba(0, 0, 0, 0.5);
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    font-size: 20px;
+    color: white;
+    transition: background-color 0.3s ease;
+    border: none;
+}
 
         .position:hover {
             background-color: rgba(0, 0, 0, 0.7);
         }
 
-        .position img {
-            position: absolute; /* Posicionamento absoluto para sobrepor a "bola" */
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%); /* Centraliza a imagem */
-            width: 60px; /* Dobro do tamanho da "bola" */
-            height: 60px; /* Dobro do tamanho da "bola" */
-            border-radius: 50%;
-            object-fit: cover;
-            /* pointer-events: none; REMOVED THIS LINE */
-            z-index: 1; /* Add this line to bring player images forward */
-        }
+.position img:not(.player-style-icon) {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%); /* Centraliza a imagem */
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    object-fit: cover;
+    z-index: 1; /* Camada 1: Fica por cima do círculo base */
+}
 
 
         .formation-options {
@@ -643,6 +642,48 @@
             }
         }
         
+        .player-card.style-item {
+    background: linear-gradient(135deg, #434343 0%, #000000 100%);
+    color: #f0f0f0; /* Cor do texto mais clara para contraste */
+    border: 1px solid #555; /* Borda sutil */
+}
+
+/* Opcional: Adicionar um brilho sutil ao passar o mouse */
+.player-card.style-item:hover {
+    background: linear-gradient(135deg, #5a5a5a 0%, #1a1a1a 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(255, 255, 255, 0.1);
+}
+
+.player-style-icon {
+    position: absolute;
+
+    /* --- Posição Final (mais para baixo) --- */
+    bottom: -26px;
+    right: -16px;
+
+    /* --- Tamanho (inalterado) --- */
+    width: 40px;
+    height: 40px;
+
+    /* --- Estilo Visual (inalterado) --- */
+    border-radius: 50%;
+    border: none;
+    box-shadow: none;
+    background-color: transparent;
+
+    /* --- Comportamento (inalterado) --- */
+    z-index: 2;
+    cursor: pointer;
+}
+
+/* --- ADIÇÃO: Estilo para o card de estilo quando está em uso no campo --- */
+.player-card.style-in-use {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none; /* Desativa completamente o card (incluindo o arraste) */
+}
+
         /* --- FIM DA ALTERAÇÃO CSS PARA FILTROS MOBILE --- */
     </style>
 </head>
@@ -740,780 +781,863 @@
     <script src="config.js"></script>
     <script type="module">
         // --- O SEU JAVASCRIPT PERMANECE EXATAMENTE O MESMO DA VERSÃO ANTERIOR ---
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, doc, getDoc, collection, getDocs, query, orderBy, limit, setDoc, addDoc, FieldValue, where, serverTimestamp, updateDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-        
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-        const auth = getAuth(app);
+   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getFirestore, doc, getDoc, collection, getDocs, query, orderBy, limit, setDoc, addDoc, FieldValue, where, serverTimestamp, updateDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
-        const positionFilterSelect = document.getElementById('position-filter');
+// --- Configuração Inicial ---
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const auth = getAuth(app);
 
-        const loadingScreen = document.getElementById('loading-screen');
-        const content = document.querySelector('.content');
-        let currentUserStatus = null;
-        let currentUserUid = null;
-        let userOwnedPlayers = [];
-        let countries = {};
-        let clubs = new Set();
-        let currentFormation = '';
-        let hasUnsavedChanges = false;
-        const formationSelect = document.getElementById('formation-select');
-        const pitchArea = document.querySelector('.pitch-area');
-        const playerResultsContainer = document.querySelector('.player-results');
-        const playerSearchInput = document.getElementById('player-search');
-        const countryFilterSelect = document.getElementById('country-filter');
-        const clubFilterSelect = document.getElementById('club-filter');
-        const playerListModal = document.getElementById('playerListModal');
-        const closePlayerListModalBtn = document.getElementById('closePlayerListModal');
-        const playerCardListContainer = document.getElementById('playerCardList');
-        let assignedPlayers = {};
+// --- Variáveis Globais ---
+let currentUserStatus = null;
+let currentUserUid = null;
+let userOwnedPlayers = [];
+let userOwnedPlayerStyles = [];
+let countries = {};
+let clubs = new Set();
+let currentFormation = '';
+let hasUnsavedChanges = false;
+let assignedPlayers = {}; // Rastreia { positionId: playerId }
+let playerStyleAssignments = {}; // Rastreia { positionId: styleId }
 
-        const formations = {
-            '4-4-2': [ { position: 'GK', top: '90%', left: '47%', positionType: 'GK' }, { position: 'DL', top: '75%', left: '12%', positionType: 'DEF' }, { position: 'DC1', top: '75%', left: '32%', positionType: 'DEF' }, { position: 'DC2', top: '75%', left: '62%', positionType: 'DEF' }, { position: 'DR', top: '75%', left: '82%', positionType: 'DEF' }, { position: 'ML', top: '40%', left: '12%', positionType: 'MID' }, { position: 'MC1', top: '40%', left: '32%', positionType: 'MID' }, { position: 'MC2', top: '40%', left: '62%', positionType: 'MID' }, { position: 'MR', top: '40%', left: '82%', positionType: 'MID' }, { position: 'FW1', top: '10%', left: '32%', positionType: 'FWD' }, { position: 'FW2', top: '10%', left: '62%', positionType: 'FWD' } ],
-            '4-3-3': [ { position: 'GK', top: '90%', left: '47%', positionType: 'GK' }, { position: 'DL', top: '75%', left: '12%', positionType: 'DEF' }, { position: 'DC1', top: '75%', left: '32%', positionType: 'DEF' }, { position: 'DC2', top: '75%', left: '62%', positionType: 'DEF' }, { position: 'DR', top: '75%', left: '82%', positionType: 'DEF' }, { position: 'MC1', top: '40%', left: '32%', positionType: 'MID' }, { position: 'MC2', top: '60%', left: '47%', positionType: 'MID' }, { position: 'MC3', top: '40%', left: '62%', positionType: 'MID' }, { position: 'AML', top: '10%', left: '25%', positionType: 'FWD' }, { position: 'AMC', top: '10%', left: '50%', positionType: 'FWD' }, { position: 'AMR', top: '10%', left: '75%', positionType: 'FWD' }, ],
-            '4-5-1': [ { position: 'GK', top: '90%', left: '47%', positionType: 'GK' }, { position: 'DL', top: '75%', left: '12%', positionType: 'DEF' }, { position: 'DC1', top: '75%', left: '32%', positionType: 'DEF' }, { position: 'DC2', top: '75%', left: '62%', positionType: 'DEF' }, { position: 'DR', top: '75%', left: '82%', positionType: 'DEF' }, { position: 'DML', top: '50%', left: '47%', positionType: 'MID' }, { position: 'MC1', top: '40%', left: '10%', positionType: 'MID' }, { position: 'AMC', top: '40%', left: '30%', positionType: 'MID' }, { position: 'MC2', top: '40%', left: '64%', positionType: 'MID' }, { position: 'DMR', top: '40%', left: '84%', positionType: 'MID' }, { position: 'FW', top: '10%', left: '47%', positionType: 'FWD' } ],
-            '3-4-3': [ { position: 'GK', top: '90%', left: '47%', positionType: 'GK' }, { position: 'DC1', top: '75%', left: '20%', positionType: 'DEF' }, { position: 'DC2', top: '75%', left: '47%', positionType: 'DEF' }, { position: 'DC3', top: '75%', left: '77%', positionType: 'DEF' }, { position: 'ML', top: '40%', left: '12%', positionType: 'MID' }, { position: 'MC1', top: '40%', left: '32%', positionType: 'MID' }, { position: 'MC2', top: '40%', left: '62%', positionType: 'MID' }, { position: 'MR', top: '40%', left: '82%', positionType: 'MID' }, { position: 'AML', top: '10%', left: '25%', positionType: 'FWD' }, { position: 'AMC', top: '10%', left: '50%', positionType: 'FWD' }, { position: 'AMR', top: '10%', left: '75%', positionType: 'FWD' }, ],
-            '5-3-2': [ { position: 'GK', top: '90%', left: '47%', positionType: 'GK' }, { position: 'SW', top: '75%', left: '10%', positionType: 'DEF' }, { position: 'WBL', top: '75%', left: '30%', positionType: 'DEF' }, { position: 'DC1', top: '75%', left: '47%', positionType: 'DEF' }, { position: 'DC2', top: '75%', left: '64%', positionType: 'DEF' }, { position: 'WBR', top: '75%', left: '84%', positionType: 'DEF' }, { position: 'MC1', top: '40%', left: '30%', positionType: 'MID' }, { position: 'MC2', top: '55%', left: '47%', positionType: 'MID' }, { position: 'MC3', top: '40%', left: '64%', positionType: 'MID' }, { position: 'FW1', top: '10%', left: '30%', positionType: 'FWD' }, { position: 'FW2', top: '10%', left: '64%', positionType: 'FWD' } ]
-        };
-        const posicaoMapping = { "Avançado": "FWD", "Defesa": "DEF", "Médio": "MID", "Guarda-Redes": "GK" };
+// Mapeamento de Regras para Estilos de Jogador
+const styleToPositionMap = {
+    "Muralha": "Guarda-Redes", "Guardião": "Guarda-Redes",
+    "General": "Defesa", "Estafeta": "Defesa",
+    "Arqueiro": "Médio", "Provedor": "Médio",
+    "Cometa": "Avançado", "Soldado": "Avançado"
+};
 
-        function isPlayerAlreadyOnPitch(playerId) {
-            return Object.values(assignedPlayers).includes(playerId);
+const posicaoMapping = { "Avançado": "FWD", "Defesa": "DEF", "Médio": "MID", "Guarda-Redes": "GK" };
+
+// --- Seletores de Elementos DOM ---
+const loadingScreen = document.getElementById('loading-screen');
+const content = document.querySelector('.content');
+const formationSelect = document.getElementById('formation-select');
+const pitchArea = document.querySelector('.pitch-area');
+const playerResultsContainer = document.querySelector('.player-results');
+const playerSearchInput = document.getElementById('player-search');
+const countryFilterSelect = document.getElementById('country-filter');
+const clubFilterSelect = document.getElementById('club-filter');
+const positionFilterSelect = document.getElementById('position-filter');
+const playerListModal = document.getElementById('playerListModal');
+const closePlayerListModalBtn = document.getElementById('closePlayerListModal');
+const playerCardListContainer = document.getElementById('playerCardList');
+const saveFormationButton = document.getElementById('saveFormationBtn');
+const chooseBtn = document.getElementById('chooseBtn');
+
+const formations = {
+    '4-4-2': [ { position: 'GK', top: '90%', left: '47%', positionType: 'GK' }, { position: 'DL', top: '75%', left: '12%', positionType: 'DEF' }, { position: 'DC1', top: '75%', left: '32%', positionType: 'DEF' }, { position: 'DC2', top: '75%', left: '62%', positionType: 'DEF' }, { position: 'DR', top: '75%', left: '82%', positionType: 'DEF' }, { position: 'ML', top: '40%', left: '12%', positionType: 'MID' }, { position: 'MC1', top: '40%', left: '32%', positionType: 'MID' }, { position: 'MC2', top: '40%', left: '62%', positionType: 'MID' }, { position: 'MR', top: '40%', left: '82%', positionType: 'MID' }, { position: 'FW1', top: '10%', left: '32%', positionType: 'FWD' }, { position: 'FW2', top: '10%', left: '62%', positionType: 'FWD' } ],
+    '4-3-3': [ { position: 'GK', top: '90%', left: '47%', positionType: 'GK' }, { position: 'DL', top: '75%', left: '12%', positionType: 'DEF' }, { position: 'DC1', top: '75%', left: '32%', positionType: 'DEF' }, { position: 'DC2', top: '75%', left: '62%', positionType: 'DEF' }, { position: 'DR', top: '75%', left: '82%', positionType: 'DEF' }, { position: 'MC1', top: '40%', left: '32%', positionType: 'MID' }, { position: 'MC2', top: '60%', left: '47%', positionType: 'MID' }, { position: 'MC3', top: '40%', left: '62%', positionType: 'MID' }, { position: 'AML', top: '10%', left: '25%', positionType: 'FWD' }, { position: 'AMC', top: '10%', left: '50%', positionType: 'FWD' }, { position: 'AMR', top: '10%', left: '75%', positionType: 'FWD' }, ],
+    '4-5-1': [ { position: 'GK', top: '90%', left: '47%', positionType: 'GK' }, { position: 'DL', top: '75%', left: '12%', positionType: 'DEF' }, { position: 'DC1', top: '75%', left: '32%', positionType: 'DEF' }, { position: 'DC2', top: '75%', left: '62%', positionType: 'DEF' }, { position: 'DR', top: '75%', left: '82%', positionType: 'DEF' }, { position: 'DML', top: '50%', left: '47%', positionType: 'MID' }, { position: 'MC1', top: '40%', left: '10%', positionType: 'MID' }, { position: 'AMC', top: '40%', left: '30%', positionType: 'MID' }, { position: 'MC2', top: '40%', left: '64%', positionType: 'MID' }, { position: 'DMR', top: '40%', left: '84%', positionType: 'MID' }, { position: 'FW', top: '10%', left: '47%', positionType: 'FWD' } ],
+    '3-4-3': [ { position: 'GK', top: '90%', left: '47%', positionType: 'GK' }, { position: 'DC1', top: '75%', left: '20%', positionType: 'DEF' }, { position: 'DC2', top: '75%', left: '47%', positionType: 'DEF' }, { position: 'DC3', top: '75%', left: '77%', positionType: 'DEF' }, { position: 'ML', top: '40%', left: '12%', positionType: 'MID' }, { position: 'MC1', top: '40%', left: '32%', positionType: 'MID' }, { position: 'MC2', top: '40%', left: '62%', positionType: 'MID' }, { position: 'MR', top: '40%', left: '82%', positionType: 'MID' }, { position: 'AML', top: '10%', left: '25%', positionType: 'FWD' }, { position: 'AMC', top: '10%', left: '50%', positionType: 'FWD' }, { position: 'AMR', top: '10%', left: '75%', positionType: 'FWD' }, ],
+    '5-3-2': [ { position: 'GK', top: '90%', left: '47%', positionType: 'GK' }, { position: 'SW', top: '75%', left: '10%', positionType: 'DEF' }, { position: 'WBL', top: '75%', left: '30%', positionType: 'DEF' }, { position: 'DC1', top: '75%', left: '47%', positionType: 'DEF' }, { position: 'DC2', top: '75%', left: '64%', positionType: 'DEF' }, { position: 'WBR', top: '75%', left: '84%', positionType: 'DEF' }, { position: 'MC1', top: '40%', left: '30%', positionType: 'MID' }, { position: 'MC2', top: '55%', left: '47%', positionType: 'MID' }, { position: 'MC3', top: '40%', left: '64%', positionType: 'MID' }, { position: 'FW1', top: '10%', left: '30%', positionType: 'FWD' }, { position: 'FW2', top: '10%', left: '64%', positionType: 'FWD' } ]
+};
+
+// --- Funções de Arrastar e Largar (Drag and Drop) ---
+
+function handlePlayerCardDragStart(event) {
+    const playerCard = event.currentTarget;
+    event.dataTransfer.setData('type', 'player');
+    event.dataTransfer.setData('playerId', playerCard.dataset.playerId);
+    event.dataTransfer.setData('source', 'list');
+    event.dataTransfer.effectAllowed = 'move';
+}
+
+function handleStyleCardDragStart(event) {
+    const styleCard = event.currentTarget;
+    const styleId = styleCard.dataset.playerId;
+    const styleName = styleCard.querySelector('.player-name').textContent;
+    const styleImageSrc = styleCard.querySelector('img').src;
+
+    event.dataTransfer.setData('type', 'style');
+    event.dataTransfer.setData('styleId', styleId);
+    event.dataTransfer.setData('styleName', styleName);
+    event.dataTransfer.effectAllowed = 'move';
+
+     const dragGhostImage = document.createElement('img');
+    dragGhostImage.src = styleImageSrc;
+
+   dragGhostImage.style.width = '40px';
+    dragGhostImage.style.height = '40px';
+    dragGhostImage.style.borderRadius = '50%';
+    dragGhostImage.style.position = 'absolute';
+    dragGhostImage.style.top = '-1000px'; // Esconde fora da tela
+
+    document.body.appendChild(dragGhostImage);
+    event.dataTransfer.setDragImage(dragGhostImage, 20, 20);
+
+    setTimeout(() => {
+        document.body.removeChild(dragGhostImage);
+    }, 0);
+
+    setTimeout(() => {
+        document.body.removeChild(dragGhostImage);
+    }, 0);
+}
+
+function handlePositionDragStart(event) {
+    const positionElement = event.currentTarget;
+    const playerId = positionElement.dataset.assignedPlayerId;
+    if (playerId && playerId !== 'null') {
+        event.dataTransfer.setData('type', 'player');
+        event.dataTransfer.setData('playerId', playerId);
+        event.dataTransfer.setData('originalPositionId', positionElement.dataset.position);
+        event.dataTransfer.setData('source', 'pitch');
+        event.dataTransfer.effectAllowed = 'move';
+        setTimeout(() => {
+            const img = positionElement.querySelector('img:not(.player-style-icon)');
+            if (img) img.style.visibility = 'hidden';
+        }, 0);
+    } else {
+        event.preventDefault();
+    }
+}
+
+function handlePositionDragOver(event) {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+}
+
+function handlePositionDrop(event) {
+    event.preventDefault();
+    const targetPositionElement = event.currentTarget;
+    const type = event.dataTransfer.getData('type');
+
+    if (type === 'style') {
+        handleStyleDrop(event, targetPositionElement);
+    } else if (type === 'player') {
+        handlePlayerDrop(event, targetPositionElement);
+    }
+}
+
+function handleStyleDrop(event, targetPositionElement) {
+    const styleId = event.dataTransfer.getData('styleId');
+    const styleName = event.dataTransfer.getData('styleName');
+    const targetPositionId = targetPositionElement.dataset.position;
+    const targetPlayerId = targetPositionElement.dataset.assignedPlayerId;
+
+    if (!targetPlayerId || targetPlayerId === 'null') {
+        alert("Só pode adicionar um estilo a um jogador que já esteja em campo.");
+        return;
+    }
+    const targetPlayer = userOwnedPlayers.find(p => p.id === targetPlayerId);
+    if (!targetPlayer) return;
+
+    const requiredPosition = styleToPositionMap[styleName];
+    if (targetPlayer.posicao !== requiredPosition) {
+        alert(`O estilo "${styleName}" só pode ser aplicado a jogadores da posição "${requiredPosition}".`);
+        return;
+    }
+
+    if (Object.values(playerStyleAssignments).includes(styleId)) {
+        alert(`O estilo "${styleName}" já está a ser usado por outro jogador.`);
+        return;
+    }
+
+    if (playerStyleAssignments[targetPositionId]) {
+        const oldStyleIcon = targetPositionElement.querySelector('.player-style-icon');
+        if (oldStyleIcon) oldStyleIcon.click();
+    }
+
+    playerStyleAssignments[targetPositionId] = styleId;
+    const styleData = userOwnedPlayerStyles.find(s => s.id === styleId);
+    if (styleData) {
+        const styleIcon = document.createElement('img');
+        styleIcon.src = styleData.imagem;
+        styleIcon.classList.add('player-style-icon');
+        styleIcon.addEventListener('click', removePlayerStyle);
+        targetPositionElement.appendChild(styleIcon);
+    }
+
+    const styleCardInList = playerResultsContainer.querySelector(`.player-card[data-player-id="${styleId}"]`);
+    if (styleCardInList) styleCardInList.classList.add('style-in-use');
+
+    hasUnsavedChanges = true;
+}
+
+function handlePlayerDrop(event, targetPositionElement) {
+    const targetPositionId = targetPositionElement.dataset.position;
+    const targetPositionType = targetPositionElement.dataset.positionType;
+    const draggedPlayerId = event.dataTransfer.getData('playerId');
+    const source = event.dataTransfer.getData('source');
+    const originalPositionId = event.dataTransfer.getData('originalPositionId');
+    const draggedPlayer = userOwnedPlayers.find(p => p.id === draggedPlayerId);
+
+    if (!draggedPlayer) {
+        const originalPosEl = pitchArea.querySelector(`.position[data-position="${originalPositionId}"] img:not(.player-style-icon)`);
+        if (originalPosEl) originalPosEl.style.visibility = 'visible';
+        console.error("Drop Falhou: Jogador arrastado não encontrado.");
+        return;
+    }
+
+    if (source === 'list' && Object.values(assignedPlayers).includes(draggedPlayerId)) {
+        alert(`${draggedPlayer.nome} já está em campo!`);
+        return;
+    }
+
+    const originalPosImg = pitchArea.querySelector(`.position[data-position="${originalPositionId}"] img:not(.player-style-icon)`);
+    if (originalPosImg) originalPosImg.style.visibility = 'visible';
+
+    if (posicaoMapping[draggedPlayer.posicao] !== targetPositionType) {
+        alert(`Este jogador é ${draggedPlayer.posicao} e não pode ser colocado nesta posição.`);
+        return;
+    }
+
+    const playerAlreadyInTargetId = targetPositionElement.dataset.assignedPlayerId;
+    if (originalPositionId === targetPositionId) return;
+
+    if (originalPositionId) {
+        removePlayerFromPosition(originalPositionId);
+    }
+
+    if (playerAlreadyInTargetId && playerAlreadyInTargetId !== 'null') {
+        removePlayerFromPosition(targetPositionId);
+    }
+
+    if (source === 'pitch' && originalPositionId && playerAlreadyInTargetId && playerAlreadyInTargetId !== 'null') {
+        const playerOriginallyInTarget = userOwnedPlayers.find(p => p.id === playerAlreadyInTargetId);
+        if (playerOriginallyInTarget) {
+            addPlayerToPosition(originalPositionId, playerOriginallyInTarget);
         }
+    }
 
-        function handlePlayerCardDragStart(event) {
-            const playerCard = event.currentTarget;
-            const playerId = playerCard.dataset.playerId;
-            event.dataTransfer.setData('playerId', playerId);
-            event.dataTransfer.setData('source', 'list');
-            event.dataTransfer.effectAllowed = 'move';
-        }
+    addPlayerToPosition(targetPositionId, draggedPlayer);
+    hasUnsavedChanges = true;
+}
 
-        function handlePositionDragStart(event) {
-            const positionElement = event.currentTarget;
-            const playerId = positionElement.dataset.assignedPlayerId;
-            const positionId = positionElement.dataset.position;
-            if (playerId && playerId !== 'null') {
-                event.dataTransfer.setData('playerId', playerId);
-                event.dataTransfer.setData('originalPositionId', positionId);
-                event.dataTransfer.setData('source', 'pitch');
-                event.dataTransfer.effectAllowed = 'move';
-                setTimeout(() => {
-                    const img = positionElement.querySelector('img');
-                    if (img) img.style.visibility = 'hidden';
-                }, 0);
-            } else {
-                event.preventDefault();
-            }
-        }
+function handlePositionDragEnd(event) {
+    const img = event.currentTarget.querySelector('img:not(.player-style-icon)');
+    if (img) img.style.visibility = 'visible';
+}
 
-        function handlePositionDragOver(event) {
-            event.preventDefault();
-            event.dataTransfer.dropEffect = 'move';
-        }
+function handlePositionClick(event) {
+    const positionElement = event.currentTarget;
+    const assignedPlayerId = positionElement.dataset.assignedPlayerId;
 
-        function handlePositionDrop(event) {
-            event.preventDefault();
-            const targetPositionElement = event.currentTarget;
-            const targetPositionId = targetPositionElement.dataset.position;
-            const targetPositionType = targetPositionElement.dataset.positionType;
-            const draggedPlayerId = event.dataTransfer.getData('playerId');
-            const source = event.dataTransfer.getData('source');
-            const originalPositionId = event.dataTransfer.getData('originalPositionId');
-            const draggedPlayer = userOwnedPlayers.find(p => p.id === draggedPlayerId);
+    if (assignedPlayerId && assignedPlayerId !== "null") {
+        removePlayerFromPosition(positionElement.dataset.position);
+    } else {
+        showPlayerListModal(positionElement.dataset.positionType, positionElement);
+    }
+}
 
-            if (!draggedPlayer) {
-                console.error("Drop Falhou: Jogador arrastado não encontrado nos dados locais.");
-                if (originalPositionId) {
-                    const originalPositionElement = pitchArea.querySelector(`.position[data-position="${originalPositionId}"]`);
-                    const img = originalPositionElement?.querySelector('img');
-                    if(img) img.style.visibility = 'visible';
-                }
-                return;
-            }
+// --- Funções de Manipulação de Elementos e Modais ---
 
-            if (source === 'list' && isPlayerAlreadyOnPitch(draggedPlayerId)) {
-                alert(`${draggedPlayer.nome} já está em campo!`);
-                return;
-            }
+function addPlayerToPosition(positionId, player) {
+    const positionElement = pitchArea.querySelector(`.position[data-position="${positionId}"]`);
+    if (!positionElement || !player) return;
 
-            if (originalPositionId) {
-                const originalPositionElement = pitchArea.querySelector(`.position[data-position="${originalPositionId}"]`);
-                const img = originalPositionElement?.querySelector('img');
-                if(img) img.style.visibility = 'visible';
-            }
+    positionElement.innerHTML = ''; // Limpa o "+"
+    const playerImg = document.createElement('img');
+    playerImg.src = player.imagem || 'placeholder.png';
+    playerImg.alt = player.nome;
+    positionElement.appendChild(playerImg);
+    positionElement.dataset.assignedPlayerId = player.id;
+    positionElement.draggable = true;
+    positionElement.addEventListener('dragstart', handlePositionDragStart);
+    positionElement.addEventListener('dragend', handlePositionDragEnd);
+    assignedPlayers[positionId] = player.id;
+}
 
-            const playerPosicaoIngles = posicaoMapping[draggedPlayer.posicao];
-            if (playerPosicaoIngles !== targetPositionType) {
-                alert(`Este jogador é ${draggedPlayer.posicao} e só pode ser colocado em posições de ${targetPositionType}`);
-                return;
-            }
+function removePlayerFromPosition(positionId) {
+    const positionElement = pitchArea.querySelector(`.position[data-position="${positionId}"]`);
+    if (!positionElement) return;
 
-            const playerAlreadyInTargetPositionId = targetPositionElement.dataset.assignedPlayerId;
-            if (originalPositionId === targetPositionId) return;
+    if (playerStyleAssignments[positionId]) {
+        const styleIcon = positionElement.querySelector('.player-style-icon');
+        if (styleIcon) styleIcon.click();
+    }
 
-            let idToRemoveFromTarget = null;
-            if (playerAlreadyInTargetPositionId && playerAlreadyInTargetPositionId !== 'null') {
-                idToRemoveFromTarget = playerAlreadyInTargetPositionId;
-            }
+    positionElement.innerHTML = '+';
+    positionElement.dataset.assignedPlayerId = null;
+    positionElement.draggable = false;
+    positionElement.removeEventListener('dragstart', handlePositionDragStart);
+    positionElement.removeEventListener('dragend', handlePositionDragEnd);
+    delete assignedPlayers[positionId];
+    hasUnsavedChanges = true;
+}
 
-            if (originalPositionId) {
-                const originalPositionElement = pitchArea.querySelector(`.position[data-position="${originalPositionId}"]`);
-                if (originalPositionElement) {
-                    removePlayerFromPositionDOM(originalPositionElement);
-                    delete assignedPlayers[originalPositionId];
-                }
-            }
+function removePlayerStyle(event) {
+    event.stopPropagation();
+    const styleIcon = event.currentTarget;
+    const positionElement = styleIcon.parentNode;
+    const positionId = positionElement.dataset.position;
 
-            if (idToRemoveFromTarget) {
-                removePlayerFromPositionDOM(targetPositionElement);
-            }
+    if (positionId && playerStyleAssignments[positionId]) {
+        const styleId = playerStyleAssignments[positionId];
+        delete playerStyleAssignments[positionId];
 
-            if (source === 'list' && idToRemoveFromTarget) {
-                addPlayerToPositionDOM(targetPositionElement, draggedPlayer);
-                assignedPlayers[targetPositionId] = draggedPlayerId;
-                hasUnsavedChanges = true;
-            } else if (source === 'pitch' && originalPositionId && idToRemoveFromTarget) {
-                const originalPositionElement = pitchArea.querySelector(`.position[data-position="${originalPositionId}"]`);
-                const playerOriginallyInTarget = userOwnedPlayers.find(p => p.id === idToRemoveFromTarget);
-                if (originalPositionElement && playerOriginallyInTarget) {
-                    addPlayerToPositionDOM(originalPositionElement, playerOriginallyInTarget);
-                    assignedPlayers[originalPositionId] = idToRemoveFromTarget;
-                    addPlayerToPositionDOM(targetPositionElement, draggedPlayer);
-                    assignedPlayers[targetPositionId] = draggedPlayerId;
-                    hasUnsavedChanges = true;
-                } else {
-                    console.error("Falha na Troca: Elemento original ou dados do jogador alvo não encontrados.");
-                    if (originalPositionId && originalPositionElement) {
-                        addPlayerToPositionDOM(originalPositionElement, draggedPlayer);
-                        assignedPlayers[originalPositionId] = draggedPlayerId;
-                    }
-                }
-            } else if (!idToRemoveFromTarget) {
-                addPlayerToPositionDOM(targetPositionElement, draggedPlayer);
-                assignedPlayers[targetPositionId] = draggedPlayerId;
-                if (originalPositionId) {
-                    const originalPositionElement = pitchArea.querySelector(`.position[data-position="${originalPositionId}"]`);
-                    if(originalPositionElement && !originalPositionElement.querySelector('img') && originalPositionElement !== targetPositionElement) {
-                        originalPositionElement.innerHTML = '+';
-                    }
-                }
-                hasUnsavedChanges = true;
-            }
-        }
+        const styleCardInList = playerResultsContainer.querySelector(`.player-card[data-player-id="${styleId}"]`);
+        if (styleCardInList) styleCardInList.classList.remove('style-in-use');
 
-        function handlePositionDragEnd(event) {
-            const positionElement = event.currentTarget;
-            const img = positionElement?.querySelector('img');
-            if (img) {
-                img.style.visibility = 'visible';
-            }
-        }
+        styleIcon.remove();
+        hasUnsavedChanges = true;
+    }
+}
 
-        function addPlayerToPositionDOM(positionElement, player) {
-            if (!positionElement || !player) return;
-            positionElement.innerHTML = '';
-            const playerImg = document.createElement('img');
-            playerImg.src = player.imagem || 'placeholder_image_url.png';
-            playerImg.alt = player.nome;
-            playerImg.style.visibility = 'visible';
-            positionElement.appendChild(playerImg);
-            positionElement.dataset.assignedPlayerId = player.id;
-            positionElement.draggable = true;
-            positionElement.addEventListener('dragstart', handlePositionDragStart);
-            positionElement.addEventListener('dragend', handlePositionDragEnd);
-        }
+function showPlayerListModal(positionType, positionElement) {
+    playerListModal.classList.add('active');
+    playerCardListContainer.innerHTML = '<p>A carregar jogadores...</p>';
+    populatePlayerCardList(positionType, positionElement);
+}
 
-        function removePlayerFromPositionDOM(positionElement) {
-            if (!positionElement) return;
-            positionElement.innerHTML = '';
-            positionElement.dataset.assignedPlayerId = null;
-            positionElement.draggable = false;
-            positionElement.removeEventListener('dragstart', handlePositionDragStart);
-            positionElement.removeEventListener('dragend', handlePositionDragEnd);
-        }
+function populatePlayerCardList(positionType, positionElement) {
+    const positionTypePortugues = Object.keys(posicaoMapping).find(key => posicaoMapping[key] === positionType);
+    const filteredByPosition = userOwnedPlayers.filter(player => player.posicao === positionTypePortugues);
+    const assignedIds = Object.values(assignedPlayers).filter(id => id !== null);
+    const availablePlayers = filteredByPosition.filter(player => !assignedIds.includes(player.id));
+    
+    playerCardListContainer.innerHTML = '';
+    if (availablePlayers.length === 0) {
+        playerCardListContainer.innerHTML = '<p>Sem jogadores disponíveis para esta posição.</p>';
+        return;
+    }
 
-        function handlePositionClick(event) {
-            const positionElement = event.currentTarget;
-            const assignedPlayerId = positionElement.dataset.assignedPlayerId;
-            const positionId = positionElement.dataset.position;
-            if (assignedPlayerId && assignedPlayerId !== "null") {
-                removePlayerFromPositionDOM(positionElement);
-                positionElement.innerHTML = '+';
-                delete assignedPlayers[positionId];
-                hasUnsavedChanges = true;
-            } else {
-                showPlayerListModal(positionElement.dataset.positionType, positionElement);
-            }
-        }
+    const gridContainer = document.createElement('div');
+    gridContainer.classList.add('position-grid'); 
 
-        async function saveFormation() {
-            if (!currentUserUid) return;
-            try {
-                const palpitesRef = collection(db, 'palpites');
-                const palpitesQuery = query(palpitesRef, orderBy('temporada', 'desc'), limit(1));
-                const palpitesSnapshot = await getDocs(palpitesQuery);
-                let latestSeason = '';
-                if (!palpitesSnapshot.empty) { latestSeason = palpitesSnapshot.docs[0].data().temporada; }
-                else { console.error('No seasons found.'); alert("Erro: Temporada não encontrada."); return; }
-
-                if (!currentFormation) { alert("Por favor, selecione uma formação."); return; }
-
-                const planteisRef = collection(db, 'planteis');
-                const planteisQuery = query( planteisRef, where('userId', '==', currentUserUid), where('formacao', '==', currentFormation), where('temporada', '==', latestSeason) );
-                const planteisSnapshot = await getDocs(planteisQuery);
-
-                const plantelData = { userId: currentUserUid, formacao: currentFormation, temporada: latestSeason, estado: 'desativo', dataDeEdicao: serverTimestamp() };
-                const formationPositions = formations[currentFormation]?.map(p => p.position) || [];
-                formationPositions.forEach(posId => { plantelData[posId] = assignedPlayers[posId] || null; });
-
-                if (!planteisSnapshot.empty) {
-                    const docRef = planteisSnapshot.docs[0].ref;
-                    const currentData = planteisSnapshot.docs[0].data();
-                    plantelData.estado = currentData.estado || 'desativo';
-                    await updateDoc(docRef, plantelData);
-                } else {
-                    await addDoc(planteisRef, plantelData);
-                }
-                hasUnsavedChanges = false;
-                const saveBtn = document.getElementById('saveFormationBtn');
-                const confirmIcon = document.createElement('i');
-                confirmIcon.classList.add('fas', 'fa-check'); confirmIcon.style.color = '#4CAF50'; confirmIcon.style.marginLeft = '10px';
-                saveBtn.parentNode.insertBefore(confirmIcon, saveBtn.nextSibling);
-                setTimeout(() => confirmIcon.remove(), 3000);
-            } catch (error) { console.error("Erro ao guardar formação:", error); alert("Erro ao guardar formação."); }
-        }
-
-        function renderFormation(formationName) {
-            assignedPlayers = {};
-            pitchArea.innerHTML = '<div class="center-circle"></div>';
-            if (!formationName || !formations[formationName]) return;
-            currentFormation = formationName;
-            const currentFormationPositions = formations[formationName];
-            currentFormationPositions.forEach(pos => {
-                const positionElement = document.createElement('div');
-                positionElement.classList.add('position');
-                positionElement.dataset.position = pos.position;
-                positionElement.style.top = pos.top;
-                positionElement.style.left = pos.left;
-                positionElement.dataset.positionType = pos.positionType;
-                positionElement.innerHTML = '+';
-                positionElement.draggable = false;
-                positionElement.dataset.assignedPlayerId = null;
-                positionElement.addEventListener('dragover', handlePositionDragOver);
-                positionElement.addEventListener('drop', handlePositionDrop);
-                positionElement.addEventListener('click', handlePositionClick);
-                pitchArea.appendChild(positionElement);
-            });
-        }
-
-        function showPlayerListModal(positionType, positionElement) {
-            playerListModal.classList.add('active');
-            playerCardListContainer.innerHTML = '<p>A carregar jogadores...</p>';
-            populatePlayerCardList(positionType, positionElement);
-        }
-
-        async function populatePlayerCardList(positionType, positionElement) {
-            try {
-                const positionTypePortugues = Object.keys(posicaoMapping).find(key => posicaoMapping[key] === positionType);
-                const filteredByPosition = userOwnedPlayers.filter(player => player.posicao === positionTypePortugues);
-                const assignedIds = Object.values(assignedPlayers).filter(id => id !== null);
-                const availablePlayers = filteredByPosition.filter(player => !assignedIds.includes(player.id));
-                playerCardListContainer.innerHTML = '';
-                if (availablePlayers.length === 0) {
-                    playerCardListContainer.innerHTML = '<p>Sem jogadores disponíveis para esta posição (ou já estão em campo).</p>';
-                } else {
-                    const gridContainer = document.createElement('div');
-                    gridContainer.classList.add('position-grid'); 
-
-                    availablePlayers.forEach(player => {
-                        const playerCard = createPlayerCardElement(player, false);
-                        const addButton = document.createElement('button');
-                        addButton.textContent = 'ADICIONAR';
-                        addButton.classList.add('btn-confirm', 'add-player-btn');
-                        addButton.style.marginTop = '5px';
-                        addButton.onclick = () => {
-                            assignPlayerToPosition(player, positionElement);
-                            playerListModal.classList.remove('active');
-                        };
-                        playerCard.appendChild(addButton);
-                        gridContainer.appendChild(playerCard);
-                    });
-                    playerCardListContainer.appendChild(gridContainer);
-                }
-            } catch (error) {
-                console.error("Erro ao popular lista de jogadores no modal:", error);
-                playerCardListContainer.innerHTML = '<p>Erro ao carregar jogadores.</p>';
-            }
-        }
-
-        function assignPlayerToPosition(player, positionElement) {
-            const positionId = positionElement.dataset.position;
-            if (isPlayerAlreadyOnPitch(player.id)) {
-                alert(`${player.nome} já está em campo noutra posição!`);
-                return;
-            }
-            if (positionElement.dataset.assignedPlayerId && positionElement.dataset.assignedPlayerId !== 'null') {
-                alert("Esta posição já foi ocupada enquanto escolhia. Tente novamente.");
-                return;
-            }
-            removePlayerFromPositionDOM(positionElement);
-            addPlayerToPositionDOM(positionElement, player);
-            assignedPlayers[positionId] = player.id;
-            hasUnsavedChanges = true;
-        }
-
-        closePlayerListModalBtn.addEventListener('click', () => {
+    availablePlayers.forEach(player => {
+        const playerCard = createPlayerCardElement(player);
+        const addButton = document.createElement('button');
+        addButton.textContent = 'ADICIONAR';
+        addButton.classList.add('btn-confirm', 'add-player-btn');
+        addButton.style.marginTop = '5px';
+        addButton.onclick = () => {
+            assignPlayerToPosition(player, positionElement);
             playerListModal.classList.remove('active');
-        });
+        };
+        playerCard.appendChild(addButton);
+        gridContainer.appendChild(playerCard);
+    });
+    playerCardListContainer.appendChild(gridContainer);
+}
 
-        function showConfirmationModal(message, confirmCallback, cancelCallback) {
-            const existingModal = document.querySelector('.confirmation-modal-overlay');
-            if (existingModal) document.body.removeChild(existingModal);
-            const modalOverlay = document.createElement('div');
-            modalOverlay.classList.add('modal-overlay', 'confirmation-modal-overlay');
-            const modalContent = document.createElement('div');
-            modalContent.classList.add('modal-content');
-            const messageElement = document.createElement('p');
-            messageElement.textContent = message;
-            modalContent.appendChild(messageElement);
-            const buttonsContainer = document.createElement('div');
-            buttonsContainer.classList.add('modal-buttons');
-            const confirmButton = document.createElement('button');
-            confirmButton.classList.add('btn-confirm'); confirmButton.textContent = 'Sim';
-            confirmButton.onclick = () => { document.body.removeChild(modalOverlay); if (confirmCallback) confirmCallback(); };
-            const cancelButton = document.createElement('button');
-            cancelButton.classList.add('btn-cancel'); cancelButton.textContent = 'Não';
-            cancelButton.onclick = () => { document.body.removeChild(modalOverlay); if (cancelCallback) cancelCallback(); };
-            buttonsContainer.appendChild(confirmButton); buttonsContainer.appendChild(cancelButton);
-            modalContent.appendChild(buttonsContainer);
-            modalOverlay.appendChild(modalContent);
-            document.body.appendChild(modalOverlay);
-            modalOverlay.classList.add('active');
-        }
+function assignPlayerToPosition(player, positionElement) {
+    const positionId = positionElement.dataset.position;
+    if (Object.values(assignedPlayers).includes(player.id)) {
+        alert(`${player.nome} já está em campo!`);
+        return;
+    }
+    if (positionElement.dataset.assignedPlayerId && positionElement.dataset.assignedPlayerId !== 'null') {
+        alert("Esta posição já foi ocupada.");
+        return;
+    }
+    addPlayerToPosition(positionId, player);
+    hasUnsavedChanges = true;
+}
 
-        async function fetchUserOwnedPlayers() {
-            if (!currentUserUid) return;
-            const playersRef = collection(db, 'jogadores');
-            const q = query(playersRef, where('compradopor', '==', currentUserUid));
-            const querySnapshot = await getDocs(q);
-            const fetchedUserPlayers = [];
-            const uniqueClubs = new Set();
-            const uniqueCountryIds = new Set();
-            querySnapshot.forEach((doc) => {
-                const playerData = doc.data();
-                fetchedUserPlayers.push({ ...playerData, id: doc.id });
-                if (playerData.clube) uniqueClubs.add(playerData.clube);
-                if (playerData.paisId) uniqueCountryIds.add(playerData.paisId);
-            });
-            userOwnedPlayers = fetchedUserPlayers;
-            clubs = uniqueClubs;
-            populateClubFilter();
-            renderPlayerResults(userOwnedPlayers);
-        }
+function showConfirmationModal(message, confirmCallback, cancelCallback) {
+    const existingModal = document.querySelector('.confirmation-modal-overlay');
+    if (existingModal) document.body.removeChild(existingModal);
+    
+    const modalOverlay = document.createElement('div');
+    modalOverlay.className = 'modal-overlay confirmation-modal-overlay active';
+    const modalContent = document.createElement('div');
+    modalContent.className = 'modal-content';
+    modalContent.innerHTML = `<p>${message}</p>`;
+    
+    const buttonsContainer = document.createElement('div');
+    buttonsContainer.className = 'modal-buttons';
+    
+    const confirmButton = document.createElement('button');
+    confirmButton.className = 'btn-confirm';
+    confirmButton.textContent = 'Sim';
+    confirmButton.onclick = () => { document.body.removeChild(modalOverlay); if (confirmCallback) confirmCallback(); };
+    
+    const cancelButton = document.createElement('button');
+    cancelButton.className = 'btn-cancel';
+    cancelButton.textContent = 'Não';
+    cancelButton.onclick = () => { document.body.removeChild(modalOverlay); if (cancelCallback) cancelCallback(); };
+    
+    buttonsContainer.appendChild(confirmButton);
+    buttonsContainer.appendChild(cancelButton);
+    modalContent.appendChild(buttonsContainer);
+    modalOverlay.appendChild(modalContent);
+    document.body.appendChild(modalOverlay);
+}
 
-        async function fetchCountries() {
-            const countriesRef = collection(db, 'paises');
-            const countriesSnap = await getDocs(countriesRef);
-            countries = {};
-            countriesSnap.forEach(doc => { countries[doc.id] = doc.data(); });
-            populateCountryFilter();
-        }
+// --- Funções de Renderização e Criação de Elementos ---
 
-        function populateCountryFilter() {
-            countryFilterSelect.innerHTML = '<option value="">País (Todos)</option>';
-            const sortedCountries = Object.entries(countries).sort(([, a], [, b]) => a.nome.localeCompare(b.nome));
-            sortedCountries.forEach(([countryId, countryData]) => {
-                const option = document.createElement('option');
-                option.value = countryId; option.textContent = countryData.nome;
-                countryFilterSelect.appendChild(option);
-            });
-        }
+// VERSÃO CORRIGIDA E MAIS ROBUSTA
+function createPlayerCardElement(item) {
+    const card = document.createElement('div');
+    card.classList.add('player-card');
+    card.dataset.playerId = item.id;
 
-        function populateClubFilter() {
-            clubFilterSelect.innerHTML = '<option value="">Clube (Todos)</option>';
-            const sortedClubs = [...clubs].sort((a, b) => a.localeCompare(b));
-            sortedClubs.forEach(clubName => {
-                const option = document.createElement('option');
-                option.value = clubName; option.textContent = clubName;
-                clubFilterSelect.appendChild(option);
-            });
-        }
+    const isPlayer = item.tipo !== 'Estilo';
 
-        function createPlayerCardElement(player, isDraggable) {
-            const playerCard = document.createElement('div');
-            playerCard.classList.add('player-card');
-            playerCard.dataset.playerId = player.id;
-            if (isDraggable) {
-                playerCard.draggable = true;
-                playerCard.addEventListener('dragstart', handlePlayerCardDragStart);
-            }
+    if (isPlayer) {
+        card.draggable = true;
+        card.addEventListener('dragstart', handlePlayerCardDragStart);
+        if (item.casta) {
             const castaMap = { 'Jogador Ouro': 'golden', 'Jogador Prata': 'silver', 'Jogador Bronze': 'bronze', 'Jogador Platina': 'platina', 'Jogador Diamante': 'diamond' };
-            const castaClass = castaMap[player.casta];
-            if (castaClass) playerCard.classList.add(castaClass);
-
-            if (player.paisId && countries[player.paisId]) {
-                const flagImg = document.createElement('img');
-                flagImg.src = countries[player.paisId].imagem || 'placeholder_flag_url.png';
-                flagImg.alt = countries[player.paisId].nome;
-                flagImg.classList.add('country-flag');
-                playerCard.appendChild(flagImg);
-            }
-            const img = document.createElement('img');
-            img.src = player.imagem || 'placeholder_image_url.png'; img.alt = player.nome;
-            playerCard.appendChild(img);
-            const playerInfo = document.createElement('div'); playerInfo.classList.add('player-info');
-            const playerName = document.createElement('span'); playerName.classList.add('player-name'); playerName.textContent = player.nome; playerInfo.appendChild(playerName);
-            const playerPosition = document.createElement('span'); playerPosition.classList.add('player-position'); playerPosition.textContent = player.posicao; playerInfo.appendChild(playerPosition);
-            playerCard.appendChild(playerInfo);
-
-            if (player.clube) {
-                fetchCompetitionLogo(player.clube).then(logoData => {
-                    if (logoData) {
-                        const competicaoLogo = document.createElement('img');
-                        competicaoLogo.src = logoData.imagem; competicaoLogo.alt = logoData.nome;
-                        competicaoLogo.classList.add('competition-logo');
-                        playerInfo.appendChild(competicaoLogo);
-                    }
-                });
-            }
-            return playerCard;
+            const castaClass = castaMap[item.casta];
+            if (castaClass) card.classList.add(castaClass);
         }
-
-        async function fetchCompetitionLogo(clubName) {
-            try {
-                const clubesRef = collection(db, 'clubes');
-                const clubQuery = query(clubesRef, where('nome', '==', clubName), limit(1));
-                const clubSnapshot = await getDocs(clubQuery);
-                if (!clubSnapshot.empty) {
-                    const clubData = clubSnapshot.docs[0].data();
-                    if (clubData.competicaoId) {
-                        const competicaoRef = doc(db, 'competicoes', clubData.competicaoId);
-                        const competicaoDoc = await getDoc(competicaoRef);
-                        if (competicaoDoc.exists()) return competicaoDoc.data();
-                    }
-                } return null;
-            } catch (error) { console.error(`Erro logo ${clubName}:`, error); return null; }
+        if (item.paisId && countries[item.paisId]) {
+            const flagImg = document.createElement('img');
+            flagImg.src = countries[item.paisId].imagem || 'placeholder.png';
+            flagImg.classList.add('country-flag');
+            card.appendChild(flagImg);
         }
+    } else { // É um Estilo
+        card.classList.add('style-item');
+        card.draggable = true;
+        card.addEventListener('dragstart', handleStyleCardDragStart);
+        if (Object.values(playerStyleAssignments).includes(item.id)) {
+            card.classList.add('style-in-use');
+        }
+    }
+
+    const img = document.createElement('img');
+    img.src = item.imagem || 'placeholder.png';
+    img.alt = item.nome;
+    card.appendChild(img);
+
+    const infoDiv = document.createElement('div');
+    infoDiv.classList.add('player-info');
+    const nameSpan = document.createElement('span');
+    nameSpan.classList.add('player-name');
+    nameSpan.textContent = item.nome;
+    infoDiv.appendChild(nameSpan);
+
+    if (isPlayer && item.posicao) {
+        const positionSpan = document.createElement('span');
+        positionSpan.classList.add('player-position');
+        positionSpan.textContent = item.posicao;
+        infoDiv.appendChild(positionSpan);
+    }
+    card.appendChild(infoDiv);
+
+    if (isPlayer && item.clube) {
+        fetchCompetitionLogo(item.clube).then(logoData => {
+            if (logoData) {
+                const competicaoLogo = document.createElement('img');
+                competicaoLogo.src = logoData.imagem;
+                competicaoLogo.alt = logoData.nome;
+                competicaoLogo.classList.add('competition-logo');
+                infoDiv.appendChild(competicaoLogo);
+            }
+        });
+    }
+    return card;
+}
+
+function renderPlayerResults() {
+    playerResultsContainer.innerHTML = '';
+    
+    const positionOrder = ['Guarda-Redes', 'Defesa', 'Médio', 'Avançado'];
+    const groupedPlayers = userOwnedPlayers.reduce((acc, player) => {
+        (acc[player.posicao] = acc[player.posicao] || []).push(player);
+        return acc;
+    }, {});
+
+    positionOrder.forEach(position => {
+        if (groupedPlayers[position]?.length > 0) {
+            const title = document.createElement('h3');
+            title.textContent = position;
+            title.classList.add('position-group-title');
+            playerResultsContainer.appendChild(title);
+
+            const grid = document.createElement('div');
+            grid.classList.add('position-grid');
+            groupedPlayers[position]
+                .sort((a, b) => a.nome.localeCompare(b.nome))
+                .forEach(player => grid.appendChild(createPlayerCardElement(player)));
+            playerResultsContainer.appendChild(grid);
+        }
+    });
+
+    if (userOwnedPlayerStyles.length > 0) {
+        const title = document.createElement('h3');
+        title.textContent = 'Estilos de Jogador';
+        title.classList.add('position-group-title');
+        playerResultsContainer.appendChild(title);
+
+        const grid = document.createElement('div');
+        grid.classList.add('position-grid');
+        userOwnedPlayerStyles
+            .sort((a, b) => a.nome.localeCompare(b.nome))
+            .forEach(style => grid.appendChild(createPlayerCardElement(style)));
+        playerResultsContainer.appendChild(grid);
+    }
+    
+    filterPlayers();
+}
+
+function renderFormation(formationName) {
+    assignedPlayers = {};
+    playerStyleAssignments = {};
+    pitchArea.innerHTML = '<div class="center-circle"></div>';
+    if (!formationName || !formations[formationName]) return;
+    currentFormation = formationName;
+    formations[formationName].forEach(pos => {
+        const positionElement = document.createElement('div');
+        positionElement.classList.add('position');
+        positionElement.dataset.position = pos.position;
+        positionElement.style.top = pos.top;
+        positionElement.style.left = pos.left;
+        positionElement.dataset.positionType = pos.positionType;
+        positionElement.innerHTML = '+';
+        positionElement.draggable = false;
+        positionElement.dataset.assignedPlayerId = null;
+        positionElement.addEventListener('dragover', handlePositionDragOver);
+        positionElement.addEventListener('drop', handlePositionDrop);
+        positionElement.addEventListener('click', handlePositionClick);
+        pitchArea.appendChild(positionElement);
+    });
+}
+
+// --- Funções de Dados (Firebase) ---
+
+async function fetchUserOwnedPlayers() {
+    if (!currentUserUid) return;
+    const q = query(collection(db, 'jogadores'), where('compradopor', '==', currentUserUid));
+    const snapshot = await getDocs(q);
+    const fetchedPlayers = [];
+    const uniqueClubs = new Set();
+    const uniqueCountryIds = new Set();
+    snapshot.forEach(doc => {
+        const data = doc.data();
+        fetchedPlayers.push({ ...data, id: doc.id });
+        if (data.clube) uniqueClubs.add(data.clube);
+        if (data.paisId) uniqueCountryIds.add(data.paisId);
+    });
+    userOwnedPlayers = fetchedPlayers;
+    clubs = uniqueClubs;
+}
+
+async function fetchPlayerStyles() {
+    if (!currentUserUid) return;
+    const q = query(collection(db, 'movimentos'), where('userId', '==', currentUserUid), where('empireTipo', '==', 'Estilos de Jogador'));
+    const snapshot = await getDocs(q);
+    userOwnedPlayerStyles = snapshot.docs.map(doc => ({ 
+        id: doc.id, 
+        nome: doc.data().itemEmpire, 
+        imagem: doc.data().imagem, 
+        tipo: 'Estilo' 
+    }));
+}
+
+async function fetchCountries() {
+    const snapshot = await getDocs(collection(db, 'paises'));
+    countries = {};
+    snapshot.forEach(doc => { countries[doc.id] = doc.data(); });
+}
+
+async function fetchFormationsFromFirestore() {
+    if (!currentUserUid) return [];
+    try {
+        const docSnap = await getDoc(doc(db, 'users', currentUserUid));
+        if (docSnap.exists()) {
+            const táticaString = docSnap.data().tática;
+            if (táticaString) return táticaString.split(' ').filter(Boolean).map(name => ({ value: name, label: name }));
+        }
+    } catch (error) { console.error("Erro ao buscar formações:", error); }
+    return [];
+}
+
+async function fetchActiveFormationFromPlanteis() {
+    if (!currentUserUid) return null;
+    try {
+        const palpitesSnap = await getDocs(query(collection(db, 'palpites'), orderBy('temporada', 'desc'), limit(1)));
+        if (palpitesSnap.empty) return null;
+        const latestSeason = palpitesSnap.docs[0].data().temporada;
         
-        function renderPlayerResults(playersToRender) {
-            playerResultsContainer.innerHTML = '';
-            if (playersToRender.length === 0) {
-                playerResultsContainer.innerHTML = '<p>Nenhum jogador encontrado.</p>';
-                return;
+        const q = query(collection(db, 'planteis'), where('userId', '==', currentUserUid), where('estado', '==', 'ativo'), where('temporada', '==', latestSeason), limit(1));
+        const activePlanteisSnap = await getDocs(q);
+        return activePlanteisSnap.empty ? null : activePlanteisSnap.docs[0].data().formacao;
+    } catch (error) { console.error("Erro ao buscar formação ativa:", error); }
+    return null;
+}
+
+async function fetchCompetitionLogo(clubName) {
+    try {
+        const clubSnap = await getDocs(query(collection(db, 'clubes'), where('nome', '==', clubName), limit(1)));
+        if (!clubSnap.empty) {
+            const { competicaoId } = clubSnap.docs[0].data();
+            if (competicaoId) {
+                const competicaoDoc = await getDoc(doc(db, 'competicoes', competicaoId));
+                if (competicaoDoc.exists()) return competicaoDoc.data();
             }
+        }
+    } catch (error) { console.error(`Erro logo ${clubName}:`, error); }
+    return null;
+}
 
-            const positionOrder = ['Guarda-Redes', 'Defesa', 'Médio', 'Avançado'];
+async function saveFormation() {
+    if (!currentUserUid || !currentFormation) {
+        alert("Por favor, selecione uma formação.");
+        return;
+    }
+    try {
+        const palpitesSnap = await getDocs(query(collection(db, 'palpites'), orderBy('temporada', 'desc'), limit(1)));
+        if (palpitesSnap.empty) throw new Error('Temporada não encontrada.');
+        const latestSeason = palpitesSnap.docs[0].data().temporada;
 
-            const groupedPlayers = playersToRender.reduce((acc, player) => {
-                const position = player.posicao;
-                if (!acc[position]) {
-                    acc[position] = [];
+        const planteisRef = collection(db, 'planteis');
+        const q = query(planteisRef, where('userId', '==', currentUserUid), where('formacao', '==', currentFormation), where('temporada', '==', latestSeason));
+        const planteisSnap = await getDocs(q);
+
+        const plantelData = { 
+            userId: currentUserUid, 
+            formacao: currentFormation, 
+            temporada: latestSeason, 
+            estado: 'desativo', 
+            dataDeEdicao: serverTimestamp(),
+            estilos: playerStyleAssignments // Salvar os estilos
+        };
+        formations[currentFormation]?.forEach(p => { plantelData[p.position] = assignedPlayers[p.position] || null; });
+
+        if (!planteisSnap.empty) {
+            const docRef = planteisSnap.docs[0].ref;
+            plantelData.estado = planteisSnap.docs[0].data().estado || 'desativo';
+            await updateDoc(docRef, plantelData);
+        } else {
+            await addDoc(planteisRef, plantelData);
+        }
+        hasUnsavedChanges = false;
+        alert("Formação guardada com sucesso!");
+    } catch (error) { console.error("Erro ao guardar formação:", error); alert("Erro ao guardar formação."); }
+}
+
+async function loadFormation() {
+    if (!currentUserUid || !currentFormation) {
+        renderFormation(null);
+        return;
+    }
+    
+    try {
+        const palpitesSnap = await getDocs(query(collection(db, 'palpites'), orderBy('temporada', 'desc'), limit(1)));
+        if (palpitesSnap.empty) throw new Error("Temporada não encontrada.");
+        const latestSeason = palpitesSnap.docs[0].data().temporada;
+
+        const q = query(collection(db, 'planteis'), where('userId', '==', currentUserUid), where('formacao', '==', currentFormation), where('temporada', '==', latestSeason), limit(1));
+        const snapshot = await getDocs(q);
+
+        renderFormation(currentFormation); // Renderiza o campo vazio primeiro
+
+        if (!snapshot.empty) {
+            const plantelData = snapshot.docs[0].data();
+            formations[currentFormation]?.forEach(posInfo => {
+                const playerId = plantelData[posInfo.position];
+                if (playerId) {
+                    const player = userOwnedPlayers.find(p => p.id === playerId);
+                    if (player) addPlayerToPosition(posInfo.position, player);
                 }
-                acc[position].push(player);
-                return acc;
-            }, {});
+            });
+            
+            playerStyleAssignments = plantelData.estilos || {};
+            Object.entries(playerStyleAssignments).forEach(([positionId, styleId]) => {
+                const positionElement = pitchArea.querySelector(`.position[data-position="${positionId}"]`);
+                const styleData = userOwnedPlayerStyles.find(s => s.id === styleId);
+                if (positionElement && styleData) {
+                    const styleIcon = document.createElement('img');
+                    styleIcon.src = styleData.imagem;
+                    styleIcon.classList.add('player-style-icon');
+                    styleIcon.addEventListener('click', removePlayerStyle);
+                    positionElement.appendChild(styleIcon);
 
-            positionOrder.forEach(position => {
-                if (groupedPlayers[position] && groupedPlayers[position].length > 0) {
-                    const title = document.createElement('h3');
-                    title.textContent = position;
-                    title.classList.add('position-group-title');
-                    playerResultsContainer.appendChild(title);
-
-                    const gridContainer = document.createElement('div');
-                    gridContainer.classList.add('position-grid');
-
-                    groupedPlayers[position].sort((a, b) => a.nome.localeCompare(b.nome));
-
-                    groupedPlayers[position].forEach(player => {
-                        const playerCardElement = createPlayerCardElement(player, true);
-                        gridContainer.appendChild(playerCardElement);
-                    });
-                    
-                    playerResultsContainer.appendChild(gridContainer);
+                    const styleCardInList = playerResultsContainer.querySelector(`.player-card[data-player-id="${styleId}"]`);
+                    if(styleCardInList) styleCardInList.classList.add('style-in-use');
                 }
             });
         }
-        
-        function filterPlayers() {
-            const searchTerm = playerSearchInput.value.toLowerCase();
-            const selectedCountryId = countryFilterSelect.value;
-            const selectedClub = clubFilterSelect.value;
-            const selectedPosition = positionFilterSelect.value; 
+        hasUnsavedChanges = false;
+    } catch (error) { console.error("Erro ao carregar formação:", error); }
+}
 
-            const filtered = userOwnedPlayers.filter(player => {
-                const nameMatch = player.nome.toLowerCase().includes(searchTerm);
-                const countryMatch = !selectedCountryId || player.paisId === selectedCountryId;
-                const clubMatch = !selectedClub || player.clube === selectedClub;
-                const positionMatch = !selectedPosition || player.posicao === selectedPosition; 
-                return nameMatch && countryMatch && clubMatch && positionMatch;
-            });
-            renderPlayerResults(filtered);
-        }
+// --- Lógica de UI e Filtros ---
 
-        playerSearchInput.addEventListener('input', filterPlayers);
-        countryFilterSelect.addEventListener('change', filterPlayers);
-        clubFilterSelect.addEventListener('change', filterPlayers);
-        positionFilterSelect.addEventListener('change', filterPlayers);
-
-        const saveFormationButton = document.getElementById('saveFormationBtn');
-        saveFormationButton.addEventListener('click', saveFormation);
-
-        const chooseBtn = document.getElementById('chooseBtn');
-        chooseBtn.addEventListener('click', async () => {
-            if (!currentUserUid) return;
-            if (!currentFormation) { alert("Selecione uma formação."); return; }
-            if (hasUnsavedChanges) { alert("Guarde as alterações antes de escolher."); return; }
-            try {
-                const palpitesRef = collection(db, 'palpites');
-                const palpitesQuery = query(palpitesRef, orderBy('temporada', 'desc'), limit(1));
-                const palpitesSnapshot = await getDocs(palpitesQuery);
-                if (palpitesSnapshot.empty) throw new Error('Temporada não encontrada.');
-                const latestSeason = palpitesSnapshot.docs[0].data().temporada;
-
-                const planteisRef = collection(db, 'planteis');
-                const currentFormationQuery = query( planteisRef, where('userId', '==', currentUserUid), where('formacao', '==', currentFormation), where('temporada', '==', latestSeason), limit(1) );
-                const currentFormationSnap = await getDocs(currentFormationQuery);
-                if (currentFormationSnap.empty) { alert(`A formação ${currentFormation} não está guardada. Guarde-a primeiro.`); return; }
-                const currentFormationDocRef = currentFormationSnap.docs[0].ref;
-
-                const allPlanteisQuery = query( planteisRef, where('userId', '==', currentUserUid), where('temporada', '==', latestSeason) );
-                const allPlanteisSnapshot = await getDocs(allPlanteisQuery);
-                const batch = writeBatch(db);
-                allPlanteisSnapshot.forEach(doc => { batch.update(doc.ref, { estado: 'desativo' }); });
-                batch.update(currentFormationDocRef, { estado: 'ativo' });
-                await batch.commit();
-
-                const confirmIcon = document.createElement('i');
-                confirmIcon.classList.add('fas', 'fa-check'); confirmIcon.style.color = '#4CAF50'; confirmIcon.style.marginLeft = '10px';
-                chooseBtn.parentNode.insertBefore(confirmIcon, chooseBtn.nextSibling);
-                setTimeout(() => confirmIcon.remove(), 2000);
-            } catch (error) { console.error('Erro ao definir formação ativa:', error); alert('Erro: ' + error.message); }
+function populateCountryFilter() {
+    countryFilterSelect.innerHTML = '<option value="">País (Todos)</option>';
+    Object.entries(countries)
+        .sort(([, a], [, b]) => a.nome.localeCompare(b.nome))
+        .forEach(([id, data]) => {
+            const option = document.createElement('option');
+            option.value = id; option.textContent = data.nome;
+            countryFilterSelect.appendChild(option);
         });
+}
 
-        async function getUserStatus(userId) {
-            const userDoc = doc(db, 'users', userId);
-            const docSnap = await getDoc(userDoc);
-            if (docSnap.exists() && docSnap.data().aceite === "Yes") { return docSnap.data().estatuto; }
-            else { return null; }
-        }
+function populateClubFilter() {
+    clubFilterSelect.innerHTML = '<option value="">Clube (Todos)</option>';
+    [...clubs].sort().forEach(clubName => {
+        const option = document.createElement('option');
+        option.value = clubName; option.textContent = clubName;
+        clubFilterSelect.appendChild(option);
+    });
+}
 
-        async function fetchFormationsFromFirestore() {
-            if (!currentUserUid) return [];
-            try {
-                const userDocRef = doc(db, 'users', currentUserUid);
-                const userDocSnap = await getDoc(userDocRef);
-                if (userDocSnap.exists()) {
-                    const userData = userDocSnap.data();
-                    const táticaString = userData.tática;
-                    if (táticaString) { return táticaString.split(' ').filter(name => name.trim() !== '').map(name => ({ value: name, label: name })); }
-                }
-                return [];
-            } catch (error) { console.error("Erro ao buscar formações:", error); return []; }
-        }
+async function populateFormationDropdownFromFirestore() {
+    const formationsFromUser = await fetchFormationsFromFirestore();
+    formationSelect.innerHTML = '<option value="" disabled selected>Selecionar Formação</option>';
+    formationsFromUser.forEach(f => {
+        const option = document.createElement('option');
+        option.value = f.value; option.textContent = f.label;
+        formationSelect.appendChild(option);
+    });
+}
 
-        async function fetchActiveFormationFromPlanteis() {
-            if (!currentUserUid) return null;
-            try {
-                const palpitesRef = collection(db, 'palpites');
-                const palpitesQuery = query(palpitesRef, orderBy('temporada', 'desc'), limit(1));
-                const palpitesSnapshot = await getDocs(palpitesQuery);
-                if (palpitesSnapshot.empty) return null;
-                const latestSeason = palpitesSnapshot.docs[0].data().temporada;
-                const planteisRef = collection(db, 'planteis');
-                const activePlanteisQuery = query( planteisRef, where('userId', '==', currentUserUid), where('estado', '==', 'ativo'), where('temporada', '==', latestSeason), limit(1) );
-                const activePlanteisSnapshot = await getDocs(activePlanteisQuery);
-                if (!activePlanteisSnapshot.empty) { return activePlanteisSnapshot.docs[0].data().formacao; }
-                return null;
-            } catch (error) { console.error("Erro ao buscar formação ativa:", error); return null; }
-        }
+function filterPlayers() {
+    const searchTerm = playerSearchInput.value.toLowerCase();
+    const selectedCountryId = countryFilterSelect.value;
+    const selectedClub = clubFilterSelect.value;
+    const selectedPosition = positionFilterSelect.value;
 
-        async function populateFormationDropdownFromFirestore() {
-            const formationsFromUser = await fetchFormationsFromFirestore();
-            formationSelect.innerHTML = '';
-            const defaultOption = document.createElement('option');
-            defaultOption.value = ""; defaultOption.disabled = true; defaultOption.selected = true;
-            defaultOption.textContent = "Selecionar Formação";
-            formationSelect.appendChild(defaultOption);
-            if (formationsFromUser.length > 0) {
-                formationsFromUser.forEach(formation => {
-                    const option = document.createElement('option');
-                    option.value = formation.value; option.textContent = formation.label;
-                    formationSelect.appendChild(option);
-                });
-            }
-        }
+    playerResultsContainer.querySelectorAll('.player-card:not(.style-item)').forEach(card => {
+        const player = userOwnedPlayers.find(p => p.id === card.dataset.playerId);
+        if (!player) { card.style.display = 'none'; return; }
 
-        async function loadFormation() {
-            if (!currentUserUid || !currentFormation) {
-                renderFormation(null);
-                return;
-            }
-            pitchArea.querySelectorAll('.position').forEach(pos => { removePlayerFromPositionDOM(pos); pos.innerHTML = '+'; });
-            assignedPlayers = {};
-            try {
-                const palpitesRef = collection(db, 'palpites');
-                const palpitesQuery = query(palpitesRef, orderBy('temporada', 'desc'), limit(1));
-                const palpitesSnapshot = await getDocs(palpitesQuery);
-                if (palpitesSnapshot.empty) throw new Error("Temporada não encontrada.");
-                const latestSeason = palpitesSnapshot.docs[0].data().temporada;
+        const nameMatch = player.nome.toLowerCase().includes(searchTerm);
+        const countryMatch = !selectedCountryId || player.paisId === selectedCountryId;
+        const clubMatch = !selectedClub || player.clube === selectedClub;
+        const positionMatch = !selectedPosition || player.posicao === selectedPosition;
 
-                const planteisRef = collection(db, 'planteis');
-                const q = query( planteisRef, where('userId', '==', currentUserUid), where('formacao', '==', currentFormation), where('temporada', '==', latestSeason), limit(1) );
-                const querySnapshot = await getDocs(q);
+        card.style.display = (nameMatch && countryMatch && clubMatch && positionMatch) ? '' : 'none';
+    });
+}
 
-                if (!querySnapshot.empty) {
-                    const plantelData = querySnapshot.docs[0].data();
-                    const currentFormationPositions = formations[currentFormation];
-                    if (!currentFormationPositions) { console.error(`Definições para ${currentFormation} não encontradas.`); return; }
+async function getUserStatus(userId) {
+    const userDoc = await getDoc(doc(db, 'users', userId));
+    if (userDoc.exists() && userDoc.data().aceite === "Yes") {
+        return userDoc.data().estatuto;
+    }
+    return null;
+}
 
-                    currentFormationPositions.forEach(posInfo => {
-                        const positionId = posInfo.position;
-                        const playerId = plantelData[positionId];
-                        if (playerId) {
-                            const positionElement = pitchArea.querySelector(`.position[data-position="${positionId}"]`);
-                            const player = userOwnedPlayers.find(p => p.id === playerId);
-                            if (positionElement && player) {
-                                addPlayerToPositionDOM(positionElement, player);
-                                assignedPlayers[positionId] = playerId;
-                            }
-                        }
-                    });
-                    hasUnsavedChanges = false;
-                } else {
-                    hasUnsavedChanges = false;
-                }
-            } catch (error) { console.error("Erro ao carregar formação:", error); }
-        }
+// --- Inicialização da Página ---
 
-        formationSelect.addEventListener('change', async (e) => {
-            const newFormation = e.target.value;
-            if (!newFormation) return;
-            if (hasUnsavedChanges) {
-                showConfirmationModal(
-                    'Existem alterações não guardadas. Quer guardá-las antes de mudar?',
-                    async () => {
-                        await saveFormation();
-                        currentFormation = newFormation;
-                        renderFormation(currentFormation);
-                        await loadFormation();
-                    },
-                    async () => {
-                        hasUnsavedChanges = false;
-                        currentFormation = newFormation;
-                        renderFormation(currentFormation);
-                        await loadFormation();
-                    }
-                );
-            } else {
-                currentFormation = newFormation;
-                renderFormation(currentFormation);
-                await loadFormation();
-            }
-        });
-
-    onAuthStateChanged(auth, async (user) => {
+onAuthStateChanged(auth, async (user) => {
     if (user) {
         currentUserUid = user.uid;
         currentUserStatus = await getUserStatus(user.uid);
-
-        if (currentUserStatus !== null) {
-            
-            // CÓDIGO ADICIONADO PARA ATUALIZAR O ÚLTIMO ACESSO
-            try {
-                const userDocRef = doc(db, 'users', user.uid);
-                await updateDoc(userDocRef, {
-                    ultimoacesso: serverTimestamp()
-                });
-            } catch (error) {
-                console.error("Erro ao atualizar o campo ultimoacesso: ", error);
-            }
-            // FIM DO CÓDIGO ADICIONADO
-
-            try {
-                const paineisMenuDoc = await getDoc(doc(db, 'paineis', 'paineis menu'));
-
-                if (paineisMenuDoc.exists()) {
-                    const paineisMenuData = paineisMenuDoc.data();
-
-                    if (paineisMenuData.team === "off" && currentUserStatus !== 'ruler') {
-                        window.location.href = '404.html';
-                        return; 
-                    }
-
-                    const menuItemsConfig = {
-                        "1x": "menu-item-1x",
-                        "market": "menu-item-market", 
-                        "team": "menu-item-team",
-                        "empire": "menu-item-empire",
-                        "rankings": "menu-item-rankings", 
-                        "profile": "menu-item-profile" 
-                    };
-
-                    for (const menuItemKey in menuItemsConfig) {
-                        if (paineisMenuData[menuItemKey] === "off") {
-                            const menuItemElement = document.querySelector(`.menu-item[href*="${menuItemKey}.html"]`);
-                            if (menuItemElement) {
-                                menuItemElement.style.display = 'none';
-                            }
-                        }
-                    }
-                } else {
-                    console.error("Documento 'paineis menu' não encontrado.");
-                }
-
-                await fetchCountries();
-                await populateFormationDropdownFromFirestore();
-                await fetchUserOwnedPlayers();
-
-                const activeFormation = await fetchActiveFormationFromPlanteis();
-                let initialFormationToLoad = null;
-
-                if (activeFormation && formationSelect.querySelector(`option[value="${activeFormation}"]`)) {
-                    initialFormationToLoad = activeFormation;
-                    formationSelect.value = activeFormation;
-                } else if (formationSelect.options.length > 1) {
-                    initialFormationToLoad = formationSelect.options[1].value;
-                    formationSelect.value = initialFormationToLoad;
-                }
-
-                currentFormation = initialFormationToLoad;
-                renderFormation(currentFormation);
-
-                if (currentFormation) {
-                    await loadFormation();
-                }
-
-            } catch (error) {
-                console.error("Erro durante a inicialização:", error);
-            } finally {
-                loadingScreen.style.display = 'none';
-                content.style.display = 'block';
-            }
-        } else {
+        
+        if (!currentUserStatus) {
             window.location.href = '404.html';
+            return;
+        }
+
+        try {
+            await updateDoc(doc(db, 'users', user.uid), { ultimoacesso: serverTimestamp() });
+            
+            const paineisMenuDoc = await getDoc(doc(db, 'paineis', 'paineis menu'));
+            if (paineisMenuDoc.exists()) {
+                const menuData = paineisMenuDoc.data();
+                if (menuData.team === "off" && currentUserStatus !== 'ruler') {
+                    window.location.href = '404.html';
+                    return;
+                }
+                document.querySelectorAll('.menu-item').forEach(item => {
+                    const key = item.href.split('/').pop().replace('.html', '');
+                    if (menuData[key] === "off") {
+                        item.style.display = 'none';
+                    }
+                });
+            }
+
+            await Promise.all([
+                fetchCountries(),
+                fetchUserOwnedPlayers(),
+                fetchPlayerStyles()
+            ]);
+            
+            await populateFormationDropdownFromFirestore();
+            populateCountryFilter();
+            populateClubFilter();
+            renderPlayerResults();
+
+            const activeFormation = await fetchActiveFormationFromPlanteis();
+            const formationsFromUser = await fetchFormationsFromFirestore();
+            let initialFormationToLoad = activeFormation || (formationsFromUser[0]?.value || null);
+            
+            if (initialFormationToLoad) {
+                formationSelect.value = initialFormationToLoad;
+                currentFormation = initialFormationToLoad;
+                await loadFormation();
+            } else {
+                renderFormation(null);
+            }
+            
+        } catch (error) {
+            console.error("Erro na inicialização:", error);
+        } finally {
+            loadingScreen.style.display = 'none';
+            content.style.display = 'block';
         }
     } else {
         window.location.href = 'index.html';
     }
 });
 
-        document.querySelectorAll('.menu-item').forEach(item => {
-            item.addEventListener('click', async (e) => {
-                const destination = item.href;
-                if (hasUnsavedChanges && destination && !destination.endsWith('#') && destination !== window.location.href) {
-                    e.preventDefault();
-                    showConfirmationModal(
-                        'Tem alterações não guardadas. Quer guardá-las antes de sair?',
-                        async () => { await saveFormation(); window.location.href = destination; },
-                        () => { hasUnsavedChanges = false; window.location.href = destination; }
-                    );
-                }
-            });
-        });
+// --- Adição de Event Listeners ---
+playerSearchInput.addEventListener('input', filterPlayers);
+countryFilterSelect.addEventListener('change', filterPlayers);
+clubFilterSelect.addEventListener('change', filterPlayers);
+positionFilterSelect.addEventListener('change', filterPlayers);
+saveFormationButton.addEventListener('click', saveFormation);
+closePlayerListModalBtn.addEventListener('click', () => playerListModal.classList.remove('active'));
+
+chooseBtn.addEventListener('click', async () => {
+    if (!currentUserUid || !currentFormation) { alert("Selecione uma formação."); return; }
+    if (hasUnsavedChanges) { alert("Guarde as alterações antes de escolher."); return; }
+    try {
+        const palpitesSnap = await getDocs(query(collection(db, 'palpites'), orderBy('temporada', 'desc'), limit(1)));
+        if (palpitesSnap.empty) throw new Error('Temporada não encontrada.');
+        const latestSeason = palpitesSnap.docs[0].data().temporada;
+
+        const planteisRef = collection(db, 'planteis');
+        const q = query(planteisRef, where('userId', '==', currentUserUid), where('formacao', '==', currentFormation), where('temporada', '==', latestSeason), limit(1));
+        const currentSnap = await getDocs(q);
+        if (currentSnap.empty) { alert(`A formação ${currentFormation} não está guardada. Guarde-a primeiro.`); return; }
+        
+        const batch = writeBatch(db);
+        const allPlanteisSnap = await getDocs(query(planteisRef, where('userId', '==', currentUserUid), where('temporada', '==', latestSeason)));
+        allPlanteisSnap.forEach(doc => batch.update(doc.ref, { estado: 'desativo' }));
+        batch.update(currentSnap.docs[0].ref, { estado: 'ativo' });
+        await batch.commit();
+
+        alert(`Formação ${currentFormation} definida como ativa!`);
+    } catch (error) { console.error('Erro ao definir formação ativa:', error); alert('Erro: ' + error.message); }
+});
+
+formationSelect.addEventListener('change', async (e) => {
+    const newFormation = e.target.value;
+    if (!newFormation || newFormation === currentFormation) return;
+
+    const switchFormation = async () => {
+        hasUnsavedChanges = false;
+        currentFormation = newFormation;
+        await loadFormation();
+    };
+
+    if (hasUnsavedChanges) {
+        showConfirmationModal(
+            'Existem alterações não guardadas. Quer guardá-las antes de mudar?',
+            async () => { await saveFormation(); await switchFormation(); },
+            async () => { await switchFormation(); }
+        );
+    } else {
+        await switchFormation();
+    }
+});
+
+document.querySelectorAll('.menu-item').forEach(item => {
+    item.addEventListener('click', (e) => {
+        const destination = item.href;
+        if (hasUnsavedChanges && destination && !destination.endsWith('#') && destination !== window.location.href) {
+            e.preventDefault();
+            showConfirmationModal(
+                'Tem alterações não guardadas. Quer guardá-las antes de sair?',
+                async () => { await saveFormation(); window.location.href = destination; },
+                () => { hasUnsavedChanges = false; window.location.href = destination; }
+            );
+        }
+    });
+});
     </script>
 </body>
 </html>
