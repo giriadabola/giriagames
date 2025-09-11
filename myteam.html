@@ -684,6 +684,12 @@
     pointer-events: none; /* Desativa completamente o card (incluindo o arraste) */
 }
 
+.player-card.player-in-use {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none; /* Desativa completamente o card (incluindo o arraste) */
+}
+
         /* --- FIM DA ALTERAÇÃO CSS PARA FILTROS MOBILE --- */
     </style>
 </head>
@@ -1040,11 +1046,17 @@ function addPlayerToPosition(positionId, player) {
     positionElement.addEventListener('dragstart', handlePositionDragStart);
     positionElement.addEventListener('dragend', handlePositionDragEnd);
     assignedPlayers[positionId] = player.id;
+    const playerCardInList = playerResultsContainer.querySelector(`.player-card[data-player-id="${player.id}"]`);
+    if (playerCardInList) {
+        playerCardInList.classList.add('player-in-use');
+    }
 }
 
 function removePlayerFromPosition(positionId) {
     const positionElement = pitchArea.querySelector(`.position[data-position="${positionId}"]`);
     if (!positionElement) return;
+
+    const removedPlayerId = assignedPlayers[positionId];
 
     if (playerStyleAssignments[positionId]) {
         const styleIcon = positionElement.querySelector('.player-style-icon');
@@ -1058,6 +1070,12 @@ function removePlayerFromPosition(positionId) {
     positionElement.removeEventListener('dragend', handlePositionDragEnd);
     delete assignedPlayers[positionId];
     hasUnsavedChanges = true;
+    if (removedPlayerId) {
+        const playerCardInList = playerResultsContainer.querySelector(`.player-card[data-player-id="${removedPlayerId}"]`);
+        if (playerCardInList) {
+            playerCardInList.classList.remove('player-in-use');
+        }
+    }
 }
 
 function removePlayerStyle(event) {
@@ -1409,8 +1427,11 @@ async function loadFormation() {
         renderFormation(null);
         return;
     }
+     playerResultsContainer.querySelectorAll('.player-card.player-in-use').forEach(card => {
+        card.classList.remove('player-in-use');
+    });
     
-    try {
+   try {
         const palpitesSnap = await getDocs(query(collection(db, 'palpites'), orderBy('temporada', 'desc'), limit(1)));
         if (palpitesSnap.empty) throw new Error("Temporada não encontrada.");
         const latestSeason = palpitesSnap.docs[0].data().temporada;
@@ -1418,7 +1439,7 @@ async function loadFormation() {
         const q = query(collection(db, 'planteis'), where('userId', '==', currentUserUid), where('formacao', '==', currentFormation), where('temporada', '==', latestSeason), limit(1));
         const snapshot = await getDocs(q);
 
-        renderFormation(currentFormation); // Renderiza o campo vazio primeiro
+      renderFormation(currentFormation); // Renderiza o campo vazio primeiro
 
         if (!snapshot.empty) {
             const plantelData = snapshot.docs[0].data();
@@ -1429,6 +1450,7 @@ async function loadFormation() {
                     if (player) addPlayerToPosition(posInfo.position, player);
                 }
             });
+            
             
             playerStyleAssignments = plantelData.estilos || {};
             Object.entries(playerStyleAssignments).forEach(([positionId, styleId]) => {
@@ -1638,6 +1660,15 @@ document.querySelectorAll('.menu-item').forEach(item => {
         }
     });
 });
+
+document.addEventListener('contextmenu', function(event) {
+    // Verifica se o elemento que foi clicado é uma tag de imagem (IMG)
+    if (event.target.tagName === 'IMG') {
+        // Impede o comportamento padrão do navegador (mostrar o menu)
+        event.preventDefault();
+    }
+});
+
     </script>
 </body>
 </html>
