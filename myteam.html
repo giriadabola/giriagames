@@ -1347,16 +1347,26 @@ async function fetchCountries() {
 }
 
 async function fetchFormationsFromFirestore() {
-    if (!currentUserUid) return [];
-    try {
-        const docSnap = await getDoc(doc(db, 'users', currentUserUid));
-        if (docSnap.exists()) {
-            const táticaString = docSnap.data().tática;
-            if (táticaString) return táticaString.split(' ').filter(Boolean).map(name => ({ value: name, label: name }));
+            if (!currentUserUid) return []; // Retorna um array vazio se não houver utilizador
+            try {
+                const docSnap = await getDoc(doc(db, 'users', currentUserUid));
+                if (docSnap.exists()) {
+                    // AGORA: Obtemos o campo 'tática', que esperamos que seja um array
+                    const taticasArray = docSnap.data().tática;
+
+                    // VERIFICAÇÃO: Certificamo-nos que é realmente um array e não está vazio
+                    if (Array.isArray(taticasArray) && taticasArray.length > 0) {
+                        // Se for um array, mapeamos cada nome de formação para o formato que a dropdown precisa
+                        return taticasArray.map(name => ({ value: name, label: name }));
+                    }
+                }
+            } catch (error) { 
+                console.error("Erro ao buscar formações:", error); 
+            }
+            
+            // Se o campo não existir, não for um array, ou estiver vazio, retorna um array vazio.
+            return [];
         }
-    } catch (error) { console.error("Erro ao buscar formações:", error); }
-    return [];
-}
 
 async function fetchActiveFormationFromPlanteis() {
     if (!currentUserUid) return null;
