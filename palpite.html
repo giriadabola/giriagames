@@ -129,7 +129,9 @@
 <body>
     <div id="loading-screen"><div class="loading-spinner"></div></div>
     <div id="error-popup" class="popup"><div class="popup-content"><span class="close-popup">×</span><div class="popup-message"></div></div></div>
-    <div id="confirmation-popup" class="popup"><div class="popup-content"><span class="close-popup">×</span><h3 style="margin-bottom: 15px;">Confirmar Palpites</h3><div id="confirmation-predictions" style="margin-bottom: 20px;"></div><div style="display: flex; gap: 10px; justify-content: center;"><button onclick="confirmPredictions()" style="background: #2176ff; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer;">Confirmar</button><button onclick="closeConfirmationPopup()" style="background: #dc3545; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer;">Cancelar</button></div></div></div>
+    <div id="confirmation-popup" class="popup"><div class="popup-content"><span class="close-popup">×</span><h3 style="margin-bottom: 15px;">Confirmar Palpites</h3><div id="confirmation-predictions" style="margin-bottom: 20px;"></div><div style="display: flex; gap: 10px; justify-content: center;">
+       <button onclick="confirmPredictions(this)" style="background: #2176ff; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer;">Confirmar</button>
+    </div></div></div>
   <div class="content">
     <h1></h1>
     <div id="game-container"></div>
@@ -152,14 +154,14 @@
     <a href="profile.html" class="menu-item" data-key="profile"><i class="fas fa-user"></i></a>
 </nav>
     <script src="config.js"></script>
-  <script type="module">
+ <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getFirestore, doc, getDoc, collection, serverTimestamp, getDocs, query, where, orderBy, writeBatch, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+    import { getFirestore, doc, getDoc, collection, serverTimestamp, getDocs, query, where, orderBy, writeBatch, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
-     const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-        const auth = getAuth(app);
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
     
     const loadingScreen = document.getElementById('loading-screen');
     const content = document.querySelector('.content');
@@ -167,6 +169,9 @@ import { getFirestore, doc, getDoc, collection, serverTimestamp, getDocs, query,
     let selectedPredictions = [];
     let maxPredictions = 0;
     let countdownInterval = null;
+
+    // NOVO: Flag de controlo para impedir submissões múltiplas
+    let isSubmitting = false;
 
     // --- FUNÇÕES DE RENDERIZAÇÃO DINÂMICA ---
     function renderPredictionCards(predictions) {
@@ -206,7 +211,18 @@ import { getFirestore, doc, getDoc, collection, serverTimestamp, getDocs, query,
     }
 
     // --- FUNÇÃO CONFIRMPREDICTIONS MODIFICADA ---
-    window.confirmPredictions = async function() {
+    // MODIFICADO: A função agora aceita o elemento do botão como argumento
+    window.confirmPredictions = async function(buttonElement) {
+        // NOVO: Se uma submissão já estiver em andamento, interrompe a função
+        if (isSubmitting) {
+            return;
+        }
+
+        // NOVO: Ativa a flag e desativa o botão para dar feedback visual e impedir cliques
+        isSubmitting = true;
+        buttonElement.disabled = true;
+        buttonElement.textContent = 'A processar...';
+
         try {
             if (!currentGame || !auth.currentUser) throw new Error('Dados do jogo ou utilizador não disponíveis.');
             if (new Date() > currentGame.fimIntervalo.toDate()) { showErrorPopup('Tempo esgotado, impossível palpitar.'); closeConfirmationPopup(); return; }
@@ -247,6 +263,12 @@ import { getFirestore, doc, getDoc, collection, serverTimestamp, getDocs, query,
             console.error('Error submitting predictions:', error);
             showErrorPopup(`Erro ao enviar palpites: ${error.message}`);
             closeConfirmationPopup();
+            // NOVO: Se ocorrer um erro, reativa o botão para permitir uma nova tentativa
+            buttonElement.disabled = false;
+            buttonElement.textContent = 'Confirmar';
+        } finally {
+            // NOVO: Independentemente do sucesso ou falha, liberta a flag no final
+            isSubmitting = false;
         }
     };
 
@@ -360,47 +382,7 @@ import { getFirestore, doc, getDoc, collection, serverTimestamp, getDocs, query,
     document.querySelector('#error-popup .close-popup').addEventListener('click', () => document.getElementById('error-popup').style.display = 'none');
     document.querySelector('#confirmation-popup .close-popup').addEventListener('click', closeConfirmationPopup);
     function replaceTeamPlaceholders(text) { if (!text || !currentGame) return text; return text.replace(/Equipa da Casa|Equipa A/gi, currentGame.equipaCasa).replace(/Equipa Visitante|Equipa de Fora|Equipa B/gi, currentGame.equipaFora); }
-async function buildFullOddHierarchy() {
-    const allOddsData = [];
-    const q = query(collection(db, 'oddcategorias'), orderBy('ordem'));
-    const querySnapshot = await getDocs(q);
-
-    querySnapshot.forEach(doc => {
-        allOddsData.push({ id: doc.id, ...doc.data() });
-    });
-
-    const categories = new Map();
-    const subcategories = new Map();
-    const thirdLevelItems = [];
-
-    // Separa os documentos por tipo (categoria, subcategoria, item)
-    allOddsData.forEach(item => {
-        if (item.categoria_subcategoria_3cat === 'categoria') {
-            categories.set(item.id, { ...item, children: [] });
-        } else if (item.categoria_subcategoria_3cat === 'subcategoria') {
-            subcategories.set(item.id, { ...item, children: [] });
-        } else if (item.categoria_subcategoria_3cat === '3cat') {
-            thirdLevelItems.push(item);
-        }
-    });
-
-    // Associa os itens (3cat) às suas subcategorias pai
-    thirdLevelItems.forEach(item => {
-        if (item.subcategoriapai && subcategories.has(item.subcategoriapai)) {
-            subcategories.get(item.subcategoriapai).children.push(item);
-        }
-    });
-
-    // Associa as subcategorias às suas categorias pai
-    for (const [id, subcategory] of subcategories) {
-        if (subcategory.categoriapai && categories.has(subcategory.categoriapai)) {
-            categories.get(subcategory.categoriapai).children.push(subcategory);
-        }
-    }
-
-    // Retorna a hierarquia final como um array de categorias
-    return Array.from(categories.values());
-}
+    async function buildFullOddHierarchy() { const allOddsData = []; const q = query(collection(db, 'oddcategorias'), orderBy('ordem')); const querySnapshot = await getDocs(q); querySnapshot.forEach(doc => { allOddsData.push({ id: doc.id, ...doc.data() }); }); const categories = new Map(); const subcategories = new Map(); const thirdLevelItems = []; allOddsData.forEach(item => { if (item.categoria_subcategoria_3cat === 'categoria') { categories.set(item.id, { ...item, children: [] }); } else if (item.categoria_subcategoria_3cat === 'subcategoria') { subcategories.set(item.id, { ...item, children: [] }); } else if (item.categoria_subcategoria_3cat === '3cat') { thirdLevelItems.push(item); } }); thirdLevelItems.forEach(item => { if (item.subcategoriapai && subcategories.has(item.subcategoriapai)) { subcategories.get(item.subcategoriapai).children.push(item); } }); for (const [id, subcategory] of subcategories) { if (subcategory.categoriapai && categories.has(subcategory.categoriapai)) { categories.get(subcategory.categoriapai).children.push(subcategory); } } return Array.from(categories.values()); }
     function renderOddsList(hierarchy) { const container = document.getElementById('odds-list-container'); container.innerHTML = ''; const shortcutsContainer = document.getElementById('category-shortcuts-container'); let shortcutsHtml = ''; hierarchy.forEach(category => { if (category.children.length === 0) return; shortcutsHtml += `<div class="category-shortcut" onclick="scrollToCategory('${category.id}')" title="${replaceTeamPlaceholders(category.nomecategoria)}"><span class="shortcut-icon">${category.icon || '⭐'}</span></div>`; const categoryElement = document.createElement('div'); categoryElement.className = 'odds-category'; categoryElement.id = category.id; let filterBarHtml = ''; if (category.nomecategoria === 'Por Parte') filterBarHtml = `<div class="subcategory-filter-container"><strong>Filtro:</strong><button class="filter-btn active" onclick="applyFilter(this, '${category.id}', 'all')">Todas</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', '1st Half')">Primeira Parte</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', '2nd Half')">Segunda Parte</button></div>`; else if (category.nomecategoria === 'Mercados Combinados') filterBarHtml = `<div class="subcategory-filter-container"><strong>Filtro:</strong><button class="filter-btn active" onclick="applyFilter(this, '${category.id}', 'all')">Todos</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'home')">${currentGame.equipaCasa}</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'away')">${currentGame.equipaFora}</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'both')">Ambas</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'others')">Outras Odds</button></div>`; else if (category.nomecategoria === 'Mercados Especiais') filterBarHtml = `<div class="subcategory-filter-container"><strong>Filtro:</strong><button class="filter-btn active" onclick="applyFilter(this, '${category.id}', 'all')">Todos</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'home_special')">${currentGame.equipaCasa}</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'away_special')">${currentGame.equipaFora}</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'others_special')">Outras Odds</button></div>`; else if (category.nomecategoria === 'Específicos por Equipa') filterBarHtml = `<div class="subcategory-filter-container"><strong>Filtro:</strong><button class="filter-btn active" onclick="applyFilter(this, '${category.id}', 'all')">Todos</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'home_team_specific')">${currentGame.equipaCasa}</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'away_team_specific')">${currentGame.equipaFora}</button><button class="filter-btn" onclick="applyFilter(this, '${category.id}', 'others_team_specific')">Outras Odds</button></div>`; let subcategoriesHTML = ''; category.children.forEach(subcategory => { if (subcategory.children.length === 0) return; let itemsHTML = ''; subcategory.children.forEach(item => { const predictionData = { value: `${category.nomecategoria} - ${subcategory.nomesubcategoria} - ${item.nome3categoria}`, catIndice: category.indiceIngles || null, subcatIndice: subcategory.indiceIngles || null, cat3Indice: item.indiceIngles || null }; let infoIconHTML = item.breveDescricao && item.breveDescricao.trim() !== '' ? `<div class="info-container"><i class="fas fa-info-circle info-icon"></i><div class="info-tooltip">${replaceTeamPlaceholders(item.breveDescricao)}</div></div>` : ''; itemsHTML += `<li class="odds-item" data-prediction='${JSON.stringify(predictionData)}'>${infoIconHTML}<span class="odds-item-text">${replaceTeamPlaceholders(item.nome3categoria)}</span></li>`; }); const subcatIndiceIngles = subcategory.indiceIngles || ''; subcategoriesHTML += `<li class="filterable-subcategory" data-indice-ingles="${subcatIndiceIngles}"><div class="subcategory-header"><span>${replaceTeamPlaceholders(subcategory.nomesubcategoria)}</span><i class="fas fa-chevron-down toggle-icon"></i></div><ul class="nested-list"><ul class="odds-items-grid">${itemsHTML}</ul></ul></li>`; }); if (subcategoriesHTML === '') return; categoryElement.innerHTML = `<div class="category-header"><span class="category-header-title"><span>${category.icon || '⭐'}</span><span>${replaceTeamPlaceholders(category.nomecategoria)}</span></span><i class="fas fa-chevron-down toggle-icon"></i></div><ul class="nested-list">${filterBarHtml}${subcategoriesHTML}</ul>`; container.appendChild(categoryElement); }); if (shortcutsHtml) shortcutsContainer.innerHTML = `<div class="shortcuts-wrapper">${shortcutsHtml}</div>`; addEventListenersToList(); }
     window.scrollToCategory = function(targetId) { const targetElement = document.getElementById(targetId); if (!targetElement) return; targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' }); const header = targetElement.querySelector('.category-header'); if (header && !header.classList.contains('active')) setTimeout(() => header.click(), 300); };
     window.applyFilter = function(clickedButton, categoryId, filterKeyword) { clickedButton.parentElement.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active')); clickedButton.classList.add('active'); const subcategories = clickedButton.closest('.odds-category').querySelectorAll('.filterable-subcategory'); subcategories.forEach(subcatLi => { const indiceIngles = (subcatLi.dataset.indiceIngles || '').toLowerCase(); let show = false; if (filterKeyword === 'all') show = true; else { let keywords = [], exclusionKeywords = []; switch(filterKeyword) { case '1st Half': keywords = ['1st half']; break; case '2nd Half': keywords = ['2nd half']; break; case 'home': keywords = ['h1', 'team 1', 'win1', 'win 1']; break; case 'away': keywords = ['h2', 'team 2', 'win2', 'win 2']; break; case 'both': keywords = ['both teams']; break; case 'home_special': keywords = ['h1', 'team 1', 'win1', 'win 1', '2:0']; break; case 'away_special': keywords = ['h2', 'team 2', 'win2', 'win 2', '0:2']; break; case 'home_team_specific': keywords = ['h1', 'team 1', 'win1', 'win 1']; break; case 'away_team_specific': keywords = ['h2', 'team 2', 'win2', 'win 2']; break; case 'others': exclusionKeywords = ['h1', 'team 1', 'win1', 'win 1', 'h2', 'team 2', 'win2', 'win 2', 'both teams']; break; case 'others_special': exclusionKeywords = ['h1', 'team 1', 'win1', 'win 1', '2:0', 'h2', 'team 2', 'win2', 'win 2', '0:2']; break; case 'others_team_specific': exclusionKeywords = ['h1', 'team 1', 'win1', 'win 1', 'h2', 'team 2', 'win2', 'win 2']; break; } if (keywords.length > 0 && keywords.some(k => indiceIngles.includes(k))) show = true; if (exclusionKeywords.length > 0 && !exclusionKeywords.some(k => indiceIngles.includes(k))) show = true; } subcatLi.style.display = show ? 'block' : 'none'; }); }
@@ -416,37 +398,37 @@ async function buildFullOddHierarchy() {
     function checkPageAccess(userStatus, menuSettings) { return !menuSettings ? userStatus === 'ruler' : menuSettings['1x'] === 'on' || userStatus === 'ruler'; }
     function updateMenuVisibility(menuSettings) { if (!menuSettings) return; document.querySelectorAll('.bottom-menu .menu-item').forEach(item => { const key = item.getAttribute('data-key'); if (key) item.classList.toggle('hidden', menuSettings[key] === 'off'); }); }
 
-   onAuthStateChanged(auth, async (user) => {
-    if (user) {
-        currentUserStatus = await getUserStatus(user.uid);
-        if (currentUserStatus === null) {
-            window.location.href = '404.html';
-            return;
-        }
+    onAuthStateChanged(auth, async (user) => {
+        if (user) {
+            currentUserStatus = await getUserStatus(user.uid);
+            if (currentUserStatus === null) {
+                window.location.href = '404.html';
+                return;
+            }
 
-        // CÓDIGO ADICIONADO PARA ATUALIZAR O ÚLTIMO ACESSO (COM CORREÇÃO)
-        try {
-            const userDocRef = doc(db, 'users', user.uid);
-            await updateDoc(userDocRef, {
-                ultimoacesso: serverTimestamp()
-            });
-        } catch (error) {
-            console.error("Erro ao atualizar o campo ultimoacesso: ", error);
-        }
-        // FIM DO CÓDIGO ADICIONADO
+            // CÓDIGO ADICIONADO PARA ATUALIZAR O ÚLTIMO ACESSO (COM CORREÇÃO)
+            try {
+                const userDocRef = doc(db, 'users', user.uid);
+                await updateDoc(userDocRef, {
+                    ultimoacesso: serverTimestamp()
+                });
+            } catch (error) {
+                console.error("Erro ao atualizar o campo ultimoacesso: ", error);
+            }
+            // FIM DO CÓDIGO ADICIONADO
 
-        const menuSettings = await loadMenuSettings();
-        if (checkPageAccess(currentUserStatus, menuSettings)) {
-            updateMenuVisibility(menuSettings);
-            await loadGameDetails();
+            const menuSettings = await loadMenuSettings();
+            if (checkPageAccess(currentUserStatus, menuSettings)) {
+                updateMenuVisibility(menuSettings);
+                await loadGameDetails();
+            } else {
+                window.location.href = '404.html';
+            }
         } else {
-            window.location.href = '404.html';
+            loadingScreen.style.display = 'none';
+            window.location.href = 'index.html';
         }
-    } else {
-        loadingScreen.style.display = 'none';
-        window.location.href = 'index.html';
-    }
-});
+    });
 
     window.addEventListener('beforeunload', () => clearInterval(countdownInterval));
 </script>
