@@ -976,7 +976,7 @@ import { getFirestore, collection, getDocs, doc, getDoc, updateDoc, Timestamp, a
         /**
          * Loads player data from Firestore and populates the market grids.
          */
-        async function loadPlayers() {
+     async function loadPlayers() {
             let playersLoadedCount = 0;
             let totalMarketPlayers = 0;
             const progressStart = 40;
@@ -989,6 +989,39 @@ import { getFirestore, collection, getDocs, doc, getDoc, updateDoc, Timestamp, a
                 const snapshot = await getDocs(q);
                 updateLoadingProgress(10);
 
+                // --- INÍCIO DA MODIFICAÇÃO: ORDENAÇÃO DOS JOGADORES ---
+
+                // 1. Definir a ordem de prioridade das castas
+                const castaOrder = {
+                    'Jogador Platina': 4,
+                    'Jogador Ouro': 3,
+                    'Jogador Prata': 2,
+                    'Jogador Bronze': 1
+                };
+
+                // 2. Ordenar a lista de documentos recebida do Firebase
+                const sortedDocs = snapshot.docs.sort((a, b) => {
+                    const playerA = a.data();
+                    const playerB = b.data();
+
+                    // Obter a pontuação de cada casta (0 se não definida)
+                    const rankA = castaOrder[playerA.casta] || 0;
+                    const rankB = castaOrder[playerB.casta] || 0;
+
+                    // Critério Primário: Ordenar por casta (maior pontuação primeiro)
+                    if (rankA !== rankB) {
+                        return rankB - rankA; // Descendente (4, 3, 2, 1)
+                    }
+                    
+                    // Critério Secundário (desempate): Ordenar por overall
+                    const overallA = playerA.overall || 0;
+                    const overallB = playerB.overall || 0;
+                    return overallB - overallA; // Descendente (maior overall primeiro)
+                });
+                
+                // --- FIM DA MODIFICAÇÃO ---
+
+
                 const playersGrids = {
                     'Guarda-Redes': document.getElementById('guarda-redes-grid'),
                     'Defesa': document.getElementById('defesas-grid'),
@@ -997,12 +1030,12 @@ import { getFirestore, collection, getDocs, doc, getDoc, updateDoc, Timestamp, a
                 };
                 Object.values(playersGrids).forEach(grid => { if(grid) grid.innerHTML = ''; });
 
-                totalMarketPlayers = snapshot.docs.length;
-                const marketContent = document.querySelector('.content'); // Get content area once
-                const existingMsg = marketContent?.querySelector('.no-players-message'); // Check for existing message
+                totalMarketPlayers = sortedDocs.length; // Usar a lista ordenada
+                const marketContent = document.querySelector('.content');
+                const existingMsg = marketContent?.querySelector('.no-players-message');
 
                 if (totalMarketPlayers === 0) {
-                    if (marketContent && !existingMsg) { // Add message only if not already there
+                    if (marketContent && !existingMsg) {
                        const noPlayersMsg = document.createElement('p');
                        noPlayersMsg.textContent = "Nenhum jogador no mercado neste momento.";
                        noPlayersMsg.className = 'no-players-message';
@@ -1012,46 +1045,45 @@ import { getFirestore, collection, getDocs, doc, getDoc, updateDoc, Timestamp, a
                     updateLoadingProgress(0, progressStart + progressForPlayers);
                     return;
                 } else {
-                    if (existingMsg) existingMsg.remove(); // Remove message if players found
+                    if (existingMsg) existingMsg.remove();
                 }
-
-                // Create cards concurrently
-                const cardCreationPromises = snapshot.docs.map(doc => {
-                    const player = { ...doc.data(), id: doc.id }; // Combine data and id
+                
+                // Usar a lista JÁ ORDENADA ('sortedDocs') para criar os cards
+                const cardCreationPromises = sortedDocs.map(doc => {
+                    const player = { ...doc.data(), id: doc.id };
                     const grid = playersGrids[player.posicao];
                     if (grid) {
                         return createPlayerCard(player)
-                                 .then(card => ({ grid, card })) // Return successful pair
+                                 .then(card => ({ grid, card }))
                                  .catch(cardError => {
                                      console.error(`Failed to create card for player ${player.id}:`, cardError);
-                                     return null; // Return null on card creation error
+                                     return null;
                                  });
                     } else {
                         console.warn(`No grid found for position: ${player.posicao}`);
-                        return Promise.resolve(null); // Resolve immediately as null
+                        return Promise.resolve(null);
                     }
                 });
 
-                // Wait for all card creations and append them
                 const results = await Promise.all(cardCreationPromises);
                 results.forEach(result => {
                     if (result?.card && result?.grid) {
                          result.grid.appendChild(result.card);
                     }
-                    playersLoadedCount++; // Increment count regardless of success for progress calc
+                    playersLoadedCount++;
                     const currentPlayerProgress = progressStart + Math.floor((playersLoadedCount / totalMarketPlayers) * progressForPlayers);
                     updateLoadingProgress(0, currentPlayerProgress);
                  });
 
 
-               updateSectionCounts(); // <-- 1. Chame a função de contagem primeiro
-                setupSectionToggles(); //
+               updateSectionCounts();
+               setupSectionToggles();
 
             } catch (error) {
                 console.error("Error loading players:", error);
-                updateLoadingProgress(0, 100); // Ensure loading screen hides on error
+                updateLoadingProgress(0, 100);
             } finally {
-                if (loadingProgress < 100) updateLoadingProgress(0, 100); // Ensure 100%
+                if (loadingProgress < 100) updateLoadingProgress(0, 100);
             }
         }
 
