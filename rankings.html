@@ -168,6 +168,7 @@
 
     <div class="content">
         <h1>Tabela Classificativa</h1>
+        <p id="status-indicator" style="margin-bottom: 15px; font-size: 0.8em; text-align: right; color: #555;"></p>
         <table class="rankings-table">
             <thead>
                 <tr>
@@ -361,8 +362,43 @@ import { getFirestore, doc, getDoc, collection, getDocs, query, where, updateDoc
 });
 
 
+ function updateStatusIndicator(isPending) {
+        const indicator = document.getElementById('status-indicator');
+        if (indicator) {
+            if (isPending) {
+                indicator.innerHTML = '🟠 Tabela Pendente';
+                // ADICIONADO: Define o atributo 'title' para mostrar a mensagem no hover/toque
+                indicator.setAttribute('title', 'Ainda faltam atribuir pontos em alguns palpites.');
+            } else {
+                indicator.innerHTML = '🟢 Tabela Atualizada';
+                // ADICIONADO: Remove o atributo 'title' para que nenhuma mensagem apareça
+                indicator.removeAttribute('title');
+            }
+        }
+    }
+
+    // --- Função para verificar se existem palpites pendentes para uma época ---
+    async function checkPendingPredictionsStatus(season) {
+        try {
+            const palpitesRef = collection(db, 'palpites');
+            // A consulta procura por palpites na época especificada
+            // onde o campo 'Analisado' NÃO é igual a "Sim".
+            const q = query(palpitesRef,
+                where('temporada', '==', season),
+                where('Analisado', '!=', 'Sim')
+            );
+            const querySnapshot = await getDocs(q);
+            // Se a querySnapshot não estiver vazia, significa que há palpites pendentes.
+            return !querySnapshot.empty;
+        } catch (error) {
+            console.error("Erro ao verificar o status dos palpites:", error);
+            // Em caso de erro, assume-se que está pendente por segurança.
+            return true;
+        }
+    }
+
     // --- Load Seasons and Rankings (No changes needed here) ---
-    async function loadSeasons() {
+  async function loadSeasons() {
         const palpitesRef = collection(db, 'palpites');
         const palpitesSnap = await getDocs(palpitesRef);
         const seasons = new Set();
@@ -376,9 +412,19 @@ import { getFirestore, doc, getDoc, collection, getDocs, query, where, updateDoc
 
         if (sortedSeasons.length > 0) {
             const mostRecentSeason = sortedSeasons[0];
+
+            // --- CÓDIGO DE INTEGRAÇÃO ADICIONADO AQUI ---
+            // 1. Verifica o status dos palpites para a época mais recente.
+            const isPending = await checkPendingPredictionsStatus(mostRecentSeason);
+            // 2. Atualiza o texto e o emoji na interface.
+            updateStatusIndicator(isPending);
+            // --- FIM DA INTEGRAÇÃO ---
+
             await loadRankings(mostRecentSeason);
         } else {
             rankingsBody.innerHTML = '<tr><td colspan="4">Sem épocas disponíveis.</td></tr>';
+            // Esconde o indicador se não houver épocas
+            document.getElementById('status-indicator').style.display = 'none';
         }
     }
 
