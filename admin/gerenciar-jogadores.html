@@ -345,7 +345,7 @@
         displayPlayers(playersToDisplay);
     }
 
-     async function saveChanges() {
+    async function saveChanges() {
         try {
             if (changedPlayers.size === 0) {
                 alert('Nenhuma alteração para salvar.');
@@ -353,17 +353,36 @@
             }
             const batch = [];
             
-            /* --- ALTERADO: A lógica do loop foi ajustada para a nova estrutura de dados --- */
             for (const [playerId, updates] of changedPlayers) {
-                // 'updates' é um objeto, ex: { noMercado: true, preco: 1500 }
                 const playerRef = doc(db, 'jogadores', playerId);
-                // A função updateDoc aceita diretamente este objeto de atualizações
                 batch.push(updateDoc(playerRef, updates));
             }
 
             await Promise.all(batch);
-            changedPlayers.clear();
+
+            // AVISO DE SUCESSO: Informa o usuário que a gravação no banco de dados foi bem-sucedida.
             alert('Alterações salvas com sucesso!');
+
+            // --- INÍCIO DA ATUALIZAÇÃO LOCAL (BLOCO ADICIONADO) ---
+            // Passo 1: Percorre o mapa de alterações que acabaram de ser salvas.
+            for (const [playerId, updates] of changedPlayers) {
+                // Passo 2: Encontra o jogador correspondente na nossa cópia local de dados.
+                const playerToUpdate = allPlayers.find(p => p.id === playerId);
+                if (playerToUpdate) {
+                    // Passo 3: Aplica as alterações (ex: {preco: 45}) diretamente no objeto do jogador local.
+                    // O Object.assign mescla as propriedades de 'updates' em 'playerToUpdate'.
+                    Object.assign(playerToUpdate, updates);
+                }
+            }
+            // --- FIM DA ATUALIZAÇÃO LOCAL ---
+
+            // Limpa o mapa para a próxima rodada de edições.
+            changedPlayers.clear(); 
+
+            // ATUALIZA A EXIBIÇÃO: Chama a função que redesenha os jogadores na tela,
+            // que agora usará a lista 'allPlayers' que acabamos de atualizar.
+            updateFiltersAndDisplay();
+
         } catch (error) {
             console.error('Error saving changes:', error);
             alert('Erro ao salvar alterações. Por favor, tente novamente.');
@@ -553,57 +572,52 @@
     // --- INICIALIZAÇÃO DA APLICAÇÃO ---
 
  async function initializeApp() {
-    try {
-        document.getElementById('players-grid').innerHTML = '<p>A carregar jogadores...</p>';
-        const [jogadoresSnapshot, clubesSnapshot, competicoesSnapshot] = await Promise.all([
-            getDocs(collection(db, 'jogadores')),
-            getDocs(collection(db, 'clubes')),
-            getDocs(collection(db, 'competicoes'))
-        ]);
+        try {
+            document.getElementById('players-grid').innerHTML = '<p>A carregar jogadores...</p>';
+            const [jogadoresSnapshot, clubesSnapshot, competicoesSnapshot] = await Promise.all([
+                getDocs(collection(db, 'jogadores')),
+                getDocs(collection(db, 'clubes')),
+                getDocs(collection(db, 'competicoes'))
+            ]);
 
-        // --- ALTERAÇÃO PRINCIPAL AQUI ---
-        // 1. Criamos um mapa para procurar clubes PELO NOME, não pelo ID.
-        const clubesByNameMap = new Map();
-        clubesSnapshot.forEach(doc => {
-            const clubeData = doc.data();
-            if (clubeData.nome) { // Garante que só adicionamos clubes que têm um nome
-                clubesByNameMap.set(clubeData.nome, clubeData);
-            }
-        });
-
-        // 2. O mapa de competições continua igual, pois ele é procurado por ID.
-        const competicoesMap = new Map();
-        competicoesSnapshot.forEach(doc => competicoesMap.set(doc.id, doc.data()));
-
-        allPlayers = jogadoresSnapshot.docs.map(doc => {
-            const player = { id: doc.id, ...doc.data() };
-            
-            // 3. Agora procuramos o clube usando o NOME do jogador (player.clube).
-            const clubeData = clubesByNameMap.get(player.clube); 
-            
-            if (clubeData) {
-                player.clubeData = clubeData;
-                // A lógica daqui para a frente funciona porque `clubeData` agora é encontrado corretamente.
-                const competicaoData = competicoesMap.get(clubeData.competicaoId);
-                if (competicaoData) {
-                    player.competicaoNome = competicaoData.nome;
+            const clubesByNameMap = new Map();
+            clubesSnapshot.forEach(doc => {
+                const clubeData = doc.data();
+                if (clubeData.nome) {
+                    clubesByNameMap.set(clubeData.nome, clubeData);
                 }
-            }
-            return player;
-        });
-        
-        populateMarketTimeSelectors(allPlayers);
-        updateFiltersAndDisplay();
+            });
 
-        document.getElementById('filterPosicao').addEventListener('change', updateFiltersAndDisplay);
-        document.getElementById('filterCasta').addEventListener('change', updateFiltersAndDisplay);
-        document.getElementById('filterCompeticao').addEventListener('change', updateFiltersAndDisplay);
-        document.getElementById('filterPais').addEventListener('change', updateFiltersAndDisplay);
-    } catch (error) {
-        console.error('Error initializing app:', error);
-        document.getElementById('players-grid').innerHTML = '<p style="color: red; text-align: center;">Ocorreu um erro ao carregar os dados.</p>';
+            const competicoesMap = new Map();
+            competicoesSnapshot.forEach(doc => competicoesMap.set(doc.id, doc.data()));
+
+            allPlayers = jogadoresSnapshot.docs.map(doc => {
+                const player = { id: doc.id, ...doc.data() };
+                
+                const clubeData = clubesByNameMap.get(player.clube); 
+                
+                if (clubeData) {
+                    player.clubeData = clubeData;
+                    const competicaoData = competicoesMap.get(clubeData.competicaoId);
+                    if (competicaoData) {
+                        player.competicaoNome = competicaoData.nome;
+                    }
+                }
+                return player;
+            });
+            
+            populateMarketTimeSelectors(allPlayers);
+            updateFiltersAndDisplay();
+
+            document.getElementById('filterPosicao').addEventListener('change', updateFiltersAndDisplay);
+            document.getElementById('filterCasta').addEventListener('change', updateFiltersAndDisplay);
+            document.getElementById('filterCompeticao').addEventListener('change', updateFiltersAndDisplay);
+            document.getElementById('filterPais').addEventListener('change', updateFiltersAndDisplay);
+        } catch (error) {
+            console.error('Error initializing app:', error);
+            document.getElementById('players-grid').innerHTML = '<p style="color: red; text-align: center;">Ocorreu um erro ao carregar os dados.</p>';
+        }
     }
-}
 
     // Dispara a inicialização e adiciona o listener para o botão de salvar principal
     initializeApp();
