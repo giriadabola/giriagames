@@ -158,6 +158,30 @@
         #loading-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #f0f0f0; display: flex; justify-content: center; align-items: center; z-index: 1001; }
         .loading-spinner { border: 16px solid #f3f3f3; border-top: 16px solid #3498db; border-radius: 50%; width: 120px; height: 120px; animation: spin 2s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    .toast-notification {
+            position: fixed;
+            left: 50%;
+            bottom: 80px; /* Posicionado acima do menu inferior */
+            transform: translateX(-50%);
+            background-color: #333;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 25px;
+            z-index: 1005; /* Garante que fica por cima de outros elementos */
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            font-size: 0.9em;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.4s ease, visibility 0.4s ease, transform 0.4s ease;
+        }
+
+        .toast-notification.show {
+            opacity: 1;
+            visibility: visible;
+            transform: translate(-50%, -10px); /* Efeito de deslizar para cima */
+        }
+    
+    
     </style>
 </head>
 <body>
@@ -225,6 +249,8 @@
         </a>
     </nav>
 
+     <div id="toast-notification" class="toast-notification"></div>
+
     <script src="config.js"></script>
     <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
@@ -238,6 +264,7 @@ import { getFirestore, doc, getDoc, collection, getDocs, query, where, updateDoc
     const content = document.querySelector('.content');
     const rankingsBody = document.getElementById('rankings-body');
     let currentUserStatus = null; // Store user status (estatuto)
+    let toastTimeout; 
 
     // --- Function to load Menu Settings ---
     async function loadMenuSettings() {
@@ -362,16 +389,42 @@ import { getFirestore, doc, getDoc, collection, getDocs, query, where, updateDoc
 });
 
 
+ function showToast(message) {
+        const toast = document.getElementById('toast-notification');
+        if (!toast) return;
+
+        // Se já houver um toast visível, limpa o temporizador anterior
+        clearTimeout(toastTimeout);
+
+        toast.textContent = message;
+        toast.classList.add('show');
+
+        // Esconde o toast após 3 segundos
+        toastTimeout = setTimeout(() => {
+            toast.classList.remove('show');
+        }, 3000);
+    }
+
+
  function updateStatusIndicator(isPending) {
         const indicator = document.getElementById('status-indicator');
         if (indicator) {
+            // Remove qualquer evento de clique anterior para evitar duplicados
+            indicator.onclick = null;
+            indicator.style.cursor = 'default'; // Restaura o cursor padrão
+
             if (isPending) {
                 indicator.innerHTML = '🟠 Tabela Pendente';
-                // ADICIONADO: Define o atributo 'title' para mostrar a mensagem no hover/toque
-                indicator.setAttribute('title', 'Ainda faltam atribuir pontos em alguns palpites.');
+                indicator.setAttribute('title', 'Ainda faltam atribuir pontos em alguns palpites.'); // Mantém para desktop hover
+                indicator.style.cursor = 'pointer'; // Muda o cursor para indicar que é clicável
+
+                // Adiciona o evento de clique para mostrar o toast
+                indicator.onclick = () => {
+                    showToast('Ainda faltam atribuir pontos em alguns palpites.');
+                };
+
             } else {
                 indicator.innerHTML = '🟢 Tabela Atualizada';
-                // ADICIONADO: Remove o atributo 'title' para que nenhuma mensagem apareça
                 indicator.removeAttribute('title');
             }
         }
