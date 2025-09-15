@@ -19,13 +19,63 @@
         .form-container { display: none; background: white; padding: 24px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
         .form-group { margin-bottom: 16px; }
         .form-group label { display: block; margin-bottom: 8px; font-weight: bold; color: #555; }
-        .form-group input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 16px; }
+        .form-group input, #user-select, #query-user-select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 16px; }
         .form-group input[readonly] { background-color: #e9ecef; cursor: not-allowed; }
         .form-button { width: 100%; padding: 12px; border: none; background-color: #2176ff; color: white; font-size: 16px; font-weight: bold; border-radius: 4px; cursor: pointer; transition: background-color 0.3s ease; }
         .form-button:hover { background-color: #1a5fcc; }
         .feedback-message { text-align: center; margin-top: 16px; font-weight: bold; }
         .feedback-message.success { color: green; }
         .feedback-message.error { color: red; }
+
+        /* Estilos do Popup */
+        .popup-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+        }
+        .popup-content {
+            background: white; padding: 24px; border-radius: 8px;
+            width: 90%; max-width: 500px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        .popup-content h2 { text-align: center; margin-bottom: 20px; color: #333; }
+        .popup-buttons { display: flex; gap: 12px; margin-top: 20px; }
+        .popup-button { flex: 1; padding: 12px; border: none; border-radius: 4px; font-size: 16px; font-weight: bold; cursor: pointer; transition: all 0.3s ease; }
+        .popup-button.confirm { background-color: #28a745; color: white; }
+        .popup-button.confirm:hover { background-color: #218838; }
+        .popup-button.cancel { background-color: #dc3545; color: white; }
+        .popup-button.cancel:hover { background-color: #c82333; }
+
+        /* Estilos para a tabela de resultados */
+        .results-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+            font-size: 14px;
+        }
+        .results-table th, .results-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        .results-table th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+        }
+        .results-table tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        .valor-positivo {
+            color: #28a745; /* Verde */
+            font-weight: bold;
+        }
+        .valor-negativo {
+            color: #dc3545; /* Vermelho */
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
@@ -53,13 +103,70 @@
                 <button type="submit" class="form-button">Guardar Alterações</button>
             </form>
             <p id="feedback-message" class="feedback-message"></p>
+            
+            <button id="open-loan-popup-btn" class="form-button" style="margin-top: 20px; background-color: #28a745;">
+                <i class="fas fa-hand-holding-usd"></i> Conceder Empréstimo
+            </button>
+            
+            <button id="open-query-popup-btn" class="form-button" style="margin-top: 10px; background-color: #007bff;">
+                <i class="fas fa-search"></i> Consultar Movimentos de Utilizador
+            </button>
         </div>
     </main>
 
-        <script type="module">
+    <!-- POPUP DE CONSULTA DE MOVIMENTOS -->
+    <div class="popup-overlay" id="query-popup">
+        <div class="popup-content">
+            <h2>Consultar Movimentos</h2>
+            <div class="form-group">
+                <label for="query-user-select">Selecione o Utilizador</label>
+                <select id="query-user-select">
+                    <option value="">A carregar utilizadores...</option>
+                </select>
+            </div>
+            <div id="query-result-container" style="min-height: 50px; max-height: 300px; overflow-y: auto;">
+                <!-- A tabela de resultados aparecerá aqui -->
+            </div>
+            <div class="popup-buttons">
+                <button type="button" class="popup-button cancel" id="close-query-btn">Fechar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- POPUP DE EMPRÉSTIMO -->
+    <div class="popup-overlay" id="loan-popup">
+        <div class="popup-content">
+            <h2>Conceder Empréstimo</h2>
+            <form id="loan-form">
+                <div class="form-group">
+                    <label for="user-select">Selecionar Utilizador</label>
+                    <select id="user-select" required></select>
+                </div>
+                <div class="form-group">
+                    <label for="loan-amount">Valor do Empréstimo</label>
+                    <input type="number" id="loan-amount" placeholder="Ex: 500" required min="1">
+                </div>
+                <div class="form-group">
+                    <label for="loan-description">Descrição (Opcional)</label>
+                    <input type="text" id="loan-description" placeholder="Ex: Adiantamento prémio">
+                </div>
+                <div class="form-group">
+                    <label for="loan-interest">Juros (%)</label>
+                    <input type="number" id="loan-interest" placeholder="Ex: 5" value="0" required min="0" step="0.1">
+                </div>
+                <div class="popup-buttons">
+                    <button type="submit" class="popup-button confirm">Confirmar</button>
+                    <button type="button" class="popup-button cancel" id="cancel-loan-btn">Cancelar</button>
+                </div>
+            </form>
+            <p id="loan-feedback" class="feedback-message"></p>
+        </div>
+    </div>
+
+          <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
         import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
-        import { getFirestore, doc, getDoc, setDoc, collection, query, where, getDocs, addDoc, Timestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        import { getFirestore, doc, getDoc, setDoc, collection, query, where, getDocs, addDoc, Timestamp, writeBatch, orderBy } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
         const firebaseConfig = {
             apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0",
@@ -83,102 +190,68 @@
         const totalInput = document.getElementById('total-input');
         const feedbackMessage = document.getElementById('feedback-message');
         
+        const openLoanPopupBtn = document.getElementById('open-loan-popup-btn');
+        const loanPopup = document.getElementById('loan-popup');
+        const loanForm = document.getElementById('loan-form');
+        const userSelect = document.getElementById('user-select');
+        const loanAmountInput = document.getElementById('loan-amount');
+        const loanDescriptionInput = document.getElementById('loan-description');
+        const cancelLoanBtn = document.getElementById('cancel-loan-btn');
+        const loanFeedback = document.getElementById('loan-feedback');
+        const loanInterestInput = document.getElementById('loan-interest');
+
+        const openQueryPopupBtn = document.getElementById('open-query-popup-btn');
+        const queryPopup = document.getElementById('query-popup');
+        const queryUserSelect = document.getElementById('query-user-select');
+        const queryResultContainer = document.getElementById('query-result-container');
+        const closeQueryBtn = document.getElementById('close-query-btn');
+
         let movimentosSum = 0;
         let currentSeason = null;
 
         // --- Funções ---
 
-        // 1. Busca a temporada atual
         async function fetchCurrentSeason() {
             const configRef = doc(db, "paineis", "configuracoes_gerais");
             const docSnap = await getDoc(configRef);
             if (docSnap.exists() && docSnap.data().temporadaAtual) {
-                return docSnap.data().temporadaAtual;
+                const temporada = docSnap.data().temporadaAtual;
+                return temporada.replace(/\//g, '');
             }
-            throw new Error("Não foi possível encontrar a temporada atual em 'paineis/configuracoes_gerais'.");
+            throw new Error("Não foi possível encontrar a temporada atual.");
         }
 
-        // 2. Calcula a soma dos movimentos da banca para a temporada
         async function calculateMovimentosSum(season) {
             const movimentosRef = collection(db, "movimentos");
-            const q = query(movimentosRef, 
-                where("tipo", "==", "Banca"),
-                where("temporada", "==", season)
-            );
-            
+            const q = query(movimentosRef, where("tipo", "==", "Banca"), where("temporada", "==", season));
             const querySnapshot = await getDocs(q);
             let sum = 0;
             querySnapshot.forEach((doc) => {
                 const preco = parseFloat(doc.data().preco);
-                if (!isNaN(preco)) {
-                    sum += preco;
-                }
+                if (!isNaN(preco)) sum += preco;
             });
             return sum;
         }
         
-        // 3. Atualiza o campo "Total" na interface
         function updateCalculatedTotal() {
             const baseValue = parseFloat(baseValueInput.value) || 0;
             const total = baseValue + movimentosSum;
             totalInput.value = total.toFixed(2);
         }
 
-        // 4. Carrega os dados iniciais e configura a página
-        async function initializePage() {
-            try {
-                currentSeason = await fetchCurrentSeason();
-                movimentosSum = await calculateMovimentosSum(currentSeason);
-                
-                // O campo "Valor Base" começa sempre em 0, não é lido da base de dados.
-                updateCalculatedTotal(); 
-                
-                statusMessage.style.display = 'none';
-                formContainer.style.display = 'block';
-                
-                baseValueInput.addEventListener('input', updateCalculatedTotal);
-                bancaForm.addEventListener('submit', handleFormSubmit);
-
-            } catch (error) {
-                console.error("Erro na inicialização:", error);
-                statusMessage.textContent = `Erro: ${error.message}`;
-            }
-        }
-
-        // 5. Lida com a submissão do formulário
         async function handleFormSubmit(event) {
             event.preventDefault();
             feedbackMessage.textContent = 'A guardar...';
-            feedbackMessage.className = 'feedback-message';
-
-            const valorAdicionar = parseFloat(baseValueInput.value) || 0;
-            const newTotalValue = valorAdicionar + movimentosSum;
-
             try {
-                // Parte 1: Criar novo documento em "movimentos" com o valor do input
-                const movimentoData = {
-                    userId: null,
-                    preco: valorAdicionar,
-                    movimentoData: Timestamp.now(),
-                    tipo: "Banca",
-                    temporada: currentSeason
-                };
-
-                const movimentosRef = collection(db, 'movimentos');
-                await addDoc(movimentosRef, movimentoData);
-
-                // Parte 2: Atualizar apenas o total no painel "Banca"
-                const bancaRef = doc(db, "paineis", "Banca");
-                // Apenas o campo 'valor' é guardado, NENHUM 'valor_base' é escrito.
-                await setDoc(bancaRef, {
-                    valor: newTotalValue
-                }, { merge: true });
-
-                // Parte 3: Atualizar a interface do utilizador
-                movimentosSum += valorAdicionar;
+                const valorAdicionar = parseFloat(baseValueInput.value) || 0;
+                await addDoc(collection(db, 'movimentos'), {
+                    preco: valorAdicionar, movimentoData: Timestamp.now(), tipo: "Banca",
+                    temporada: currentSeason, descricao: "Ajuste manual do admin"
+                });
+                movimentosSum = await calculateMovimentosSum(currentSeason);
+                await setDoc(doc(db, "paineis", "Banca"), { valor: movimentosSum }, { merge: true });
                 baseValueInput.value = 0;
                 updateCalculatedTotal();
-
                 feedbackMessage.textContent = 'Operação registada com sucesso!';
                 feedbackMessage.className = 'feedback-message success';
             } catch (error) {
@@ -187,14 +260,184 @@
                 feedbackMessage.className = 'feedback-message error';
             }
         }
+        
+        async function populateUsersDropdowns() {
+            try {
+                const q = query(collection(db, 'users'), where("aceite", "==", "Yes"));
+                const querySnapshot = await getDocs(q);
+                const users = [];
+                querySnapshot.forEach((doc) => users.push({ id: doc.id, ...doc.data() }));
+                users.sort((a, b) => (a.nometabela || a.id).localeCompare(b.nometabela || b.id));
+                const initialOption = '<option value="">-- Selecione um utilizador --</option>';
+                userSelect.innerHTML = initialOption;
+                queryUserSelect.innerHTML = initialOption;
+                users.forEach((user) => {
+                    const option = document.createElement('option');
+                    option.value = user.id;
+                    option.textContent = user.nometabela || user.id;
+                    userSelect.appendChild(option);
+                    queryUserSelect.appendChild(option.cloneNode(true));
+                });
+            } catch (error) {
+                console.error("Erro ao carregar utilizadores:", error);
+                const errorOption = '<option value="">Erro ao carregar</option>';
+                userSelect.innerHTML = errorOption;
+                queryUserSelect.innerHTML = errorOption;
+            }
+        }
 
-        // --- Controlo de Acesso ---
+        /**
+         * Lida com a submissão do empréstimo.
+         * Regista os movimentos e recalcula o saldo total do utilizador a partir de TODOS
+         * os seus movimentos na temporada, atualizando o campo ...GCoins.
+         */
+        async function handleLoanSubmit(event) {
+            event.preventDefault();
+            loanFeedback.textContent = 'A processar empréstimo...';
+            loanFeedback.className = 'feedback-message';
+
+            const userId = userSelect.value;
+            const amount = parseFloat(loanAmountInput.value);
+            if (!userId || isNaN(amount) || amount <= 0) {
+                loanFeedback.textContent = 'Por favor, selecione um utilizador e insira um valor válido.';
+                loanFeedback.className = 'feedback-message error';
+                return;
+            }
+
+            try {
+                // 1. LER todos os movimentos existentes do utilizador para calcular o saldo base
+                const movimentosRef = collection(db, "movimentos");
+                const q = query(movimentosRef, where("userId", "==", userId), where("temporada", "==", currentSeason));
+                const querySnapshot = await getDocs(q);
+                
+                let saldoExistente = 0;
+                querySnapshot.forEach((doc) => {
+                    const valor = parseFloat(doc.data().valorreal);
+                    if (!isNaN(valor)) {
+                        saldoExistente += valor;
+                    }
+                });
+
+                // 2. CALCULAR o novo saldo final (saldo existente + novo empréstimo)
+                const novoSaldoTotal = saldoExistente + amount;
+
+                // 3. PREPARAR a transação atómica (batch)
+                const batch = writeBatch(db);
+                const description = loanDescriptionInput.value || "Empréstimo da Banca";
+                const selectedUserName = userSelect.options[userSelect.selectedIndex].text;
+                const interestRate = parseFloat(loanInterestInput.value) || 0;
+                const interestAmount = amount * (interestRate / 100);
+                const totalDebt = amount + interestAmount;
+
+                // 3a. Registar movimento de débito da banca
+                batch.set(doc(collection(db, 'movimentos')), {
+                    tipo: "Banca", preco: -amount, movimentoData: Timestamp.now(), temporada: currentSeason,
+                    descricao: `Empréstimo a ${selectedUserName} (Juros: ${interestRate}%)`, para_userId: userId
+                });
+
+                // 3b. Registar movimento de crédito do utilizador
+                batch.set(doc(collection(db, 'movimentos')), {
+                    userId: userId, valorreal: amount, tipo: "Empréstimo", movimentoData: Timestamp.now(), temporada: currentSeason,
+                    de: "Banca", descricao: description, jurosPercentagem: interestRate, valorJuros: interestAmount,
+                    valorTotalAPagar: totalDebt, estado: "Por Pagar"
+                });
+
+                // 3c. Atualizar o saldo ...GCoins do utilizador com o valor RECALCULADO
+                const userRef = doc(db, 'users', userId);
+                const gCoinsField = `${currentSeason}GCoins`;
+                batch.update(userRef, { [gCoinsField]: novoSaldoTotal });
+
+                // 3d. Atualizar o saldo da banca
+                const newBankTotal = movimentosSum - amount;
+                batch.set(doc(db, "paineis", "Banca"), { valor: newBankTotal }, { merge: true });
+
+                // 4. EXECUTAR a transação
+                await batch.commit();
+
+                // 5. ATUALIZAR a interface
+                movimentosSum = newBankTotal;
+                updateCalculatedTotal();
+                loanForm.reset();
+                loanFeedback.textContent = 'Empréstimo registado e saldo atualizado com sucesso!';
+                loanFeedback.className = 'feedback-message success';
+                setTimeout(() => { loanPopup.style.display = 'none'; }, 2000);
+            } catch (error) {
+                console.error("Erro ao conceder empréstimo:", error);
+                loanFeedback.textContent = `Erro: ${error.message}`;
+                loanFeedback.className = 'feedback-message error';
+            }
+        }
+        
+        async function initializePage() {
+            try {
+                currentSeason = await fetchCurrentSeason();
+                movimentosSum = await calculateMovimentosSum(currentSeason);
+                updateCalculatedTotal(); 
+                await populateUsersDropdowns();
+                statusMessage.style.display = 'none';
+                formContainer.style.display = 'block';
+                
+                async function handleUserQuery(userId) {
+                    if (!userId) {
+                        queryResultContainer.innerHTML = '<p style="text-align: center;">Selecione um utilizador para consultar.</p>';
+                        return;
+                    }
+                    try {
+                        queryResultContainer.innerHTML = '<p style="text-align: center;"><em>A pesquisar movimentos...</em></p>';
+                        const q = query(collection(db, "movimentos"),
+                            where("userId", "==", userId), where("temporada", "==", currentSeason),
+                            where("valorreal", "!=", null), orderBy("movimentoData", "desc")
+                        );
+                        const querySnapshot = await getDocs(q);
+                        if (querySnapshot.empty) {
+                            queryResultContainer.innerHTML = '<p style="text-align: center;">Nenhum movimento com "valorreal" encontrado.</p>';
+                            return;
+                        }
+                        let tableHTML = `<table class="results-table"><thead><tr><th>Data</th><th>Tipo</th><th>Descrição</th><th>Valor</th></tr></thead><tbody>`;
+                        querySnapshot.forEach((doc) => {
+                            const data = doc.data();
+                            const valor = parseFloat(data.valorreal);
+                            const dataMovimento = data.movimentoData.toDate().toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                            const valorClass = valor >= 0 ? 'valor-positivo' : 'valor-negativo';
+                            tableHTML += `<tr><td>${dataMovimento}</td><td>${data.tipo || '-'}</td><td>${data.descricao || '-'}</td><td class="${valorClass}">${valor.toFixed(2)}</td></tr>`;
+                        });
+                        tableHTML += `</tbody></table>`;
+                        queryResultContainer.innerHTML = tableHTML;
+                    } catch (error) {
+                        console.error("Erro ao consultar movimentos:", error);
+                        queryResultContainer.innerHTML = '<p style="text-align: center; color: red;">Erro ao realizar a consulta.</p>';
+                    }
+                }
+                openQueryPopupBtn.addEventListener('click', () => {
+                    queryResultContainer.innerHTML = '<p style="text-align: center;">Selecione um utilizador para consultar.</p>';
+                    queryUserSelect.value = '';
+                    queryPopup.style.display = 'flex';
+                });
+                closeQueryBtn.addEventListener('click', () => queryPopup.style.display = 'none');
+                queryPopup.addEventListener('click', (e) => { if (e.target === queryPopup) queryPopup.style.display = 'none'; });
+                queryUserSelect.addEventListener('change', (event) => handleUserQuery(event.target.value));
+
+                baseValueInput.addEventListener('input', updateCalculatedTotal);
+                bancaForm.addEventListener('submit', handleFormSubmit);
+                openLoanPopupBtn.addEventListener('click', () => {
+                    loanFeedback.textContent = '';
+                    loanForm.reset();
+                    loanPopup.style.display = 'flex';
+                });
+                cancelLoanBtn.addEventListener('click', () => loanPopup.style.display = 'none');
+                loanPopup.addEventListener('click', (e) => { if (e.target === loanPopup) loanPopup.style.display = 'none'; });
+                loanForm.addEventListener('submit', handleLoanSubmit);
+            } catch (error) {
+                console.error("Erro na inicialização:", error);
+                statusMessage.textContent = `Erro: ${error.message}`;
+            }
+        }
+
         onAuthStateChanged(auth, async (user) => {
             document.body.style.display = 'flex';
             if (user) {
                 const userDocRef = doc(db, "users", user.uid);
                 const userDocSnap = await getDoc(userDocRef);
-
                 if (userDocSnap.exists() && userDocSnap.data().estatuto === 'ruler') {
                     await initializePage();
                 } else {
