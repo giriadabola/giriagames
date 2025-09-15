@@ -333,14 +333,15 @@
             gap: 1rem;
         }
 
-        .popup-btn {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 16px;
-            transition: background-color 0.3s;
-        }
+       .popup-btn {
+    padding: 10px 20px;
+    /* ALTERAÇÃO: Adiciona uma borda que corresponde à do input */
+    border: 1px solid transparent; 
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: background-color 0.3s;
+}
 
         .popup-btn-confirm {
             background-color: #d32f2f;
@@ -495,6 +496,14 @@
             border-radius: 5px;
             font-size: 16px;
         }
+
+          #maxPaymentBtn {
+    height: 40px; 
+    box-sizing: border-box; 
+    display: flex;
+    justify-content: center; 
+    align-items: center;     
+}
 
         .password-input:focus {
             outline: none;
@@ -927,6 +936,18 @@
             height: 0;
         }
 
+        .debt-display {
+    background: linear-gradient(135deg, #e74c3c, #c0392b);
+    box-shadow: 0 4px 15px rgba(231, 76, 60, 0.3);
+    cursor: pointer; /* Adicionado para indicar que é clicável */
+}
+
+
+#maxPaymentBtn {
+    padding-top: 9px;
+    padding-bottom: 9px;
+}
+
     </style>
 </head>
 <body>
@@ -948,6 +969,32 @@
             <div class="display-label">GCoins</div>
             <div class="display-value" id="gcoinsValue">0</div>
         </div>
+
+<div class="popup-overlay" id="debtPaymentPopup">
+    <div class="popup-content">
+        <h2 style="color: #c0392b;">Pagar Dívida à Banca</h2>
+        <button class="popup-btn popup-btn-icon" id="closeDebtPopupBtn">
+            <i class="fas fa-times"></i>
+        </button>
+
+        <p style="margin-bottom: 1rem;">
+            Dívida Total: <strong id="popupDebtTotal">0 ₲₵</strong>
+        </p>
+        <p style="font-size: 0.9em; color: #555; margin-bottom: 1.5rem;">
+            Pode pagar a totalidade ou uma parte da sua dívida, dependendo dos seus GCoins disponíveis.
+        </p>
+
+        <div style="display: flex; gap: 10px; margin-bottom: 1.5rem;">
+            <input type="number" id="paymentAmountInput" class="password-input" placeholder="Valor a pagar" min="1" step="1">
+            <button id="maxPaymentBtn" class="popup-btn" style="background-color: #f39c12;">MAX</button>
+        </div>
+        
+        <div class="popup-buttons">
+            <button id="confirmPaymentBtn" class="popup-btn popup-btn-confirm" style="background-color: #27ae60;">Confirmar Pagamento</button>
+        </div>
+        <p id="debtFeedback" style="margin-top: 1rem; font-weight: bold;"></p>
+    </div>
+</div>
 
         <!-- GCoins Change Notification Popup -->
         <div class="popup-overlay" id="gcoinsChangePopup">
@@ -1077,8 +1124,7 @@
     <script type="module">
         import { getAuth, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-        import { getFirestore, doc, getDoc, collection, getDocs, query, orderBy, limit, where, updateDoc, addDoc, serverTimestamp, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
-
+import { getFirestore, doc, getDoc, collection, getDocs, query, orderBy, limit, where, updateDoc, addDoc, serverTimestamp, onSnapshot, writeBatch } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
              const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const auth = getAuth(app);
@@ -1119,12 +1165,23 @@ const bancaDisplay = document.getElementById('bancaDisplay');
         const bottomMenuEmpire = document.querySelector('.bottom-menu a[href="empire.html"]');
         const bottomMenuRankings = document.querySelector('.bottom-menu a[href="rankings.html"]');
         const bottomMenuProfile = document.querySelector('.bottom-menu a[href="profile.html"]');
-        
+        const debtValueElement = document.getElementById('debtValue');
+        const debtPaymentPopup = document.getElementById('debtPaymentPopup');
+const closeDebtPopupBtn = document.getElementById('closeDebtPopupBtn');
+const popupDebtTotal = document.getElementById('popupDebtTotal');
+const paymentAmountInput = document.getElementById('paymentAmountInput');
+const maxPaymentBtn = document.getElementById('maxPaymentBtn');
+const confirmPaymentBtn = document.getElementById('confirmPaymentBtn');
+const debtFeedback = document.getElementById('debtFeedback');
+
         // Variables for listener and state
         let unsubscribePanelListener = null;
         let initialPanelSettings = null;
         let isInitialPanelLoad = true;
         let previousMythsValue = null;
+        let totalUserDebt = 0;
+let currentUserGCoins = 0;
+let userDebtDocuments = [];
 
         // Function to update mini-games visibility based on panel settings
         async function updateMiniGamesVisibility(panelSettings) {
@@ -1168,6 +1225,34 @@ const bancaDisplay = document.getElementById('bancaDisplay');
         quemGanhaDisplay.addEventListener('click', () => {
             window.location.href = 'whowins.html';
         });
+
+
+debtDisplay.addEventListener('click', () => {
+    // Apenas abre o popup se o utilizador tiver uma dívida
+    if (totalUserDebt > 0) {
+        // Prepara o popup com os dados mais recentes
+        popupDebtTotal.textContent = totalUserDebt.toFixed(0) + ' ₲₵';
+        paymentAmountInput.value = '';
+        paymentAmountInput.max = Math.min(currentUserGCoins, totalUserDebt); // Define o valor máximo que pode ser pago
+        debtFeedback.textContent = ''; // Limpa mensagens de feedback anteriores
+        confirmPaymentBtn.disabled = false; // Garante que o botão está ativo
+        
+        // Mostra o popup
+        debtPaymentPopup.style.display = 'flex';
+    }
+});
+
+closeDebtPopupBtn.addEventListener('click', () => {
+    debtPaymentPopup.style.display = 'none';
+});
+
+maxPaymentBtn.addEventListener('click', () => {
+    const maxPayable = Math.min(currentUserGCoins, totalUserDebt);
+    paymentAmountInput.value = Math.floor(maxPayable); // Usa Math.floor para garantir um inteiro
+});
+
+confirmPaymentBtn.addEventListener('click', handleDebtPayment);
+
 
         // Check Firebase panel settings for myths visibility
         const checkMythsVisibility = async () => {
@@ -1396,6 +1481,148 @@ const bancaDisplay = document.getElementById('bancaDisplay');
             return latestGcoinsField;
         }
 
+
+async function loadUserDebts() {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const debtQuery = query(
+        collection(db, 'movimentos'),
+        where('userId', '==', user.uid),
+        where('estado', '==', 'Por Pagar'),
+        where('tipo', '==', 'Empréstimo')
+    );
+
+    try {
+        const querySnapshot = await getDocs(debtQuery);
+        let totalDebt = 0;
+        userDebtDocuments = []; // Limpa a lista antes de recalcular
+
+        querySnapshot.forEach(doc => {
+            const debtData = doc.data();
+            totalDebt += debtData.valorTotalAPagar || 0;
+            userDebtDocuments.push({ id: doc.id, ...debtData }); // Guarda o documento inteiro
+        });
+
+        totalUserDebt = totalDebt; // Atualiza a variável global
+        debtValueElement.textContent = totalDebt.toFixed(0) + ' ₲₵';
+
+        // Ordena as dívidas da mais antiga para a mais recente
+        userDebtDocuments.sort((a, b) => a.movimentoData.toMillis() - b.movimentoData.toMillis());
+
+    } catch (error) {
+        console.error("Erro ao carregar dívidas do utilizador:", error);
+        debtValueElement.textContent = 'Erro';
+    }
+}
+
+async function handleDebtPayment() {
+    const user = auth.currentUser;
+    const paymentAmount = parseFloat(paymentAmountInput.value);
+
+    // Validação
+    if (isNaN(paymentAmount) || paymentAmount <= 0) {
+        debtFeedback.textContent = 'Valor inválido.';
+        debtFeedback.style.color = 'red';
+        return;
+    }
+    if (paymentAmount > currentUserGCoins) {
+        debtFeedback.textContent = 'Não tem GCoins suficientes.';
+        debtFeedback.style.color = 'red';
+        return;
+    }
+    if (paymentAmount > totalUserDebt) {
+        debtFeedback.textContent = 'O pagamento não pode exceder a dívida.';
+        debtFeedback.style.color = 'red';
+        return;
+    }
+
+    debtFeedback.textContent = 'A processar...';
+    debtFeedback.style.color = 'black';
+    confirmPaymentBtn.disabled = true;
+
+    try {
+        const batch = writeBatch(db);
+        const userData = (await getDoc(doc(db, 'users', user.uid))).data();
+        const userName = userData.nometabela || user.uid;
+        const latestGcoinsField = findLatestGcoinsField(userData);
+        const seasonsQuery = query(collection(db, 'palpites'), orderBy('temporada', 'desc'), limit(1));
+        const seasonsSnapshot = await getDocs(seasonsQuery);
+        const currentSeason = (seasonsSnapshot.docs[0]?.data()?.temporada || '').replace('/', '');
+
+        // 1. Criar movimento de DÉBITO para o utilizador
+        const userPaymentRef = doc(collection(db, 'movimentos'));
+        batch.set(userPaymentRef, {
+            userId: user.uid,
+            valorreal: -paymentAmount,
+            tipo: "Pagamento Dívida",
+            estado: "Pago",
+            movimentoData: serverTimestamp(),
+            temporada: currentSeason,
+            descricao: "Pagamento à Banca"
+        });
+
+        // 2. Criar movimento de CRÉDITO para a Banca
+        const bancaPaymentRef = doc(collection(db, 'movimentos'));
+        batch.set(bancaPaymentRef, {
+            tipo: "Banca",
+            preco: paymentAmount,
+            movimentoData: serverTimestamp(),
+            temporada: currentSeason,
+            descricao: `Pagamento de dívida de ${userName}`
+        });
+
+        // 3. Atualizar os documentos de dívida originais
+        let remainingPayment = paymentAmount;
+        for (const debtDoc of userDebtDocuments) {
+            if (remainingPayment <= 0) break;
+            
+            const debtRef = doc(db, 'movimentos', debtDoc.id);
+            const amountToPayFromThisDebt = Math.min(remainingPayment, debtDoc.valorTotalAPagar);
+            const newDebtAmount = debtDoc.valorTotalAPagar - amountToPayFromThisDebt;
+            
+            const updateData = {
+                valorTotalAPagar: newDebtAmount,
+                estado: newDebtAmount <= 0 ? "Pago" : "Por Pagar"
+            };
+            batch.update(debtRef, updateData);
+            
+            remainingPayment -= amountToPayFromThisDebt;
+        }
+
+        // 4. Atualizar saldo do utilizador
+        const newUserBalance = currentUserGCoins - paymentAmount;
+        batch.update(doc(db, 'users', user.uid), { [latestGcoinsField]: newUserBalance });
+
+        // 5. Atualizar saldo da Banca
+        const bancaRef = doc(db, 'paineis', 'Banca');
+        const bancaSnap = await getDoc(bancaRef);
+        const currentBancaValue = bancaSnap.exists() ? bancaSnap.data().valor : 0;
+        const newBancaValue = currentBancaValue + paymentAmount;
+        batch.set(bancaRef, { valor: newBancaValue }, { merge: true });
+
+        // Executar a transação
+        await batch.commit();
+
+        debtFeedback.textContent = 'Pagamento bem-sucedido!';
+        debtFeedback.style.color = 'green';
+        setTimeout(() => {
+            debtPaymentPopup.style.display = 'none';
+            location.reload(); // Recarrega a página para atualizar todos os valores
+        }, 1500);
+
+    } catch (error) {
+        console.error("Erro no pagamento da dívida:", error);
+        debtFeedback.textContent = 'Erro ao processar o pagamento.';
+        debtFeedback.style.color = 'red';
+        confirmPaymentBtn.disabled = false;
+    }
+}
+
+
+
+
+
         async function updateGCoinsDisplay() {
              const user = auth.currentUser;
             const gcoinsValue = document.getElementById('gcoinsValue');
@@ -1462,23 +1689,25 @@ const bancaDisplay = document.getElementById('bancaDisplay');
                 for (const docSnapshot of movementsSnapshot.docs) {
                     const transaction = docSnapshot.data();
                     const listItem = document.createElement('li');
-                    let itemName = '';
-                     if (transaction.empireTipo) {
-                        const itemEmpireValue = transaction.itemEmpire || '';
-                        itemName = transaction.empireTipo + " " + itemEmpireValue;
-                    } else if (transaction.nomeJogo) {
-                        itemName = transaction.nomeJogo;
-                    } else if (transaction.jogadorId) {
-                        try {
-                            const playerDoc = await getDoc(doc(db, 'jogadores', transaction.jogadorId));
-                            itemName = playerDoc.exists() ? playerDoc.data().nome : 'Jogador Indisponível';
-                        } catch (playerError) {
-                            console.error('Error fetching player name:', playerError);
-                            itemName = 'Erro ao carregar nome';
-                        }
-                    } else {
-                        itemName = 'N/A';
-                    }
+                 let itemName = '';
+ if (transaction.empireTipo) {
+    const itemEmpireValue = transaction.itemEmpire || '';
+    itemName = transaction.empireTipo + " " + itemEmpireValue;
+} else if (transaction.nomeJogo) {
+    itemName = transaction.nomeJogo;
+} else if (transaction.jogadorId) {
+    try {
+        const playerDoc = await getDoc(doc(db, 'jogadores', transaction.jogadorId));
+        itemName = playerDoc.exists() ? playerDoc.data().nome : 'Jogador Indisponível';
+    } catch (playerError) {
+        console.error('Error fetching player name:', playerError);
+        itemName = 'Erro ao carregar nome';
+    }
+} else if (transaction.descricao) { // <-- ADICIONADO AQUI
+    itemName = transaction.descricao; // <-- ADICIONADO AQUI
+} else {
+    itemName = 'N/A';
+}
 
                     const date = transaction.movimentoData ? transaction.movimentoData.toDate().toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: '2-digit' }) : 'Data Indisponível';
                     let valorReal = transaction.valorreal !== undefined ? transaction.valorreal : 0;
@@ -1560,139 +1789,119 @@ const bancaDisplay = document.getElementById('bancaDisplay');
             content.style.display = 'none';
         });
 
-    onAuthStateChanged(auth, async (user) => {
+   
+   
+   
+onAuthStateChanged(auth, async (user) => {
+    // Limpa qualquer listener anterior para evitar múltiplas execuções se o estado de auth mudar
     if (unsubscribePanelListener) {
-         unsubscribePanelListener();
-         unsubscribePanelListener = null;
-         initialPanelSettings = null;
-         isInitialPanelLoad = true;
+        unsubscribePanelListener();
+        unsubscribePanelListener = null;
+        initialPanelSettings = null;
+        isInitialPanelLoad = true;
     }
 
-    const panelDocRef = doc(db, 'paineis', 'paineis perfil');
-    unsubscribePanelListener = onSnapshot(panelDocRef, (doc) => {
-        if (doc.exists()) {
-            const panelSettings = doc.data();
-            updateMiniGamesVisibility(panelSettings);
-        }
-    });
-
+    // Se o utilizador estiver autenticado, prossiga
     if (user) {
         try {
+            // Inicia um listener em tempo real para as configurações do painel de perfil
+            const panelDocRef = doc(db, 'paineis', 'paineis perfil');
+            isInitialPanelLoad = true; // Flag para ignorar a primeira chamada do listener (que é o estado inicial)
+            unsubscribePanelListener = onSnapshot(panelDocRef, (docSnap) => {
+                if (isInitialPanelLoad) {
+                    isInitialPanelLoad = false;
+                    return; // Ignora a primeira execução
+                }
+                if (docSnap.exists()) {
+                    const currentSettings = docSnap.data();
+                    // Compara as configurações atuais com as iniciais para detetar mudanças
+                    const fieldsToCheck = ['GCoin', 'dividas', 'devolver', 'myteam', 'minigames', 'world26', 'quemganha', 'myths', 'manual', 'trofeus', 'banca'];
+                    let changed = false;
+                    for (const field of fieldsToCheck) {
+                        if (initialPanelSettings && currentSettings && currentSettings[field] !== initialPanelSettings[field]) {
+                            changed = true;
+                            break;
+                        }
+                    }
+                    if (changed) {
+                        location.reload(); // Recarrega a página se uma configuração relevante mudar
+                    }
+                }
+            }, (error) => {
+                console.error("Erro no listener 'paineis perfil':", error);
+            });
+            
+            // Busca dados essenciais em paralelo para maior eficiência
             const userDocRef = doc(db, 'users', user.uid);
-            // CORREÇÃO: Trocamos a leitura do painel de menu pelo de perfil aqui também para consistência.
-            const [userDocSnap, panelSettings] = await Promise.all([
+            const [userDocSnap, panelSettings, menuSettings] = await Promise.all([
                 getDoc(userDocRef),
-                fetchPanelSettings() // Usamos as configurações do perfil para tudo
+                fetchPanelSettings(),
+                fetchMenuSettings()
             ]);
 
+            // Validação de acesso: o utilizador existe, está aceite e tem permissão para ver a página?
             if (!userDocSnap.exists() || userDocSnap.data().aceite !== "Yes") {
                 loadingScreen.style.display = 'none';
                 window.location.href = 'index.html';
                 return;
             }
 
+            const userData = userDocSnap.data();
+            const userStatus = userData.estatuto || null;
+
+            if (menuSettings.profile !== 'on' && userStatus !== 'ruler') {
+                loadingScreen.style.display = 'none';
+                window.location.href = '404.html';
+                return;
+            }
+
+            // Atualiza o campo de último acesso do utilizador
             try {
                 await updateDoc(userDocRef, { ultimoacesso: serverTimestamp() });
             } catch (error) {
                 console.error("Erro ao atualizar o campo ultimoacesso: ", error);
             }
 
-            const userData = userDocSnap.data();
-            const userStatus = userData.estatuto || null;
+            // Aplica as configurações de visibilidade (agora corretamente separadas)
+            applyMenuVisibility(menuSettings); // Controla APENAS o menu inferior
+            initialPanelSettings = panelSettings; // Guarda as configurações iniciais para o listener
 
-            // Para o acesso à página, continuamos a ler do painel de menu, que é o correto para isso
-            const menuSettings = await fetchMenuSettings();
-            const canAccessProfilePage = menuSettings.profile === 'on' || userStatus === 'ruler';
+            if (panelSettings) {
+                // Este bloco agora controla TODOS os cards da PÁGINA DE PERFIL
+                gcoinsDisplay.style.display = panelSettings.GCoin === 'on' ? 'flex' : 'none';
+                debtDisplay.style.display = panelSettings.dividas === 'on' ? 'flex' : 'none';
+                returnDisplay.style.display = panelSettings.devolver === 'on' ? 'flex' : 'none';
+                squadDisplayLink.style.display = panelSettings.myteam === 'on' ? 'block' : 'none';
+                minigamesDisplay.style.display = panelSettings.minigames === 'on' ? 'flex' : 'none';
+                bancaDisplay.style.display = panelSettings.banca === 'on' ? 'flex' : 'none';
+                
+                // --- CORREÇÃO APLICADA AQUI ---
+                if (manualDisplay) manualDisplay.style.display = panelSettings.manual === 'on' ? 'flex' : 'none';
+                if (trophiesDisplay) trophiesDisplay.style.display = panelSettings.trofeus === 'on' ? 'flex' : 'none';
+                // --- FIM DA CORREÇÃO ---
 
-            if (!canAccessProfilePage) {
-                 loadingScreen.style.display = 'none';
-                 window.location.href = '404.html';
-                 return;
-            }
-            
-            // A visibilidade do menu inferior continua a ser controlada pelo 'paineis menu'
-            applyMenuVisibility(menuSettings);
-
-            initialPanelSettings = panelSettings; // Usamos as configurações já carregadas
-
-            if (initialPanelSettings) {
-                gcoinsDisplay.style.display = initialPanelSettings.GCoin === 'on' ? 'flex' : 'none';
-                debtDisplay.style.display = initialPanelSettings.dividas === 'on' ? 'flex' : 'none';
-                returnDisplay.style.display = initialPanelSettings.devolver === 'on' ? 'flex' : 'none';
-                squadDisplayLink.style.display = initialPanelSettings.myteam === 'on' ? 'block' : 'none';
-                minigamesDisplay.style.display = initialPanelSettings.minigames === 'on' ? 'flex' : 'none';
-                if (manualDisplay) manualDisplay.style.display = initialPanelSettings.manual === 'on' ? 'flex' : 'none';
-                if (trophiesDisplay) trophiesDisplay.style.display = initialPanelSettings.trofeus === 'on' ? 'flex' : 'none';
-if (bancaDisplay) bancaDisplay.style.display = initialPanelSettings.banca === 'on' ? 'flex' : 'none';
-
-                const miniGamesDisplayVisible = initialPanelSettings.minigames === 'on';
-                if (jornadaEuroDisplay) jornadaEuroDisplay.style.display = miniGamesDisplayVisible && initialPanelSettings.world26 === 'on' ? 'block' : 'none';
-                if (quemGanhaDisplay) quemGanhaDisplay.style.display = miniGamesDisplayVisible && initialPanelSettings.quemganha === 'on' ? 'block' : 'none';
-            } else {
-                // Fallback caso as configurações não carreguem
-                gcoinsDisplay.style.display = 'flex';
-                debtDisplay.style.display = 'flex';
-                returnDisplay.style.display = 'flex';
-                squadDisplayLink.style.display = 'block';
-                minigamesDisplay.style.display = 'flex';
-                if (manualDisplay) manualDisplay.style.display = 'flex';
-                if (trophiesDisplay) trophiesDisplay.style.display = 'flex';
-                if (jornadaEuroDisplay) jornadaEuroDisplay.style.display = 'block';
-                if (quemGanhaDisplay) quemGanhaDisplay.style.display = 'block';
-
-                initialPanelSettings = { GCoin: 'on', dividas: 'on', devolver: 'on', myteam: 'on', minigames: 'on', world26: 'on', quemganha: 'on', manual: 'on', trofeus: 'on' };
+                // Sub-itens dentro do popup de minigames
+                const miniGamesDisplayVisible = panelSettings.minigames === 'on';
+                if (jornadaEuroDisplay) jornadaEuroDisplay.style.display = miniGamesDisplayVisible && panelSettings.world26 === 'on' ? 'block' : 'none';
+                if (quemGanhaDisplay) quemGanhaDisplay.style.display = miniGamesDisplayVisible && panelSettings.quemganha === 'on' ? 'block' : 'none';
             }
 
-            const panelSettingsDocRef = doc(db, 'paineis', 'paineis perfil');
-            isInitialPanelLoad = true;
-            
-            unsubscribePanelListener = onSnapshot(panelSettingsDocRef, (docSnap) => {
-                if (isInitialPanelLoad) {
-                    isInitialPanelLoad = false;
-                    return;
-                }
+            // --- LÓGICA FINANCEIRA PRINCIPAL ---
+            const gcoinsData = await updateGCoinsDisplay();
+            if (gcoinsData) {
+                currentUserGCoins = gcoinsData.value;
+            }
+            await loadUserDebts();
+            await loadBancaValue();
+            // --- FIM DA LÓGICA FINANCEIRA ---
 
-                if (!docSnap.exists()) {
-                    return;
-                }
-
-                const currentSettings = docSnap.data();
-
-                // ===== AQUI ESTÁ A CORREÇÃO PRINCIPAL =====
-const fieldsToCheck = ['GCoin', 'dividas', 'devolver', 'myteam', 'minigames', 'world26', 'quemganha', 'myths', 'manual', 'trofeus', 'banca'];                let changed = false;
-                for (const field of fieldsToCheck) {
-                    if (initialPanelSettings && currentSettings && currentSettings[field] !== initialPanelSettings[field]) {
-                        changed = true;
-                        break;
-                    }
-                }
-
-                if (changed) {
-                    if (unsubscribePanelListener) {
-                        unsubscribePanelListener();
-                        unsubscribePanelListener = null;
-                    }
-                    location.reload();
-                }
-
-            }, (error) => {
-                console.error("Error in 'paineis perfil' listener:", error);
-                if (unsubscribePanelListener) {
-                     unsubscribePanelListener();
-                     unsubscribePanelListener = null;
-                }
-            });
-
-            await updateGCoinsDisplay();
-await loadBancaValue();
-
+            // Preenche o nome de utilizador e mostra o conteúdo da página
             profileUsernameSpan.textContent = userData.nomeDeUsuario || "Username Not Found";
-
             loadingScreen.style.display = 'none';
             content.style.display = 'block';
 
         } catch (error) {
-            console.error("Error during auth state change processing:", error);
+            console.error("Erro durante o processamento do estado de autenticação:", error);
             loadingScreen.style.display = 'none';
             window.location.href = '404.html';
         }
@@ -1702,6 +1911,10 @@ await loadBancaValue();
         window.location.href = 'index.html';
     }
 });
+
+
+
+
 
         async function updatePanelSetting(fieldName, isChecked) {
             const settingValue = isChecked ? 'on' : 'off';
