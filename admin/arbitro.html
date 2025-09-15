@@ -1201,49 +1201,74 @@ status-indicator {
                 }
              }
 
-             console.log("Aggregated User Data for Update:", userAggregatedData);
-             for (const userId in userAggregatedData) {
-                 const userData = userAggregatedData[userId];
-                 const userRef = doc(db, 'users', userId);
-                 const userUpdatePayload = {};
-                 for (const temporadaKey in userData.temporadas) {
-                     const temporadaData = userData.temporadas[temporadaKey];
-                     const temporadaPontosFieldName = `${temporadaKey}Pontos`;
-                     const temporadaGCoinsFieldName = `${temporadaKey}GCoins`;
-                     const temporadaPontosPossiveisFieldName = `${temporadaKey}PontosPossiveis`;
+         console.log("Aggregated User Data for Update:", userAggregatedData);
+for (const userId in userAggregatedData) {
+    const userData = userAggregatedData[userId];
+    const userRef = doc(db, 'users', userId);
+    const userUpdatePayload = {};
 
-                    const movimentosQuery = query(collection(db, 'movimentos'),
-                        where("userId", "==", userId),
-                        where("temporada", "==", temporadaKey)
-                    );
-                     let totalGCoinsGanhosFromMovimentos = 0;
-                     try {
-                         const movimentosDocs = await getDocs(movimentosQuery);
-                         movimentosDocs.forEach(movDoc => {
-                             const movData = movDoc.data();
-                             if (typeof movData.valorreal === 'number') {
-                                 totalGCoinsGanhosFromMovimentos += movData.valorreal;
-                             }
-                         });
+    for (const temporadaKey in userData.temporadas) {
+        const temporadaData = userData.temporadas[temporadaKey];
+        const temporadaPontosFieldName = `${temporadaKey}Pontos`;
+        const temporadaGCoinsFieldName = `${temporadaKey}GCoins`;
+        const temporadaPontosPossiveisFieldName = `${temporadaKey}PontosPossiveis`;
 
-                         // CORREÇÃO APLICADA: Usa o total recalculado para Pontos e GCoins
-                         userUpdatePayload[temporadaPontosFieldName] = totalGCoinsGanhosFromMovimentos;
-                         userUpdatePayload[temporadaPontosPossiveisFieldName] = temporadaData.totalPontosPossiveis;
-                         userUpdatePayload[temporadaGCoinsFieldName] = totalGCoinsGanhosFromMovimentos;
+        // --- CÁLCULO PARA GCOINS (TODOS OS MOVIMENTOS) ---
+        // Esta parte continua como antes, para garantir que o saldo de GCoins reflete tudo.
+        const todosMovimentosQuery = query(collection(db, 'movimentos'),
+            where("userId", "==", userId),
+            where("temporada", "==", temporadaKey)
+        );
+        let totalGCoins = 0;
+        try {
+            const movimentosGeraisDocs = await getDocs(todosMovimentosQuery);
+            movimentosGeraisDocs.forEach(movDoc => {
+                const movData = movDoc.data();
+                if (typeof movData.valorreal === 'number') {
+                    totalGCoins += movData.valorreal;
+                }
+            });
+            userUpdatePayload[temporadaGCoinsFieldName] = totalGCoins;
+        } catch (error) {
+            console.error(`Error fetching ALL movimentos for GCoins user ${userId}, temporada ${temporadaKey}:`, error);
+        }
 
-                     } catch (error) {
-                         console.error(`Error fetching movimentos for GCoins user ${userId}, temporada ${temporadaKey}:`, error);
-                     }
-                 }
-                 if (Object.keys(userUpdatePayload).length > 0) {
-                     try {
-                         await updateDoc(userRef, userUpdatePayload);
-                         console.log(`User ${userId} updated with payload:`, userUpdatePayload);
-                     } catch (error) {
-                         console.error(`Failed to update user ${userId}:`, error);
-                     }
-                 }
-             }
+        // --- CÁLCULO PARA PONTOS (APENAS PALPITES) ---
+        // Aqui é onde o novo filtro é aplicado para calcular os pontos.
+        const palpitesMovimentosQuery = query(collection(db, 'movimentos'),
+            where("userId", "==", userId),
+            where("temporada", "==", temporadaKey),
+            where("estado", "==", "Palpite Paid") // <-- FILTRO ADICIONADO AQUI
+        );
+        let totalPontos = 0;
+        try {
+            const movimentosPalpitesDocs = await getDocs(palpitesMovimentosQuery);
+            movimentosPalpitesDocs.forEach(movDoc => {
+                const movData = movDoc.data();
+                // Pontos de palpites são sempre positivos
+                if (typeof movData.valorreal === 'number' && movData.valorreal > 0) {
+                    totalPontos += movData.valorreal;
+                }
+            });
+            userUpdatePayload[temporadaPontosFieldName] = totalPontos;
+        } catch (error) {
+            console.error(`Error fetching PALPITE movimentos for Points user ${userId}, temporada ${temporadaKey}:`, error);
+        }
+
+        // A lógica para PontosPossiveis permanece a mesma
+        userUpdatePayload[temporadaPontosPossiveisFieldName] = temporadaData.totalPontosPossiveis;
+    }
+
+    if (Object.keys(userUpdatePayload).length > 0) {
+        try {
+            await updateDoc(userRef, userUpdatePayload);
+            console.log(`User ${userId} updated with payload:`, userUpdatePayload);
+        } catch (error) {
+            console.error(`Failed to update user ${userId}:`, error);
+        }
+    }
+}
+
              statusIconsSpan.innerHTML = '<i class="fas fa-check-circle success-icon" style="display: inline-block; color: #28a745;"></i>';
              console.log("Launch process completed successfully.");
              await loadPredictions();
