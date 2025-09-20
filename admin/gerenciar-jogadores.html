@@ -64,6 +64,40 @@
         .overlay.active { display: block; }
 .player-actions { /* NOVO: Contêiner para alinhar o preço e o interruptor */ display: flex; align-items: center; gap: 12px; margin-left: auto; } .price-input-container { /* NOVO: Contêiner para o campo de preço e o símbolo de moeda */ position: relative; } .price-input { /* NOVO: Estilo para o campo de preço */ width: 100px; padding: 8px 8px 8px 20px; /* Espaço à esquerda para o símbolo */ border: 1px solid #ccc; border-radius: 4px; font-size: 14px; font-weight: bold; text-align: right; transition: border-color 0.2s; } .price-input:focus { outline: none; border-color: #2176ff; } .price-input-container::before { /* NOVO: Adiciona o símbolo de "€" dentro da caixa */ content: '€'; position: absolute; left: 8px; top: 50%; transform: translateY(-50%); color: #666; font-weight: normal; } .toggle-switch { position: relative; display: inline-block; width: 60px; height: 34px; /* ALTERADO: removido o margin-left: auto */ }
 
+.player-card {
+    position: relative; 
+}
+
+/* Estilo e posicionamento da bandeira no canto superior esquerdo */
+.player-flag {
+    position: absolute;
+    top: 8px;         /* Ajustado para melhor alinhamento */
+    left: 8px;        /* Ajustado para melhor alinhamento */
+    width: 16px;      /* ALTERADO: Reduzido para metade */
+    height: auto;
+    border-radius: 2px; /* Ligeiro ajuste para a nova escala */
+    border: 1px solid #eee;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+}
+
+/* Novo contêiner para a imagem e a posição */
+.player-visuals {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px; /* Espaço entre a imagem e o texto da posição */
+    flex-shrink: 0; /* Impede que o contêiner encolha */
+}
+
+/* Estilo para o texto da posição */
+.player-position {
+    font-weight: bold;
+    color: #333;
+    font-size: 14px;
+    background-color: #f2f2f2;
+    padding: 2px 8px;
+    border-radius: 4px;
+}
 
     </style>
 </head>
@@ -192,22 +226,41 @@
         }
     }
 
-   function createPlayerCard(player, docId) {
+  function createPlayerCard(player, docId) {
     const card = document.createElement('div');
     card.className = 'player-card';
     const tierClass = getTierClass(player.casta);
     
-    // 1. O HTML do cartão está correto.
+    // Cria o HTML da bandeira apenas se a imagem existir no objeto do jogador
+    const flagHtml = player.paisImagem 
+        ? `<img src="${player.paisImagem}" alt="Bandeira do país" class="player-flag">` 
+        : '';
+        
+    // Cria o HTML para a posição do jogador
+    const positionHtml = player.posicao 
+        ? `<div class="player-position">${player.posicao}</div>` 
+        : '';
+
     card.innerHTML = `
-        <img src="${player.imagem || 'https://via.placeholder.com/200'}" alt="${player.nome}" class="player-image">
+        ${flagHtml}
+
+        <!-- Novo contêiner para agrupar a imagem e a posição -->
+        <div class="player-visuals">
+            <img src="${player.imagem || 'https://via.placeholder.com/200'}" alt="${player.nome}" class="player-image">
+            ${positionHtml}
+        </div>
+        
         <div class="player-info-container">
             <div class="player-name">${player.nome}</div>
-            <div class="player-info">Posição: ${player.posicao}</div>
+            <!-- NOVO: Campo Clube adicionado logo abaixo do nome -->
+            <div class="player-info">Clube: ${player.clube || 'Não definido'}</div>
+            <!-- ANTIGO: Campo Posição foi removido desta área -->
             <div class="player-info ${tierClass}">Casta: ${player.casta}</div>
-            <div class="player-info">Comprado por: ${player.compradopor || 'Não comprado'}</div>
+            <div class="player-info">Comprado por: ${player.compradorNome || 'Não comprado'}</div>
             <div class="player-info">Abertura: ${player.marketTimes?.abertura ? new Date(player.marketTimes.abertura).toLocaleString() : 'Não definido'}</div>
             <div class="player-info">Fechamento: ${player.marketTimes?.fechamento ? new Date(player.marketTimes.fechamento).toLocaleString() : 'Não definido'}</div>
         </div>
+
         <div class="player-actions">
             <div class="price-input-container">
                 <input type="number" class="price-input" value="${player.preco || 0}" data-player-id="${docId}">
@@ -219,7 +272,7 @@
         </div>
     `;
 
-    // 2. A lógica para registrar as alterações está correta.
+    // A lógica dos 'event listeners' permanece a mesma
     const updateChanges = (playerId, field, value) => {
         const currentChanges = changedPlayers.get(playerId) || {};
         currentChanges[field] = value;
@@ -237,7 +290,6 @@
         updateChanges(docId, 'preco', priceValue);
     });
     
-    // 3. O trecho de código antigo e duplicado foi removido.
     return card;
 }
 
@@ -572,52 +624,74 @@
     // --- INICIALIZAÇÃO DA APLICAÇÃO ---
 
  async function initializeApp() {
-        try {
-            document.getElementById('players-grid').innerHTML = '<p>A carregar jogadores...</p>';
-            const [jogadoresSnapshot, clubesSnapshot, competicoesSnapshot] = await Promise.all([
-                getDocs(collection(db, 'jogadores')),
-                getDocs(collection(db, 'clubes')),
-                getDocs(collection(db, 'competicoes'))
-            ]);
+    try {
+        document.getElementById('players-grid').innerHTML = '<p>A carregar jogadores...</p>';
+        
+        // 1. Adicionada a busca pela coleção 'users'
+        const [jogadoresSnapshot, clubesSnapshot, competicoesSnapshot, paisesSnapshot, usersSnapshot] = await Promise.all([
+            getDocs(collection(db, 'jogadores')),
+            getDocs(collection(db, 'clubes')),
+            getDocs(collection(db, 'competicoes')),
+            getDocs(collection(db, 'paises')),
+            getDocs(collection(db, 'users')) // NOVO: Carrega os dados dos utilizadores
+        ]);
 
-            const clubesByNameMap = new Map();
-            clubesSnapshot.forEach(doc => {
-                const clubeData = doc.data();
-                if (clubeData.nome) {
-                    clubesByNameMap.set(clubeData.nome, clubeData);
-                }
-            });
+        const clubesByNameMap = new Map();
+        clubesSnapshot.forEach(doc => {
+            const clubeData = doc.data();
+            if (clubeData.nome) clubesByNameMap.set(clubeData.nome, clubeData);
+        });
 
-            const competicoesMap = new Map();
-            competicoesSnapshot.forEach(doc => competicoesMap.set(doc.id, doc.data()));
+        const competicoesMap = new Map();
+        competicoesSnapshot.forEach(doc => competicoesMap.set(doc.id, doc.data()));
 
-            allPlayers = jogadoresSnapshot.docs.map(doc => {
-                const player = { id: doc.id, ...doc.data() };
-                
-                const clubeData = clubesByNameMap.get(player.clube); 
-                
-                if (clubeData) {
-                    player.clubeData = clubeData;
-                    const competicaoData = competicoesMap.get(clubeData.competicaoId);
-                    if (competicaoData) {
-                        player.competicaoNome = competicaoData.nome;
-                    }
-                }
-                return player;
-            });
+        const paisesMap = new Map();
+        paisesSnapshot.forEach(doc => paisesMap.set(doc.id, doc.data()));
+
+        // 2. Criado um mapa para os utilizadores para pesquisa rápida
+        const usersMap = new Map();
+        usersSnapshot.forEach(doc => usersMap.set(doc.id, doc.data()));
+
+        allPlayers = jogadoresSnapshot.docs.map(doc => {
+            const player = { id: doc.id, ...doc.data() };
             
-            populateMarketTimeSelectors(allPlayers);
-            updateFiltersAndDisplay();
+            // Lógica de clubes e competições (inalterada)
+            const clubeData = clubesByNameMap.get(player.clube); 
+            if (clubeData) {
+                player.clubeData = clubeData;
+                const competicaoData = competicoesMap.get(clubeData.competicaoId);
+                if (competicaoData) player.competicaoNome = competicaoData.nome;
+            }
 
-            document.getElementById('filterPosicao').addEventListener('change', updateFiltersAndDisplay);
-            document.getElementById('filterCasta').addEventListener('change', updateFiltersAndDisplay);
-            document.getElementById('filterCompeticao').addEventListener('change', updateFiltersAndDisplay);
-            document.getElementById('filterPais').addEventListener('change', updateFiltersAndDisplay);
-        } catch (error) {
-            console.error('Error initializing app:', error);
-            document.getElementById('players-grid').innerHTML = '<p style="color: red; text-align: center;">Ocorreu um erro ao carregar os dados.</p>';
-        }
+            // Lógica da bandeira do país (inalterada)
+            if (player.paisId) {
+                const paisData = paisesMap.get(player.paisId);
+                if (paisData && paisData.imagem) player.paisImagem = paisData.imagem;
+            }
+
+            // 3. NOVO: Adiciona o nome do comprador ao objeto do jogador
+            if (player.compradopor) {
+                const userData = usersMap.get(player.compradopor); // Usa o ID para encontrar o user
+                if (userData && userData.nometabela) {
+                    player.compradorNome = userData.nometabela; // Adiciona a propriedade com o nome
+                }
+            }
+
+            return player;
+        });
+        
+        populateMarketTimeSelectors(allPlayers);
+        updateFiltersAndDisplay();
+
+        document.getElementById('filterPosicao').addEventListener('change', updateFiltersAndDisplay);
+        document.getElementById('filterCasta').addEventListener('change', updateFiltersAndDisplay);
+        document.getElementById('filterCompeticao').addEventListener('change', updateFiltersAndDisplay);
+        document.getElementById('filterPais').addEventListener('change', updateFiltersAndDisplay);
+    } catch (error) {
+        console.error('Error initializing app:', error);
+        document.getElementById('players-grid').innerHTML = '<p style="color: red; text-align: center;">Ocorreu um erro ao carregar os dados.</p>';
     }
+}
 
     // Dispara a inicialização e adiciona o listener para o botão de salvar principal
     initializeApp();
