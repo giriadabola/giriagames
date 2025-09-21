@@ -31,10 +31,10 @@
 <body>
     <nav class="top-menu">
         <a href="1x.html" class="menu-item"><i class="fas fa-home"></i>Home</a>
-    <a href="fusiveis.html" class="menu-item"><i class="fas fa-bolt"></i>Fusíveis</a>
-    <a href="arbitro.html" class="menu-item"><i class="fas fa-gavel"></i>Árbitro</a>
-    <a href="criar-manual.html" class="menu-item"><i class="fas fa-book"></i>Manual</a>
-    <a href="criar-banca.html" class="menu-item"><i class="fas fa-university"></i>Banca</a>
+        <a href="fusiveis.html" class="menu-item"><i class="fas fa-bolt"></i>Fusíveis</a>
+        <a href="arbitro.html" class="menu-item"><i class="fas fa-gavel"></i>Árbitro</a>
+        <a href="criar-manual.html" class="menu-item"><i class="fas fa-book"></i>Manual</a>
+        <a href="criar-banca.html" class="menu-item"><i class="fas fa-university"></i>Banca</a>
     </nav>
     <main class="content">
         <h1><i class="fas fa-eye"></i> G Empire Eye - Utilizadores</h1>
@@ -47,6 +47,8 @@
                         <th class="sortable" data-column="tatica">Tática</th>
                         <th class="sortable" data-column="pontos">Pontos</th>
                         <th class="sortable" data-column="gcoins">GCoins</th>
+                        <!-- 1. CABEÇALHO DA NOVA COLUNA ADICIONADO -->
+                        <th class="sortable" data-column="divida">Dívida</th>
                         <th class="sortable" data-column="jogadores">Jogadores</th>
                         <th class="sortable" data-column="ultimoacesso">Último Acesso</th>
                     </tr>
@@ -59,7 +61,7 @@
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
         import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
-        import { getFirestore, collection, getDocs, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        import { getFirestore, collection, getDocs, doc, getDoc, query, where } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
         const firebaseConfig = {
             apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0",
@@ -101,8 +103,16 @@
             tableBody.innerHTML = '';
             users.forEach(user => {
                 const row = document.createElement('tr');
-                // Adicionada a célula para 'user.jogadores'
-                row.innerHTML = `<td>${user.displayName}</td><td>${user.tatica}</td><td>${user.pontos}</td><td>${user.gcoins}</td><td>${user.jogadores}</td><td>${user.ultimoacesso}</td>`;
+                // 3. CÉLULA DA NOVA COLUNA ADICIONADA (user.divida)
+                row.innerHTML = `
+                    <td>${user.displayName}</td>
+                    <td>${user.tatica}</td>
+                    <td>${user.pontos}</td>
+                    <td>${user.gcoins}</td>
+                    <td>${user.divida}</td>
+                    <td>${user.jogadores}</td>
+                    <td>${user.ultimoacesso}</td>
+                `;
                 tableBody.appendChild(row);
             });
         }
@@ -113,7 +123,7 @@
             allUsersData.sort((a, b) => {
                 let valA = a[columnKey]; let valB = b[columnKey];
                 if (typeof valA === 'number' && typeof valB === 'number') { return direction === 'asc' ? valA - valB : valB - valA; }
-                else { return direction === 'asc' ? String(valA).localeCompare(String(valB)) : String(valB).localeCompare(String(valA)); }
+                else { return direction === 'asc' ? String(valA).localeCompare(String(valB)) : String(B).localeCompare(String(valA)); }
             });
             currentSort = { column: columnKey, direction: direction };
             document.querySelectorAll('thead th.sortable').forEach(th => {
@@ -138,29 +148,44 @@
                     }
                 });
 
-                // ETAPA 2: Buscar todos os utilizadores
+                // 2. NOVA ETAPA: Buscar e somar todas as dívidas pendentes de todos os utilizadores
+                const debtTotals = {};
+                const debtQuery = query(collection(db, "movimentos"), where("estado", "==", "Por Pagar"));
+                const debtSnapshot = await getDocs(debtQuery);
+                debtSnapshot.forEach(debtDoc => {
+                    const debtData = debtDoc.data();
+                    const userId = debtData.userId;
+                    const debtAmount = debtData.valorTotalAPagar || 0;
+                    if (userId) {
+                        debtTotals[userId] = (debtTotals[userId] || 0) + debtAmount;
+                    }
+                });
+
+                // ETAPA 3: Buscar todos os utilizadores
                 const usersSnapshot = await getDocs(collection(db, "users"));
                 allUsersData = [];
                 if (usersSnapshot.empty) { statusMessage.textContent = 'Nenhum utilizador encontrado.'; return; }
 
-                // ETAPA 3: Montar os dados para a tabela
+                // ETAPA 4: Montar os dados para a tabela, agora incluindo a dívida
                 usersSnapshot.forEach(doc => {
                     const userData = doc.data();
+                    const userId = doc.id;
                     let dynamicPontos = 0, dynamicGCoins = 0;
                     for (const key in userData) {
                         if (key.endsWith('Pontos') && !isNaN(parseInt(key.substring(0, 8)))) { dynamicPontos = userData[key]; }
                         if (key.endsWith('GCoins') && !isNaN(parseInt(key.substring(0, 8)))) { dynamicGCoins = userData[key]; }
                     }
 
-                    // Obter a contagem de jogadores do mapa, ou 0 se não houver
-                    const numJogadores = playerCounts[doc.id] || 0;
+                    const numJogadores = playerCounts[userId] || 0;
+                    const totalDivida = debtTotals[userId] || 0; // Obter a dívida do mapa
 
                     allUsersData.push({
                         displayName: userData.nometabela || userData.email || 'N/A',
                         tatica: userData.tática || 'N/A',
                         pontos: dynamicPontos,
                         gcoins: dynamicGCoins,
-                        jogadores: numJogadores, // Adicionar a nova propriedade
+                        divida: totalDivida, // Adicionar a nova propriedade
+                        jogadores: numJogadores,
                         ultimoacesso: formatFirebaseTimestamp(userData.ultimoacesso)
                     });
                 });
@@ -181,6 +206,8 @@
             if (user) {
                 const userDoc = await getDoc(doc(db, "users", user.uid));
                 if (userDoc.exists() && userDoc.data().estatuto === 'ruler') {
+                    // Importar a função query aqui para o escopo do onAuthStateChanged
+                    const { query, where } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
                     fetchAndDisplayUsers();
                 } else {
                     window.location.replace('/acesso-negado.html');
