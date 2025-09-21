@@ -772,237 +772,266 @@ status-indicator {
     let isProcessingLaunch = false;
     let totalEligibleVoters = 0; // Movido para o escopo global para ser acessível
     
-    async function loadPredictions() {
-         try {
-             const predictionsContainer = document.getElementById('predictions-container');
-             const roundFilter = document.getElementById('round-filter');
-             const palpitesSnapshot = await getDocs(collection(db, 'palpites'));
-             allPredictions = [];
-             const rounds = new Set();
-             const gplayers = new Set();
-             if (palpitesSnapshot.empty) {
-                 predictionsContainer.innerHTML = '<div class="prediction-card">Nenhum palpite encontrado.</div>';
-                 return;
-             }
-             const uniqueJogoIdsFromPalpites = [...new Set(palpitesSnapshot.docs.map(d => d.data().jogoId).filter(Boolean))];
-             const jogoPromises = uniqueJogoIdsFromPalpites.map(id => getDoc(doc(db, 'jogos', id)));
-             const jogoDocs = await Promise.all(jogoPromises);
-             const jogosDataMap = jogoDocs.reduce((acc, docSnap) => {
-                 if (docSnap.exists()) acc[docSnap.id] = docSnap.data();
-                 return acc;
-             }, {});
-             for (const palpiteDoc of palpitesSnapshot.docs) {
-                 const palpite = palpiteDoc.data();
-                 const jogoData = palpite.jogoId ? jogosDataMap[palpite.jogoId] : null;
-                 const numeroPalpites = jogoData && typeof jogoData.numeroPalpites === 'number' ? jogoData.numeroPalpites : 0;
-                 if (palpite.ronda) {
-                     rounds.add(palpite.ronda);
-                 }
-                 if (palpite.nomeDeUsuario) {
-                     gplayers.add(palpite.nomeDeUsuario);
-                 }
-                 allPredictions.push({
-                     id: palpiteDoc.id,
-                     ...palpite,
-                     numeroPalpites: numeroPalpites
-                 });
-             }
-             const sortedRounds = Array.from(rounds).sort((a, b) => b - a);
-             roundFilter.innerHTML = '<option value="">Todas as Rondas</option>';
-             sortedRounds.forEach(round => {
-                 roundFilter.innerHTML += `<option value="${round}">Ronda ${round}</option>`;
-             });
-             function updateGameFilter() {
-                 const gameFilter = document.getElementById('game-filter');
-                 const filteredByRound = currentRound ? allPredictions.filter(p => p.ronda === currentRound) : allPredictions;
-                 const games = new Set(filteredByRound.map(p => p.nomeJogo).filter(Boolean));
-                 const sortedGames = Array.from(games).sort();
-                 gameFilter.innerHTML = '<option value="">Todos os Jogos</option>';
-                 sortedGames.forEach(game => {
-                     const teamNamesMatch = game.match(/^([^-]+ vs [^-]+)/);
-                     const displayGameName = teamNamesMatch ? teamNamesMatch[1].trim() : game;
-                     gameFilter.innerHTML += `<option value="${game}">${displayGameName}</option>`;
-                 });
-                 gameFilter.value = currentGame || '';
-             }
-             const gameFilter = document.getElementById('game-filter');
-             const gplayerFilter = document.getElementById('gplayer-filter');
-             roundFilter.replaceWith(roundFilter.cloneNode(true));
-             gameFilter.replaceWith(gameFilter.cloneNode(true));
-             gplayerFilter.replaceWith(gplayerFilter.cloneNode(true));
-             document.getElementById('round-filter').addEventListener('change', (e) => {
-                 currentRound = e.target.value === "" ? null : Number(e.target.value);
-                 currentGame = null;
-                 updateGameFilter();
-                 loadPredictions();
-             });
-             document.getElementById('game-filter').addEventListener('change', (e) => {
-                 currentGame = e.target.value || null;
-                 loadPredictions();
-             });
-             document.getElementById('gplayer-filter').addEventListener('change', (e) => {
-                 currentGPlayer = e.target.value || null;
-                 loadPredictions();
-             });
-             if (sortedRounds.length > 0 && currentRound === null) {
-                 currentRound = sortedRounds[0];
-                 document.getElementById('round-filter').value = currentRound;
-             } else {
-                document.getElementById('round-filter').value = currentRound || '';
-             }
-             updateGameFilter();
-             const sortedGPlayers = Array.from(gplayers).sort();
-             document.getElementById('gplayer-filter').innerHTML = '<option value="">Todos os GPlayers</option>';
-             sortedGPlayers.forEach(gplayer => {
-                 if (gplayer) {
-                     document.getElementById('gplayer-filter').innerHTML += `<option value="${gplayer}">${gplayer}</option>`;
-                 }
-             });
-             document.getElementById('gplayer-filter').value = currentGPlayer || '';
-             let filteredPredictions = allPredictions;
-             if (currentRound) {
-                 filteredPredictions = filteredPredictions.filter(p => p.ronda === currentRound);
-             }
-             if (currentGame) {
-                 filteredPredictions = filteredPredictions.filter(p => p.nomeJogo === currentGame);
-             }
-             if (currentGPlayer) {
-                 filteredPredictions = filteredPredictions.filter(p => p.nomeDeUsuario === currentGPlayer);
-             }
+   async function loadPredictions() {
+    // ALTERAÇÃO 1: Busca os GPlayers qualificados da coleção 'users'
+    let qualifiedGPlayers = [];
+    try {
+        const usersRef = collection(db, 'users');
+        const q = query(usersRef, where("aceite", "==", "Yes"), where("natabela", "==", "Yes"));
+        const querySnapshot = await getDocs(q);
+        querySnapshot.forEach((doc) => {
+            qualifiedGPlayers.push({
+                id: doc.id,
+                nometabela: doc.data().nometabela
+            });
+        });
+        qualifiedGPlayers.sort((a, b) => a.nometabela.localeCompare(b.nometabela));
+    } catch (error) {
+        console.error("Erro ao buscar GPlayers qualificados:", error);
+    }
 
-            const voterCountDisplay = document.getElementById('voter-count-display');
-             if (currentGame && totalEligibleVoters > 0) {
-                 const votedUserIds = new Set(filteredPredictions.map(p => p.userId));
-                 const votedCount = votedUserIds.size;
-                 voterCountDisplay.textContent = `(${votedCount}/${totalEligibleVoters})`;
-                 if (votedCount === totalEligibleVoters) {
-                     voterCountDisplay.style.color = '#28a745';
-                 } else {
-                     voterCountDisplay.style.color = '#dc3545';
-                 }
-             } else {
-                 voterCountDisplay.textContent = '';
-             }
+    try {
+        const predictionsContainer = document.getElementById('predictions-container');
+        const roundFilter = document.getElementById('round-filter');
+        const palpitesSnapshot = await getDocs(collection(db, 'palpites'));
+        allPredictions = [];
+        const rounds = new Set();
+        // A variável 'gplayers' não é mais necessária aqui
+        if (palpitesSnapshot.empty) {
+            predictionsContainer.innerHTML = '<div class="prediction-card">Nenhum palpite encontrado.</div>';
+            return;
+        }
+        const uniqueJogoIdsFromPalpites = [...new Set(palpitesSnapshot.docs.map(d => d.data().jogoId).filter(Boolean))];
+        const jogoPromises = uniqueJogoIdsFromPalpites.map(id => getDoc(doc(db, 'jogos', id)));
+        const jogoDocs = await Promise.all(jogoPromises);
+        const jogosDataMap = jogoDocs.reduce((acc, docSnap) => {
+            if (docSnap.exists()) acc[docSnap.id] = docSnap.data();
+            return acc;
+        }, {});
+        for (const palpiteDoc of palpitesSnapshot.docs) {
+            const palpite = palpiteDoc.data();
+            const jogoData = palpite.jogoId ? jogosDataMap[palpite.jogoId] : null;
+            const numeroPalpites = jogoData && typeof jogoData.numeroPalpites === 'number' ? jogoData.numeroPalpites : 0;
+            if (palpite.ronda) {
+                rounds.add(palpite.ronda);
+            }
+            // Não precisamos mais popular a lista de gplayers a partir daqui
+            allPredictions.push({
+                id: palpiteDoc.id,
+                ...palpite,
+                numeroPalpites: numeroPalpites
+            });
+        }
+        const sortedRounds = Array.from(rounds).sort((a, b) => b - a);
+        roundFilter.innerHTML = '<option value="">Todas as Rondas</option>';
+        sortedRounds.forEach(round => {
+            roundFilter.innerHTML += `<option value="${round}">Ronda ${round}</option>`;
+        });
+        function updateGameFilter() {
+            const gameFilter = document.getElementById('game-filter');
+            const filteredByRound = currentRound ? allPredictions.filter(p => p.ronda === currentRound) : allPredictions;
+            const games = new Set(filteredByRound.map(p => p.nomeJogo).filter(Boolean));
+            const sortedGames = Array.from(games).sort();
+            gameFilter.innerHTML = '<option value="">Todos os Jogos</option>';
+            sortedGames.forEach(game => {
+                const teamNamesMatch = game.match(/^([^-]+ vs [^-]+)/);
+                const displayGameName = teamNamesMatch ? teamNamesMatch[1].trim() : game;
+                gameFilter.innerHTML += `<option value="${game}">${displayGameName}</option>`;
+            });
+            gameFilter.value = currentGame || '';
+        }
+        const gameFilter = document.getElementById('game-filter');
+        const gplayerFilter = document.getElementById('gplayer-filter');
+        roundFilter.replaceWith(roundFilter.cloneNode(true));
+        gameFilter.replaceWith(gameFilter.cloneNode(true));
+        gplayerFilter.replaceWith(gplayerFilter.cloneNode(true));
+        document.getElementById('round-filter').addEventListener('change', (e) => {
+            currentRound = e.target.value === "" ? null : Number(e.target.value);
+            currentGame = null;
+            updateGameFilter();
+            loadPredictions();
+        });
+        document.getElementById('game-filter').addEventListener('change', (e) => {
+            currentGame = e.target.value || null;
+            loadPredictions();
+        });
+        document.getElementById('gplayer-filter').addEventListener('change', (e) => {
+            currentGPlayer = e.target.value || null;
+            loadPredictions();
+        });
+        if (sortedRounds.length > 0 && currentRound === null) {
+            currentRound = sortedRounds[0];
+            document.getElementById('round-filter').value = currentRound;
+        } else {
+           document.getElementById('round-filter').value = currentRound || '';
+        }
+        updateGameFilter();
 
-             let predictionsHTML = '';
-             predictionsContainer.innerHTML = '<div class="loading">Carregando palpites...</div>';
-             if (filteredPredictions.length === 0) {
-                 predictionsContainer.innerHTML = '<div class="prediction-card">Nenhum palpite encontrado para os filtros selecionados.</div>';
-                 return;
-             }
-             const uniqueUserIds = [...new Set(filteredPredictions.map(p => p.userId).filter(Boolean))];
-             const userPromises = uniqueUserIds.map(id => getDoc(doc(db, 'users', id)));
-             const uniqueClubIds = new Set();
-             filteredPredictions.forEach(p => {
-                 const jogo = p.jogoId ? jogosDataMap[p.jogoId] : null;
-                 if (jogo) {
-                     if (jogo.equipaCasaId) uniqueClubIds.add(jogo.equipaCasaId);
-                     if (jogo.equipaForaId) uniqueClubIds.add(jogo.equipaForaId);
-                 }
-             });
-             const clubPromises = Array.from(uniqueClubIds).map(id => getDoc(doc(db, 'clubes', id)));
-             const [userDocs, clubDocs] = await Promise.all([
-                 Promise.all(userPromises),
-                 Promise.all(clubPromises)
-             ]);
-             const usersData = userDocs.reduce((acc, docSnap) => {
-                 if (docSnap.exists()) acc[docSnap.id] = docSnap.data();
-                 return acc;
-             }, {});
-             const clubsData = clubDocs.reduce((acc, docSnap) => {
-                 if (docSnap.exists()) acc[docSnap.id] = docSnap.data();
-                 return acc;
-             }, {});
+        // ALTERAÇÃO 2: Nova lógica para preencher o dropdown de GPlayers
+        const gplayerFilterElement = document.getElementById('gplayer-filter');
+        gplayerFilterElement.innerHTML = '<option value="">Todos os GPlayers</option>';
+        qualifiedGPlayers.forEach(player => {
+            gplayerFilterElement.innerHTML += `<option value="${player.id}">${player.nometabela}</option>`;
+        });
+        gplayerFilterElement.value = currentGPlayer || '';
+        
+        let filteredPredictions = allPredictions;
+        if (currentRound) {
+            filteredPredictions = filteredPredictions.filter(p => p.ronda === currentRound);
+        }
+        if (currentGame) {
+            filteredPredictions = filteredPredictions.filter(p => p.nomeJogo === currentGame);
+        }
+        
+        // ALTERAÇÃO 3: Lógica de filtro ajustada para usar o userId
+        if (currentGPlayer) {
+            filteredPredictions = filteredPredictions.filter(p => p.userId === currentGPlayer);
+        }
 
-             for (const palpite of filteredPredictions) {
-                 try {
-                     if (!palpite.jogoId) {
-                         console.warn('Palpite sem jogoId encontrado:', palpite.id);
-                         continue;
-                     }
-                     const jogo = jogosDataMap[palpite.jogoId];
-                     if (!jogo) {
-                         console.warn(`Dados do Jogo com ID ${palpite.jogoId} não encontrados ou carregados.`);
-                         continue;
-                     }
-                     if (!jogo.equipaCasaId || !jogo.equipaForaId) {
-                         console.warn(`Jogo com ID ${palpite.jogoId} tem IDs de equipa em falta:`, jogo);
-                         continue;
-                     }
-                     const equipaCasaData = clubsData[jogo.equipaCasaId];
-                     const equipaForaData = clubsData[jogo.equipaForaId];
-                     const equipaCasa = equipaCasaData?.nome || 'Equipa Casa?';
-                     const equipaFora = equipaForaData?.nome || 'Equipa Fora?';
-                     let dataFormatada = 'Data?';
-                     try {
-                         if (jogo.dataJogo && typeof jogo.dataJogo.toDate === 'function') {
-                             const dataJogo = jogo.dataJogo.toDate();
-                             dataFormatada = dataJogo.toLocaleDateString('pt-PT');
-                         }
-                     } catch (error) {
-                         console.warn('Erro ao formatar data do jogo:', jogo.jogoId, error);
-                     }
-                     const userData = palpite.userId ? usersData[palpite.userId] : null;
-                     const userName = userData?.nometabela || palpite.nometabela || 'GPlayer?';
+       const voterCountDisplay = document.getElementById('voter-count-display');
+        if (currentGame && totalEligibleVoters > 0) {
+            const votedUserIds = new Set(filteredPredictions.map(p => p.userId));
+            const votedCount = votedUserIds.size;
+            voterCountDisplay.textContent = `(${votedCount}/${totalEligibleVoters})`;
+            if (votedCount === totalEligibleVoters) {
+                voterCountDisplay.style.color = '#28a745';
+            } else {
+                voterCountDisplay.style.color = '#dc3545';
+            }
+        } else {
+            voterCountDisplay.textContent = '';
+        }
 
-                     let statusIndicatorHTML = '';
-                     if (palpite.Analisado === "Sim") {
-                         statusIndicatorHTML = `<span class="status-indicator" title="Este palpite já foi lançado ao público.">🟢</span>`;
-                     } else {
-                         statusIndicatorHTML = `<span class="status-indicator" title="Este palpite ainda não foi analisado e lançado.">🟠</span>`;
-                     }
-                     
-                     let palpitesHTML = '';
-                     for (let i = 1; i <= 10; i++) {
-                         const palpiteKey = `palpite${i}`;
-                         const pontosKey = `Palpite${i}PontosQuanto`;
-                         const statusKey = `palpite${i}Status`;
-                         if (palpite[palpiteKey]) {
-                             const status = palpite[statusKey] || 'neutro';
-                             palpitesHTML += `
-                                 <div class="prediction-value">
-                                     <div class="prediction-points">
-                                         <span class="prediction-label">Palpite ${i}</span>
-                                         <span class="prediction-number ${status}">${palpite[palpiteKey]}</span>
-                                     </div>
-                                     <input type="number" class="points-input" min="0" max="999" value="${palpite[pontosKey] || ''}" data-palpite-id="${palpite.id}" data-pontos-key="${pontosKey}" placeholder="Pts">
-                                     <select class="status-select ${status}" data-palpite-id="${palpite.id}" data-status-key="${statusKey}">
-                                         <option value="neutro" ${status === 'neutro' ? 'selected' : ''}>Neutro</option>
-                                         <option value="acerto" ${status === 'acerto' ? 'selected' : ''}>Acerto</option>
-                                         <option value="falha" ${status === 'falha' ? 'selected' : ''}>Falha</option>
-                                     </select>
-                                 </div>`;
-                        }
-                     }
-                     predictionsHTML += `
-                         <div class="prediction-card" data-prediction-id="${palpite.id}">
-                             <div class="prediction-header">
-                                 <div class="prediction-teams">${equipaCasa} vs ${equipaFora}${statusIndicatorHTML}</div>
-                                 <div class="prediction-date">${dataFormatada} - ${userName}</div>
-                             </div>
-                             <div class="prediction-values">${palpitesHTML}</div>
-                         </div>`;
-                 } catch (error) {
-                     console.error('Erro ao processar o palpite com ID:', palpite?.id, error);
-                 }
-             }
-             predictionsContainer.innerHTML = predictionsHTML;
-             addDynamicEventListeners();
-         } catch (error) {
-             console.error('Error loading predictions:', error);
-             document.getElementById('predictions-container').innerHTML =
-                 '<div class="prediction-card">Erro ao carregar palpites. Tente atualizar a página.</div>';
-         }
-     }
+        let predictionsHTML = '';
+        predictionsContainer.innerHTML = '<div class="loading">Carregando palpites...</div>';
+        if (filteredPredictions.length === 0) {
+            predictionsContainer.innerHTML = '<div class="prediction-card">Nenhum palpite encontrado para os filtros selecionados.</div>';
+            return;
+        }
+        const uniqueUserIds = [...new Set(filteredPredictions.map(p => p.userId).filter(Boolean))];
+        const userPromises = uniqueUserIds.map(id => getDoc(doc(db, 'users', id)));
+        const uniqueClubIds = new Set();
+        filteredPredictions.forEach(p => {
+            const jogo = p.jogoId ? jogosDataMap[p.jogoId] : null;
+            if (jogo) {
+                if (jogo.equipaCasaId) uniqueClubIds.add(jogo.equipaCasaId);
+                if (jogo.equipaForaId) uniqueClubIds.add(jogo.equipaForaId);
+            }
+        });
+        const clubPromises = Array.from(uniqueClubIds).map(id => getDoc(doc(db, 'clubes', id)));
+        const [userDocs, clubDocs] = await Promise.all([
+            Promise.all(userPromises),
+            Promise.all(clubPromises)
+        ]);
+        const usersData = userDocs.reduce((acc, docSnap) => {
+            if (docSnap.exists()) acc[docSnap.id] = docSnap.data();
+            return acc;
+        }, {});
+        const clubsData = clubDocs.reduce((acc, docSnap) => {
+            if (docSnap.exists()) acc[docSnap.id] = docSnap.data();
+            return acc;
+        }, {});
+
+        for (const palpite of filteredPredictions) {
+            try {
+                if (!palpite.jogoId) {
+                    console.warn('Palpite sem jogoId encontrado:', palpite.id);
+                    continue;
+                }
+                const jogo = jogosDataMap[palpite.jogoId];
+                if (!jogo) {
+                    console.warn(`Dados do Jogo com ID ${palpite.jogoId} não encontrados ou carregados.`);
+                    continue;
+                }
+                if (!jogo.equipaCasaId || !jogo.equipaForaId) {
+                    console.warn(`Jogo com ID ${palpite.jogoId} tem IDs de equipa em falta:`, jogo);
+                    continue;
+                }
+                const equipaCasaData = clubsData[jogo.equipaCasaId];
+                const equipaForaData = clubsData[jogo.equipaForaId];
+                const equipaCasa = equipaCasaData?.nome || 'Equipa Casa?';
+                const equipaFora = equipaForaData?.nome || 'Equipa Fora?';
+                let dataFormatada = 'Data?';
+                try {
+                    if (jogo.dataJogo && typeof jogo.dataJogo.toDate === 'function') {
+                        const dataJogo = jogo.dataJogo.toDate();
+                        dataFormatada = dataJogo.toLocaleDateString('pt-PT');
+                    }
+                } catch (error) {
+                    console.warn('Erro ao formatar data do jogo:', jogo.jogoId, error);
+                }
+                const userData = palpite.userId ? usersData[palpite.userId] : null;
+                const userName = userData?.nometabela || palpite.nometabela || 'GPlayer?';
+
+                let statusIndicatorHTML = '';
+                if (palpite.Analisado === "Sim") {
+                    statusIndicatorHTML = `<span class="status-indicator" title="Este palpite já foi lançado ao público.">🟢</span>`;
+                } else {
+                    statusIndicatorHTML = `<span class="status-indicator" title="Este palpite ainda não foi analisado e lançado.">🟠</span>`;
+                }
+                
+                let palpitesHTML = '';
+                for (let i = 1; i <= 10; i++) {
+                    const palpiteKey = `palpite${i}`;
+                    const pontosKey = `Palpite${i}PontosQuanto`;
+                    const statusKey = `palpite${i}Status`;
+                    if (palpite[palpiteKey]) {
+                        const status = palpite[statusKey] || 'neutro';
+                        palpitesHTML += `
+                            <div class="prediction-value">
+                                <div class="prediction-points">
+                                    <span class="prediction-label">Palpite ${i}</span>
+                                    <span class="prediction-number ${status}">${palpite[palpiteKey]}</span>
+                                </div>
+                                <input type="number" class="points-input" min="0" max="999" value="${palpite[pontosKey] || ''}" data-palpite-id="${palpite.id}" data-pontos-key="${pontosKey}" placeholder="Pts">
+                                <select class="status-select ${status}" data-palpite-id="${palpite.id}" data-status-key="${statusKey}">
+                                    <option value="neutro" ${status === 'neutro' ? 'selected' : ''}>Neutro</option>
+                                    <option value="acerto" ${status === 'acerto' ? 'selected' : ''}>Acerto</option>
+                                    <option value="falha" ${status === 'falha' ? 'selected' : ''}>Falha</option>
+                                </select>
+                            </div>`;
+                   }
+                }
+                predictionsHTML += `
+                    <div class="prediction-card" data-prediction-id="${palpite.id}">
+                        <div class="prediction-header">
+                            <div class="prediction-teams">${equipaCasa} vs ${equipaFora}${statusIndicatorHTML}</div>
+                            <div class="prediction-date">${dataFormatada} - ${userName}</div>
+                        </div>
+                        <div class="prediction-values">${palpitesHTML}</div>
+                    </div>`;
+            } catch (error) {
+                console.error('Erro ao processar o palpite com ID:', palpite?.id, error);
+            }
+        }
+        predictionsContainer.innerHTML = predictionsHTML;
+        addDynamicEventListeners();
+    } catch (error) {
+        console.error('Error loading predictions:', error);
+        document.getElementById('predictions-container').innerHTML =
+            '<div class="prediction-card">Erro ao carregar palpites. Tente atualizar a página.</div>';
+    }
+}
+
+
 
      async function fetchTotalEligibleVoters() {
-        try {
-            const usersRef = collection(db, 'users');
-            const q = query(usersRef, where("natabela", "==", "Yes")); 
-            const snapshot = await getCountFromServer(q);
-            totalEligibleVoters = snapshot.data().count;
-            console.log(`Total de votantes elegíveis encontrados: ${totalEligibleVoters}`);
-        } catch (error) {
+      let qualifiedGPlayers = [];
+    try {
+        const usersRef = collection(db, 'users');
+        const q = query(usersRef, where("aceite", "==", "Yes"), where("natabela", "==", "Yes"));
+        const querySnapshot = await getDocs(q);
+        querySnapshot.forEach((doc) => {
+            qualifiedGPlayers.push({
+                id: doc.id, // O ID único do documento (ex: wOBhvgwz7g...)
+                nometabela: doc.data().nometabela // O nome para exibir (ex: Gabriel)
+            });
+        });
+        // Ordena a lista de jogadores pelo nome de tabela
+        qualifiedGPlayers.sort((a, b) => a.nometabela.localeCompare(b.nometabela));
+
+    } catch (error) {
+    
             console.error("Erro ao obter a contagem total de votantes:", error);
             totalEligibleVoters = 0; 
         }
