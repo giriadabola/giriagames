@@ -1103,217 +1103,214 @@ status-indicator {
          });
      }
 
-    document.getElementById('launch-button').addEventListener('click', async () => {
-        const launchButton = document.getElementById('launch-button');
-        const statusIconsSpan = document.getElementById('launch-status-icons');
-        statusIconsSpan.innerHTML = '<i class="fas fa-spinner fa-spin loading-icon" style="display: inline-block; color: #007bff;"></i>';
-        launchButton.disabled = true;
-        isProcessingLaunch = true;
-         try {
-             let predictionsToProcess = allPredictions;
-             if (currentRound) {
-                 predictionsToProcess = predictionsToProcess.filter(p => p.ronda === currentRound);
+  document.getElementById('launch-button').addEventListener('click', async () => {
+    const launchButton = document.getElementById('launch-button');
+    const statusIconsSpan = document.getElementById('launch-status-icons');
+    statusIconsSpan.innerHTML = '<i class="fas fa-spinner fa-spin loading-icon" style="display: inline-block; color: #007bff;"></i>';
+    launchButton.disabled = true;
+    isProcessingLaunch = true;
+     try {
+         let predictionsToProcess = allPredictions;
+         if (currentRound) {
+             predictionsToProcess = predictionsToProcess.filter(p => p.ronda === currentRound);
+         }
+         if (currentGame) {
+             predictionsToProcess = predictionsToProcess.filter(p => p.nomeJogo === currentGame);
+         }
+         if (currentGPlayer) {
+             predictionsToProcess = predictionsToProcess.filter(p => p.nomeDeUsuario === currentGPlayer);
+         }
+         if (predictionsToProcess.length === 0) {
+            alert("Não há palpites visíveis para lançar com os filtros atuais.");
+            throw new Error("No predictions to process based on filters.");
+         }
+         console.log(`Processing ${predictionsToProcess.length} predictions for launch...`);
+         const userAggregatedData = {};
+         const currentAdminUserId = 'ADMIN_USER_ID';
+
+            for (const palpite of predictionsToProcess) {
+             if (!palpite.userId || !palpite.jogoId || !palpite.temporada || !palpite.nomeJogo) {
+                 console.warn("Skipping palpite due to missing critical data:", palpite.id, palpite);
+                 continue;
              }
-             if (currentGame) {
-                 predictionsToProcess = predictionsToProcess.filter(p => p.nomeJogo === currentGame);
+             const numeroPalpites = palpite.numeroPalpites || 0;
+             if (numeroPalpites === 0) {
+                 continue;
              }
-             if (currentGPlayer) {
-                 predictionsToProcess = predictionsToProcess.filter(p => p.nomeDeUsuario === currentGPlayer);
-             }
-             if (predictionsToProcess.length === 0) {
-                alert("Não há palpites visíveis para lançar com os filtros atuais.");
-                throw new Error("No predictions to process based on filters.");
-             }
-             console.log(`Processing ${predictionsToProcess.length} predictions for launch...`);
-             const userAggregatedData = {};
-             const currentAdminUserId = 'ADMIN_USER_ID';
+            
+            let cardTotalPontosPossiveis = 0;
+            let cardTotalPontosGanhos = 0;
+            const palpiteUpdateData = {};
+            let hasAtLeastOnePalpite = false;
+            let containsNeutro = false; // <-- NOVA VARIÁVEL
 
-             for (const palpite of predictionsToProcess) {
-                 if (!palpite.userId || !palpite.jogoId || !palpite.temporada || !palpite.nomeJogo) {
-                     console.warn("Skipping palpite due to missing critical data:", palpite.id, palpite);
-                     continue;
-                 }
-                 const numeroPalpites = palpite.numeroPalpites || 0;
-                 if (numeroPalpites === 0) {
-                     continue;
-                 }
-                 
-                let cardTotalPontosPossiveis = 0;
-                let cardTotalPontosGanhos = 0;
-                let isFullyJudged = false;
-                const palpiteUpdateData = {};
-                let hasAtLeastOnePalpite = false;
+            for (let i = 1; i <= numeroPalpites; i++) {
+                const pontosKey = `Palpite${i}PontosQuanto`;
+                const statusKey = `palpite${i}Status`;
+                const pontosGanhosKey = `Palpite${i}PontosGanhos`;
+                const gCoinsGanhosKey = `Palpite${i}GCoinsGanhos`;
+                
+                if (palpite.hasOwnProperty(`palpite${i}`)) {
+                    hasAtLeastOnePalpite = true;
+                    const pontosValue = palpite[pontosKey] || 0;
+                    const status = palpite[statusKey] || 'neutro';
+                    let pontosGanhosValue = 0;
 
-                for (let i = 1; i <= numeroPalpites; i++) {
-                    const pontosKey = `Palpite${i}PontosQuanto`;
-                    const statusKey = `palpite${i}Status`;
-                    const pontosGanhosKey = `Palpite${i}PontosGanhos`;
-                    const gCoinsGanhosKey = `Palpite${i}GCoinsGanhos`;
-                    
-                    if (palpite.hasOwnProperty(`palpite${i}`)) {
-                        hasAtLeastOnePalpite = true;
-                        const pontosValue = palpite[pontosKey] || 0;
-                        const status = palpite[statusKey] || 'neutro';
-                        let pontosGanhosValue = 0;
-
-                        if (status === 'acerto') {
-                            pontosGanhosValue = pontosValue;
-                        }
-
-                        if (status === 'acerto' || status === 'falha') {
-                            isFullyJudged = true;
-                        }
-
-                        palpiteUpdateData[pontosKey] = pontosValue;
-                        palpiteUpdateData[statusKey] = status;
-                        palpiteUpdateData[pontosGanhosKey] = pontosGanhosValue;
-                        palpiteUpdateData[gCoinsGanhosKey] = pontosGanhosValue;
-                        cardTotalPontosPossiveis += pontosValue;
-                        cardTotalPontosGanhos += pontosGanhosValue;
+                    if (status === 'acerto') {
+                        pontosGanhosValue = pontosValue;
                     }
+
+ if (status === 'neutro') {
+                        containsNeutro = true; // Se encontrar QUALQUER palpite neutro, marca a flag
+                    }
+
+                       palpiteUpdateData[pontosKey] = pontosValue;
+                    palpiteUpdateData[statusKey] = status;
+                    palpiteUpdateData[pontosGanhosKey] = pontosGanhosValue;
+                    palpiteUpdateData[gCoinsGanhosKey] = pontosGanhosValue;
+                    cardTotalPontosPossiveis += pontosValue;
+                    cardTotalPontosGanhos += pontosGanhosValue;
                 }
+            }
 
-                if (hasAtLeastOnePalpite) {
-                    palpiteUpdateData["Analisado"] = isFullyJudged ? "Sim" : "Não";
-                    palpiteUpdateData["TotalPontosGanhos"] = cardTotalPontosGanhos;
-                    palpiteUpdateData["TotalPontosPossiveis"] = cardTotalPontosPossiveis;
+              if (hasAtLeastOnePalpite) {
+                // "Analisado" só será "Sim" se houver palpites E NENHUM deles for "Neutro"
+                palpiteUpdateData["Analisado"] = hasAtLeastOnePalpite && !containsNeutro ? "Sim" : "Não";
+                palpiteUpdateData["TotalPontosGanhos"] = cardTotalPontosGanhos;
+                palpiteUpdateData["TotalPontosPossiveis"] = cardTotalPontosPossiveis;
 
-                    try {
-                        const palpiteRef = doc(db, 'palpites', palpite.id);
-                        await updateDoc(palpiteRef, palpiteUpdateData);
-                        
-                        const index = allPredictions.findIndex(p => p.id === palpite.id);
-                        if (index > -1) {
-                            allPredictions[index] = { ...allPredictions[index], ...palpiteUpdateData };
-                        }
-                    } catch(error) {
-                       console.error(`Failed to update palpite ${palpite.id}:`, error);
-                    }
+                try {
+                    const palpiteRef = doc(db, 'palpites', palpite.id);
+                    await updateDoc(palpiteRef, palpiteUpdateData);
                     
-                    const userId = palpite.userId;
-                    const temporada = palpite.temporada;
-                    if (!userAggregatedData[userId]) {
-                        userAggregatedData[userId] = { temporadas: {} };
+                    const index = allPredictions.findIndex(p => p.id === palpite.id);
+                    if (index > -1) {
+                        allPredictions[index] = { ...allPredictions[index], ...palpiteUpdateData };
                     }
-                    const temporadaKey = temporada.replace('/', '');
-                    if (!userAggregatedData[userId].temporadas[temporadaKey]) {
-                       userAggregatedData[userId].temporadas[temporadaKey] = { totalPontosGanhos: 0, totalPontosPossiveis: 0 };
-                    }
-                    userAggregatedData[userId].temporadas[temporadaKey].totalPontosGanhos += cardTotalPontosGanhos;
-                    userAggregatedData[userId].temporadas[temporadaKey].totalPontosPossiveis += cardTotalPontosPossiveis;
-                    
-                    const temporadaFormattedMov = temporada.replace('/', '');
-                    const movimentoQuery = query(
-                        collection(db, 'movimentos'),
-                        where("userId", "==", userId),
-                        where("nomeJogo", "==", palpite.nomeJogo),
-                        where("temporada", "==", temporadaFormattedMov),
-                        where("estado", "==", "Palpite Paid"),
-                        limit(1)
-                    );
-                    try {
-                        const movimentoSnapshot = await getDocs(movimentoQuery);
-                        const movimentoData = {
-                            "de": currentAdminUserId, "estado": "Palpite Paid", "jogadorId": null, "mediapontos": null, "movimentoData": serverTimestamp(), "para": userId, "posicao": null, "preco": cardTotalPontosGanhos, "temporada": temporadaFormattedMov, "userId": userId, "valorreal": cardTotalPontosGanhos, "nomeJogo": palpite.nomeJogo
-                        };
-                        if (!movimentoSnapshot.empty) {
-                            const movimentoDocRef = doc(db, 'movimentos', movimentoSnapshot.docs[0].id);
-                            await updateDoc(movimentoDocRef, movimentoData);
-                        } else {
-                            if (cardTotalPontosGanhos > 0) {
-                                await addDoc(collection(db, 'movimentos'), movimentoData);
-                            }
-                        }
-                    } catch (error) {
-                        console.error(`Error creating/updating movimento for game ${palpite.nomeJogo}, user ${userId}:`, error);
-                    }
+                } catch(error) {
+                   console.error(`Failed to update palpite ${palpite.id}:`, error);
                 }
-             }
+                
+                const userId = palpite.userId;
+                const temporada = palpite.temporada;
+                if (!userAggregatedData[userId]) {
+                    userAggregatedData[userId] = { temporadas: {} };
+                }
+                const temporadaKey = temporada.replace('/', '');
+                if (!userAggregatedData[userId].temporadas[temporadaKey]) {
+                   userAggregatedData[userId].temporadas[temporadaKey] = { totalPontosGanhos: 0, totalPontosPossiveis: 0 };
+                }
+                userAggregatedData[userId].temporadas[temporadaKey].totalPontosGanhos += cardTotalPontosGanhos;
+                userAggregatedData[userId].temporadas[temporadaKey].totalPontosPossiveis += cardTotalPontosPossiveis;
+                
+                const temporadaFormattedMov = temporada.replace('/', '');
+                const movimentoQuery = query(
+                    collection(db, 'movimentos'),
+                    where("userId", "==", userId),
+                    where("nomeJogo", "==", palpite.nomeJogo),
+                    where("temporada", "==", temporadaFormattedMov),
+                    where("estado", "==", "Palpite Paid"),
+                    limit(1)
+                );
+                try {
+                    const movimentoData = {
+                        "de": currentAdminUserId, "estado": "Palpite Paid", "jogadorId": null, "mediapontos": null, "movimentoData": serverTimestamp(), "para": userId, "posicao": null, "preco": cardTotalPontosGanhos, "temporada": temporadaFormattedMov, "userId": userId, "valorreal": cardTotalPontosGanhos, "nomeJogo": palpite.nomeJogo
+                    };
+                    if (!movimentoSnapshot.empty) {
+                        const movimentoDocRef = doc(db, 'movimentos', movimentoSnapshot.docs[0].id);
+                        await updateDoc(movimentoDocRef, movimentoData);
+                    } else {
+                        if (cardTotalPontosGanhos > 0) {
+                            await addDoc(collection(db, 'movimentos'), movimentoData);
+                        }
+                    }
+                } catch (error) {
+                    console.error(`Error creating/updating movimento for game ${palpite.nomeJogo}, user ${userId}:`, error);
+                }
+            }
+         }
 
          console.log("Aggregated User Data for Update:", userAggregatedData);
-for (const userId in userAggregatedData) {
-    const userData = userAggregatedData[userId];
-    const userRef = doc(db, 'users', userId);
-    const userUpdatePayload = {};
+    for (const userId in userAggregatedData) {
+        const userData = userAggregatedData[userId];
+        const userRef = doc(db, 'users', userId);
+        const userUpdatePayload = {};
 
-    for (const temporadaKey in userData.temporadas) {
-        const temporadaData = userData.temporadas[temporadaKey];
-        const temporadaPontosFieldName = `${temporadaKey}Pontos`;
-        const temporadaGCoinsFieldName = `${temporadaKey}GCoins`;
-        const temporadaPontosPossiveisFieldName = `${temporadaKey}PontosPossiveis`;
+        for (const temporadaKey in userData.temporadas) {
+            const temporadaData = userData.temporadas[temporadaKey];
+            const temporadaPontosFieldName = `${temporadaKey}Pontos`;
+            const temporadaGCoinsFieldName = `${temporadaKey}GCoins`;
+            const temporadaPontosPossiveisFieldName = `${temporadaKey}PontosPossiveis`;
 
-        // --- CÁLCULO PARA GCOINS (TODOS OS MOVIMENTOS) ---
-        // Esta parte continua como antes, para garantir que o saldo de GCoins reflete tudo.
-        const todosMovimentosQuery = query(collection(db, 'movimentos'),
-            where("userId", "==", userId),
-            where("temporada", "==", temporadaKey)
-        );
-        let totalGCoins = 0;
-        try {
-            const movimentosGeraisDocs = await getDocs(todosMovimentosQuery);
-            movimentosGeraisDocs.forEach(movDoc => {
-                const movData = movDoc.data();
-                if (typeof movData.valorreal === 'number') {
-                    totalGCoins += movData.valorreal;
-                }
-            });
-            userUpdatePayload[temporadaGCoinsFieldName] = totalGCoins;
-        } catch (error) {
-            console.error(`Error fetching ALL movimentos for GCoins user ${userId}, temporada ${temporadaKey}:`, error);
-        }
+            // --- CÁLCULO PARA GCOINS (TODOS OS MOVIMENTOS) ---
+            const todosMovimentosQuery = query(collection(db, 'movimentos'),
+                where("userId", "==", userId),
+                where("temporada", "==", temporadaKey)
+            );
+            let totalGCoins = 0;
+            try {
+                const movimentosGeraisDocs = await getDocs(todosMovimentosQuery);
+                movimentosGeraisDocs.forEach(movDoc => {
+                    const movData = movDoc.data();
+                    if (typeof movData.valorreal === 'number') {
+                        totalGCoins += movData.valorreal;
+                    }
+                });
+                userUpdatePayload[temporadaGCoinsFieldName] = totalGCoins;
+            } catch (error) {
+                console.error(`Error fetching ALL movimentos for GCoins user ${userId}, temporada ${temporadaKey}:`, error);
+            }
 
         // --- CÁLCULO PARA PONTOS (APENAS PALPITES) ---
         // Aqui é onde o novo filtro é aplicado para calcular os pontos.
-        const palpitesMovimentosQuery = query(collection(db, 'movimentos'),
-            where("userId", "==", userId),
-            where("temporada", "==", temporadaKey),
-            where("estado", "==", "Palpite Paid") // <-- FILTRO ADICIONADO AQUI
-        );
-        let totalPontos = 0;
-        try {
-            const movimentosPalpitesDocs = await getDocs(palpitesMovimentosQuery);
-            movimentosPalpitesDocs.forEach(movDoc => {
-                const movData = movDoc.data();
-                // Pontos de palpites são sempre positivos
-                if (typeof movData.valorreal === 'number' && movData.valorreal > 0) {
-                    totalPontos += movData.valorreal;
-                }
-            });
-            userUpdatePayload[temporadaPontosFieldName] = totalPontos;
-        } catch (error) {
-            console.error(`Error fetching PALPITE movimentos for Points user ${userId}, temporada ${temporadaKey}:`, error);
+     const palpitesMovimentosQuery = query(collection(db, 'movimentos'),
+                where("userId", "==", userId),
+                where("temporada", "==", temporadaKey),
+                where("estado", "==", "Palpite Paid")
+            );
+            let totalPontos = 0;
+            try {
+                const movimentosPalpitesDocs = await getDocs(palpitesMovimentosQuery);
+                movimentosPalpitesDocs.forEach(movDoc => {
+                    const movData = movDoc.data();
+                    if (typeof movData.valorreal === 'number' && movData.valorreal > 0) {
+                        totalPontos += movData.valorreal;
+                    }
+                });
+                userUpdatePayload[temporadaPontosFieldName] = totalPontos;
+            } catch (error) {
+                console.error(`Error fetching PALPITE movimentos for Points user ${userId}, temporada ${temporadaKey}:`, error);
+            }
+
+            userUpdatePayload[temporadaPontosPossiveisFieldName] = temporadaData.totalPontosPossiveis;
         }
 
-        // A lógica para PontosPossiveis permanece a mesma
-        userUpdatePayload[temporadaPontosPossiveisFieldName] = temporadaData.totalPontosPossiveis;
-    }
-
-    if (Object.keys(userUpdatePayload).length > 0) {
-        try {
-            await updateDoc(userRef, userUpdatePayload);
-            console.log(`User ${userId} updated with payload:`, userUpdatePayload);
-        } catch (error) {
-            console.error(`Failed to update user ${userId}:`, error);
+        if (Object.keys(userUpdatePayload).length > 0) {
+            try {
+                await updateDoc(userRef, userUpdatePayload);
+                console.log(`User ${userId} updated with payload:`, userUpdatePayload);
+            } catch (error) {
+                console.error(`Failed to update user ${userId}:`, error);
+            }
         }
     }
-}
 
-             statusIconsSpan.innerHTML = '<i class="fas fa-check-circle success-icon" style="display: inline-block; color: #28a745;"></i>';
-             console.log("Launch process completed successfully.");
-             await loadPredictions();
-             setTimeout(() => {
-                statusIconsSpan.innerHTML = '';
-                launchButton.disabled = false;
-                isProcessingLaunch = false;
-             }, 3000);
-         } catch (error) {
-             console.error('General error during launch process:', error);
-             alert(`Erro durante o lançamento: ${error.message || 'Verifique o console.'}`);
-             statusIconsSpan.innerHTML = '';
-             launchButton.disabled = false;
-             isProcessingLaunch = false;
-         }
-      });
+            statusIconsSpan.innerHTML = '<i class="fas fa-check-circle success-icon" style="display: inline-block; color: #28a745;"></i>';
+         console.log("Launch process completed successfully.");
+         await loadPredictions();
+         setTimeout(() => {
+            statusIconsSpan.innerHTML = '';
+            launchButton.disabled = false;
+            isProcessingLaunch = false;
+         }, 3000);
+     } catch (error) {
+         console.error('General error during launch process:', error);
+         alert(`Erro durante o lançamento: ${error.message || 'Verifique o console.'}`);
+         statusIconsSpan.innerHTML = '';
+         launchButton.disabled = false;
+         isProcessingLaunch = false;
+     }
+  });
 
     window.addEventListener('beforeunload', (event) => {
          if (isProcessingLaunch) {
