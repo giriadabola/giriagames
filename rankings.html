@@ -566,140 +566,176 @@ async function loadRankings(season) {
     let selectedRounds = {}; // Store selected round per user/season key
 
     async function togglePredictions(userId, season) {
-        const popup = document.getElementById('predictions-popup');
-        const popupBody = document.getElementById('popup-predictions-body');
-        const roundFilter = document.getElementById('round-filter');
+    const popup = document.getElementById('predictions-popup');
+    const popupBody = document.getElementById('popup-predictions-body');
+    const roundFilter = document.getElementById('round-filter');
 
-         popupBody.innerHTML = 'A carregar previsões...';
-         popup.style.display = "block"; // Show popup immediately
+    popupBody.innerHTML = 'A carregar previsões...';
+    popup.style.display = "block"; // Show popup immediately
 
-        try {
-            const palpitesRef = collection(db, 'palpites');
-            const q = query(palpitesRef,
-                where('userId', '==', userId),
-                where('temporada', '==', season)
-            );
-            const palpitesSnap = await getDocs(q);
+    try {
+        const palpitesRef = collection(db, 'palpites');
+        const q = query(palpitesRef,
+            where('userId', '==', userId),
+            where('temporada', '==', season)
+        );
+        const palpitesSnap = await getDocs(q);
 
-            let predictionsHTML = '';
-            const predictions = [];
-            const rounds = new Set();
+        let predictionsHTML = '';
+        const predictions = [];
+        const rounds = new Set();
 
-            palpitesSnap.forEach(doc => {
-                const data = doc.data();
-                predictions.push({
-                    ...data,
-                    id: doc.id,
-                    timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : new Date(0)
-                });
-                if (data.ronda) rounds.add(data.ronda);
+        palpitesSnap.forEach(doc => {
+            const data = doc.data();
+            predictions.push({
+                ...data,
+                id: doc.id,
+                timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : new Date(0)
             });
+            if (data.ronda) rounds.add(data.ronda);
+        });
 
-             predictions.sort((a, b) => (b.ronda || 0) - (a.ronda || 0) || b.timestamp - a.timestamp);
+        predictions.sort((a, b) => (b.ronda || 0) - (a.ronda || 0) || b.timestamp - a.timestamp);
 
-             const sortedRounds = Array.from(rounds).sort((a, b) => parseInt(a) - parseInt(b));
-             const userSeasonKey = `${userId}-${season}`;
-             const currentSelection = selectedRounds[userSeasonKey] || '';
+        const sortedRounds = Array.from(rounds).sort((a, b) => parseInt(a) - parseInt(b));
+        const userSeasonKey = `${userId}-${season}`;
+        const currentSelection = selectedRounds[userSeasonKey] || '';
 
-             roundFilter.innerHTML = '<option value="">Todas as Rondas</option>';
-             sortedRounds.forEach(round => {
-                const option = document.createElement('option');
-                option.value = round;
-                option.textContent = `Ronda ${round}`;
-                if (String(currentSelection) === String(round)) {
-                    option.selected = true;
+        roundFilter.innerHTML = '<option value="">Todas as Rondas</option>';
+        sortedRounds.forEach(round => {
+            const option = document.createElement('option');
+            option.value = round;
+            option.textContent = `Ronda ${round}`;
+            if (String(currentSelection) === String(round)) {
+                option.selected = true;
+            }
+            roundFilter.appendChild(option);
+        });
+        roundFilter.value = currentSelection;
+
+        const selectedRound = roundFilter.value;
+        const filteredPredictions = selectedRound
+            ? predictions.filter(p => String(p.ronda) === selectedRound)
+            : predictions;
+
+        const predictionsByRound = {};
+        filteredPredictions.forEach(prediction => {
+            const round = prediction.ronda || 'Desconhecida';
+            if (!predictionsByRound[round]) {
+                predictionsByRound[round] = [];
+            }
+            predictionsByRound[round].push(prediction);
+        });
+
+        // ### INÍCIO DA NOVA LÓGICA ###
+        // Calcula os totais e o status para cada ronda
+        const roundStats = {};
+        for (const round in predictionsByRound) {
+            let totalPoints = 0;
+            let isPending = false;
+            const currentRoundPredictions = predictionsByRound[round];
+
+            for (const prediction of currentRoundPredictions) {
+                if (prediction.Analisado !== "Sim") {
+                    isPending = true;
+                    break; // Se um palpite está em análise, a ronda toda está.
                 }
-                roundFilter.appendChild(option);
-             });
-             roundFilter.value = currentSelection;
-
-             const selectedRound = roundFilter.value;
-             const filteredPredictions = selectedRound
-                 ? predictions.filter(p => String(p.ronda) === selectedRound)
-                 : predictions;
-
-            const predictionsByRound = {};
-            filteredPredictions.forEach(prediction => {
-                const round = prediction.ronda || 'Desconhecida';
-                if (!predictionsByRound[round]) {
-                    predictionsByRound[round] = [];
+                // Soma os pontos de todos os palpites (palpite1, palpite2, etc.)
+                for (let i = 1; i <= 10; i++) {
+                    totalPoints += prediction[`Palpite${i}PontosGanhos`] || 0;
                 }
-                predictionsByRound[round].push(prediction);
-            });
+            }
 
-
-             predictionsHTML = '';
-             const displaySortedRounds = Object.keys(predictionsByRound).sort((a, b) => parseInt(b) - parseInt(a));
-
-             if (displaySortedRounds.length === 0) {
-                 predictionsHTML = 'Nenhuma previsão encontrada para esta seleção.';
-             } else {
-                const roundToOpen = selectedRound || displaySortedRounds[0];
-
-                displaySortedRounds.forEach(round => {
-                    const isOpen = String(round) === String(roundToOpen);
-                    const roundPredictions = predictionsByRound[round];
-                    let roundContentHTML = '';
-
-                     roundPredictions.sort((a,b) => a.timestamp - b.timestamp);
-
-                    roundPredictions.forEach(prediction => {
-                        let palpitesHTML = '';
-                        for (let i = 1; i <= 10; i++) {
-                            if (prediction[`palpite${i}`]) {
-                                let pointsContent = '';
-                                if (prediction.Analisado === "Sim") {
-                                    const points = prediction[`Palpite${i}PontosGanhos`] || 0;
-                                    const pointsClass = points > 0 ? 'prediction-points' : 'prediction-points-negative';
-                                    pointsContent = `<span class="${pointsClass}">(${points} pts)</span>`;
-                                } else {
-                                    pointsContent = `<span class="in-analysis"><em>(em análise)</em></span>`;
-                                }
-                                palpitesHTML += `<div class="prediction-item">→ ${prediction[`palpite${i}`]} ${pointsContent}</div>`;
-                            }
-                        }
-
-                        if (palpitesHTML) {
-                            roundContentHTML += `
-                                <div class="game-header">${prediction.nomeJogo || 'Jogo Desconhecido'}</div>
-                                ${palpitesHTML}
-                            `;
-                        }
-                    });
-
-                     if (roundContentHTML) {
-                        predictionsHTML += `
-                            <div class="round-section">
-                                <div class="round-header" data-round="${round}">
-                                    <span>Ronda ${round}</span>
-                                    <span class="toggle-arrow ${isOpen ? 'open' : ''}">▶</span>
-                                </div>
-                                <div class="round-content ${isOpen ? 'open' : ''}">
-                                    ${roundContentHTML}
-                                </div>
-                            </div>
-                        `;
-                     }
-                });
-             }
-
-             popupBody.innerHTML = predictionsHTML;
-
-             document.querySelectorAll('.round-header').forEach(header => {
-                 header.removeEventListener('click', toggleRoundContent);
-                 header.addEventListener('click', toggleRoundContent);
-             });
-
-            roundFilter.onchange = () => {
-                selectedRounds[userSeasonKey] = roundFilter.value;
-                togglePredictions(userId, season);
-            };
-
-        } catch (error) {
-            console.error("Error loading predictions:", error);
-            popupBody.innerHTML = 'Erro ao carregar previsões.';
+            if (isPending) {
+                roundStats[round] = { text: '[em análise]' };
+            } else {
+                roundStats[round] = { text: `[${totalPoints} gPoints]` };
+            }
         }
+        // ### FIM DA NOVA LÓGICA ###
+
+        predictionsHTML = '';
+        const displaySortedRounds = Object.keys(predictionsByRound).sort((a, b) => parseInt(b) - parseInt(a));
+
+        if (displaySortedRounds.length === 0) {
+            predictionsHTML = 'Nenhuma previsão encontrada para esta seleção.';
+        } else {
+            const roundToOpen = selectedRound || displaySortedRounds[0];
+
+            displaySortedRounds.forEach(round => {
+                const isOpen = String(round) === String(roundToOpen);
+                const roundPredictions = predictionsByRound[round];
+                let roundContentHTML = '';
+
+                roundPredictions.sort((a, b) => a.timestamp - b.timestamp);
+
+                roundPredictions.forEach(prediction => {
+                    let palpitesHTML = '';
+                    for (let i = 1; i <= 10; i++) {
+                        if (prediction[`palpite${i}`]) {
+                            let pointsContent = '';
+                            if (prediction.Analisado === "Sim") {
+                                const points = prediction[`Palpite${i}PontosGanhos`] || 0;
+                                const pointsClass = points >= 0 ? 'prediction-points' : 'prediction-points-negative';
+                                pointsContent = `<span class="${pointsClass}">(${points} pts)</span>`;
+                            } else {
+                                pointsContent = `<span class="in-analysis"><em>(em análise)</em></span>`;
+                            }
+                            palpitesHTML += `<div class="prediction-item">→ ${prediction[`palpite${i}`]} ${pointsContent}</div>`;
+                        }
+                    }
+
+                    if (palpitesHTML) {
+                        roundContentHTML += `
+                            <div class="game-header">${prediction.nomeJogo || 'Jogo Desconhecido'}</div>
+                            ${palpitesHTML}
+                        `;
+                    }
+                });
+
+                if (roundContentHTML) {
+                    // ### ALTERAÇÃO NO CABEÇALHO DA RONDA ###
+                    const roundInfoText = roundStats[round].text;
+                    predictionsHTML += `
+                        <div class="round-section">
+                            <div class="round-header" data-round="${round}">
+                                <div style="display: flex; align-items: baseline; gap: 8px;">
+                                    <span>Ronda ${round}</span>
+                                    <span style="font-style: italic; font-size: 0.7em; font-weight: normal;">${roundInfoText}</span>
+                                </div>
+                                <span class="toggle-arrow ${isOpen ? 'open' : ''}">▶</span>
+                            </div>
+                            <div class="round-content ${isOpen ? 'open' : ''}">
+                                ${roundContentHTML}
+                            </div>
+                        </div>
+                    `;
+                }
+            });
+        }
+
+        popupBody.innerHTML = predictionsHTML;
+
+        document.querySelectorAll('.round-header').forEach(header => {
+            header.removeEventListener('click', toggleRoundContent);
+            header.addEventListener('click', toggleRoundContent);
+        });
+
+        roundFilter.onchange = () => {
+            selectedRounds[userSeasonKey] = roundFilter.value;
+            togglePredictions(userId, season);
+        };
+
+    } catch (error) {
+        console.error("Error loading predictions:", error);
+        popupBody.innerHTML = 'Erro ao carregar previsões.';
     }
+}
+
+
+
+
+
 
     // Helper function to toggle round content visibility
     function toggleRoundContent() {
