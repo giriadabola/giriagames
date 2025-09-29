@@ -27,7 +27,6 @@
         thead th.sort-asc::after { opacity: 1; border-bottom-color: #333; }
         thead th.sort-desc::after { opacity: 1; border-top-color: #333; }
 
-        /* Estilos para o popup */
         .popup-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background-color: rgba(0, 0, 0, 0.6);
@@ -47,27 +46,14 @@
         .popup-table-container { overflow-y: auto; }
         #users-table-body tr { cursor: pointer; }
 
-        /* --- NOVO CSS PARA O BOTÃO RECALCULAR --- */
         #recalculate-button {
-            position: absolute;
-            top: 25px;
-            right: 50px; /* Ajustado para não sobrepor o botão de fechar */
-            padding: 8px 12px;
-            border: none;
-            background-color: #007bff;
-            color: white;
-            border-radius: 5px;
-            cursor: pointer;
-            font-weight: bold;
+            position: absolute; top: 25px; right: 50px;
+            padding: 8px 12px; border: none; background-color: #007bff;
+            color: white; border-radius: 5px; cursor: pointer; font-weight: bold;
             transition: background-color 0.3s ease;
         }
-        #recalculate-button:hover {
-            background-color: #0056b3;
-        }
-        #recalculate-button:disabled {
-            background-color: #cccccc;
-            cursor: not-allowed;
-        }
+        #recalculate-button:hover { background-color: #0056b3; }
+        #recalculate-button:disabled { background-color: #cccccc; cursor: not-allowed; }
     </style>
 </head>
 <body>
@@ -103,11 +89,11 @@
     <div id="movements-popup" class="popup-overlay">
         <div class="popup-content">
             <span class="close-button">&times;</span>
-            <!-- NOVO: BOTÃO RECALCULAR ADICIONADO -->
             <button id="recalculate-button" title="Recalcula o saldo GCoins do utilizador com base em todos os seus movimentos da temporada.">Recalcular</button>
-            <h2 id="popup-title" style="margin-bottom: 20px; padding-right: 120px;">Movimentações</h2> <!-- Padding adicionado para não ficar por baixo do botão -->
+            <h2 id="popup-title" style="margin-bottom: 20px; padding-right: 120px;">Movimentações</h2>
             <div class="popup-table-container">
-                <table>
+                <!-- ALTERADO: Adicionado um ID à tabela para facilitar a manipulação -->
+                <table id="movements-detail-table">
                     <thead>
                         <tr>
                             <th>Data</th>
@@ -120,6 +106,7 @@
                         </tr>
                     </thead>
                     <tbody id="movements-table-body"></tbody>
+                    <!-- O TFOOT será adicionado dinamicamente via JS -->
                 </table>
             </div>
         </div>
@@ -129,6 +116,8 @@
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
         import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
         import { getFirestore, collection, getDocs, doc, getDoc, query, where, orderBy, updateDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+        // ... (todo o código JS anterior que não foi alterado permanece aqui) ...
 
         const firebaseConfig = {
             apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0",
@@ -146,13 +135,10 @@
 
         let allUsersData = [];
         let currentSort = { column: null, direction: 'asc' };
-        let currentSeason = null; // NOVO: Variável global para a temporada
+        let currentSeason = null; 
 
-        // --- INÍCIO DAS NOVAS FUNÇÕES ---
-
-        // NOVO: Função para buscar a temporada atual, essencial para o recálculo
         async function fetchCurrentSeason() {
-            if (currentSeason) return currentSeason; // Evita buscas repetidas
+            if (currentSeason) return currentSeason; 
             const configRef = doc(db, "paineis", "configuracoes_gerais");
             const docSnap = await getDoc(configRef);
             if (docSnap.exists() && docSnap.data().temporadaAtual) {
@@ -163,7 +149,6 @@
             throw new Error("Não foi possível encontrar a temporada atual.");
         }
 
-        // NOVO: Função que lida com a lógica de recálculo e atualização
         async function handleRecalculateBalance(userId) {
             const button = document.getElementById('recalculate-button');
             const originalText = button.textContent;
@@ -173,7 +158,6 @@
             try {
                 const season = await fetchCurrentSeason();
 
-                // 1. LER todos os movimentos do utilizador na temporada
                 const movimentosRef = collection(db, "movimentos");
                 const q = query(movimentosRef, where("userId", "==", userId), where("temporada", "==", season));
                 const querySnapshot = await getDocs(q);
@@ -186,41 +170,35 @@
                     }
                 });
 
-                // 2. ATUALIZAR o documento do utilizador no Firebase
                 const userRef = doc(db, 'users', userId);
                 const gCoinsField = `${season}GCoins`;
                 await updateDoc(userRef, { [gCoinsField]: newBalance });
 
-                // 3. ATUALIZAR a tabela na página para refletir a mudança
                 const userRow = document.querySelector(`tr[data-userid='${userId}']`);
                 if (userRow) {
-                    userRow.children[3].textContent = newBalance.toFixed(2); // A coluna GCoins é a 4ª (índice 3)
+                    userRow.children[3].textContent = newBalance.toFixed(2);
                 }
-                // Atualiza também o array de dados local
                 const userInData = allUsersData.find(u => u.id === userId);
                 if (userInData) {
                     userInData.gcoins = newBalance;
                 }
 
                 button.textContent = 'Sucesso!';
-                button.style.backgroundColor = '#28a745'; // Verde
+                button.style.backgroundColor = '#28a745';
 
             } catch (error) {
                 console.error("Erro ao recalcular saldo:", error);
                 button.textContent = 'Erro!';
-                button.style.backgroundColor = '#dc3545'; // Vermelho
+                button.style.backgroundColor = '#dc3545';
             } finally {
-                // Volta ao estado normal após 2 segundos
                 setTimeout(() => {
                     button.textContent = originalText;
                     button.disabled = false;
-                    button.style.backgroundColor = ''; // Volta ao azul padrão
+                    button.style.backgroundColor = '';
                 }, 2000);
             }
         }
         
-        // --- FIM DAS NOVAS FUNÇÕES ---
-
         function formatFirebaseTimestamp(timestampObject) {
             if (!timestampObject || typeof timestampObject.toDate !== 'function') return 'Nunca';
             try {
@@ -253,7 +231,7 @@
                     <td>${user.displayName}</td>
                     <td>${user.tatica}</td>
                     <td>${user.pontos}</td>
-                    <td>${user.gcoins.toFixed(2)}</td> <!-- Garante 2 casas decimais -->
+                    <td>${user.gcoins.toFixed(2)}</td>
                     <td>${user.divida.toFixed(2)}</td>
                     <td>${user.jogadores}</td>
                     <td>${user.ultimoacesso}</td>
@@ -263,21 +241,32 @@
             addEventListenersToRows();
         }
 
+        // --- FUNÇÃO fetchAndShowMovements ALTERADA ---
         async function fetchAndShowMovements(userId, userName) {
             const popup = document.getElementById('movements-popup');
             const popupTitle = document.getElementById('popup-title');
             const tableBody = document.getElementById('movements-table-body');
-            const recalculateBtn = document.getElementById('recalculate-button'); // NOVO
-            
-            // NOVO: Prepara o botão de recálculo com o ID do utilizador
-            recalculateBtn.setAttribute('data-userid', userId);
+            const recalculateBtn = document.getElementById('recalculate-button');
+            const movementsTable = document.getElementById('movements-detail-table'); // ALTERADO: Referência para a tabela inteira
 
+            recalculateBtn.setAttribute('data-userid', userId);
             popupTitle.textContent = `Movimentações de ${userName}`;
             tableBody.innerHTML = '<tr><td colspan="7" style="text-align: center;">A carregar movimentações...</td></tr>';
+            
+            // ALTERADO: Remove o rodapé antigo, se existir, para evitar duplicação
+            const oldTfoot = movementsTable.querySelector('tfoot');
+            if (oldTfoot) {
+                oldTfoot.remove();
+            }
+            
             popup.style.display = 'flex';
 
             try {
-                // MODIFICADO: Usa a temporada atual na consulta
+                // ALTERADO: Inicializa variáveis para os totais
+                let totalPreco = 0;
+                let totalValorReal = 0;
+                let totalValorAPagar = 0;
+
                 const season = await fetchCurrentSeason();
                 const movementsRef = collection(db, "movimentos");
                 const q = query(movementsRef, where("userId", "==", userId), where("temporada", "==", season), orderBy("movimentoData", "desc"));
@@ -302,7 +291,25 @@
                         <td>${(data.valorTotalAPagar || 0).toFixed(2)}</td>
                     `;
                     tableBody.appendChild(row);
+
+                    // ALTERADO: Adiciona os valores aos totais
+                    totalPreco += parseFloat(data.preco) || 0;
+                    totalValorReal += parseFloat(data.valorreal) || 0;
+                    totalValorAPagar += parseFloat(data.valorTotalAPagar) || 0;
                 });
+
+                // ALTERADO: Cria e adiciona o rodapé (tfoot) com os totais à tabela
+                const tfoot = document.createElement('tfoot');
+                tfoot.innerHTML = `
+                    <tr style="background-color: #f2f2f2; font-weight: bold; border-top: 2px solid #ccc;">
+                        <td colspan="3" style="text-align: right;">TOTAIS:</td>
+                        <td>${totalPreco.toFixed(2)}</td>
+                        <td>${totalValorReal.toFixed(2)}</td>
+                        <td></td> <!-- Coluna da Descrição vazia -->
+                        <td>${totalValorAPagar.toFixed(2)}</td>
+                    </tr>
+                `;
+                movementsTable.appendChild(tfoot);
 
             } catch (error) {
                 console.error("Erro ao buscar movimentações:", error);
@@ -342,7 +349,6 @@
             const statusMessage = document.getElementById('status-message');
             const tableContainer = document.querySelector('.table-container');
             try {
-                // NOVO: Garante que a temporada é carregada antes de tudo
                 await fetchCurrentSeason(); 
 
                 const playerCounts = {};
@@ -373,7 +379,6 @@
                 usersSnapshot.forEach(doc => {
                     const userData = doc.data();
                     const userId = doc.id;
-                    // MODIFICADO: Usa a temporada atual para buscar os campos dinâmicos
                     const pontosField = `${currentSeason}Pontos`;
                     const gcoinsField = `${currentSeason}GCoins`;
 
@@ -403,12 +408,11 @@
         
         const popup = document.getElementById('movements-popup');
         const closeBtn = document.querySelector('.close-button');
-        const recalculateBtn = document.getElementById('recalculate-button'); // NOVO
+        const recalculateBtn = document.getElementById('recalculate-button'); 
 
         closeBtn.addEventListener('click', () => popup.style.display = 'none');
         popup.addEventListener('click', (event) => { if (event.target === popup) popup.style.display = 'none'; });
         
-        // NOVO: Listener para o botão de recálculo
         recalculateBtn.addEventListener('click', (event) => {
             const userId = event.target.dataset.userid;
             if (userId) {
@@ -417,7 +421,7 @@
         });
 
         onAuthStateChanged(auth, async (user) => {
-            document.body.style.display = 'flex'; // Torna o corpo visível após a verificação
+            document.body.style.display = 'flex';
             if (user) {
                 const userDoc = await getDoc(doc(db, "users", user.uid));
                 if (userDoc.exists() && userDoc.data().estatuto === 'ruler') {
