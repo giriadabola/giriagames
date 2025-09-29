@@ -150,10 +150,11 @@
                     <label for="loan-description">Descrição (Opcional)</label>
                     <input type="text" id="loan-description" placeholder="Ex: Adiantamento prémio">
                 </div>
-                <div class="form-group">
-                    <label for="loan-interest">Juros (%)</label>
-                    <input type="number" id="loan-interest" placeholder="Ex: 5" value="0" required min="0" step="0.1">
-                </div>
+              <div class="form-group">
+    <!-- A label e o placeholder foram alterados para clareza -->
+    <label for="loan-interest">Juros (Valor Fixo em GCoins)</label>
+    <input type="number" id="loan-interest" placeholder="Ex: 50" value="0" required min="0" step="1">
+</div>
                 <div class="popup-buttons">
                     <button type="submit" class="popup-button confirm">Confirmar</button>
                     <button type="button" class="popup-button cancel" id="cancel-loan-btn">Cancelar</button>
@@ -291,7 +292,7 @@
          * Regista os movimentos e recalcula o saldo total do utilizador a partir de TODOS
          * os seus movimentos na temporada, atualizando o campo ...GCoins.
          */
-        async function handleLoanSubmit(event) {
+      async function handleLoanSubmit(event) {
             event.preventDefault();
             loanFeedback.textContent = 'A processar empréstimo...';
             loanFeedback.className = 'feedback-message';
@@ -325,22 +326,30 @@
                 const batch = writeBatch(db);
                 const description = loanDescriptionInput.value || "Empréstimo da Banca";
                 const selectedUserName = userSelect.options[userSelect.selectedIndex].text;
-                const interestRate = parseFloat(loanInterestInput.value) || 0;
-                const interestAmount = amount * (interestRate / 100);
+                
+                // --- INÍCIO DA CORREÇÃO ---
+                // O valor do input é agora o juro fixo.
+                const jurosValorFixo = parseFloat(loanInterestInput.value) || 0;
+                const interestAmount = jurosValorFixo; // O valor do juro é o valor do input
                 const totalDebt = amount + interestAmount;
 
                 // 3a. Registar movimento de débito da banca
                 batch.set(doc(collection(db, 'movimentos')), {
                     tipo: "Banca", preco: -amount, movimentoData: Timestamp.now(), temporada: currentSeason,
-                    descricao: `Empréstimo a ${selectedUserName} (Juros: ${interestRate}%)`, para_userId: userId
+                    // A descrição foi corrigida para usar o valor do juro (interestAmount)
+                    descricao: `Empréstimo a ${selectedUserName} (Juros: ${interestAmount} GCoins)`, 
+                    para_userId: userId
                 });
 
                 // 3b. Registar movimento de crédito do utilizador
                 batch.set(doc(collection(db, 'movimentos')), {
                     userId: userId, valorreal: amount, tipo: "Empréstimo", movimentoData: Timestamp.now(), temporada: currentSeason,
-                    de: "Banca", descricao: description, jurosPercentagem: interestRate, valorJuros: interestAmount,
+                    de: "Banca", descricao: description, 
+                    // O campo 'jurosPercentagem' foi removido e a variável 'interestRate' já não existe
+                    valorJuros: interestAmount, 
                     valorTotalAPagar: totalDebt, estado: "Por Pagar"
                 });
+                // --- FIM DA CORREÇÃO ---
 
                 // 3c. Atualizar o saldo ...GCoins do utilizador com o valor RECALCULADO
                 const userRef = doc(db, 'users', userId);
@@ -368,6 +377,11 @@
             }
         }
         
+
+
+
+
+
         async function initializePage() {
             try {
                 currentSeason = await fetchCurrentSeason();
