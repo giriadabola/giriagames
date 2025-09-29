@@ -92,7 +92,6 @@
             <button id="recalculate-button" title="Recalcula o saldo GCoins do utilizador com base em todos os seus movimentos da temporada.">Recalcular</button>
             <h2 id="popup-title" style="margin-bottom: 20px; padding-right: 120px;">Movimentações</h2>
             <div class="popup-table-container">
-                <!-- ALTERADO: Adicionado um ID à tabela para facilitar a manipulação -->
                 <table id="movements-detail-table">
                     <thead>
                         <tr>
@@ -116,8 +115,6 @@
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
         import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
         import { getFirestore, collection, getDocs, doc, getDoc, query, where, orderBy, updateDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
-
-        // ... (todo o código JS anterior que não foi alterado permanece aqui) ...
 
         const firebaseConfig = {
             apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0",
@@ -157,7 +154,6 @@
 
             try {
                 const season = await fetchCurrentSeason();
-
                 const movimentosRef = collection(db, "movimentos");
                 const q = query(movimentosRef, where("userId", "==", userId), where("temporada", "==", season));
                 const querySnapshot = await getDocs(q);
@@ -176,7 +172,8 @@
 
                 const userRow = document.querySelector(`tr[data-userid='${userId}']`);
                 if (userRow) {
-                    userRow.children[3].textContent = newBalance.toFixed(2);
+                    // ALTERADO: Removido .toFixed(2)
+                    userRow.children[3].textContent = newBalance;
                 }
                 const userInData = allUsersData.find(u => u.id === userId);
                 if (userInData) {
@@ -227,12 +224,13 @@
                 row.setAttribute('data-userid', user.id);
                 row.setAttribute('data-username', user.displayName);
                 
+                // ALTERADO: Removido .toFixed(2)
                 row.innerHTML = `
                     <td>${user.displayName}</td>
                     <td>${user.tatica}</td>
                     <td>${user.pontos}</td>
-                    <td>${user.gcoins.toFixed(2)}</td>
-                    <td>${user.divida.toFixed(2)}</td>
+                    <td>${user.gcoins}</td>
+                    <td>${user.divida}</td>
                     <td>${user.jogadores}</td>
                     <td>${user.ultimoacesso}</td>
                 `;
@@ -241,19 +239,17 @@
             addEventListenersToRows();
         }
 
-        // --- FUNÇÃO fetchAndShowMovements ALTERADA ---
         async function fetchAndShowMovements(userId, userName) {
             const popup = document.getElementById('movements-popup');
             const popupTitle = document.getElementById('popup-title');
             const tableBody = document.getElementById('movements-table-body');
             const recalculateBtn = document.getElementById('recalculate-button');
-            const movementsTable = document.getElementById('movements-detail-table'); // ALTERADO: Referência para a tabela inteira
+            const movementsTable = document.getElementById('movements-detail-table');
 
             recalculateBtn.setAttribute('data-userid', userId);
             popupTitle.textContent = `Movimentações de ${userName}`;
             tableBody.innerHTML = '<tr><td colspan="7" style="text-align: center;">A carregar movimentações...</td></tr>';
             
-            // ALTERADO: Remove o rodapé antigo, se existir, para evitar duplicação
             const oldTfoot = movementsTable.querySelector('tfoot');
             if (oldTfoot) {
                 oldTfoot.remove();
@@ -262,7 +258,6 @@
             popup.style.display = 'flex';
 
             try {
-                // ALTERADO: Inicializa variáveis para os totais
                 let totalPreco = 0;
                 let totalValorReal = 0;
                 let totalValorAPagar = 0;
@@ -281,32 +276,32 @@
                 querySnapshot.forEach(doc => {
                     const data = doc.data();
                     const row = document.createElement('tr');
+                    // ALTERADO: Removido .toFixed(2)
                     row.innerHTML = `
                         <td>${formatMovementDate(data.movimentoData)}</td>
                         <td>${data.estado || 'N/A'}</td>
                         <td>${data.tipo || 'N/A'}</td>
-                        <td>${(data.preco || 0).toFixed(2)}</td>
-                        <td>${(data.valorreal || 0).toFixed(2)}</td>
+                        <td>${data.preco || 0}</td>
+                        <td>${data.valorreal || 0}</td>
                         <td>${data.descricao || ''}</td>
-                        <td>${(data.valorTotalAPagar || 0).toFixed(2)}</td>
+                        <td>${data.valorTotalAPagar || 0}</td>
                     `;
                     tableBody.appendChild(row);
 
-                    // ALTERADO: Adiciona os valores aos totais
                     totalPreco += parseFloat(data.preco) || 0;
                     totalValorReal += parseFloat(data.valorreal) || 0;
                     totalValorAPagar += parseFloat(data.valorTotalAPagar) || 0;
                 });
 
-                // ALTERADO: Cria e adiciona o rodapé (tfoot) com os totais à tabela
                 const tfoot = document.createElement('tfoot');
+                // ALTERADO: Removido .toFixed(2)
                 tfoot.innerHTML = `
                     <tr style="background-color: #f2f2f2; font-weight: bold; border-top: 2px solid #ccc;">
                         <td colspan="3" style="text-align: right;">TOTAIS:</td>
-                        <td>${totalPreco.toFixed(2)}</td>
-                        <td>${totalValorReal.toFixed(2)}</td>
-                        <td></td> <!-- Coluna da Descrição vazia -->
-                        <td>${totalValorAPagar.toFixed(2)}</td>
+                        <td>${totalPreco}</td>
+                        <td>${totalValorReal}</td>
+                        <td></td>
+                        <td>${totalValorAPagar}</td>
                     </tr>
                 `;
                 movementsTable.appendChild(tfoot);
@@ -334,7 +329,7 @@
             const direction = isAscending ? 'desc' : 'asc';
             allUsersData.sort((a, b) => {
                 let valA = a[columnKey]; let valB = b[columnKey];
-                if (typeof valA === 'number' && typeof valB === 'number') { return direction === 'asc' ? valA - valB : valB - valA; }
+                if (typeof valA === 'number' && typeof valB === 'number') { return direction === 'asc' ? valA - valB : valB - a; }
                 else { return direction === 'asc' ? String(valA).localeCompare(String(valB)) : String(valB).localeCompare(String(valA)); }
             });
             currentSort = { column: columnKey, direction: direction };
