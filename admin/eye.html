@@ -29,46 +29,44 @@
 
         /* Estilos para o popup */
         .popup-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background-color: rgba(0, 0, 0, 0.6);
-            display: none; /* Inicia oculto */
-            justify-content: center;
-            align-items: center;
-            z-index: 2000;
+            display: none; justify-content: center; align-items: center; z-index: 2000;
         }
         .popup-content {
-            background-color: #fff;
-            padding: 25px;
-            border-radius: 10px;
+            background-color: #fff; padding: 25px; border-radius: 10px;
             box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-            width: 90%;
-            max-width: 900px;
-            max-height: 80vh;
-            display: flex;
-            flex-direction: column;
-            position: relative;
+            width: 90%; max-width: 900px; max-height: 80vh;
+            display: flex; flex-direction: column; position: relative;
         }
         .close-button {
+            position: absolute; top: 10px; right: 15px;
+            font-size: 28px; font-weight: bold; color: #aaa; cursor: pointer;
+        }
+        .close-button:hover { color: #333; }
+        .popup-table-container { overflow-y: auto; }
+        #users-table-body tr { cursor: pointer; }
+
+        /* --- NOVO CSS PARA O BOTÃO RECALCULAR --- */
+        #recalculate-button {
             position: absolute;
-            top: 10px;
-            right: 15px;
-            font-size: 28px;
+            top: 25px;
+            right: 50px; /* Ajustado para não sobrepor o botão de fechar */
+            padding: 8px 12px;
+            border: none;
+            background-color: #007bff;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
             font-weight: bold;
-            color: #aaa;
-            cursor: pointer;
+            transition: background-color 0.3s ease;
         }
-        .close-button:hover {
-            color: #333;
+        #recalculate-button:hover {
+            background-color: #0056b3;
         }
-        .popup-table-container {
-            overflow-y: auto;
-        }
-        #users-table-body tr {
-            cursor: pointer;
+        #recalculate-button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
         }
     </style>
 </head>
@@ -105,7 +103,9 @@
     <div id="movements-popup" class="popup-overlay">
         <div class="popup-content">
             <span class="close-button">&times;</span>
-            <h2 id="popup-title" style="margin-bottom: 20px;">Movimentações</h2>
+            <!-- NOVO: BOTÃO RECALCULAR ADICIONADO -->
+            <button id="recalculate-button" title="Recalcula o saldo GCoins do utilizador com base em todos os seus movimentos da temporada.">Recalcular</button>
+            <h2 id="popup-title" style="margin-bottom: 20px; padding-right: 120px;">Movimentações</h2> <!-- Padding adicionado para não ficar por baixo do botão -->
             <div class="popup-table-container">
                 <table>
                     <thead>
@@ -128,7 +128,7 @@
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
         import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
-        import { getFirestore, collection, getDocs, doc, getDoc, query, where, orderBy } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        import { getFirestore, collection, getDocs, doc, getDoc, query, where, orderBy, updateDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
         const firebaseConfig = {
             apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0",
@@ -146,8 +146,81 @@
 
         let allUsersData = [];
         let currentSort = { column: null, direction: 'asc' };
+        let currentSeason = null; // NOVO: Variável global para a temporada
 
-        // Função para formatar o timestamp completo (usada na tabela principal)
+        // --- INÍCIO DAS NOVAS FUNÇÕES ---
+
+        // NOVO: Função para buscar a temporada atual, essencial para o recálculo
+        async function fetchCurrentSeason() {
+            if (currentSeason) return currentSeason; // Evita buscas repetidas
+            const configRef = doc(db, "paineis", "configuracoes_gerais");
+            const docSnap = await getDoc(configRef);
+            if (docSnap.exists() && docSnap.data().temporadaAtual) {
+                const temporada = docSnap.data().temporadaAtual;
+                currentSeason = temporada.replace(/\//g, '');
+                return currentSeason;
+            }
+            throw new Error("Não foi possível encontrar a temporada atual.");
+        }
+
+        // NOVO: Função que lida com a lógica de recálculo e atualização
+        async function handleRecalculateBalance(userId) {
+            const button = document.getElementById('recalculate-button');
+            const originalText = button.textContent;
+            button.disabled = true;
+            button.textContent = 'A calcular...';
+
+            try {
+                const season = await fetchCurrentSeason();
+
+                // 1. LER todos os movimentos do utilizador na temporada
+                const movimentosRef = collection(db, "movimentos");
+                const q = query(movimentosRef, where("userId", "==", userId), where("temporada", "==", season));
+                const querySnapshot = await getDocs(q);
+                
+                let newBalance = 0;
+                querySnapshot.forEach((doc) => {
+                    const valor = parseFloat(doc.data().valorreal);
+                    if (!isNaN(valor)) {
+                        newBalance += valor;
+                    }
+                });
+
+                // 2. ATUALIZAR o documento do utilizador no Firebase
+                const userRef = doc(db, 'users', userId);
+                const gCoinsField = `${season}GCoins`;
+                await updateDoc(userRef, { [gCoinsField]: newBalance });
+
+                // 3. ATUALIZAR a tabela na página para refletir a mudança
+                const userRow = document.querySelector(`tr[data-userid='${userId}']`);
+                if (userRow) {
+                    userRow.children[3].textContent = newBalance.toFixed(2); // A coluna GCoins é a 4ª (índice 3)
+                }
+                // Atualiza também o array de dados local
+                const userInData = allUsersData.find(u => u.id === userId);
+                if (userInData) {
+                    userInData.gcoins = newBalance;
+                }
+
+                button.textContent = 'Sucesso!';
+                button.style.backgroundColor = '#28a745'; // Verde
+
+            } catch (error) {
+                console.error("Erro ao recalcular saldo:", error);
+                button.textContent = 'Erro!';
+                button.style.backgroundColor = '#dc3545'; // Vermelho
+            } finally {
+                // Volta ao estado normal após 2 segundos
+                setTimeout(() => {
+                    button.textContent = originalText;
+                    button.disabled = false;
+                    button.style.backgroundColor = ''; // Volta ao azul padrão
+                }, 2000);
+            }
+        }
+        
+        // --- FIM DAS NOVAS FUNÇÕES ---
+
         function formatFirebaseTimestamp(timestampObject) {
             if (!timestampObject || typeof timestampObject.toDate !== 'function') return 'Nunca';
             try {
@@ -159,7 +232,6 @@
             }
         }
 
-        // NOVA FUNÇÃO: Formatar a data apenas para "dia Mês Ano" (usada no popup)
         function formatMovementDate(timestampObject) {
             if (!timestampObject || typeof timestampObject.toDate !== 'function') return 'N/A';
             const dateObj = timestampObject.toDate();
@@ -174,7 +246,6 @@
             tableBody.innerHTML = '';
             users.forEach(user => {
                 const row = document.createElement('tr');
-                // Adicionamos atributos de dados para identificar o user ao clicar
                 row.setAttribute('data-userid', user.id);
                 row.setAttribute('data-username', user.displayName);
                 
@@ -182,39 +253,42 @@
                     <td>${user.displayName}</td>
                     <td>${user.tatica}</td>
                     <td>${user.pontos}</td>
-                    <td>${user.gcoins}</td>
-                    <td>${user.divida}</td>
+                    <td>${user.gcoins.toFixed(2)}</td> <!-- Garante 2 casas decimais -->
+                    <td>${user.divida.toFixed(2)}</td>
                     <td>${user.jogadores}</td>
                     <td>${user.ultimoacesso}</td>
                 `;
                 tableBody.appendChild(row);
             });
-            
-            // Adicionamos os event listeners às novas linhas da tabela
             addEventListenersToRows();
         }
 
-        // NOVA FUNÇÃO: Busca e exibe as movimentações no popup
         async function fetchAndShowMovements(userId, userName) {
             const popup = document.getElementById('movements-popup');
             const popupTitle = document.getElementById('popup-title');
             const tableBody = document.getElementById('movements-table-body');
+            const recalculateBtn = document.getElementById('recalculate-button'); // NOVO
             
+            // NOVO: Prepara o botão de recálculo com o ID do utilizador
+            recalculateBtn.setAttribute('data-userid', userId);
+
             popupTitle.textContent = `Movimentações de ${userName}`;
             tableBody.innerHTML = '<tr><td colspan="7" style="text-align: center;">A carregar movimentações...</td></tr>';
-            popup.style.display = 'flex'; // Exibe o popup
+            popup.style.display = 'flex';
 
             try {
+                // MODIFICADO: Usa a temporada atual na consulta
+                const season = await fetchCurrentSeason();
                 const movementsRef = collection(db, "movimentos");
-                const q = query(movementsRef, where("userId", "==", userId), orderBy("movimentoData", "desc"));
+                const q = query(movementsRef, where("userId", "==", userId), where("temporada", "==", season), orderBy("movimentoData", "desc"));
                 const querySnapshot = await getDocs(q);
 
                 if (querySnapshot.empty) {
-                    tableBody.innerHTML = '<tr><td colspan="7" style="text-align: center;">Nenhuma movimentação encontrada.</td></tr>';
+                    tableBody.innerHTML = `<tr><td colspan="7" style="text-align: center;">Nenhuma movimentação encontrada para a temporada ${season}.</td></tr>`;
                     return;
                 }
 
-                tableBody.innerHTML = ''; // Limpa a mensagem de "a carregar"
+                tableBody.innerHTML = '';
                 querySnapshot.forEach(doc => {
                     const data = doc.data();
                     const row = document.createElement('tr');
@@ -222,10 +296,10 @@
                         <td>${formatMovementDate(data.movimentoData)}</td>
                         <td>${data.estado || 'N/A'}</td>
                         <td>${data.tipo || 'N/A'}</td>
-                        <td>${data.preco || 0}</td>
-                        <td>${data.valorreal || 0}</td>
+                        <td>${(data.preco || 0).toFixed(2)}</td>
+                        <td>${(data.valorreal || 0).toFixed(2)}</td>
                         <td>${data.descricao || ''}</td>
-                        <td>${data.valorTotalAPagar || ''}</td>
+                        <td>${(data.valorTotalAPagar || 0).toFixed(2)}</td>
                     `;
                     tableBody.appendChild(row);
                 });
@@ -236,7 +310,6 @@
             }
         }
 
-        // NOVA FUNÇÃO: Adiciona os listeners de clique às linhas da tabela principal
         function addEventListenersToRows() {
             document.querySelectorAll('#users-table-body tr').forEach(row => {
                 row.addEventListener('click', () => {
@@ -269,6 +342,9 @@
             const statusMessage = document.getElementById('status-message');
             const tableContainer = document.querySelector('.table-container');
             try {
+                // NOVO: Garante que a temporada é carregada antes de tudo
+                await fetchCurrentSeason(); 
+
                 const playerCounts = {};
                 const playersSnapshot = await getDocs(collection(db, "jogadores"));
                 playersSnapshot.forEach(playerDoc => {
@@ -279,7 +355,7 @@
                 });
 
                 const debtTotals = {};
-                const debtQuery = query(collection(db, "movimentos"), where("estado", "==", "Por Pagar"));
+                const debtQuery = query(collection(db, "movimentos"), where("estado", "==", "Por Pagar"), where("temporada", "==", currentSeason));
                 const debtSnapshot = await getDocs(debtQuery);
                 debtSnapshot.forEach(debtDoc => {
                     const debtData = debtDoc.data();
@@ -297,18 +373,16 @@
                 usersSnapshot.forEach(doc => {
                     const userData = doc.data();
                     const userId = doc.id;
-                    let dynamicPontos = 0, dynamicGCoins = 0;
-                    for (const key in userData) {
-                        if (key.endsWith('Pontos') && !isNaN(parseInt(key.substring(0, 8)))) { dynamicPontos = userData[key]; }
-                        if (key.endsWith('GCoins') && !isNaN(parseInt(key.substring(0, 8)))) { dynamicGCoins = userData[key]; }
-                    }
+                    // MODIFICADO: Usa a temporada atual para buscar os campos dinâmicos
+                    const pontosField = `${currentSeason}Pontos`;
+                    const gcoinsField = `${currentSeason}GCoins`;
 
                     allUsersData.push({
-                        id: userId, // <-- ID ADICIONADO AQUI
+                        id: userId,
                         displayName: userData.nometabela || userData.email || 'N/A',
                         tatica: userData.tática || 'N/A',
-                        pontos: dynamicPontos,
-                        gcoins: dynamicGCoins,
+                        pontos: userData[pontosField] || 0,
+                        gcoins: userData[gcoinsField] || 0,
                         divida: debtTotals[userId] || 0,
                         jogadores: playerCounts[userId] || 0,
                         ultimoacesso: formatFirebaseTimestamp(userData.ultimoacesso)
@@ -323,27 +397,27 @@
 
             } catch (error) {
                 console.error("Erro CRÍTICO ao buscar dados:", error);
-                statusMessage.textContent = 'Ocorreu um erro ao carregar os dados.';
+                statusMessage.textContent = `Ocorreu um erro ao carregar os dados: ${error.message}`;
             }
         }
         
-        // LÓGICA PARA FECHAR O POPUP
         const popup = document.getElementById('movements-popup');
         const closeBtn = document.querySelector('.close-button');
+        const recalculateBtn = document.getElementById('recalculate-button'); // NOVO
 
-        closeBtn.addEventListener('click', () => {
-            popup.style.display = 'none';
-        });
+        closeBtn.addEventListener('click', () => popup.style.display = 'none');
+        popup.addEventListener('click', (event) => { if (event.target === popup) popup.style.display = 'none'; });
         
-        // Fecha o popup se clicar fora da área do conteúdo
-        popup.addEventListener('click', (event) => {
-            if (event.target === popup) {
-                popup.style.display = 'none';
+        // NOVO: Listener para o botão de recálculo
+        recalculateBtn.addEventListener('click', (event) => {
+            const userId = event.target.dataset.userid;
+            if (userId) {
+                handleRecalculateBalance(userId);
             }
         });
 
-
         onAuthStateChanged(auth, async (user) => {
+            document.body.style.display = 'flex'; // Torna o corpo visível após a verificação
             if (user) {
                 const userDoc = await getDoc(doc(db, "users", user.uid));
                 if (userDoc.exists() && userDoc.data().estatuto === 'ruler') {
@@ -352,8 +426,7 @@
                     window.location.replace('/acesso-negado.html');
                 }
             } else {
-                 // Lógica de redirecionamento se não houver usuário logado, se necessário
-                 // window.location.replace('/login.html');
+                 statusMessage.textContent = 'É necessário fazer login para aceder a esta página.';
             }
         });
     </script>
