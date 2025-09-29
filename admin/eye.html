@@ -26,6 +26,50 @@
         thead th.sortable::after { content: ''; position: absolute; right: 15px; top: 50%; margin-top: -8px; border: 5px solid transparent; opacity: 0.3; }
         thead th.sort-asc::after { opacity: 1; border-bottom-color: #333; }
         thead th.sort-desc::after { opacity: 1; border-top-color: #333; }
+
+        /* Estilos para o popup */
+        .popup-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            display: none; /* Inicia oculto */
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+        }
+        .popup-content {
+            background-color: #fff;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            width: 90%;
+            max-width: 900px;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+        .close-button {
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            font-size: 28px;
+            font-weight: bold;
+            color: #aaa;
+            cursor: pointer;
+        }
+        .close-button:hover {
+            color: #333;
+        }
+        .popup-table-container {
+            overflow-y: auto;
+        }
+        #users-table-body tr {
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -47,7 +91,6 @@
                         <th class="sortable" data-column="tatica">Tática</th>
                         <th class="sortable" data-column="pontos">Pontos</th>
                         <th class="sortable" data-column="gcoins">GCoins</th>
-                        <!-- 1. CABEÇALHO DA NOVA COLUNA ADICIONADO -->
                         <th class="sortable" data-column="divida">Dívida</th>
                         <th class="sortable" data-column="jogadores">Jogadores</th>
                         <th class="sortable" data-column="ultimoacesso">Último Acesso</th>
@@ -58,10 +101,34 @@
         </div>
     </main>
 
+    <!-- HTML DO POPUP -->
+    <div id="movements-popup" class="popup-overlay">
+        <div class="popup-content">
+            <span class="close-button">&times;</span>
+            <h2 id="popup-title" style="margin-bottom: 20px;">Movimentações</h2>
+            <div class="popup-table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Data</th>
+                            <th>Estado</th>
+                            <th>Tipo</th>
+                            <th>Preço</th>
+                            <th>Valor Real</th>
+                            <th>Descrição</th>
+                            <th>Valor a Pagar</th>
+                        </tr>
+                    </thead>
+                    <tbody id="movements-table-body"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
         import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
-        import { getFirestore, collection, getDocs, doc, getDoc, query, where } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        import { getFirestore, collection, getDocs, doc, getDoc, query, where, orderBy } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
         const firebaseConfig = {
             apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0",
@@ -80,22 +147,26 @@
         let allUsersData = [];
         let currentSort = { column: null, direction: 'asc' };
 
+        // Função para formatar o timestamp completo (usada na tabela principal)
         function formatFirebaseTimestamp(timestampObject) {
-            if (!timestampObject || typeof timestampObject.toDate !== 'function') {
-                return 'Nunca';
-            }
+            if (!timestampObject || typeof timestampObject.toDate !== 'function') return 'Nunca';
             try {
                 const dateObj = timestampObject.toDate();
-                const formattedDay = dateObj.getDate();
-                const formattedMonth = dateObj.toLocaleString('pt-PT', { month: 'long' });
-                const formattedYear = dateObj.getFullYear();
-                const formattedHours = String(dateObj.getHours()).padStart(2, '0');
-                const formattedMinutes = String(dateObj.getMinutes()).padStart(2, '0');
-                return `${formattedDay} ${formattedMonth} ${formattedYear}, ${formattedHours}h${formattedMinutes}`;
+                return `${dateObj.getDate()} ${dateObj.toLocaleString('pt-PT', { month: 'long' })} ${dateObj.getFullYear()}, ${String(dateObj.getHours()).padStart(2, '0')}h${String(dateObj.getMinutes()).padStart(2, '0')}`;
             } catch (error) {
                 console.error("Erro ao converter Timestamp:", error);
                 return 'Data Inválida';
             }
+        }
+
+        // NOVA FUNÇÃO: Formatar a data apenas para "dia Mês Ano" (usada no popup)
+        function formatMovementDate(timestampObject) {
+            if (!timestampObject || typeof timestampObject.toDate !== 'function') return 'N/A';
+            const dateObj = timestampObject.toDate();
+            const day = dateObj.getDate();
+            const month = dateObj.toLocaleString('pt-PT', { month: 'long' });
+            const year = dateObj.getFullYear();
+            return `${day} ${month} ${year}`;
         }
 
         function renderTable(users) {
@@ -103,7 +174,10 @@
             tableBody.innerHTML = '';
             users.forEach(user => {
                 const row = document.createElement('tr');
-                // 3. CÉLULA DA NOVA COLUNA ADICIONADA (user.divida)
+                // Adicionamos atributos de dados para identificar o user ao clicar
+                row.setAttribute('data-userid', user.id);
+                row.setAttribute('data-username', user.displayName);
+                
                 row.innerHTML = `
                     <td>${user.displayName}</td>
                     <td>${user.tatica}</td>
@@ -115,6 +189,64 @@
                 `;
                 tableBody.appendChild(row);
             });
+            
+            // Adicionamos os event listeners às novas linhas da tabela
+            addEventListenersToRows();
+        }
+
+        // NOVA FUNÇÃO: Busca e exibe as movimentações no popup
+        async function fetchAndShowMovements(userId, userName) {
+            const popup = document.getElementById('movements-popup');
+            const popupTitle = document.getElementById('popup-title');
+            const tableBody = document.getElementById('movements-table-body');
+            
+            popupTitle.textContent = `Movimentações de ${userName}`;
+            tableBody.innerHTML = '<tr><td colspan="7" style="text-align: center;">A carregar movimentações...</td></tr>';
+            popup.style.display = 'flex'; // Exibe o popup
+
+            try {
+                const movementsRef = collection(db, "movimentos");
+                const q = query(movementsRef, where("userId", "==", userId), orderBy("movimentoData", "desc"));
+                const querySnapshot = await getDocs(q);
+
+                if (querySnapshot.empty) {
+                    tableBody.innerHTML = '<tr><td colspan="7" style="text-align: center;">Nenhuma movimentação encontrada.</td></tr>';
+                    return;
+                }
+
+                tableBody.innerHTML = ''; // Limpa a mensagem de "a carregar"
+                querySnapshot.forEach(doc => {
+                    const data = doc.data();
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${formatMovementDate(data.movimentoData)}</td>
+                        <td>${data.estado || 'N/A'}</td>
+                        <td>${data.tipo || 'N/A'}</td>
+                        <td>${data.preco || 0}</td>
+                        <td>${data.valorreal || 0}</td>
+                        <td>${data.descricao || ''}</td>
+                        <td>${data.valorTotalAPagar || ''}</td>
+                    `;
+                    tableBody.appendChild(row);
+                });
+
+            } catch (error) {
+                console.error("Erro ao buscar movimentações:", error);
+                tableBody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: red;">Erro ao carregar dados.</td></tr>';
+            }
+        }
+
+        // NOVA FUNÇÃO: Adiciona os listeners de clique às linhas da tabela principal
+        function addEventListenersToRows() {
+            document.querySelectorAll('#users-table-body tr').forEach(row => {
+                row.addEventListener('click', () => {
+                    const userId = row.dataset.userid;
+                    const userName = row.dataset.username;
+                    if (userId) {
+                        fetchAndShowMovements(userId, userName);
+                    }
+                });
+            });
         }
         
         function sortTable(columnKey) {
@@ -123,7 +255,7 @@
             allUsersData.sort((a, b) => {
                 let valA = a[columnKey]; let valB = b[columnKey];
                 if (typeof valA === 'number' && typeof valB === 'number') { return direction === 'asc' ? valA - valB : valB - valA; }
-                else { return direction === 'asc' ? String(valA).localeCompare(String(valB)) : String(B).localeCompare(String(valA)); }
+                else { return direction === 'asc' ? String(valA).localeCompare(String(valB)) : String(valB).localeCompare(String(valA)); }
             });
             currentSort = { column: columnKey, direction: direction };
             document.querySelectorAll('thead th.sortable').forEach(th => {
@@ -137,18 +269,15 @@
             const statusMessage = document.getElementById('status-message');
             const tableContainer = document.querySelector('.table-container');
             try {
-                // ETAPA 1: Buscar todos os jogadores e contar quantos cada user comprou
                 const playerCounts = {};
                 const playersSnapshot = await getDocs(collection(db, "jogadores"));
                 playersSnapshot.forEach(playerDoc => {
-                    const playerData = playerDoc.data();
-                    const buyerId = playerData.compradopor;
+                    const buyerId = playerDoc.data().compradopor;
                     if (buyerId) {
                         playerCounts[buyerId] = (playerCounts[buyerId] || 0) + 1;
                     }
                 });
 
-                // 2. NOVA ETAPA: Buscar e somar todas as dívidas pendentes de todos os utilizadores
                 const debtTotals = {};
                 const debtQuery = query(collection(db, "movimentos"), where("estado", "==", "Por Pagar"));
                 const debtSnapshot = await getDocs(debtQuery);
@@ -161,12 +290,10 @@
                     }
                 });
 
-                // ETAPA 3: Buscar todos os utilizadores
                 const usersSnapshot = await getDocs(collection(db, "users"));
                 allUsersData = [];
                 if (usersSnapshot.empty) { statusMessage.textContent = 'Nenhum utilizador encontrado.'; return; }
 
-                // ETAPA 4: Montar os dados para a tabela, agora incluindo a dívida
                 usersSnapshot.forEach(doc => {
                     const userData = doc.data();
                     const userId = doc.id;
@@ -176,16 +303,14 @@
                         if (key.endsWith('GCoins') && !isNaN(parseInt(key.substring(0, 8)))) { dynamicGCoins = userData[key]; }
                     }
 
-                    const numJogadores = playerCounts[userId] || 0;
-                    const totalDivida = debtTotals[userId] || 0; // Obter a dívida do mapa
-
                     allUsersData.push({
+                        id: userId, // <-- ID ADICIONADO AQUI
                         displayName: userData.nometabela || userData.email || 'N/A',
                         tatica: userData.tática || 'N/A',
                         pontos: dynamicPontos,
                         gcoins: dynamicGCoins,
-                        divida: totalDivida, // Adicionar a nova propriedade
-                        jogadores: numJogadores,
+                        divida: debtTotals[userId] || 0,
+                        jogadores: playerCounts[userId] || 0,
                         ultimoacesso: formatFirebaseTimestamp(userData.ultimoacesso)
                     });
                 });
@@ -202,16 +327,33 @@
             }
         }
         
+        // LÓGICA PARA FECHAR O POPUP
+        const popup = document.getElementById('movements-popup');
+        const closeBtn = document.querySelector('.close-button');
+
+        closeBtn.addEventListener('click', () => {
+            popup.style.display = 'none';
+        });
+        
+        // Fecha o popup se clicar fora da área do conteúdo
+        popup.addEventListener('click', (event) => {
+            if (event.target === popup) {
+                popup.style.display = 'none';
+            }
+        });
+
+
         onAuthStateChanged(auth, async (user) => {
             if (user) {
                 const userDoc = await getDoc(doc(db, "users", user.uid));
                 if (userDoc.exists() && userDoc.data().estatuto === 'ruler') {
-                    // Importar a função query aqui para o escopo do onAuthStateChanged
-                    const { query, where } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
                     fetchAndDisplayUsers();
                 } else {
                     window.location.replace('/acesso-negado.html');
                 }
+            } else {
+                 // Lógica de redirecionamento se não houver usuário logado, se necessário
+                 // window.location.replace('/login.html');
             }
         });
     </script>
