@@ -1,70 +1,2123 @@
-document.addEventListener("DOMContentLoaded", () => {
-    // 1. O HTML do menu (sem alterações)
-    const menuHTML = `
-        <nav class="bottom-menu">
-            <a href="1x.html" class="menu-item" data-menu-key="1x"><i class="fas fa-home"></i></a>
-            <a href="market.html" class="menu-item" data-menu-key="market"><i class="fas fa-shopping-cart"></i></a>
-            <a href="team.html" class="menu-item" data-menu-key="team"><i class="fas fa-users"></i></a>
-            <a href="empire.html" class="menu-item" data-menu-key="empire"><i class="fas fa-landmark empire-icon"></i></a>
-            <a href="rankings.html" class="menu-item" data-menu-key="rankings"><i class="fas fa-list"></i></a>
-            <a href="profile.html" class="menu-item" data-menu-key="profile"><i class="fas fa-user"></i></a>
-        </nav>
-    `;
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Empire - G EMPIRE</title>
+        <link rel="icon" type="image/png" href="https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhTl6Ljabwgx-VXdZz8FcAoygQprujSsCoXc32Y_iU0FjYVPu1B6MffWwp8gcCVuV8TWn39FRk9OIe1nc-esubVJYmdLsTptAoR9GyqNuw4R5MBaeaoWXTc3JaqH2YVNtEmfReQqohvQKvHiI0XwE5na2ty2B9Bt4oELxYv2BaZ7R3UmeylpiVEiIbiLnCB/s320/soccer-ball-png.webp">
 
-    // 2. O CSS do menu (sem alterações)
-    const menuCSS = `
-        .bottom-menu { position: fixed; bottom: 0; left: 0; width: 100%; background-color: var(--card-bg, #ffffff); box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1); padding: 12px 0; display: flex; justify-content: center; gap: 32px; align-items: center; z-index: 1000; }
-        .menu-item { display: flex; flex-direction: column; align-items: center; text-decoration: none; color: var(--secondary-text, #7f8c8d); transition: color 0.3s ease, transform 0.3s ease; position: relative; }
-        .menu-item.hidden { display: none; }
-        .menu-item:hover { color: var(--primary-text, #2c3e50); transform: translateY(-3px); }
-        .menu-item.active { color: var(--accent-color, #3498db); }
-        .menu-item.active::before { content: ''; position: absolute; top: -12px; width: 25px; height: 3px; background-color: var(--accent-color, #3498db); border-radius: 2px; }
-        .menu-item i { font-size: 24px; margin-bottom: 4px; }
-        .empire-icon { font-size: 42px; color: #2176ff; transform: translateY(-3px); filter: drop-shadow(0 0 8px rgba(33, 118, 255, 0.4)); transition: all 0.3s ease; }
-        .empire-icon:hover { color: #0056d6; transform: translateY(-8px); filter: drop-shadow(0 0 12px rgba(33, 118, 255, 0.6)); }
-    `;
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <!-- Google Font Cinzel -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&display=swap">
+    <style>
+        /* --- Global Resets & Body --- */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none; /* Prevent text selection */
+        }
 
-    // 3. Injeção (sem alterações)
-    const styleElement = document.createElement('style');
-    styleElement.textContent = menuCSS;
-    document.head.appendChild(styleElement);
-    document.body.insertAdjacentHTML('beforeend', menuHTML);
+        body {
+            min-height: 100vh;
+            background: linear-gradient(135deg, #0a0a14 0%, #1a1a3a 50%, #2a1a4a 100%);
+            background-attachment: fixed; /* Prevent gradient scrolling */
+            font-family: 'Cinzel', serif;
+            color: #e0d2b4; /* Primary text color */
+            overflow-x: hidden; /* Prevent horizontal scroll */
+        }
+
+        /* --- Loading Screen Styles --- */
+        #loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #0a0a14;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1005; /* Highest z-index */
+            opacity: 1;
+            transition: opacity 0.5s ease-out;
+        }
+        .loading-spinner {
+            border: 16px solid #1a1a3a; /* Darker background color */
+            border-top: 16px solid #c9a959; /* Gold accent */
+            border-radius: 50%;
+            width: 120px;
+            height: 120px;
+            animation: spin 2s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .loading-percentage {
+            margin-top: 15px;
+            font-size: 18px;
+            font-weight: bold;
+            color: #c9a959; /* Gold accent */
+        }
+        .progress-bar-container {
+            width: 200px;
+            height: 10px;
+            background-color: #1a1a3a; /* Darker background */
+            border-radius: 5px;
+            margin-top: 10px;
+            overflow: hidden;
+        }
+        .progress-bar {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(135deg, #c9a959 0%, #e6c675 100%); /* Gold gradient */
+            border-radius: 5px;
+            transition: width 0.3s ease-in-out;
+        }
+
     
-    // 4. Marcar item ativo (sem alterações)
-    setActiveMenuItem();
-});
 
-function setActiveMenuItem() {
-    const currentPage = window.location.pathname.split('/').pop();
-    const pageToMenuKey = { '1x.html': '1x', 'market.html': 'market', 'team.html': 'team', 'empire.html': 'empire', 'rankings.html': 'rankings', 'profile.html': 'profile' };
-    const activeKey = pageToMenuKey[currentPage];
-    if (activeKey) {
-        const menuItem = document.querySelector(`.menu-item[data-menu-key="${activeKey}"]`);
-        if (menuItem) {
-            menuItem.classList.add('active');
+        /* --- Popup General Styles --- */
+        .popup-overlay {
+            display: none; /* Hidden by default */
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8); /* Dark overlay */
+            z-index: 1001; /* Base popup layer (Ex: Filosofia Details) */
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            overflow-y: auto; /* Allow vertical scroll if content overflows */
+            padding: 20px 0; /* Top/bottom padding for scroll space */
+        }
+        .popup-content {
+            position: relative; /* Position relative to the overlay flow */
+            margin: 5vh auto; /* Center vertically with margin, horizontally auto */
+            transform: scale(0.8); /* Start scaled down for animation */
+            background: rgba(26, 26, 58, 0.95); /* Dark purple, almost opaque */
+            padding: 30px;
+            border-radius: 10px;
+            border: 2px solid #c9a959; /* Gold border */
+            max-width: 95%; /* Max width relative to viewport */
+            width: 800px; /* Default width */
+            opacity: 0;
+            transition: all 0.3s ease; /* Smooth transition for scale and opacity */
+            box-shadow: 0 5px 25px rgba(0, 0, 0, 0.7); /* Strong shadow */
+        }
+        .popup-overlay.active { /* Styles when popup is shown */
+            display: block; /* Make visible */
+            opacity: 1; /* Fade in */
+        }
+        .popup-overlay.active .popup-content {
+            transform: scale(1); /* Scale up to full size */
+            opacity: 1; /* Fade in content */
+        }
+        .popup-title {
+            text-align: center;
+            color: #c9a959; /* Gold title */
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+        .items-grid {
+            display: grid;
+            /* Auto-fill columns, minimum 150px width, max 1 fraction of space */
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 15px; /* Gap between grid items */
+            margin-bottom: 20px;
+            max-height: 60vh; /* Limit height to prevent overly tall popups */
+            overflow-y: auto; /* Allow scrolling within the grid */
+            padding-right: 10px; /* Space for scrollbar */
+            position: relative; /* Needed for z-index on headers */
+            z-index: 1;
+        }
+        .item-card {
+            background: rgba(20, 20, 40, 0.7); /* Slightly transparent card background */
+            border: 1px solid #c9a959; /* Gold border */
+            border-radius: 8px;
+            padding: 10px;
+            text-align: center;
+            opacity: 0; /* Start hidden for animation */
+            transform: translateY(20px); /* Start lower for animation */
+            transition: all 0.3s ease;
+            cursor: pointer; /* Indicate clickable */
+            position: relative; /* For stacking context if needed */
+            z-index: 1; /* Ensure cards are above potential grid background */
+        }
+        .item-card:hover {
+            border-color: #e6c675; /* Brighter gold border on hover */
+            background: rgba(30, 30, 60, 0.85); /* Darker background on hover */
+        }
+        .item-card.visible { /* State for animation completion */
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .item-image {
+            width: 100px; /* Fixed image width */
+            height: 100px; /* Fixed image height */
+            object-fit: contain; /* Scale image while preserving aspect ratio */
+            margin-bottom: 10px;
+            pointer-events: none; /* Prevent image dragging ghost */
+        }
+        .item-name {
+            color: #e0d2b4; /* Main text color */
+            font-size: 14px;
+            margin-bottom: 5px;
+            min-height: 2.5em; /* Ensure consistent height even with short names */
+        }
+        .item-nota { /* For description or other notes */
+            color: #a99a7c; /* Muted gold/brown */
+            font-size: 12px;
+        }
+        .type-header { /* Style for category headers within the grid */
+            width: 100%;
+            padding: 10px;
+            margin: 15px 0 10px;
+            color: #c9a959; /* Gold color */
+            font-size: 18px;
+            font-weight: bold;
+            border-bottom: 1px solid #c9a959; /* Gold underline */
+            grid-column: 1 / -1; /* Span across all grid columns */
+            text-transform: uppercase; /* Make titles stand out */
+            letter-spacing: 1px;
+            position: relative; /* Needed for z-index */
+            z-index: 1; /* Ensure headers are above cards if overlapping occurs */
+        }
+        .popup-buttons { /* Container for action buttons at bottom */
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .popup-button { /* Style for buttons within popups */
+            padding: 10px 20px;
+            border: 2px solid #c9a959; /* Gold border */
+            background: transparent; /* Transparent background */
+            color: #e0d2b4; /* Text color */
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-family: 'Cinzel', serif; /* Use main font */
+        }
+        .popup-button:hover {
+            background: #c9a959; /* Gold background on hover */
+            color: #1a1a3a; /* Dark text on hover */
+        }
+        .confirmation-popup, .nested-popup-overlay {
+             /* Popups que devem ficar ACIMA do base (Loja, Detalhes Estádio, Confirmações) */
+            z-index: 1002;
+        }
+        #nested-popup.popup-overlay {
+            /* O popup genérico para itens anexados precisa ficar ACIMA dos outros popups (como a Loja) */
+            z-index: 1003;
+        }
+
+
+ #item-confirmation-popup.popup-overlay {
+            /* Garante que a confirmação de compra de item fique acima de TODOS os outros popups */
+            z-index: 1004;
+        }
+
+
+        .close-button { /* Style for the 'X' close button */
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            background: none;
+            border: none;
+            font-size: 28px;
+            color: #a99a7c; /* Muted gold */
+            cursor: pointer;
+            transition: color 0.3s ease;
+            padding: 5px;
+            line-height: 1; /* Ensure tight fit */
+        }
+        .close-button:hover {
+            color: #e0d2b4; /* Brighter color on hover */
+        }
+
+        /* --- Filosofia Card Specific Styles --- */
+        @keyframes floatGlow { /* Animation for the floating glow effect */
+            0%, 100% { filter: drop-shadow(0 0 8px rgba(201, 169, 89, 0.6)); } /* Base gold glow */
+            50% { filter: drop-shadow(0 0 12px rgba(201, 169, 89, 0.75)); } /* Stronger glow at midpoint */
+        }
+        .filosofia-card { /* Container for the large filosofia choice cards */
+            opacity: 0; /* Start hidden for JS animation */
+            transform: translateY(10px); /* Start lower for JS animation */
+            transition: opacity 0.8s ease-in-out, transform 0.8s ease-in-out; /* JS transitions */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            /* --- BASE MARGIN (Applied Desktop First) --- */
+            margin: 15px;
+            cursor: pointer; /* Indicate clickable */
+            position: relative; /* Needed for stacking context */
+            flex-shrink: 0; /* Prevent shrinking in flex container */
+        }
+        .filosofia-card img { /* Image within the filosofia card */
+            width: 300px; /* Large image */
+            height: 300px;
+            object-fit: contain;
+            pointer-events: none; /* Prevent interaction with image */
+            /* Apply the base floating glow animation */
+            animation: floatGlow 3.5s infinite ease-in-out;
+            /* Add transition for smooth hover effect change */
+            transition: filter 0.4s ease-in-out;
+        }
+        .filosofia-card:hover img { /* Enhance glow on hover */
+            animation: none; /* Pause the floating animation on hover */
+            filter: drop-shadow(0 0 18px rgba(230, 198, 117, 0.9)); /* Stronger static glow */
+        }
+
+        /* --- Main Content Area Styling --- */
+        #filosofias-container {
+            position: relative; /* Needed for z-index stacking context */
+            z-index: 1; /* Ensure content is above the background image */
+            padding: 20px; /* Keep padding */
+            margin-bottom: 80px; /* Space above bottom menu */
+        }
+        #filosofias-list {
+             position: relative; /* Ensure list items stack correctly */
+             z-index: 1;
+             display: flex; /* Use flexbox for layout */
+             flex-wrap: wrap; /* Allow items to wrap */
+             justify-content: center; /* Center items */
+             gap: 20px; /* BASE Gap between items (will be overridden for mobile filosofias) */
+        }
+
+        /* Estilo para o botão Comprar quando desativado */
+        .buy-item-btn:disabled {
+            background-color: rgba(85, 85, 85, 0.5); /* Cinza mais escuro e transparente */
+            border-color: #777;
+            color: #aaa;
+            cursor: not-allowed;
+            opacity: 0.7; /* Um pouco mais transparente */
+        }
+        .buy-item-btn:disabled:hover {
+             /* Evita mudança de cor no hover quando desativado */
+            background-color: rgba(85, 85, 85, 0.5);
+            color: #aaa;
+        }
+        .disabled-reason { /* Estilo para a nota abaixo do botão desativado */
+            font-size: 10px;
+            color: #ffcdd2; /* Cor de aviso suave (vermelho claro) */
+            margin-top: 5px;
+            display: block; /* Garante que fica numa linha própria */
+            min-height: 1.2em; /* Reserva espaço mesmo quando não há motivo */
+        }
+
+        /* --- Botão Flutuante para Outros Impérios --- */
+        #other-empires-button {
+            position: fixed;
+            bottom: 90px; /* Acima do menu inferior */
+            right: 20px;
+            width: 55px;
+            height: 55px;
+            background-color: rgba(201, 169, 89, 0.85); /* Cor dourada semi-transparente */
+            color: #1a1a3a; /* Cor escura do tema */
+            border: 2px solid #1a1a3a;
+            border-radius: 50%;
+            font-size: 24px;
+            display: flex; /* Para centralizar o ícone */
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
+            z-index: 999; /* Abaixo dos popups, acima do conteúdo */
+            transition: all 0.3s ease;
+            opacity: 0; /* Começa escondido, mostrado via JS */
+            transform: scale(0.8); /* Animação de entrada */
+        }
+        #other-empires-button:hover {
+            background-color: #e6c675; /* Dourado mais claro */
+            transform: scale(1.1);
+        }
+        #other-empires-button.visible { /* Classe para mostrar o botão */
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        /* --- Popup Outros Impérios --- */
+        #other-empires-popup.popup-overlay {
+             /* Deve ficar acima de outros popups como loja ou detalhes */
+             z-index: 1003;
+        }
+        /* Estilo para cada cartão de utilizador na lista */
+        .user-empire-card {
+            background: rgba(20, 20, 40, 0.7);
+            border: 1px solid #a99a7c; /* Borda mais suave */
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s ease;
+            opacity: 0; /* Para animação */
+            transform: translateY(15px); /* Para animação */
+            cursor: pointer; /* Indicar que é clicável */
+        }
+         .user-empire-card.visible { /* Para animação */
+             opacity: 1;
+             transform: translateY(0);
+         }
+        .user-empire-card:hover {
+             border-color: #c9a959;
+             background: rgba(30, 30, 60, 0.85);
+         }
+        .user-empire-image {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid #c9a959;
+            margin-bottom: 5px;
+            pointer-events: none; /* Evita interação com a imagem */
+        }
+        .user-empire-name {
+            color: #e0d2b4;
+            font-size: 14px;
+            font-weight: bold;
+            pointer-events: none; /* Evita interação com o nome */
+        }
+
+        /* --- Popup Itens de Outro Utilizador --- */
+        #user-items-popup.popup-overlay {
+             /* Deve ficar acima do popup de Outros Impérios */
+             z-index: 1004;
+        }
+        /* Estilo para cada item na lista do popup de itens do utilizador */
+        .user-owned-item-card {
+            background: rgba(15, 15, 30, 0.8); /* Um pouco mais escuro */
+            border: 1px solid #7a6a4c;
+            border-radius: 6px;
+            padding: 10px;
+            text-align: left; /* Alinhar texto à esquerda */
+            display: flex;
+            flex-direction: column; /* Empilhar nome e tipo */
+            gap: 4px;
+            opacity: 0; /* Para animação */
+            transform: translateY(15px); /* Para animação */
+            transition: all 0.3s ease;
+        }
+        .user-owned-item-card.visible { /* Para animação */
+             opacity: 1;
+             transform: translateY(0);
+         }
+        .user-owned-item-name {
+            color: #e0d2b4;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        .user-owned-item-type {
+            color: #a99a7c;
+            font-size: 12px;
+            font-style: italic;
+        }
+
+
+        .item-type-chip {
+            position: absolute; /* Posicionamento absoluto relativo ao cartão */
+            top: 5px;          /* Distância do topo */
+            right: 5px;         /* Distância da direita */
+            background-color: rgba(201, 169, 89, 0.8); /* Cor dourada semi-transparente (ajusta conforme gosto) */
+            color: #1a1a3a;     /* Cor escura do tema para o texto */
+            padding: 2px 6px;  /* Espaçamento interno (pequeno) */
+            border-radius: 10px; /* Bordas arredondadas */
+            font-size: 10px;     /* Tamanho da fonte pequeno */
+            font-weight: bold;
+            z-index: 2;        /* Garante que fica acima da imagem se houver sobreposição */
+            line-height: 1.2;  /* Ajuste de altura da linha */
+            box-shadow: 0 1px 3px rgba(0,0,0,0.5); /* Sombra suave */
+        }
+
+
+        /* =========================================================== */
+        /* --- Responsive Adjustments for Mobile (Max-width 600px) --- */
+        /* =========================================================== */
+        @media (max-width: 600px) {
+
+            body {
+                /* Potentially reduce base font size slightly if needed */
+                /* font-size: 14px; */
+            }
+
+            /* --- Adjustments for Filosofia Section --- */
+            #filosofias-list {
+                 /* Make Filosofia cards wrap */
+                 flex-wrap: wrap;
+                 /* Remove space BETWEEN filosofia cards */
+                 gap: 0;
+                 /* Keep items centered */
+                 justify-content: center;
+            }
+
+            .filosofia-card {
+                /* Reduce size significantly */
+                width: 150px; /* Or adjust as needed */
+                 height: auto; /* Allow height to adjust */
+
+                /* --- KEY FIX: Remove horizontal margin, keep vertical --- */
+                margin: 10px 0; /* 10px top/bottom, 0px left/right */
+            }
+
+            .filosofia-card img {
+                /* Match card width, adjust height as needed */
+                width: 100%; /* Fill the card width */
+                height: 150px; /* Adjust height */
+            }
+
+            /* Adjustments for General Item Cards (in Grids and Main List) */
+            .items-grid {
+                /* Make grid columns slightly smaller minimum on mobile */
+                grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+                gap: 10px; /* Reduce gap between grid items */
+                padding-right: 5px; /* Less padding for scrollbar */
+                 max-height: 65vh; /* Allow slightly more height if needed */
+            }
+
+            .item-card { /* Applies to Stadiums and Owned Items in main list too */
+                padding: 8px; /* Slightly reduce padding */
+                 /* Ensure cards in grid don't have conflicting margins */
+                 margin: 0; /* Remove potential margins IF they cause issues */
+            }
+
+            .item-image {
+                width: 80px; /* Reduce image size */
+                height: 80px;
+                margin-bottom: 8px;
+            }
+
+            .item-name {
+                font-size: 13px; /* Slightly smaller font */
+                min-height: 2.2em; /* Adjust min-height accordingly */
+                 margin-bottom: 3px;
+            }
+
+            .item-nota {
+                font-size: 11px; /* Slightly smaller font */
+            }
+
+             .item-type-chip {
+                 font-size: 9px;   /* Smaller chip text */
+                 padding: 1px 5px; /* Adjust padding */
+             }
+
+
+            /* Adjustments for Popups */
+            .popup-content {
+                width: 92%; /* Remove fixed width, rely on percentage */
+                padding: 20px; /* Reduce padding */
+                margin: 3vh auto; /* Adjust vertical margin */
+            }
+
+            .popup-title {
+                font-size: 20px; /* Reduce title size */
+                margin-bottom: 15px;
+            }
+
+            .type-header {
+                font-size: 16px; /* Reduce header size */
+                padding: 8px;
+                margin: 10px 0 8px;
+            }
+
+            .popup-buttons {
+                gap: 10px; /* Reduce gap between buttons */
+                margin-top: 15px;
+            }
+
+            .popup-button {
+                padding: 8px 15px; /* Adjust button padding */
+                font-size: 14px;
+            }
+
+            /* Adjust confirmation popups if needed */
+            #confirmation-popup .popup-content,
+            #stadium-confirmation-popup .popup-content,
+            #item-confirmation-popup .popup-content,
+            #info-popup .popup-content {
+                width: 90%; /* Ensure smaller popups are also responsive */
+            }
+
+            /* Adjust Bottom Menu Spacing */
+            .bottom-menu {
+                gap: 20px; /* Reduce gap between menu items */
+                padding: 10px 0;
+            }
+            .menu-item i {
+                font-size: 22px; /* Slightly smaller icons */
+            }
+            .empire-icon {
+                font-size: 38px; /* Slightly smaller main icon */
+            }
+
+             /* Adjust Floating Button Position */
+             #other-empires-button {
+                 bottom: 75px; /* Adjust position relative to smaller bottom menu */
+                 right: 15px;
+                 width: 50px;
+                 height: 50px;
+                 font-size: 22px;
+             }
+
+            /* Adjust Main Header */
+            #filosofias-container h2 {
+                 font-size: 24px; /* Smaller main title */
+                 margin: 0 8px; /* Adjust margins */
+             }
+            #user-image-placeholder {
+                 width: 40px; height: 40px; /* Smaller user image */
+             }
+            #user-image-placeholder img {
+                 width: 38px; height: 38px; /* Adjust image size within placeholder */
+             }
+             #shop-button-placeholder .popup-button {
+                 padding: 6px 10px; /* Smaller shop button */
+                 font-size: 13px;
+             }
+             #shop-button-placeholder {
+                 gap: 5px; /* Smaller gap if multiple buttons appear */
+             }
+
+            /* Adjustments for Other Empires/User Items Popups */
+            .user-empire-card {
+                padding: 10px;
+                gap: 5px;
+            }
+            .user-empire-image {
+                width: 55px;
+                height: 55px;
+            }
+            .user-empire-name {
+                font-size: 13px;
+            }
+            .user-owned-item-card {
+                padding: 8px;
+            }
+            .user-owned-item-name {
+                font-size: 13px;
+            }
+            .user-owned-item-type {
+                font-size: 11px;
+            }
+            #user-items-list {
+                /* Adjust columns for owned items popup if needed */
+                grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+            }
+
+        } /* End of @media query */
+
+    </style>
+</head>
+
+<body class="empire-theme">
+    <!-- Loading Screen -->
+    <div id="loading-screen">
+        <div class="loading-spinner"></div>
+        <div class="loading-percentage">0%</div>
+        <div class="progress-bar-container">
+            <div class="progress-bar"></div>
+        </div>
+    </div>
+
+    <!-- Container for Main Content (State-Dependent) -->
+    <div id="filosofias-container" style="display: none;"> <!-- Controlled by JS -->
+         <!-- Header Row: User Image (Left), Title (Center), Shop Button (Right) -->
+         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <!-- Placeholder para Imagem do Utilizador (Esquerda) -->
+            <div id="user-image-placeholder" style="flex-shrink: 0; width: 50px; height: 50px;"> <!-- Reserva espaço -->
+                 <!-- Imagem injetada aqui pelo JS -->
+            </div>
+
+            <!-- Título Centralizado -->
+            <h2 style="text-align: center; font-size: 32px; color: #c9a959; flex-grow: 1; margin: 0 15px;">Carregando...</h2>
+
+            <!-- Placeholder para Botão da Loja (Direita) -->
+            <div id="shop-button-placeholder" style="flex-shrink: 0; display: flex; align-items: center; gap: 10px;">
+                <!-- Botão injetado aqui pelo JS -->
+            </div>
+        </div>
+        <!-- List Area: Displays Filosofias, Estadios, or Owned Items -->
+        <div id="filosofias-list">
+            <!-- Content dynamically loaded here -->
+        </div>
+    </div>
+
+    <!-- POPUPS -->
+
+    <!-- Main Popup (Filosofia Details/Selection) -->
+    <div id="popup-overlay" class="popup-overlay">
+        <div class="popup-content">
+            <button class="close-button" onclick="closePopup()">×</button>
+            <h3 class="popup-title"></h3> <!-- JS sets title -->
+            <div class="items-grid"> <!-- Attached items loaded here --> </div>
+            <div class="popup-buttons">
+                <button id="escolher-filosofia-btn" class="popup-button" onclick="showConfirmation()">Escolher Filosofia</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filosofia Choice Confirmation Popup -->
+    <div id="confirmation-popup" class="popup-overlay confirmation-popup">
+        <div class="popup-content" style="width: 400px;"> <!-- Smaller width -->
+            <h3 class="popup-title">Confirmar Escolha</h3>
+            <p style="text-align: center; color: #e0d2b4; margin-bottom: 20px;">Tem certeza que deseja escolher esta filosofia?</p>
+            <div class="popup-buttons">
+                <button class="popup-button" onclick="confirmChoice(false)">Não</button>
+                <button class="popup-button" onclick="confirmChoice(true)">Sim</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Nested Popup (Generic for viewing items attached to other items) -->
+    <div id="nested-popup" class="popup-overlay nested-popup-overlay">
+        <div class="popup-content">
+            <button class="close-button" onclick="closeNestedPopup()">×</button>
+            <h3 class="popup-title"></h3> <!-- JS sets title -->
+            <div class="items-grid"> <!-- Nested items loaded here --> </div>
+        </div>
+    </div>
+
+    <!-- Stadium Details Popup (Shows only items attached to a specific stadium) -->
+    <div id="stadium-details-popup" class="popup-overlay nested-popup-overlay">
+        <div class="popup-content">
+            <button class="close-button" onclick="closeStadiumDetailsPopup()">×</button>
+            <h3 class="popup-title">Itens Anexados</h3> <!-- Title can be updated by JS -->
+            <div class="items-grid" id="stadium-attached-items-grid"> <!-- Stadium's attached items --> </div>
+        </div>
+    </div>
+
+    <!-- Stadium Purchase Confirmation Popup -->
+    <div id="stadium-confirmation-popup" class="popup-overlay confirmation-popup">
+        <div class="popup-content" style="width: 450px;">
+            <h3 class="popup-title">Confirmar Compra</h3>
+            <p id="stadium-confirmation-text" style="text-align: center; color: #e0d2b4; margin-bottom: 20px;">
+                Tem certeza que deseja adquirir o estádio <strong id="confirm-stadium-name"></strong> por <strong id="confirm-stadium-price"></strong> GCoins?
+            </p>
+            <div class="popup-buttons">
+                <button class="popup-button" onclick="confirmStadiumPurchase(false)">Não</button>
+                <button class="popup-button" onclick="confirmStadiumPurchase(true)">Sim</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Empire Shop Popup (Shows purchasable items for owned stadium) -->
+    <div id="empire-shop-popup" class="popup-overlay nested-popup-overlay">
+        <div class="popup-content">
+            <button class="close-button" onclick="closeEmpireShopPopup()">×</button>
+            <h3 class="popup-title">Loja do Império</h3>
+            <div class="items-grid" id="empire-shop-items-grid"> <!-- Purchasable items loaded here --> </div>
+        </div>
+    </div>
+
+    <!-- Item Purchase Confirmation Popup (For items from the Empire Shop) -->
+<div id="item-confirmation-popup" class="popup-overlay confirmation-popup">
+    <div class="popup-content" style="width: 450px;">
+        <h3 class="popup-title">Confirmar Compra</h3>
+        <p id="item-confirmation-text" style="text-align: center; color: #e0d2b4; margin-bottom: 20px;">
+            Tem certeza que deseja adquirir o item <strong id="confirm-item-name"></strong> por <strong id="confirm-item-price"></strong> GCoins?
+        </p>
+        <div class="popup-buttons">
+            <!-- <<< ALTERAÇÃO AQUI: Adicionar ID e mudar onclick >>> -->
+            <button id="confirm-item-btn-no" class="popup-button" onclick="confirmItemPurchase(false)">Não</button>
+            <!-- <<< ALTERAÇÃO AQUI: Adicionar ID e mudar onclick para uma nova função >>> -->
+            <button id="confirm-item-btn-yes" class="popup-button" onclick="handleConfirmPurchase()">Sim</button>
+        </div>
+    </div>
+</div>
+
+    <!-- Simple Info/Error Popup -->
+    <div id="info-popup" class="popup-overlay confirmation-popup">
+        <div class="popup-content" style="width: 400px;">
+            <h3 id="info-popup-title" class="popup-title">Informação</h3>
+            <p id="info-popup-message" style="text-align: center; color: #e0d2b4; margin-bottom: 20px;"></p>
+            <div class="popup-buttons">
+                <button class="popup-button" onclick="closeInfoPopup()">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Popup para Mostrar Outros Impérios -->
+    <div id="other-empires-popup" class="popup-overlay">
+        <div class="popup-content">
+            <button class="close-button" onclick="closeOtherEmpiresPopup()">×</button>
+            <h3 class="popup-title">Outros Impérios</h3>
+            <div id="other-empires-list" class="items-grid" style="max-height: 70vh;">
+                <!-- Lista de utilizadores será carregada aqui -->
+                <p style="color: #a99a7c; text-align: center; grid-column: 1 / -1;">A carregar impérios...</p>
+            </div>
+        </div>
+    </div>
+
+     <!-- Popup para Mostrar Itens de Outro Utilizador -->
+    <div id="user-items-popup" class="popup-overlay">
+        <div class="popup-content">
+            <button class="close-button" onclick="closeUserItemsPopup()">×</button>
+            <h3 id="user-items-popup-title" class="popup-title">Itens do Império</h3> <!-- Título dinâmico -->
+            <div id="user-items-list" class="items-grid" style="max-height: 70vh; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));"> <!-- Grid para itens -->
+                <!-- Lista de itens será carregada aqui -->
+                <p style="color: #a99a7c; text-align: center; grid-column: 1 / -1;">A carregar itens...</p>
+            </div>
+        </div>
+    </div>
+
+
+ 
+    <!-- Botão para Abrir Popup de Outros Impérios -->
+    <button id="other-empires-button" style="display: none;">
+        <i class="fas fa-globe-americas"></i> <!-- Ou outro ícone como fa-users-cog, fa-chess-rook -->
+    </button>
+
+    <!-- JavaScript Module -->
+        <!-- JavaScript Module -->
+         <script src="config.js"></script>
+        <script type="module">
+            // --- Firebase Imports ---
+          // --- Firebase Imports ---
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getFirestore, doc, getDoc, collection, query, where, getDocs, updateDoc, runTransaction, serverTimestamp, writeBatch, orderBy, addDoc, arrayUnion, limit } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+
+console.log("Empire Page Script: Module loading initiated.");
+
+// --- Firebase Initialization ---
+console.log("Empire Page Script: Initializing Firebase app...");
+let app, db, auth;
+try {
+    app = initializeApp(firebaseConfig);
+    db = getFirestore(app);
+    auth = getAuth(app);
+    console.log("Empire Page Script: Firebase initialized successfully.");
+} catch (error) {
+    console.error("Empire Page Script: CRITICAL ERROR initializing Firebase:", error);
+    const loadingScreen = document.getElementById('loading-screen');
+    if (loadingScreen) loadingScreen.innerHTML = '<p style="color: red; text-align: center; padding: 20px;">Erro Crítico ao inicializar. Verifique a consola.</p>';
+    throw new Error("Firebase initialization failed");
+}
+
+// --- Global State Variables ---
+let currentUser = null; // Stores { uid, estatuto, filosofia, estadio, data: fullUserData }
+let selectedFilosofia = null; // For filosofia choice flow
+let selectedStadiumForPurchase = null; // For stadium purchase flow
+let selectedItemForPurchase = null; // For item purchase flow
+let empireParentItemIds = null;
+let isProcessingPurchase = false; // Flag para prevenir cliques duplos na compra de itens
+let isShowingOtherEmpires = false;
+
+// --- Utility Functions ---
+
+/** Fetches user status and essential data */
+async function getUserStatus(userId) {
+    console.log(`getUserStatus: Fetching status for user ID: ${userId}`);
+    if (!userId) { console.error("getUserStatus: No userId provided."); return null; }
+    const userDocRef = doc(db, 'users', userId);
+    try {
+        const docSnap = await getDoc(userDocRef);
+        if (docSnap.exists() && docSnap.data().aceite === "Yes") {
+            const userData = docSnap.data();
+            const status = { uid: userId, estatuto: userData.estatuto, filosofia: userData.filosofia || null, estadio: userData.estadio || null, data: userData };
+            console.log("getUserStatus: User found and accepted.", status); return status;
+        } else if (docSnap.exists()) {
+            console.log(`getUserStatus: User document found but not accepted (aceite != "Yes").`, docSnap.data()); return null;
+        } else {
+            console.log(`getUserStatus: User document not found for ${userId}.`); return null;
+        }
+    } catch (error) { console.error(`getUserStatus: Error fetching user document for ${userId}:`, error); return null; }
+}
+
+/** Shows a simple informational popup */
+function showInfoPopup(title, message, persistent = false) {
+    console.log(`showInfoPopup: Title: "${title}", Message: "${message}", Persistent: ${persistent}`);
+    const popup = document.getElementById('info-popup');
+    const titleEl = document.getElementById('info-popup-title');
+    const msgEl = document.getElementById('info-popup-message');
+    const okButton = popup?.querySelector('.popup-button');
+
+    if (popup && titleEl && msgEl && okButton) {
+        titleEl.textContent = title;
+        msgEl.innerHTML = message;
+        okButton.style.display = persistent ? 'none' : 'flex';
+        popup.classList.add('active');
+    } else {
+        console.error("showInfoPopup: Info popup elements (popup, title, message, or button) not found.");
+    }
+}
+
+
+/** Closes the simple informational popup */
+function closeInfoPopup() {
+    console.log("closeInfoPopup: Closing info popup."); const popup = document.getElementById('info-popup'); if (popup) popup.classList.remove('active');
+}
+
+/** Updates the loading screen progress */
+function updateLoadingProgress(percentage) {
+    const percEl = document.querySelector('.loading-percentage'); const barEl = document.querySelector('.progress-bar'); if (percEl) percEl.textContent = `${Math.round(percentage)}%`; if (barEl) barEl.style.width = `${percentage}%`;
+}
+
+/** Hides the loading screen */
+function hideLoadingScreen() {
+    console.log("hideLoadingScreen: Attempting to hide loading screen."); const loadingScreen = document.getElementById('loading-screen'); if (loadingScreen && loadingScreen.style.display !== 'none') { loadingScreen.style.opacity = '0'; setTimeout(() => { const currentLoadingScreen = document.getElementById('loading-screen'); if (currentLoadingScreen) currentLoadingScreen.style.display = 'none'; console.log("hideLoadingScreen: Loading screen hidden via display: none."); }, 500); } else if (!loadingScreen) { console.warn("hideLoadingScreen: Loading screen element not found."); } else { console.log("hideLoadingScreen: Loading screen already hidden or hiding."); }
+}
+
+/** Fetches global menu visibility settings */
+async function getMenuSettings() {
+    console.log("getMenuSettings: Fetching menu settings..."); const paineisMenuRef = doc(db, 'paineis', 'paineis menu'); try { const docSnap = await getDoc(paineisMenuRef); const settings = docSnap.exists() ? docSnap.data() : null; console.log("getMenuSettings: Settings fetched:", settings); return settings; } catch (error) { console.error("getMenuSettings: Error fetching menu settings:", error); return null; }
+}
+
+/** Checks if the user has access to this page */
+async function checkPageAccess(userStatus, menuSettings) {
+    console.log("checkPageAccess: Checking access for user:", userStatus, "with settings:", menuSettings); if (!menuSettings || menuSettings['empire'] !== 'on') { console.log("checkPageAccess: Empire page is OFF in settings or settings missing."); if (!userStatus || userStatus.estatuto !== 'ruler') { console.log("checkPageAccess: User is not ruler. Redirecting to 404."); window.location.href = '404.html'; return false; } else { console.log("checkPageAccess: User IS ruler, granting access despite page setting."); } } console.log("checkPageAccess: Access granted."); return true;
+}
+
+/** Updates bottom menu item visibility based on settings */
+
+
+async function getLatestSeason() {
+    console.log("getLatestSeason: Fetching seasons from 'jogos' collection..."); const jogosCollectionRef = collection(db, 'jogos'); const fieldNameHoldingSeasonString = 'temporada'; try { const querySnapshot = await getDocs(jogosCollectionRef); let latestSeasonVal = "0"; let latestFormattedSeason = null; querySnapshot.forEach((doc) => { const gameData = doc.data(); const seasonString = gameData[fieldNameHoldingSeasonString]; if (seasonString && typeof seasonString === 'string') { const parts = seasonString.split('/'); if (parts.length === 2 && parts[0].length === 4 && parts[1].length === 4 && !isNaN(parts[0]) && !isNaN(parts[1])) { const startYear = parts[0]; const endYear = parts[1]; const sortableVal = endYear; const formatted = startYear + endYear; if (sortableVal > latestSeasonVal) { latestSeasonVal = sortableVal; latestFormattedSeason = formatted; } } else { console.warn(`getLatestSeason: Invalid season string format: "${seasonString}" in doc ${doc.id}`); } } }); if (latestFormattedSeason) { console.log("getLatestSeason: Latest season determined:", latestFormattedSeason); return latestFormattedSeason; } else { console.error("getLatestSeason: Could not determine latest season from 'jogos'."); return null; } } catch (error) { console.error("getLatestSeason: Error fetching documents from 'jogos':", error); return null; }
+}
+
+function daysBetween(date1, date2) {
+    const oneDay = 24 * 60 * 60 * 1000; const d1 = new Date(date1.getFullYear(), date1.getMonth(), date1.getDate()); const d2 = new Date(date2.getFullYear(), date2.getMonth(), date2.getDate()); return Math.round(Math.abs((d1.getTime() - d2.getTime()) / oneDay));
+}
+function findFirstDayOfWeekInYear(year, targetDayIndex) {
+    const date = new Date(year, 0, 1); while (date.getDay() !== targetDayIndex) { date.setDate(date.getDate() + 1); if (date.getFullYear() !== year) return null; } return date;
+}
+
+async function loadEmpireParentMap() {
+    if (empireParentItemIds !== null) {
+        console.log("loadEmpireParentMap: Mapa de pais já está em cache. A saltar a leitura da BD.");
+        return;
+    }
+    console.log("loadEmpireParentMap: Primeira chamada. A ler a BD para construir o mapa de pais...");
+    try {
+        const allItemsSnapshot = await getDocs(collection(db, 'empireitens'));
+        const parentIds = new Set();
+        allItemsSnapshot.forEach(doc => {
+            const data = doc.data();
+            if (data.anexadoItemId) {
+                parentIds.add(data.anexadoItemId);
+            }
+        });
+        empireParentItemIds = parentIds;
+        console.log(`loadEmpireParentMap: Mapa construído. ${empireParentItemIds.size} itens pais encontrados.`);
+    } catch (error) {
+        console.error("loadEmpireParentMap: Falha ao construir o mapa de pais:", error);
+        empireParentItemIds = new Set();
+    }
+}
+
+function setPageBackground(imageUrl, opacity = 1) {
+    const existingBg = document.getElementById('dynamic-page-background');
+    if (existingBg) {
+        existingBg.remove();
+    }
+    if (imageUrl) {
+        const backgroundDiv = document.createElement('div');
+        backgroundDiv.id = 'dynamic-page-background';
+        Object.assign(backgroundDiv.style, {
+            position: 'fixed', top: 0, left: 0,
+            width: '100vw', height: '100vh',
+            backgroundImage: `url('${imageUrl}')`,
+            backgroundSize: 'cover', backgroundPosition: 'center center',
+            opacity: opacity, zIndex: '-1', pointerEvents: 'none',
+            transition: 'opacity 0.5s ease-in-out'
+        });
+        document.body.insertBefore(backgroundDiv, document.body.firstChild);
+    }
+}
+
+function isItemAvailableToday(availabilityRule) {
+    if (!availabilityRule || typeof availabilityRule !== 'string' || availabilityRule.trim() === '') {
+        return true;
+    }
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const year = today.getFullYear(); const dayOfWeek = today.getDay();
+    const daysPortuguese = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"]; const currentDayName = daysPortuguese[dayOfWeek];
+    const ruleTrimmed = availabilityRule.trim();
+
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (dateRegex.test(ruleTrimmed)) {
+        const parts = ruleTrimmed.split('-');
+        const targetDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+        targetDate.setHours(0, 0, 0, 0);
+        return targetDate.getTime() === today.getTime();
+    }
+
+    const isDayNameOnly = daysPortuguese.some(name => name.toLowerCase() === ruleTrimmed.toLowerCase());
+    if (isDayNameOnly && !/^\d/.test(ruleTrimmed)) {
+        return currentDayName.toLowerCase() === ruleTrimmed.toLowerCase();
+    }
+
+    const recurringRegex = /^(\d{1,2})(Domingo|Segunda|Terça|Quarta|Quinta|Sexta|Sábado)$/i; const match = ruleTrimmed.match(recurringRegex);
+    if (match) {
+        const interval = parseInt(match[1], 10);
+        const requiredDayName = match[2];
+        const requiredDayIndex = daysPortuguese.findIndex(name => name.toLowerCase() === requiredDayName.toLowerCase());
+
+        if (dayOfWeek !== requiredDayIndex) {
+            return false;
+        }
+        if (interval === 7) {
+            return true;
+        }
+        if (interval > 0 && requiredDayIndex !== -1) {
+            const firstOccurrenceDate = findFirstDayOfWeekInYear(year, requiredDayIndex);
+            if (!firstOccurrenceDate) { return false; }
+            firstOccurrenceDate.setHours(0, 0, 0, 0);
+            const daysSinceFirst = daysBetween(firstOccurrenceDate, today);
+            return daysSinceFirst % interval === 0;
+        } else { return false; }
+    }
+    return false;
+}
+
+// --- Filosofia Choice Flow Functions ---
+async function showPopup(filosofia) {
+    console.log("showPopup (Smart Click): Mostrando popup para a filosofia:", filosofia);
+    selectedFilosofia = filosofia;
+    const popup = document.getElementById('popup-overlay');
+    const popupTitle = popup?.querySelector('.popup-title');
+    const itemsGrid = popup?.querySelector('.items-grid');
+    const escolherButton = document.getElementById('escolher-filosofia-btn');
+
+    if (!popup || !popupTitle || !itemsGrid || !escolherButton) return;
+
+    popupTitle.textContent = filosofia.nome || 'Escolha a Filosofia';
+    itemsGrid.innerHTML = '<p>A carregar itens...</p>';
+    escolherButton.style.display = 'inline-block';
+    popup.classList.add('active');
+
+    try {
+        await loadEmpireParentMap();
+
+        const filosofiaItemsQuery = query(collection(db, 'empireitens'), where('anexadoItemId', '==', filosofia.id), where('noMercado', '==', true), orderBy('ordem', 'asc'));
+        const snapshot = await getDocs(filosofiaItemsQuery);
+        const itemsToDisplay = [];
+        snapshot.forEach(doc => itemsToDisplay.push({ id: doc.id, ...doc.data() }));
+
+        itemsGrid.innerHTML = '';
+        if (itemsToDisplay.length === 0) {
+            itemsGrid.innerHTML = '<p>Nenhum item associado.</p>';
+            return;
+        }
+
+        itemsToDisplay.forEach((item, itemIndex) => {
+            const itemCard = document.createElement('div');
+            itemCard.className = 'item-card';
+            const imageUrl = item.imagem || 'placeholder.png';
+            itemCard.innerHTML = `
+                <img 
+                    src="${imageUrl}" 
+                    alt="${item.nome || ''}" 
+                    class="item-image" 
+                    onerror="this.onerror=null; this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iMTAwIiB2aWV3Qm94PSIwIDAgMjQgMjQiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzZCNjA0MiIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiPjxyZWN0IHg9IjMiIHk9IjMiIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgcng9IjIiIHJ5PSIyIj48L3JlY3Q+PGNpcmNsZSBjeD0iOC41IiBjeT0iOC41IiByPSIxLjUiPjwvY2lyY2xlPjxwb2x5bGluZSBwb2ludHM9IjIxIDE1IDExIDUgMyAxMyI+PC9wb2x5bGluZT48L3N2Zz4=';"
+                >
+                <div class="item-name">${item.nome || 'Item'}</div>
+                <div class="item-nota">${item.nota || 'N/A'}</div>
+            `;
+
+            if (empireParentItemIds.has(item.id)) {
+                itemCard.style.cursor = 'pointer';
+                itemCard.addEventListener('click', () => window.showNestedPopup(item));
+            } else {
+                itemCard.style.cursor = 'default';
+            }
+
+            itemsGrid.appendChild(itemCard);
+            requestAnimationFrame(() => {
+                setTimeout(() => itemCard.classList.add('visible'), itemIndex * 100);
+            });
+        });
+    } catch (error) {
+        console.error(`showPopup: Erro ao obter itens para a filosofia ${filosofia.id}:`, error);
+        itemsGrid.innerHTML = '<p style="color:red;">Erro ao carregar itens.</p>';
+    }
+}
+
+function closePopup() {
+    console.log("closePopup: Closing filosofia selection popup."); const popup = document.getElementById('popup-overlay'); if (popup) popup.classList.remove('active'); selectedFilosofia = null;
+}
+function showConfirmation() {
+    if (!selectedFilosofia) { console.warn("showConfirmation called without selectedFilosofia."); return; } console.log("showConfirmation: Showing filosofia confirmation for:", selectedFilosofia); const popup = document.getElementById('confirmation-popup'); if (popup) popup.classList.add('active');
+}
+function closeConfirmation() {
+    console.log("closeConfirmation: Closing filosofia confirmation popup."); const popup = document.getElementById('confirmation-popup'); if (popup) popup.classList.remove('active');
+}
+async function confirmChoice(confirmed) {
+    console.log(`confirmChoice: User action - confirmed: ${confirmed}`); closeConfirmation(); if (!confirmed) { console.log("confirmChoice: Choice cancelled."); return; } if (!selectedFilosofia || !currentUser) { console.error("confirmChoice: Missing filosofia or user data."); showInfoPopup("Erro", "Dados em falta."); return; } showInfoPopup("Processando...", "A gravar..."); try { const userDocRef = doc(db, 'users', currentUser.uid); await updateDoc(userDocRef, { filosofia: selectedFilosofia.id }); console.log('confirmChoice: User filosofia updated.'); try { const latestSeason = await getLatestSeason(); if (latestSeason) { const precoFilosofia = selectedFilosofia.valor ?? 0; const valorRealFilosofia = -precoFilosofia; const movimentoData = { estado: "Escolhido", itemEmpire: selectedFilosofia.nome || "?", temporada: latestSeason, movimentoData: serverTimestamp(), preco: precoFilosofia, tipo: "Empire", userId: currentUser.uid, valorreal: valorRealFilosofia, empireTipo: selectedFilosofia.tipo || "Filosofia", nivel: selectedFilosofia.nivel || 'Nível 1' }; console.log("confirmChoice: Creating movement data:", movimentoData); const movRef = await addDoc(collection(db, 'movimentos'), movimentoData); console.log("confirmChoice: Movement record created:", movRef.id); } else { console.warn("confirmChoice: No season. Skipping movement."); } } catch (movError) { console.error("confirmChoice: Error creating movement:", movError); showInfoPopup("Aviso", "Escolha salva, erro no registo."); await new Promise(resolve => setTimeout(resolve, 1500)); } console.log('confirmChoice: Refreshing page...'); closePopup(); closeInfoPopup(); location.reload(); } catch (error) { console.error('confirmChoice: Error updating user:', error); closeInfoPopup(); showInfoPopup('Erro', 'Falha ao salvar. Tente novamente.'); }
+}
+
+// --- Nested Item Popup Logic ---
+async function showNestedPopup(parentItem) {
+    console.log("showNestedPopup (FINAL COM REGRA PAI): Mostrando popup para:", parentItem);
+    if (!parentItem || !parentItem.id) return;
+
+    const nestedPopup = document.getElementById('nested-popup');
+    const popupTitle = nestedPopup?.querySelector('.popup-title');
+    const itemsGrid = nestedPopup?.querySelector('.items-grid');
+    if (!nestedPopup || !popupTitle || !itemsGrid) return;
+
+    popupTitle.textContent = `Itens anexados a: ${parentItem.nome || 'Item'}`;
+    itemsGrid.innerHTML = '<p>A carregar itens...</p>';
+    nestedPopup.classList.add('active');
+
+    try {
+        await loadEmpireParentMap();
+        let userHasBoughtToday = false;
+        let ownedItemNamesSet = new Set();
+        let ownedTypeLevelSet = new Set();
+        const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+        const tomorrowStart = new Date(todayStart); tomorrowStart.setDate(todayStart.getDate() + 1);
+
+        const dailyPurchaseQuery = query(collection(db, 'movimentos'), where('userId', '==', currentUser.uid), where('tipo', '==', 'Empire'), where('movimentoData', '>=', todayStart), where('movimentoData', '<', tomorrowStart), limit(1));
+        const ownedItemsQuery = query(collection(db, 'movimentos'), where('userId', '==', currentUser.uid), where('tipo', '==', 'Empire'));
+const [dailyPurchaseSnapshot, ownedItemsSnapshot] = await Promise.all([getDocs(dailyPurchaseQuery), getDocs(ownedItemsQuery)]);
+
+        userHasBoughtToday = !dailyPurchaseSnapshot.empty;
+        ownedItemsSnapshot.forEach(doc => {
+            const movData = doc.data();
+            if (movData.itemEmpire) ownedItemNamesSet.add(movData.itemEmpire);
+            if (movData.empireTipo && movData.nivel) ownedTypeLevelSet.add(`${movData.empireTipo}:${movData.nivel}`);
+        });
+
+        const itemsQuery = query(collection(db, 'empireitens'), where('anexadoItemId', '==', parentItem.id), where('noMercado', '==', true), orderBy('ordem', 'asc'));
+        const snapshot = await getDocs(itemsQuery);
+
+        const itemsToDisplay = [];
+        snapshot.forEach(doc => itemsToDisplay.push({ id: doc.id, ...doc.data() }));
+
+        itemsGrid.innerHTML = '';
+        if (itemsToDisplay.length === 0) {
+            itemsGrid.innerHTML = '<p>Nenhum item anexado.</p>';
+            return;
+        }
+
+        itemsToDisplay.forEach((item, itemIndex) => {
+            const itemCard = document.createElement('div');
+            itemCard.className = 'item-card';
+
+            const isOwned = ownedItemNamesSet.has(item.nome);
+            const isAvailableToday = isItemAvailableToday(item.diaDisponivel || item.dataMercado);
+            let needsLevel1 = item.nivel === 'Nível 2';
+            let hasLevel1 = needsLevel1 ? ownedTypeLevelSet.has(`${item.tipo}:Nível 1`) : true;
+            const isPurchasable = item.valor !== undefined && item.valor !== null;
+            const hasParentItem = ownedItemNamesSet.has(parentItem.nome);
+            const isDisabled = isOwned || !isAvailableToday || userHasBoughtToday || (needsLevel1 && !hasLevel1) || !isPurchasable || !hasParentItem;
+
+            let disabledReason =
+                !hasParentItem ? `Requer: ${parentItem.nome}` :
+                (isOwned ? 'Já Possuído' :
+                (userHasBoughtToday ? 'Limite Diário Atingido' :
+                (!isAvailableToday ? 'Indisponível Hoje' :
+                (needsLevel1 && !hasLevel1 ? 'Requer Nível 1' :
+                (!isPurchasable ? 'Não está à venda' : '')))));
+
+            const purchaseBlockHTML = isPurchasable ? `
+                <div class="item-nota" style="color: #c9a959; font-weight: bold; margin-bottom: 10px;">${item.valor} GCoins</div>
+                <button class="popup-button buy-item-btn" style="padding: 5px 10px; font-size: 14px;" ${isDisabled ? 'disabled' : ''}>Comprar</button>
+                <span class="disabled-reason">${disabledReason}</span>
+            ` : `<div style="min-height: 4.5em;"></div>`;
+
+            itemCard.innerHTML = `
+                <img src="${item.imagem || 'placeholder.png'}" alt="${item.nome || ''}" class="item-image">
+                <div class="item-name">${item.nome || 'Item'}</div>
+                <div class="item-nota" style="min-height: 2em; margin-bottom: 8px;">${item.nota || '...'}</div>
+                ${purchaseBlockHTML}
+            `;
+
+            if (!isDisabled && isPurchasable) {
+                const buyButton = itemCard.querySelector('.buy-item-btn');
+                if (buyButton) buyButton.onclick = (event) => { event.stopPropagation(); initiateItemPurchase(item); };
+            }
+
+            const hasChildren = empireParentItemIds.has(item.id);
+            if (hasChildren) {
+                itemCard.style.cursor = 'pointer';
+                itemCard.addEventListener('click', (event) => {
+                    if (event.target.tagName !== 'BUTTON') {
+                        window.showNestedPopup(item);
+                    }
+                });
+            } else {
+                itemCard.style.cursor = 'default';
+            }
+
+            itemsGrid.appendChild(itemCard);
+            requestAnimationFrame(() => {
+                setTimeout(() => itemCard.classList.add('visible'), itemIndex * 100);
+            });
+        });
+    } catch (error) {
+        console.error(`showNestedPopup (FINAL): Erro ao obter itens para ${parentItem.id}:`, error);
+        itemsGrid.innerHTML = '<p style="color:red;">Erro ao carregar.</p>';
+    }
+};
+
+function closeNestedPopup() {
+    console.log("closeNestedPopup: Closing nested popup."); const popup = document.getElementById('nested-popup'); if (popup) popup.classList.remove('active');
+};
+
+// --- Stadium-Specific Popup Logic ---
+async function showStadiumDetailsPopup(stadium) {
+    console.log("showStadiumDetailsPopup (Smart Click): Mostrando ITENS ANEXADOS para o estádio:", stadium);
+    const popup = document.getElementById('stadium-details-popup');
+    const title = popup?.querySelector('.popup-title');
+    const itemsGrid = document.getElementById('stadium-attached-items-grid');
+    if (!popup || !title || !itemsGrid) return;
+
+    title.textContent = `Itens Anexados a: ${stadium.nome || 'Estádio'}`;
+    itemsGrid.innerHTML = '<p>A carregar...</p>';
+    popup.classList.add('active');
+
+    try {
+        await loadEmpireParentMap();
+
+        const attachedItemsQuery = query(collection(db, 'empireitens'), where('anexadoItemId', '==', stadium.id), where('noMercado', '==', true), orderBy('ordem', 'asc'));
+        const snapshot = await getDocs(attachedItemsQuery);
+
+        const itemsToDisplay = [];
+        snapshot.forEach(doc => itemsToDisplay.push({ id: doc.id, ...doc.data() }));
+
+        itemsGrid.innerHTML = '';
+        if (itemsToDisplay.length === 0) {
+            itemsGrid.innerHTML = '<p>Nenhum item anexado.</p>';
+            return;
+        }
+
+        itemsToDisplay.forEach((item, itemIndex) => {
+            const itemCard = document.createElement('div');
+            itemCard.className = 'item-card';
+            itemCard.innerHTML = `<img src="${item.imagem || 'placeholder.png'}" alt="${item.nome || ''}" class="item-image"><div class="item-name">${item.nome || 'Item'}</div><div class="item-nota">${item.nota || 'N/A'}</div>`;
+
+            if (empireParentItemIds.has(item.id)) {
+                itemCard.style.cursor = 'pointer';
+                itemCard.addEventListener('click', () => window.showNestedPopup(item));
+            } else {
+                itemCard.style.cursor = 'default';
+            }
+
+            itemsGrid.appendChild(itemCard);
+            requestAnimationFrame(() => {
+                setTimeout(() => itemCard.classList.add('visible'), itemIndex * 100);
+            });
+        });
+    } catch (error) {
+        console.error(`showStadiumDetailsPopup: Erro ao carregar itens para ${stadium.id}:`, error);
+        itemsGrid.innerHTML = '<p style="color:red;">Erro ao carregar.</p>';
+    }
+}
+
+function closeStadiumDetailsPopup() {
+    console.log("closeStadiumDetailsPopup: Closing stadium details popup."); const popup = document.getElementById('stadium-details-popup'); if (popup) popup.classList.remove('active');
+}
+
+// --- Stadium Purchase Flow Functions ---
+function showStadiumConfirmation() {
+    if (!selectedStadiumForPurchase || selectedStadiumForPurchase.valor === undefined) { console.error("showStadiumConfirmation: Invalid stadium data."); showInfoPopup("Erro", "Estádio inválido."); return; } if (currentUser && currentUser.estadio) { console.warn("showStadiumConfirmation: User already owns a stadium."); showInfoPopup("Informação", `Já possui: ${currentUser.estadio}.`); return; } console.log("showStadiumConfirmation: Showing confirmation for:", selectedStadiumForPurchase); const nameEl = document.getElementById('confirm-stadium-name'); const priceEl = document.getElementById('confirm-stadium-price'); const popup = document.getElementById('stadium-confirmation-popup'); if (nameEl) nameEl.textContent = selectedStadiumForPurchase.nome || 'este estádio'; if (priceEl) priceEl.textContent = selectedStadiumForPurchase.valor; if (popup) popup.classList.add('active');
+}
+function closeStadiumConfirmation() {
+    console.log("closeStadiumConfirmation: Closing stadium confirmation."); const popup = document.getElementById('stadium-confirmation-popup'); if (popup) popup.classList.remove('active');
+}
+async function confirmStadiumPurchase(confirmed) {
+    console.log(`confirmStadiumPurchase: User action - confirmed: ${confirmed}`);
+    closeStadiumConfirmation();
+    if (!confirmed) {
+        console.log("confirmStadiumPurchase: Cancelled.");
+        selectedStadiumForPurchase = null;
+        return;
+    }
+
+    if (!selectedStadiumForPurchase?.id || selectedStadiumForPurchase.valor === undefined || !selectedStadiumForPurchase.tipo || !selectedStadiumForPurchase.nome || !currentUser) {
+        console.error("confirmStadiumPurchase: Pre-transaction check failed (missing data).", { stadium: selectedStadiumForPurchase, user: currentUser });
+        showInfoPopup("Erro", "Dados inválidos para iniciar a compra (nome do estádio em falta?).");
+        selectedStadiumForPurchase = null;
+        return;
+    }
+
+    const stadiumToPurchase = selectedStadiumForPurchase;
+    const stadiumPrice = stadiumToPurchase.valor;
+    const userDocRef = doc(db, 'users', currentUser.uid);
+    const stadiumLockRef = doc(db, 'stadiumLocks', stadiumToPurchase.nome);
+
+    console.log(`confirmStadiumPurchase: Processing purchase for ${stadiumToPurchase.nome}`);
+    showInfoPopup("Processando", "A processar compra...");
+
+    let latestSeason;
+    try {
+        latestSeason = await getLatestSeason();
+        if (!latestSeason) throw new Error("Temporada atual não pôde ser determinada.");
+
+        await runTransaction(db, async (transaction) => {
+            console.log(`confirmStadiumPurchase: Transaction started.`);
+
+            const userDocSnap = await transaction.get(userDocRef);
+            const lockDocSnap = await transaction.get(stadiumLockRef);
+
+            if (!userDocSnap.exists()) throw new Error("Documento do utilizador não encontrado na transação.");
+            const userData = userDocSnap.data();
+
+            if (lockDocSnap.exists()) {
+                throw new Error("Este estádio já foi adquirido por outro império (lock existente).");
+            }
+            if (userData.estadio) {
+                throw new Error("Já possui um estádio. Compra cancelada.");
+            }
+
+            console.log("confirmStadiumPurchase: Lock/Ownership checks passed inside transaction. Preparing updates.");
+
+            transaction.set(stadiumLockRef, {
+                boughtByUid: currentUser.uid,
+                boughtByName: userData.nomeDeUsuario || '???',
+                boughtAt: serverTimestamp(),
+                stadiumId: stadiumToPurchase.id
+            });
+
+            transaction.update(userDocRef, {
+                estadio: stadiumToPurchase.nome
+            });
+
+            const movimentoDocRef = doc(collection(db, 'movimentos'));
+            const movimentoData = {
+                estado: "Comprado",
+                itemEmpire: stadiumToPurchase.nome,
+                temporada: latestSeason,
+                movimentoData: serverTimestamp(),
+                preco: stadiumPrice,
+                tipo: "Empire",
+                userId: currentUser.uid,
+                valorreal: -stadiumPrice,
+                empireTipo: stadiumToPurchase.tipo,
+                nivel: stadiumToPurchase.nivel || 'Nível 1',
+                imagem: stadiumToPurchase.imagem || null
+            };
+            transaction.set(movimentoDocRef, movimentoData);
+
+            console.log("confirmStadiumPurchase: Transaction updates prepared (User estadio update + New movement + Lock set).");
+        });
+
+        console.log("confirmStadiumPurchase: Transaction successful (Lock acquired, Movement created, User estadio set)!");
+
+        console.log("confirmStadiumPurchase: Recalculating total GCoins based on all movements...");
+        let calculatedTotalGCoins = 0;
+        const gcoinsField = `${latestSeason}GCoins`;
+        try {
+            const allMovimentosQuery = query(collection(db, 'movimentos'), where('userId', '==', currentUser.uid));
+            const allMovimentosSnapshot = await getDocs(allMovimentosQuery);
+
+            allMovimentosSnapshot.forEach(doc => {
+                calculatedTotalGCoins += doc.data().valorreal || 0;
+            });
+            console.log(`confirmStadiumPurchase: Calculated total GCoins from ${allMovimentosSnapshot.size} movements: ${calculatedTotalGCoins}`);
+
+            await updateDoc(userDocRef, {
+                [gcoinsField]: calculatedTotalGCoins
+            });
+            console.log(`confirmStadiumPurchase: User GCoins (${gcoinsField}) updated successfully with calculated total value.`);
+
+        } catch (recalcError) {
+            console.error("confirmStadiumPurchase: ERROR during GCoins recalculation and update:", recalcError);
+            showInfoPopup("Aviso Importante", `O estádio foi adquirido, mas houve um erro ao recalcular o seu saldo final (${recalcError.message}). O seu saldo pode estar incorreto. Contacte o suporte.`);
+        }
+
+        closeInfoPopup();
+        if (!document.getElementById('info-popup').classList.contains('active')) {
+            showInfoPopup("Sucesso!", `Estádio ${stadiumToPurchase.nome} adquirido com sucesso! Saldo atualizado.`);
+        }
+        selectedStadiumForPurchase = null;
+        console.log("confirmStadiumPurchase: Reloading page...");
+        setTimeout(() => location.reload(), 3000);
+
+    } catch (error) {
+        console.error("confirmStadiumPurchase: A operação falhou:", error);
+        closeInfoPopup();
+        let displayError;
+        if (error.message.includes("lock existente")) {
+            displayError = "Este estádio já foi adquirido por outro império.";
+        } else if (error.message.includes("Já possui um estádio")) {
+            displayError = "A sua conta já possui um estádio.";
+        } else {
+            displayError = "Ocorreu uma falha inesperada. Tente novamente.";
+        }
+        showInfoPopup("Erro na Compra", displayError);
+        selectedStadiumForPurchase = null;
+    }
+}
+
+// --- Empire Shop & Item Purchase Flow Functions ---
+async function showEmpireShopPopup(stadiumId, ownedTypeLevelSet) {
+    console.log(`%c[DEBUG] showEmpireShopPopup (Chip+Nivel2+SmartClick): Called`, 'color: cyan; font-weight: bold;');
+    const shopPopup = document.getElementById('empire-shop-popup');
+    const itemsGrid = document.getElementById('empire-shop-items-grid');
+    if (!shopPopup || !itemsGrid || !currentUser) return;
+
+    itemsGrid.innerHTML = '<p style="color: #a99a7c; text-align: center; grid-column: 1 / -1;">A carregar itens disponíveis...</p>';
+    shopPopup.classList.add('active');
+
+    try {
+        await loadEmpireParentMap();
+
+        let userHasBoughtToday = false;
+        let ownedItemNamesSet = new Set();
+        const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+        const tomorrowStart = new Date(todayStart); tomorrowStart.setDate(todayStart.getDate() + 1);
+
+        const dailyPurchaseQuery = query(collection(db, 'movimentos'), where('userId', '==', currentUser.uid), where('tipo', '==', 'Empire'), where('movimentoData', '>=', todayStart), where('movimentoData', '<', tomorrowStart), limit(1));
+        const ownedItemsQuery = query(collection(db, 'movimentos'), where('userId', '==', currentUser.uid), where('tipo', '==', 'Empire'));
+        
+        // <<< A CORREÇÃO FOI FEITA AQUI >>>
+        const [dailyPurchaseSnapshot, ownedItemsSnapshot] = await Promise.all([getDocs(dailyPurchaseQuery), getDocs(ownedItemsQuery)]);
+
+        userHasBoughtToday = !dailyPurchaseSnapshot.empty;
+        ownedItemsSnapshot.forEach(doc => {
+            const movData = doc.data();
+            if (movData.itemEmpire) ownedItemNamesSet.add(movData.itemEmpire);
+        });
+
+        const purchasableItemsQuery = query(collection(db, 'empireitens'), where('anexadoItemId', '==', stadiumId), where('noMercado', '==', true));
+        const querySnapshot = await getDocs(purchasableItemsQuery);
+        const rawFetchedItems = [];
+        querySnapshot.forEach(doc => rawFetchedItems.push({ id: doc.id, ...doc.data() }));
+
+        const itemsToDisplay = rawFetchedItems.filter(item => item.valor !== undefined && item.valor !== null);
+        itemsGrid.innerHTML = '';
+
+        if (itemsToDisplay.length === 0) {
+            itemsGrid.innerHTML = '<p>Nenhum item adicional encontrado.</p>';
+            return;
+        }
+
+        itemsToDisplay.forEach((item, index) => {
+            const itemCard = document.createElement('div');
+            itemCard.className = 'item-card';
+            itemCard.style.opacity = 0; itemCard.style.transform = 'translateY(20px)';
+
+            const isOwned = ownedItemNamesSet.has(item.nome);
+            const isAvailableToday = isItemAvailableToday(item.diaDisponivel || item.dataMercado);
+            let needsLevel1 = item.nivel === 'Nível 2';
+            let hasLevel1 = needsLevel1 ? ownedTypeLevelSet.has(`${item.tipo}:Nível 1`) : true;
+            const isDisabled = isOwned || !isAvailableToday || userHasBoughtToday || (needsLevel1 && !hasLevel1);
+            let disabledReason = isOwned ? 'Já Possuído' : (userHasBoughtToday ? 'Limite Diário Atingido' : (!isAvailableToday ? 'Indisponível Hoje' : (needsLevel1 && !hasLevel1 ? 'Requer Nível 1' : '')));
+
+            const itemType = item.tipo || '???';
+            const nivelDisplay = item.nivel ? ` <span style="font-size:0.8em; color:#aaa;">(${item.nivel})</span>` : '';
+            itemCard.innerHTML = `
+                <span class="item-type-chip">${itemType}</span>
+                <img src="${item.imagem || 'placeholder.png'}" alt="${item.nome || ''}" class="item-image">
+                <div class="item-name">${item.nome || 'Item'}${nivelDisplay}</div>
+                <div class="item-nota" style="min-height: 3em; margin-bottom: 8px;">${item.nota || '...'}</div>
+                <div class="item-nota" style="color: #c9a959; font-weight: bold; margin-bottom: 10px;">${item.valor || '?'} GCoins</div>
+                <button class="popup-button buy-item-btn" style="padding: 5px 10px; font-size: 14px;" ${isDisabled ? 'disabled' : ''}>Comprar</button>
+                <span class="disabled-reason">${disabledReason}</span>
+            `;
+
+            if (!isDisabled) {
+                const buyButton = itemCard.querySelector('.buy-item-btn');
+                if (buyButton) buyButton.onclick = (event) => { event.stopPropagation(); initiateItemPurchase(item); };
+            }
+
+            const hasChildren = empireParentItemIds.has(item.id);
+
+            if (hasChildren) {
+                itemCard.style.cursor = 'pointer';
+                itemCard.addEventListener('click', (event) => {
+                    if (event.target.tagName !== 'BUTTON' || event.target.disabled) {
+                        window.showNestedPopup(item);
+                    }
+                });
+            } else {
+                itemCard.style.cursor = 'default';
+            }
+
+            itemsGrid.appendChild(itemCard);
+            requestAnimationFrame(() => {
+                setTimeout(() => {
+                    itemCard.style.opacity = '1';
+                    itemCard.style.transform = 'translateY(0)';
+                    itemCard.classList.add('visible');
+                }, index * 100);
+            });
+        });
+    } catch (error) {
+        console.error("%c[DEBUG] Error during showEmpireShopPopup:", 'color: red;', error);
+        itemsGrid.innerHTML = `<p style="color:red;">Erro loja: ${error.message}</p>`;
+    }
+    console.log(`%c[DEBUG] showEmpireShopPopup (Chip+Nivel2+SmartClick): Function End`, 'color: cyan; font-weight: bold;');
+}
+
+
+
+function closeEmpireShopPopup() {
+    console.log("closeEmpireShopPopup: Closing empire shop."); const popup = document.getElementById('empire-shop-popup'); if (popup) popup.classList.remove('active');
+}
+
+function initiateItemPurchase(itemData) {
+    console.log("initiateItemPurchase: Initiating purchase for:", itemData); if (!itemData || itemData.valor === undefined) { console.error("initiateItemPurchase: Invalid item data."); showInfoPopup("Erro", "Item inválido."); return; } selectedItemForPurchase = itemData; const popup = document.getElementById('item-confirmation-popup'); const nameEl = document.getElementById('confirm-item-name'); const priceEl = document.getElementById('confirm-item-price'); if (popup && nameEl && priceEl) { nameEl.textContent = selectedItemForPurchase.nome || 'item'; priceEl.textContent = selectedItemForPurchase.valor; popup.classList.add('active'); } else { console.error("initiateItemPurchase: Item confirmation elements not found."); }
+}
+
+function closeItemConfirmation() {
+    console.log("closeItemConfirmation: Closing item confirmation."); const popup = document.getElementById('item-confirmation-popup'); if (popup) popup.classList.remove('active');
+}
+
+/**
+ * Manipulador de clique para o botão 'Sim' da confirmação de compra.
+ * Fornece feedback visual imediato e previne cliques duplos.
+ */
+function handleConfirmPurchase() {
+    const yesButton = document.getElementById('confirm-item-btn-yes');
+    const noButton = document.getElementById('confirm-item-btn-no');
+
+    if (yesButton && !yesButton.disabled) {
+        yesButton.disabled = true;
+        yesButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Aguarde...';
+        if (noButton) {
+            noButton.disabled = true;
+        }
+        confirmItemPurchase(true);
+    }
+}
+
+/**
+ * Handles the confirmation (Yes/No) for purchasing an item from the shop.
+ * This version assumes the UI is blocked by handleConfirmPurchase().
+ */
+async function confirmItemPurchase(confirmed) {
+    console.log(`confirmItemPurchase: User action - confirmed: ${confirmed}`);
+
+    if (!confirmed) {
+        closeItemConfirmation();
+        selectedItemForPurchase = null;
+        return;
+    }
+
+    if (isProcessingPurchase) {
+        console.log("confirmItemPurchase: Compra já em processamento. Ignorando.");
+        return;
+    }
+
+    if (!selectedItemForPurchase?.id || selectedItemForPurchase.valor === undefined || !selectedItemForPurchase.tipo || !currentUser) {
+        console.error("confirmItemPurchase: Pre-check failed.", { item: selectedItemForPurchase, user: currentUser });
+        closeItemConfirmation();
+        showInfoPopup("Erro", "Dados inválidos para a compra.");
+        selectedItemForPurchase = null;
+        return;
+    }
+    
+    isProcessingPurchase = true;
+    const itemToPurchase = selectedItemForPurchase;
+    const itemPrice = itemToPurchase.valor;
+    const userDocRef = doc(db, 'users', currentUser.uid);
+    const empireItemRef = doc(db, 'empireitens', itemToPurchase.id);
+    let latestSeason;
+
+    try {
+        latestSeason = await getLatestSeason(); if (!latestSeason) throw new Error("Temporada não determinada.");
+        const gcoinsFieldCheck = `${latestSeason}GCoins`;
+
+        const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+        const tomorrowStart = new Date(todayStart); tomorrowStart.setDate(todayStart.getDate() + 1);
+        const dailyPurchaseQuery = query(collection(db, 'movimentos'), where('userId', '==', currentUser.uid), where('tipo', '==', 'Empire'), where('movimentoData', '>=', todayStart), where('movimentoData', '<', tomorrowStart), limit(1));
+        const dailyPurchaseSnapshot = await getDocs(dailyPurchaseQuery);
+        if (!dailyPurchaseSnapshot.empty) { throw new Error("Limite Diário Atingido"); }
+
+        const availabilityCheckRule = itemToPurchase.diaDisponivel || itemToPurchase.dataMercado;
+        if (!isItemAvailableToday(availabilityCheckRule)) { throw new Error("Item não disponível hoje."); }
+
+        if (itemToPurchase.nivel === 'Nível 2') {
+            const level1CheckQuery = query(collection(db, 'movimentos'), where('userId', '==', currentUser.uid), where('empireTipo', '==', itemToPurchase.tipo), where('nivel', '==', 'Nível 1'), limit(1));
+            const level1Snapshot = await getDocs(level1CheckQuery);
+            if (level1Snapshot.empty) { throw new Error(`Requisito: Nível 1 (${itemToPurchase.tipo}) necessário.`); }
+        }
+
+        await runTransaction(db, async (transaction) => {
+            const userDocSnap = await transaction.get(userDocRef);
+            if (!userDocSnap.exists()) throw new Error("User doc not found in transaction.");
+            const userData = userDocSnap.data();
+            const currentUserGCoins = userData[gcoinsFieldCheck] || 0;
+            if (currentUserGCoins < itemPrice) { throw new Error(`Saldo insuficiente`); }
+            
+            const movimentoDocRef = doc(collection(db, 'movimentos'));
+            const movimentoData = { 
+                estado: "Comprado", 
+                itemEmpire: itemToPurchase.nome, 
+                temporada: latestSeason, 
+                movimentoData: serverTimestamp(), 
+                preco: itemPrice, 
+                tipo: "Empire", 
+                userId: currentUser.uid, 
+                valorreal: -itemPrice, 
+                empireTipo: itemToPurchase.tipo, 
+                nivel: itemToPurchase.nivel || 'Nível 1',
+                imagem: itemToPurchase.imagem || null
+            };
+            transaction.set(movimentoDocRef, movimentoData);
+            
+            transaction.update(empireItemRef, { compradoPorUids: arrayUnion(currentUser.uid) });
+            if (itemToPurchase.tipo === "Formações") {
+                transaction.update(userDocRef, { tática: arrayUnion(itemToPurchase.nome) });
+            }
+        });
+
+        console.log("confirmItemPurchase: Transaction OK! Recalculating GCoins...");
+        const finalSeason = latestSeason; const finalGcoinsField = `${finalSeason}GCoins`;
+        const allMovimentosQuery = query(collection(db, 'movimentos'), where('userId', '==', currentUser.uid));
+        const allMovimentosSnapshot = await getDocs(allMovimentosQuery);
+        let totalValorReal = 0;
+        allMovimentosSnapshot.forEach(doc => { totalValorReal += doc.data().valorreal || 0; });
+        await updateDoc(userDocRef, { [finalGcoinsField]: totalValorReal });
+
+        closeItemConfirmation();
+        setTimeout(() => location.reload(), 1000);
+
+    } catch (error) {
+        console.error("confirmItemPurchase: A compra falhou:", error);
+        let displayError;
+        if (error.message.includes("Saldo insuficiente")) { displayError = "Saldo Insuficiente"; }
+        else if (error.message.includes("Limite Diário Atingido")) { displayError = "Você já atingiu o limite de uma compra por dia."; }
+        else if (error.message.includes("Item não disponível hoje")) { displayError = "Este item não está disponível para compra hoje."; }
+        else if (error.message.includes("Requisito: Nível 1")) { displayError = "É necessário possuir o Nível 1 deste tipo de item primeiro."; }
+        else { displayError = "Ocorreu uma falha inesperada. Tente novamente."; }
+        
+        closeItemConfirmation();
+        showInfoPopup("Erro na Compra", displayError);
+        selectedItemForPurchase = null;
+
+    } finally {
+        isProcessingPurchase = false;
+        console.log("confirmItemPurchase: Flag de processamento resetada.");
+
+        const yesButton = document.getElementById('confirm-item-btn-yes');
+        const noButton = document.getElementById('confirm-item-btn-no');
+        if (yesButton) {
+            yesButton.disabled = false;
+            yesButton.innerHTML = 'Sim';
+        }
+        if (noButton) {
+            noButton.disabled = false;
         }
     }
 }
 
-// NOVO: A função de visibilidade agora mora aqui e é global.
-// O script principal irá chamar esta função.
-window.updateMenuVisibility = function(menuSettings) {
-    const bottomMenu = document.querySelector('.bottom-menu');
-    if (!bottomMenu) return; // Se o menu ainda não carregou, sai para evitar erros
+// --- State Loading Functions ---
+async function loadFilosofiasParaEscolha() {
+    console.log("loadFilosofiasParaEscolha: Starting..."); let container, list, title; try { container = document.getElementById('filosofias-container'); list = document.getElementById('filosofias-list'); title = container.querySelector('h2'); if (!container || !list || !title) throw new Error("DOM elements missing"); list.innerHTML = '<p>A carregar filosofias...</p>'; title.textContent = 'Escolha sua Filosofia'; container.style.display = 'block'; } catch (domError) { console.error("loadFilosofiasParaEscolha: DOM access ERROR:", domError); return; } if (!db) { console.error("loadFilosofiasParaEscolha: DB invalid!"); list.innerHTML = '<p style="color:red;">Erro DB.</p>'; return; } const filosofiasQuery = query(collection(db, 'empireitens'), where('tipo', '==', 'Filosofia'), where('noMercado', '==', true), orderBy('ordem', 'asc')); console.log("loadFilosofiasParaEscolha: Querying..."); try { const querySnapshot = await getDocs(filosofiasQuery); console.log(`loadFilosofiasParaEscolha: Found ${querySnapshot.size} filosofias.`); const filosofias = []; querySnapshot.forEach((doc) => { filosofias.push({ id: doc.id, ...doc.data() }); }); list.innerHTML = ''; if (filosofias.length === 0) { list.innerHTML = '<p>Nenhuma filosofia disponível.</p>'; return; } for (let i = 0; i < filosofias.length; i++) { const filosofia = filosofias[i]; const card = document.createElement('div'); card.className = 'filosofia-card'; card.style.opacity = 0; card.style.transform = 'translateY(10px)'; card.innerHTML = `<img src="${filosofia.imagem || 'placeholder.png'}" alt="${filosofia.nome || 'Filosofia'}">`; card.addEventListener('click', () => showPopup(filosofia)); list.appendChild(card); requestAnimationFrame(() => { setTimeout(() => { card.style.opacity = '1'; card.style.transform = 'translateY(0)'; }, (i + 1) * 200); }); } console.log("loadFilosofiasParaEscolha: Rendered choices."); } catch (error) { console.error("loadFilosofiasParaEscolha: ERROR:", error); list.innerHTML = `<p style="color:red;">Erro: ${error.message}</p>`; }
+}
 
-    const menuItems = bottomMenu.querySelectorAll('.menu-item');
-    const settingToKeyMap = { '1x': '1x', 'bank': 'bank', 'empire': 'empire', 'market': 'market', 'profile': 'profile', 'rankings': 'rankings', 'team': 'team' };
-    
-    menuItems.forEach(item => {
-        const menuKey = item.dataset.menuKey;
-        if (menuKey) {
-            const settingName = settingToKeyMap[menuKey];
-            const settingValue = menuSettings[settingName];
-            if (settingValue === 'off') {
-                item.classList.add('hidden');
+async function loadEstadios(filosofiaId) {
+    console.log(`loadEstadios: Starting for filosofia: ${filosofiaId}`);
+    let container, list, title;
+    try {
+        container = document.getElementById('filosofias-container');
+        list = document.getElementById('filosofias-list');
+        title = container.querySelector('h2');
+        if (!container || !list || !title) {
+            throw new Error("DOM elements missing for stadium display (container, list, or title)");
+        }
+        list.innerHTML = '<p>A verificar estádios disponíveis...</p>';
+        title.textContent = 'Escolha seu Estádio';
+        container.style.display = 'block';
+    } catch (domError) {
+        console.error("loadEstadios: DOM access ERROR:", domError);
+        return;
+    }
+
+    const boughtStadiumNamesSet = new Set();
+    try {
+        console.log("loadEstadios: Querying 'movimentos' for already bought stadiums...");
+        const movimentosQuery = query(
+            collection(db, "movimentos"),
+            where("tipo", "==", "Empire"),
+            where("empireTipo", "==", "Estádio")
+        );
+        const movimentosSnapshot = await getDocs(movimentosQuery);
+        movimentosSnapshot.forEach((doc) => {
+            const movData = doc.data();
+            if (movData.itemEmpire) {
+                boughtStadiumNamesSet.add(movData.itemEmpire);
+            }
+        });
+        console.log(`loadEstadios: Found ${boughtStadiumNamesSet.size} unique stadium names in 'movimentos'.`, boughtStadiumNamesSet);
+    } catch (error) {
+        console.error("loadEstadios: Error querying 'movimentos' for bought stadiums:", error);
+        list.innerHTML = `<p style="color:red;">Erro ao verificar disponibilidade dos estádios.</p>`;
+        return;
+    }
+
+    const estadiosQuery = query(
+        collection(db, 'empireitens'),
+        where('tipo', '==', 'Estádio'),
+        where('anexadoItemId', '==', filosofiaId),
+        where('noMercado', '==', true),
+        orderBy('ordem', 'asc')
+    );
+
+    console.log("loadEstadios: Querying 'empireitens' for stadium details...");
+    try {
+        const querySnapshot = await getDocs(estadiosQuery);
+        console.log(`loadEstadios: Found ${querySnapshot.size} stadium documents in 'empireitens'.`);
+
+        list.innerHTML = '';
+
+        if (querySnapshot.empty) {
+            list.innerHTML = '<p>Nenhum estádio encontrado para esta filosofia.</p>';
+            return;
+        }
+
+        const estadios = [];
+        querySnapshot.forEach((doc) => {
+            estadios.push({ id: doc.id, ...doc.data() });
+        });
+
+        const userHasAnyStadium = currentUser && currentUser.estadio;
+
+        for (let i = 0; i < estadios.length; i++) {
+            const estadio = estadios[i];
+            const card = document.createElement('div');
+            card.className = 'item-card';
+            card.style.opacity = 0;
+            card.style.transform = 'translateY(20px)';
+
+            let cardContent = `
+                 <img src="${estadio.imagem || 'placeholder.png'}" alt="${estadio.nome || ''}" class="item-image" style="width: 150px; height: 150px;">
+                 <div class="item-name">${estadio.nome || 'Estádio'}</div>
+                 <div class="item-nota">${estadio.nota || 'N/A'}</div>
+             `;
+
+            const isOwnedByCurrentUser = currentUser && currentUser.estadio === estadio.nome;
+            const isAlreadyBoughtByAnyone = boughtStadiumNamesSet.has(estadio.nome);
+
+            let clickHandler = null;
+
+            if (isOwnedByCurrentUser) {
+                cardContent += `<div style="color: lightgreen; font-weight: bold;">Possuído</div>`;
+                clickHandler = () => window.showStadiumDetailsPopup(estadio);
+            } else if (isAlreadyBoughtByAnyone) {
+                cardContent += `<div style="color: grey; font-style: italic;">Indisponível (Já Adquirido)</div>`;
+                card.style.cursor = 'not-allowed';
+                card.style.filter = 'grayscale(80%)';
+                clickHandler = () => window.showStadiumDetailsPopup(estadio);
+            } else if (userHasAnyStadium) {
+                cardContent += `<div>${estadio.valor !== undefined ? estadio.valor + ' GCoins' : ''}</div>`;
+                card.style.cursor = 'not-allowed';
+                card.style.filter = 'grayscale(80%)';
+                clickHandler = () => window.showStadiumDetailsPopup(estadio);
+            } else if (estadio.valor !== undefined && estadio.valor !== null) {
+                cardContent += `<div style="color: #c9a959; font-weight: bold; cursor: pointer;">${estadio.valor} GCoins - Comprar</div>`;
+                clickHandler = () => {
+                    selectedStadiumForPurchase = estadio;
+                    window.showStadiumConfirmation();
+                };
+                card.style.cursor = 'pointer';
             } else {
-                item.classList.remove('hidden');
+                cardContent += `<div style="color: grey;">Indisponível</div>`;
+                clickHandler = () => window.showStadiumDetailsPopup(estadio);
+            }
+
+            card.innerHTML = cardContent;
+            if (clickHandler) {
+                card.addEventListener('click', clickHandler);
+            }
+            list.appendChild(card);
+
+            requestAnimationFrame(() => {
+                setTimeout(() => {
+                    card.style.opacity = '1';
+                    card.style.transform = 'translateY(0)';
+                    card.classList.add('visible');
+                }, (i + 1) * 150);
+            });
+        }
+        console.log("loadEstadios: Rendered estadios based on 'movimentos' availability check.");
+
+    } catch (error) {
+        console.error("loadEstadios: Firebase/Render ERROR:", error);
+        if (list) {
+            list.innerHTML = `<p style="color:red;">Erro ao carregar estádios: ${error.message}</p>`;
+        }
+    }
+}
+
+async function displayOwnedEmpireState(userData) {
+    console.log(`displayOwnedEmpireState (Chips+SmartClick): Starting for user ${userData.uid}`);
+    let container, list, title, userImagePlaceholder, shopButtonPlaceholder;
+    let ownedStadiumId = null;
+    let acquiredItemsDetails = [];
+    let ownedTypeLevelSet = new Set();
+
+    try {
+        container = document.getElementById('filosofias-container'); 
+        list = document.getElementById('filosofias-list'); 
+        title = container.querySelector('h2'); 
+        userImagePlaceholder = document.getElementById('user-image-placeholder'); 
+        shopButtonPlaceholder = document.getElementById('shop-button-placeholder');
+        if (!container || !list || !title || !userImagePlaceholder || !shopButtonPlaceholder) throw new Error("DOM elements missing!");
+        
+        list.innerHTML = '<p>A carregar seu império...</p>';
+        title.textContent = 'Seu Império Estabelecido'; 
+        container.style.display = 'block'; 
+        userImagePlaceholder.innerHTML = ''; // Garante que o placeholder está vazio
+        shopButtonPlaceholder.innerHTML = '';
+
+        await loadEmpireParentMap();
+
+    } catch (domError) { 
+        console.error("displayOwnedEmpireState: DOM access ERROR:", domError); 
+        return; 
+    }
+
+    try {
+        const stadiumQuery = query(collection(db, 'empireitens'), where('nome', '==', userData.estadio), where('tipo', '==', 'Estádio'), limit(1));
+        const stadiumSnapshot = await getDocs(stadiumQuery);
+        if (!stadiumSnapshot.empty) {
+            const stadiumDoc = stadiumSnapshot.docs[0];
+            ownedStadiumId = stadiumDoc.id;
+            const stadiumData = stadiumDoc.data();
+            if (stadiumData.imagem) {
+                const existingBg = document.getElementById('empire-background-image');
+                if (existingBg) existingBg.remove();
+                const backgroundDiv = document.createElement('div');
+                backgroundDiv.id = 'empire-background-image';
+                Object.assign(backgroundDiv.style, { position: 'fixed', top: '0', left: '0', width: '100vw', height: '100vh', backgroundImage: `url('${stadiumData.imagem}')`, backgroundSize: 'cover', backgroundPosition: 'center center', opacity: '0.48', zIndex: '-1', pointerEvents: 'none' });
+                document.body.appendChild(backgroundDiv);
             }
         }
-    });
+    } catch (error) { console.error("Error fetching stadium:", error); }
+
+    try {
+        const movimentosQuery = query(collection(db, 'movimentos'), where('userId', '==', userData.uid), where('tipo', '==', 'Empire'));
+        const movimentosSnapshot = await getDocs(movimentosQuery);
+        acquiredItemsDetails = []; 
+        ownedTypeLevelSet.clear();
+        movimentosSnapshot.forEach(doc => {
+            const movData = doc.data();
+            if (movData.itemEmpire && movData.empireTipo && movData.empireTipo !== 'Filosofia' && movData.empireTipo !== 'Estádio') {
+                const itemDetail = { name: movData.itemEmpire, type: movData.empireTipo, level: movData.nivel || 'Nível 1' };
+                acquiredItemsDetails.push(itemDetail);
+                ownedTypeLevelSet.add(`${itemDetail.type}:${itemDetail.level}`);
+            }
+        });
+
+        if (acquiredItemsDetails.length === 0) {
+            list.innerHTML = '<p>Não adquiriu outros itens ainda.</p>';
+        } else {
+            const itemPromises = acquiredItemsDetails.map(ownedItem => getDocs(query(collection(db, 'empireitens'), where('nome', '==', ownedItem.name), limit(1))));
+            const itemSnapshots = await Promise.all(itemPromises);
+
+            const itemsToDisplay = itemSnapshots.map((snapshot, index) => snapshot.empty ? null : { id: snapshot.docs[0].id, ...snapshot.docs[0].data() }).filter(item => item !== null);
+            itemsToDisplay.sort((a, b) => (a.ordem || 0) - (b.ordem || 0) || a.nome.localeCompare(b.nome));
+            list.innerHTML = '';
+
+            itemsToDisplay.forEach((item, index) => {
+                const itemCard = document.createElement('div');
+                itemCard.className = 'item-card';
+                itemCard.style.opacity = 0;
+                itemCard.style.transform = 'translateY(20px)';
+                const itemType = item.tipo || '???';
+                const nivelDisplay = item.nivel ? ` <span style="font-size:0.8em; color:#aaa;">(${item.nivel})</span>` : '';
+                itemCard.innerHTML = `
+                    <span class="item-type-chip">${itemType}</span>
+                    <img src="${item.imagem || 'placeholder.png'}" alt="${item.nome || ''}" class="item-image">
+                    <div class="item-name">${item.nome || 'Item'}${nivelDisplay}</div>
+                    <div class="item-nota">${item.nota || 'N/A'}</div>
+                `;
+
+                if (empireParentItemIds.has(item.id)) {
+                    itemCard.style.cursor = 'pointer';
+                    itemCard.addEventListener('click', () => window.showNestedPopup(item));
+                } else {
+                    itemCard.style.cursor = 'default';
+                }
+
+                list.appendChild(itemCard);
+                requestAnimationFrame(() => {
+                    setTimeout(() => {
+                        itemCard.style.opacity = '1';
+                        itemCard.style.transform = 'translateY(0)';
+                        itemCard.classList.add('visible');
+                    }, index * 100);
+                });
+            });
+        }
+
+        // --- BLOCO DE CÓDIGO QUE ADICIONAVA A IMAGEM FOI REMOVIDO DAQUI ---
+        // O código que estava aqui foi apagado para que a imagem nunca seja adicionada.
+
+        if (ownedStadiumId) {
+            const shopButton = document.createElement('button');
+            shopButton.className = 'popup-button';
+            shopButton.innerHTML = '<i class="fas fa-shopping-cart" style="margin-right: 5px;"></i>Loja';
+            shopButton.style.padding = '8px 15px';
+            shopButton.onclick = () => showEmpireShopPopup(ownedStadiumId, ownedTypeLevelSet);
+            shopButtonPlaceholder.appendChild(shopButton);
+        }
+    } catch (error) {
+        console.error("Error displaying acquired items/UI:", error);
+        list.innerHTML = `<p style="color:red;">Erro ao carregar seus itens: ${error.message}</p>`;
+    }
 }
+
+
+
+// --- Funções para Popup Outros Impérios ---
+async function displayOtherEmpiresView() {
+    console.log("displayOtherEmpiresView: Switching to other empires view.");
+    const listContainer = document.getElementById('filosofias-list');
+    const title = document.querySelector('#filosofias-container h2');
+    const shopButton = document.querySelector('#shop-button-placeholder button');
+    const userImagePlaceholder = document.getElementById('user-image-placeholder');
+    // --- ADICIONE ESTA LINHA ---
+    const stadiumBackground = document.getElementById('empire-background-image');
+
+    if (!listContainer || !title) return;
+
+    // Atualiza a UI
+    listContainer.innerHTML = '<p>A carregar impérios...</p>';
+    title.textContent = 'Outros Impérios';
+    if (shopButton) shopButton.style.display = 'none';
+    if (userImagePlaceholder) userImagePlaceholder.style.display = 'none';
+    
+    // --- ADICIONE ESTA LINHA PARA OCULTAR O FUNDO DO ESTÁDIO ---
+    if (stadiumBackground) stadiumBackground.style.display = 'none';
+    
+    setPageBackground('https://lh3.googleusercontent.com/pw/AP1GczPZedYgh1QcwMzyJcb3Xe5XfxjNNvKPVvR7UetQ01ebddLxeU_ZtPAOudlBzqtDcjIyjH6V71ySDpfxykBMo52FGxMtFpa34kCRmkQ7Qvyx8nBXcu2geDy_16GThkINoio6urG7q46ItYZp9R7tVAF3=w1415-h809-s-no-gm?authuser=1', 0.48);
+
+    try {
+        const usersQuery = query(collection(db, "users"), where("estadio", ">", ""));
+        const querySnapshot = await getDocs(usersQuery);
+        listContainer.innerHTML = '';
+        let otherEmpiresCount = 0;
+
+        const userCards = [];
+        querySnapshot.forEach((doc) => {
+            if (doc.id === currentUser.uid) return;
+            otherEmpiresCount++;
+            const userData = doc.data();
+            const userCard = document.createElement('div');
+            userCard.className = 'user-empire-card';
+            userCard.dataset.userId = doc.id;
+            userCard.dataset.userName = userData.nomeDeUsuario || '???';
+            userCard.innerHTML = `
+                <img src="${userData.imagem || 'placeholder.png'}" alt="Imagem de ${userData.nomeDeUsuario || 'User'}" class="user-empire-image">
+                <div class="user-empire-name">${userData.nomeDeUsuario || '???'}</div>
+            `;
+            userCard.addEventListener('click', handleUserCardClick);
+            userCards.push(userCard);
+        });
+
+        if (otherEmpiresCount === 0) {
+            listContainer.innerHTML = '<p>Nenhum outro império encontrado.</p>';
+        } else {
+            userCards.forEach((card, index) => {
+                listContainer.appendChild(card);
+                requestAnimationFrame(() => {
+                    setTimeout(() => {
+                        card.classList.add('visible');
+                    }, index * 100);
+                });
+            });
+        }
+    } catch (error) {
+        console.error("displayOtherEmpiresView: Error:", error);
+        listContainer.innerHTML = `<p style="color:red;">Erro ao carregar impérios.</p>`;
+    }
+}
+
+function displayMyEmpireView() {
+    console.log("displayMyEmpireView: Switching back to my empire view.");
+    const shopButton = document.querySelector('#shop-button-placeholder button');
+    const userImagePlaceholder = document.getElementById('user-image-placeholder');
+    // --- ADICIONE ESTA LINHA ---
+    const stadiumBackground = document.getElementById('empire-background-image');
+
+    setPageBackground(null); // Remove o fundo especial
+    if (shopButton) shopButton.style.display = 'flex';
+    if (userImagePlaceholder) userImagePlaceholder.style.display = 'block';
+    
+    // --- ADICIONE ESTA LINHA PARA GARANTIR QUE O FUNDO DO ESTÁDIO REAPARECE ---
+    if (stadiumBackground) stadiumBackground.style.display = 'block';
+
+    // Re-renderiza o estado do império do utilizador.
+    displayOwnedEmpireState(currentUser);
+}
+
+function toggleEmpireView() {
+    if (isShowingOtherEmpires) {
+        // Se está a mostrar os outros, volta para o meu império
+        displayMyEmpireView();
+    } else {
+        // Se está a mostrar o meu, muda para os outros impérios
+        displayOtherEmpiresView();
+    }
+    // Inverte o estado
+    isShowingOtherEmpires = !isShowingOtherEmpires;
+}
+
+function closeOtherEmpiresPopup() {
+    console.log("closeOtherEmpiresPopup: Closing."); const popup = document.getElementById('other-empires-popup'); if (popup) popup.classList.remove('active');
+}
+function handleUserCardClick(event) {
+    const clickedCard = event.currentTarget; const userId = clickedCard.dataset.userId; const userName = clickedCard.dataset.userName;
+    if (userId && userName) { console.log(`Clicked user: ${userName} (ID: ${userId})`); showUserEmpireItems(userId, userName); }
+    else { console.error("Could not get data from clicked card.", clickedCard.dataset); }
+}
+async function showUserEmpireItems(targetUserId, targetUserName) {
+    console.log(`showUserEmpireItems: Fetching items for ${targetUserName} (ID: ${targetUserId})`);
+    const popup = document.getElementById('user-items-popup'); const titleEl = document.getElementById('user-items-popup-title'); const listContainer = document.getElementById('user-items-list');
+    if (!popup || !titleEl || !listContainer) { console.error("showUserEmpireItems: Elements missing."); return; }
+    titleEl.textContent = `Império de: ${targetUserName}`; listContainer.innerHTML = '<p>A carregar...</p>'; popup.classList.add('active');
+    try {
+        const movimentosQuery = query(
+            collection(db, "movimentos"),
+            where("userId", "==", targetUserId),
+            where("tipo", "==", "Empire"),
+            orderBy("empireTipo", "asc"),
+            orderBy("itemEmpire", "asc")
+        );
+        const querySnapshot = await getDocs(movimentosQuery);
+        console.log(`Found ${querySnapshot.size} Empire movements for ${targetUserId}.`);
+        listContainer.innerHTML = ''; let itemsFound = 0; let cardIndex = 0;
+        if (querySnapshot.empty) {
+            listContainer.innerHTML = '<p>Nenhum item encontrado para este império.</p>';
+        }
+        else {
+            querySnapshot.forEach((doc) => {
+                const movData = doc.data();
+                const itemName = movData.itemEmpire || "???";
+                const itemType = movData.empireTipo || "Item Empire";
+                const itemLevel = movData.nivel || '';
+
+                itemsFound++;
+                const itemCard = document.createElement('div');
+                itemCard.className = 'user-owned-item-card';
+
+                const nameEl = document.createElement('div');
+                nameEl.className = 'user-owned-item-name';
+                nameEl.textContent = itemName + (itemLevel ? ` (${itemLevel})` : '');
+
+                const typeEl = document.createElement('div');
+                typeEl.className = 'user-owned-item-type';
+                typeEl.textContent = `Tipo: ${itemType}`;
+
+                itemCard.appendChild(nameEl);
+                itemCard.appendChild(typeEl);
+
+                listContainer.appendChild(itemCard);
+
+                requestAnimationFrame(() => {
+                    setTimeout(() => {
+                        itemCard.classList.add('visible');
+                    }, cardIndex * 80);
+                });
+                cardIndex++;
+            });
+            console.log(`Displayed ${itemsFound} items.`);
+        }
+    } catch (error) {
+        console.error(`Error fetching movements for ${targetUserId}:`, error);
+        listContainer.innerHTML = `<p style="color:red;">Erro ao carregar itens: ${error.message}</p>`;
+    }
+}
+function closeUserItemsPopup() {
+    console.log("closeUserItemsPopup: Closing."); const popup = document.getElementById('user-items-popup'); if (popup) popup.classList.remove('active');
+}
+
+// --- Global Function Definitions ---
+window.closePopup = closePopup;
+window.showConfirmation = showConfirmation;
+window.confirmChoice = confirmChoice;
+window.showStadiumDetailsPopup = showStadiumDetailsPopup;
+window.closeStadiumDetailsPopup = closeStadiumDetailsPopup;
+window.showStadiumConfirmation = showStadiumConfirmation;
+window.closeStadiumConfirmation = closeStadiumConfirmation;
+window.confirmStadiumPurchase = confirmStadiumPurchase;
+window.closeInfoPopup = closeInfoPopup;
+window.showNestedPopup = showNestedPopup;
+window.closeNestedPopup = closeNestedPopup;
+window.closeEmpireShopPopup = closeEmpireShopPopup;
+window.initiateItemPurchase = initiateItemPurchase;
+window.confirmItemPurchase = confirmItemPurchase;
+window.handleConfirmPurchase = handleConfirmPurchase; // Nova função
+window.closeOtherEmpiresPopup = closeOtherEmpiresPopup;
+window.closeUserItemsPopup = closeUserItemsPopup;
+
+// --- Main Initialization Logic on Auth State Change ---
+console.log("Empire Page Script: Setting up onAuthStateChanged listener...");
+onAuthStateChanged(auth, async (user) => {
+    console.log("onAuthStateChanged: Auth state changed.");
+    updateLoadingProgress(10);
+
+    if (user) {
+        console.log(`onAuthStateChanged: User detected. UID: ${user.uid}`);
+        try {
+            currentUser = await getUserStatus(user.uid);
+            updateLoadingProgress(30);
+            console.log("onAuthStateChanged: User status received:", currentUser);
+            if (!currentUser) { console.warn('onAuthStateChanged: User invalid or not accepted. Redirecting.'); window.location.href = '404.html'; hideLoadingScreen(); return; }
+
+            const menuSettings = await getMenuSettings();
+            updateLoadingProgress(50);
+            console.log("onAuthStateChanged: Menu settings received:", menuSettings);
+
+            const hasAccess = await checkPageAccess(currentUser, menuSettings);
+            if (!hasAccess) { console.log("Access check failed."); hideLoadingScreen(); return; }
+            console.log("Access check passed.");
+
+            updateMenuVisibility(menuSettings);
+            updateLoadingProgress(70);
+            console.log("Menu visibility updated.");
+
+            console.log(`onAuthStateChanged: User State - Filosofia: ${currentUser.filosofia}, Estadio: ${currentUser.estadio}`);
+
+            if (currentUser.filosofia && currentUser.estadio) {
+                console.log('State -> Owned Empire.');
+                await displayOwnedEmpireState(currentUser);
+            } else if (!currentUser.filosofia) {
+                console.log('State -> Choose Filosofia.');
+                await loadFilosofiasParaEscolha();
+            } else {
+                console.log(`State -> Choose Estadio.`);
+                await loadEstadios(currentUser.filosofia);
+            }
+            console.log("Correct state loading function finished.");
+
+         const otherEmpiresBtn = document.getElementById('other-empires-button');
+if (otherEmpiresBtn && currentUser?.estadio) {
+    console.log("onAuthStateChanged: Showing 'Other Empires' button.");
+    otherEmpiresBtn.style.display = 'flex';
+    setTimeout(() => otherEmpiresBtn.classList.add('visible'), 100);
+    // Define a nova função de toggle como o manipulador de clique
+    otherEmpiresBtn.onclick = toggleEmpireView;
+} else if (otherEmpiresBtn) {
+    otherEmpiresBtn.style.display = 'none';
+    otherEmpiresBtn.classList.remove('visible');
+    otherEmpiresBtn.onclick = null;
+}
+
+            updateLoadingProgress(100);
+            console.log("Hiding loading screen.");
+            hideLoadingScreen();
+
+        } catch (error) {
+            console.error('CRITICAL ERROR during init/load:', error);
+            const container = document.getElementById('filosofias-container');
+            if (container) { container.innerHTML = '<h2 style="color:red;">Erro Crítico</h2><p style="color:red;">Erro ao carregar a página. Verifique a consola para detalhes.</p>'; container.style.display = 'block'; }
+            hideLoadingScreen();
+        }
+    } else {
+        console.log('No user logged in. Redirecting to index.');
+        currentUser = null;
+        hideLoadingScreen();
+        window.location.href = 'index.html';
+    }
+});
+console.log("Empire Page Script: onAuthStateChanged listener set up.");
+
+        </script>
+<script src="menu-component.js"></script> 
+</body>
+</html>
