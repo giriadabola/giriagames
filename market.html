@@ -20,52 +20,6 @@
             font-family: Arial, sans-serif;
         }
 
-        .bottom-menu {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    background-color: #ffffff;
-    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
-    padding: 12px 0;
-    display: flex;
-    justify-content: center;
-    gap: 32px;
-    align-items: center;
-    z-index: 1000;
-}
-
-.menu-item {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    text-decoration: none;
-    color: #666;
-    transition: color 0.3s ease;
-}
-
-.menu-item:hover, .menu-item.active {
-    color: #333;
-}
-
-.menu-item i {
-    font-size: 24px;
-    margin-bottom: 4px;
-}
-
-.empire-icon {
-    font-size: 42px;
-    color: #2176ff;
-    transform: translateY(-3px);
-    filter: drop-shadow(0 0 8px rgba(33, 118, 255, 0.4));
-    transition: all 0.3s ease;
-}
-
-.empire-icon:hover {
-    color: #0056d6;
-    transform: translateY(-8px);
-    filter: drop-shadow(0 0 12px rgba(33, 118, 255, 0.6));
-}
 
         .content {
             padding: 20px;
@@ -465,14 +419,6 @@
         <!-- Message for no players will be added here by JS -->
     </div>
 
-    <nav class="bottom-menu">
-        <a id="menu-item-1x" href="1x.html" class="menu-item"> <i class="fas fa-home"></i> </a>
-        <a id="menu-item-market" href="market.html" class="menu-item active"> <i class="fas fa-shopping-cart"></i> </a>
-        <a id="menu-item-team" href="team.html" class="menu-item"> <i class="fas fa-users"></i> </a>
-        <a id="menu-item-empire" href="empire.html" class="menu-item"> <i class="fas fa-landmark empire-icon"></i> </a>
-        <a id="menu-item-rankings" href="rankings.html" class="menu-item"> <i class="fas fa-list"></i> </a>
-        <a id="menu-item-profile" href="profile.html" class="menu-item"> <i class="fas fa-user"></i> </a>
-    </nav>
 
     <script src="config.js"></script>
     <script type="module">
@@ -1286,52 +1232,64 @@ function updateSectionCounts() {
 
         // --- Initialization and Auth Handling ---
 
-       onAuthStateChanged(auth, async (user) => {
-    try {
-        if (user) {
-            updateLoadingProgress(10); // Auth checked
-            currentUserEstatuto = await getUserEstatuto(user.uid);
-            updateLoadingProgress(10); // Status fetched
+     onAuthStateChanged(auth, async (user) => {
+           try {
+               if (user) {
+                   updateLoadingProgress(10); // Auth verificado
+                   currentUserEstatuto = await getUserEstatuto(user.uid);
+                   updateLoadingProgress(10); // Status obtido
 
-            // NOVO CÓDIGO A ADICIONAR AQUI
-            try {
-                const userDocRef = doc(db, 'users', user.uid);
-                await updateDoc(userDocRef, {
-                    ultimoacesso: serverTimestamp()
-                });
-            } catch (error) {
-                console.error("Erro ao atualizar o campo ultimoacesso: ", error);
-            }
-            // FIM DO NOVO CÓDIGO
+                   // Atualiza o último acesso do utilizador
+                   try {
+                       const userDocRef = doc(db, 'users', user.uid);
+                       await updateDoc(userDocRef, { ultimoacesso: serverTimestamp() });
+                   } catch (error) {
+                       console.error("Erro ao atualizar o campo ultimoacesso: ", error);
+                   }
 
-            if (currentUserEstatuto !== null) {
-                const menuSettings = await loadMenuSettings();
-                        updateLoadingProgress(10); // Settings loaded
+                   if (currentUserEstatuto !== null) {
+                       // Se o utilizador for válido, continua o carregamento
+                       const menuSettings = await loadMenuSettings();
+                       updateLoadingProgress(10); // Configurações do menu carregadas
 
-                        if (!checkPageAccess(currentUserEstatuto, menuSettings)) return; // Redirects
-                        updateLoadingProgress(10); // Access checked (Total 40%)
+                       if (!checkPageAccess(currentUserEstatuto, menuSettings)) return; // Redireciona se não tiver acesso
+                       updateLoadingProgress(10); // Acesso verificado (Total 40%)
 
-                        updateMenuVisibility(menuSettings);
-                        await loadPlayers(); // Handles progress from 40% up
-                    } else {
-                        // Logged in but not accepted or error
-                        if (loadingScreen) loadingScreen.style.display = 'none';
-                        window.location.href = '404.html'; return;
-                    }
-                } else {
-                    // No user
-                    if (loadingScreen) loadingScreen.style.display = 'none';
-                    window.location.href = '404.html'; return;
-                }
-                updateLoadingProgress(0, 100); // Ensure 100% eventually
+                       // Lógica específica para o botão "Transações" desta página
+                       const transactionButton = document.getElementById('transaction-button-link');
+                       if (transactionButton && menuSettings?.bank === 'off') {
+                           transactionButton.style.display = 'none';
+                       }
 
-            } catch (error) {
-                console.error("Critical error during initial load:", error);
-                if (loadingScreen) loadingScreen.style.display = 'none';
-                alert("Ocorreu um erro grave ao carregar a página.");
-                window.location.href = '404.html';
-            }
-        });
+                       // Chama a função GLOBAL do menu-component.js para o menu inferior
+                       if (window.updateMenuVisibility) {
+                           window.updateMenuVisibility(menuSettings);
+                       }
+                       
+                       // Carrega os jogadores
+                       await loadPlayers();
+
+                   } else {
+                       // Utilizador logado mas não aceite ou com erro
+                       if (loadingScreen) loadingScreen.style.display = 'none';
+                       window.location.href = '404.html';
+                       return;
+                   }
+               } else {
+                   // Nenhum utilizador logado
+                   if (loadingScreen) loadingScreen.style.display = 'none';
+                   window.location.href = '404.html';
+                   return;
+               }
+               updateLoadingProgress(0, 100); // Garante que a barra chega a 100%
+
+           } catch (error) {
+               console.error("Erro crítico durante o carregamento inicial:", error);
+               if (loadingScreen) loadingScreen.style.display = 'none';
+               alert("Ocorreu um erro grave ao carregar a página.");
+               window.location.href = '404.html';
+           }
+       });
 
         // --- Event Listeners Setup ---
 
@@ -1378,6 +1336,6 @@ function updateSectionCounts() {
         });
 
     </script>
-
+<script src="menu-component.js"></script> 
 </body>
 </html>
