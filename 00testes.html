@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>1xWhatIf - Ggames</title>
+    <link rel="icon" type="image/png" href="https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhTl6Ljabwgx-VXdZz8FcAoygQprujSsCoXc32Y_iU0FjYVPu1B6MffWwp8gcCVuV8TWn39FRk9OIe1nc-esubVJYmdLsTptAoR9GyqNuw4R5MBaeaoWXTc3JaqH2YVNtEmfReQqohvQKvHiI0XwE5na2ty2B9Bt4oELxYv2BaZ7R3UmeylpiVEIbiLnCB/s320/soccer-ball-png.webp">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <style>
+        /* Estilos existentes ... */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        /* --- TELA DE CARREGAMENTO (COM Z-INDEX CORRIGIDO) --- */
+        #loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #f0f0f0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 2002; /* <<< CORREÇÃO: Aumentado para garantir que fica por cima de tudo */
+        }
+        .loading-spinner { border: 16px solid #f3f3f3; border-top: 16px solid #3498db; border-radius: 50%; width: 120px; height: 120px; animation: spin 2s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+
+        /* Mod Popup Styles */
+        .mod-popup-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .mod-popup-overlay.active {
+            display: flex;
+            opacity: 1;
+        }
+
+        .mod-popup-content {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            width: 85%;
+            max-width: 500px;
+            max-height: 90vh;
+            overflow-y: hidden;
+            border-radius: 15px;
+            padding: 25px;
+            position: relative;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3), 0 15px 12px rgba(0, 0, 0, 0.2);
+            transform: scale(0.9);
+            transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .mod-popup-overlay.active .mod-popup-content {
+            transform: scale(1);
+        }
+
+        .mod-popup-close {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            font-size: 16px;
+            color: #666;
+            background: none;
+            border: none;
+            cursor: pointer;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            background-color: rgba(255, 255, 255, 0.8);
+            transition: all 0.3s ease;
+            z-index: 2100;
+        }
+
+        .mod-popup-close:hover {
+            color: #333;
+            background-color: rgba(255, 255, 255, 1);
+            transform: rotate(90deg);
+        }
+
+        .mod-popup-header {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-bottom: 20px;
+            position: relative;
+        }
+
+        .new-mod-badge {
+            position: absolute;
+            top: -15px;
+            left: -15px;
+            background: #FFD700;
+            color: #333;
+            font-weight: bold;
+            font-size: 0.8em;
+            padding: 8px 12px;
+            border-radius: 50%;
+            box-shadow: 0 0 10px rgba(255, 215, 0, 0.7);
+            z-index: 2200;
+            transform: rotate(-15deg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            width: 70px;
+            height: 70px;
+        }
+
+        .new-mod-badge::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: #FFD700;
+            z-index: -1;
+            border-radius: 50%;
+            transform: scale(1);
+            animation: pulse-star 1.5s infinite alternate;
+        }
+
+        @keyframes pulse-star {
+            0% { transform: scale(1); opacity: 0.7; }
+            100% { transform: scale(1.2); opacity: 0.3; }
+        }
+        .mod-popup-image-container { display: none; width: 100%; height: 150px; overflow: hidden; border-radius: 10px; margin-bottom: 10px; box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1); position: relative; }
+        .mod-popup-image { width: 100%; height: 100%; object-fit: cover; }
+        .mod-popup-title { font-size: 1.8em; font-weight: bold; color: #2176ff; text-align: center; margin-bottom: 10px; text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.1); }
+        .mod-popup-info { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; width: 100%; }
+        .mod-popup-overall { background: linear-gradient(135deg, #f0f8ff 0%, #e6f2ff 100%); border-radius: 8px; padding: 8px 12px; display: flex; justify-content: center; align-items: center; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05); border: 1px solid rgba(33, 118, 255, 0.2); width: auto; }
+        .mod-popup-points { display: flex; justify-content: flex-end; padding: 8px 12px; background-color: rgba(255, 255, 255, 0.7); border-radius: 8px; box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05); }
+        .mod-popup-points-gain { color: #28a745; font-weight: bold; display: flex; align-items: center; margin-right: 10px; }
+        .mod-popup-points-loss { color: #dc3545; font-weight: bold; display: flex; align-items: center; }
+        .mod-popup-points-gain::before { content: '+'; margin-right: 2px; }
+        .mod-popup-points-loss::before { content: '-'; margin-right: 2px; }
+        .mod-popup-video { width: 100%; margin: 15px 0; border-radius: 8px; overflow: hidden; box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1); position: relative; height: 350px; padding: 0; }
+        .mod-popup-video iframe { width: 100% !important; height: 100% !important; border: none; overflow: hidden; max-width: 100% !important; max-height: 100% !important; scrolling: no; padding: 0 !important; margin: 0 !important; display: block; box-sizing: border-box; object-fit: cover; object-position: center; }
+        .mod-popup-analyze { display: block; width: 100%; padding: 12px 0; background: linear-gradient(135deg, #2176ff, #1a5cc4); color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; margin-top: 20px; transition: all 0.3s ease; text-transform: uppercase; letter-spacing: 1px; box-shadow: 0 4px 6px rgba(33, 118, 255, 0.3); }
+        .mod-popup-analyze:hover { background: linear-gradient(135deg, #1a5cc4, #0d4cb3); transform: translateY(-2px); box-shadow: 0 6px 8px rgba(33, 118, 255, 0.4); }
+        .mod-icon-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.8); display: flex; justify-content: center; align-items: center; z-index: 2001; opacity: 0; transition: opacity 0.3s ease; pointer-events: none; }
+        .mod-icon-container.active { opacity: 1; pointer-events: auto; }
+        .mod-icon-animation { width: 150px; height: 150px; animation: pulse 1.5s infinite alternate, rotate 3.5s forwards; transform-origin: center; }
+        @keyframes pulse { 0% { transform: scale(1) rotate(0deg); filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.5)); } 100% { transform: scale(1.2) rotate(0deg); filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.8)); } }
+        @keyframes rotate { 0% { transform: scale(1) rotate(0deg); } 80% { transform: scale(1.5) rotate(360deg); filter: drop-shadow(0 0 30px rgba(255, 215, 0, 0.9)); } 100% { transform: scale(3) rotate(720deg); opacity: 0; filter: drop-shadow(0 0 50px rgba(255, 255, 255, 1)); } }
+        
+        /* ESTILOS DOS BOTÕES MODS E CALENDÁRIO */
+        .top-right-buttons { position: fixed; top: 10px; right: 20px; z-index: 1001; display: flex; gap: 10px; }
+        .action-button { padding: 10px 20px; color: white; border: none; border-radius: 25px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 8px; text-decoration: none; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3); transition: transform 0.3s, box-shadow 0.3s; position: relative; overflow: hidden; }
+        .action-button:hover { transform: translateY(-3px); }
+        .action-button::before { content: ''; position: absolute; top: 0; left: -100%; width: 50%; height: 100%; background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.3), transparent); transform: skewX(-25deg); animation: lightEffect 3s infinite; }
+        @keyframes lightEffect { 0% { left: -100%; } 100% { left: 200%; } }
+        .mods-button { background: linear-gradient(135deg, #9b59b6, #8e44ad); box-shadow: 0 4px 15px rgba(155, 89, 182, 0.5); }
+        .mods-button:hover { box-shadow: 0 6px 20px rgba(155, 89, 182, 0.7); }
+        .calendar-button { background: linear-gradient(135deg, #2176ff, #1a5cc4); box-shadow: 0 4px 15px rgba(33, 118, 255, 0.5); }
+        .calendar-button:hover { box-shadow: 0 6px 20px rgba(33, 118, 255, 0.7); }
+        
+        /* Resto dos estilos */
+        body { min-height: 100vh; background-color: #f0f0f0; font-family: Arial, sans-serif; /* A linha display: none; foi removida */ }
+        .content { padding: 20px; margin-bottom: 80px; /* A linha display: none; foi removida */ margin-top: 50px; }
+        h1 { color: #333; margin-bottom: 20px; }
+        #games-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; padding: 10px; }
+        .game-card { background: linear-gradient(to bottom right, #ffffff, #f8f9fa); border-radius: 20px; padding: 25px; box-shadow: 0 10px 20px rgba(0, 0, 0, 0.08), 0 6px 6px rgba(0, 0, 0, 0.12); transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); position: relative; border: 1px solid rgba(0, 0, 0, 0.05); }
+        .game-card.voted { background: linear-gradient(to bottom right, #f0fff4, #dcffe4); border: 1px solid rgba(40, 167, 69, 0.2); }
+        .vote-status-icon { position: absolute; top: 10px; left: 10px; font-size: 18px; z-index: 2; }
+        .vote-status-icon.voted { color: #28a745; }
+        .vote-status-icon.pending { color: #ffc107; }
+        .round-badge { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, #2176ff, #1a5cc4); color: white; padding: 8px 20px; border-radius: 20px; font-size: 0.9em; font-weight: bold; box-shadow: 0 4px 8px rgba(33, 118, 255, 0.3); letter-spacing: 0.5px; }
+        .game-card:hover { transform: translateY(-8px); box-shadow: 0 15px 30px rgba(0, 0, 0, 0.12), 0 8px 8px rgba(0, 0, 0, 0.08); }
+        .teams-container { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .team { display: flex; flex-direction: column; align-items: center; flex: 1; }
+        .team-image { width: 70px; height: 70px; border-radius: 50%; overflow: hidden; margin-bottom: 12px; border: 3px solid #fff; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); transition: transform 0.3s ease; }
+        .team-image img { width: 100%; height: 100%; object-fit: cover; }
+        .team-name { font-weight: bold; text-align: center; font-size: 0.9em; }
+        .vs { margin: 0 15px; font-weight: bold; color: #666; }
+        .competition-info { display: flex; align-items: center; margin-bottom: 15px; padding: 10px; background: #f8f9fa; border-radius: 8px; }
+        .competition-image { width: 30px; height: 30px; margin-right: 10px; }
+        .competition-image img { width: 100%; height: 100%; object-fit: contain; }
+        .competition-details { flex: 1; }
+        .competition-name { font-weight: bold; font-size: 0.9em; text-align: center; }
+        .round { color: #666; font-size: 0.8em; }
+        .predict-button { width: 100%; padding: 14px; background: linear-gradient(135deg, #2176ff, #1a5cc4); color: white; border: none; border-radius: 12px; font-weight: bold; cursor: pointer; transition: all 0.3s ease; text-transform: uppercase; letter-spacing: 0.5px; box-shadow: 0 4px 6px rgba(33, 118, 255, 0.2); }
+        .predict-button:hover { background: linear-gradient(135deg, #1a5cc4, #0d4cb3); box-shadow: 0 6px 8px rgba(33, 118, 255, 0.3); transform: translateY(-2px); }
+        .game-datetime { text-align: center; color: #666; font-size: 0.9em; margin-bottom: 15px; padding: 8px; background: #f8f9fa; border-radius: 8px; }
+        .no-games, .error { text-align: center; color: #666; padding: 20px; background: white; border-radius: 8px; margin: 20px 0; }
+        .error { color: #dc3545; background: #f8d7da; }
+
+        /* NOVO: Estilos para o Card Exclusivo do ModsPlay */
+       #modsplay-card-container {
+            margin-bottom: 30px;
+            /* Adicionado para centralizar o card na página */
+            display: flex;
+            justify-content: center;
+        }
+
+        .modsplay-card {
+            background: linear-gradient(135deg, #1f1c2c, #3a3a5a);
+            color: white;
+            border-radius: 20px;
+            padding: 0; /* Removido padding para a imagem poder preencher o topo */
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+            border: 2px solid #FFD700;
+            animation: fadeIn 0.8s ease-out;
+            
+            /* --- MODIFICAÇÃO DE TAMANHO --- */
+            /* Define uma largura que se assemelha a um card de jogo */
+            width: 100%;
+            max-width: 380px; 
+            min-height: 480px; /* Aprox. 1/3 mais alto que um card de jogo padrão */
+            
+            /* Adicionado para controlar layout interno da imagem e conteúdo */
+            display: flex;
+            flex-direction: column;
+            overflow: hidden; /* Garante que a imagem com borda arredondada não "vaze" */
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* NOVO: Estilo para o container da imagem que respeita a imagePosition */
+        .modsplay-image {
+            width: 100%;
+            height: 300px; /* Altura fixa para a área da imagem */
+            background-repeat: no-repeat;
+            /* As propriedades de imagem (URL, posição, zoom) serão aplicadas via JS */
+        }
+        
+        /* NOVO: Container para o conteúdo abaixo da imagem */
+        .modsplay-card-content {
+            padding: 0 20px 25px 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            flex-grow: 1; /* Faz este container ocupar o espaço vertical restante */
+        }
+
+        .modsplay-card-title {
+            font-size: 1.5em;
+            font-weight: bold;
+            margin-top: 15px;
+            margin-bottom: 20px;
+            text-shadow: 1px 1px 5px rgba(255, 215, 0, 0.5);
+        }
+
+        .modsplay-play-button {
+            display: inline-block;
+            padding: 14px;
+            background: linear-gradient(135deg, #FFD700, #FFA500);
+            color: #333;
+            border: none;
+            border-radius: 12px;
+            font-weight: bold;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(255, 215, 0, 0.4);
+            align-self: center; /* Centraliza o botão */
+        }
+
+        .modsplay-play-button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(255, 215, 0, 0.6);
+        }
+
+    </style>
+</head>
+
+
+<body>
+
+    <!-- A tela de carregamento está fora do wrapper, por isso aparece imediatamente -->
+    <div id="loading-screen">
+        <div class="loading-spinner"></div>
+    </div>
+    
+    <!-- Popups e outros elementos que podem aparecer por cima de tudo -->
+    <div id="mod-icon-container" class="mod-icon-container">
+        <img id="mod-icon-animation" class="mod-icon-animation" src="" alt="Mod Icon">
+    </div>
+
+    <div id="mod-popup-overlay" class="mod-popup-overlay">
+        <div class="mod-popup-content">
+            <button class="mod-popup-close"><i class="fas fa-times"></i></button>
+            <div class="mod-popup-header">
+                <div class="mod-popup-image-container"><img src="" alt="" class="mod-popup-image" id="popup-mod-image"></div>
+                <h2 class="mod-popup-title" id="popup-mod-title"></h2>
+                <span class="new-mod-badge">NEW MOD</span>
+            </div>
+            <div class="mod-popup-info">
+                <div class="mod-popup-overall">
+                    <span class="overall-label">Overall:</span>
+                    <span class="overall-value" id="popup-mod-overall"></span>
+                </div>
+                <div class="mod-popup-points">
+                    <span class="mod-popup-points-gain" id="popup-mod-points-gain"></span>
+                    <span class="mod-popup-points-loss" id="popup-mod-points-loss"></span>
+                </div>
+            </div>
+            <div id="popup-mod-video" class="mod-popup-video"></div>
+            <button id="popup-mod-analyze" class="mod-popup-analyze">Analisar</button>
+        </div>
+    </div>
+
+    <!-- Wrapper para todo o conteúdo principal, começa escondido -->
+    <div id="main-content-wrapper" style="display: none;">
+       <div class="top-right-buttons">
+    <a href="calendario.html" class="action-button calendar-button" id="calendar-btn">
+        <i class="fas fa-calendar-alt"></i>
+        Calendário
+    </a>
+    <a href="mods.html" class="action-button mods-button" id="mods-btn">
+        <i class="fas fa-star"></i>
+        Mods
+    </a>
+</div>
+
+        <div class="content">
+            <h1>1x WhatIf...</h1>
+            
+            <!-- NOVO: Contentor para o Card Exclusivo do ModsPlay -->
+            <div id="modsplay-card-container"></div>
+
+            <div id="games-container">
+                <!-- Jogos serão carregados aqui dinamicamente -->
+            </div>
+        </div>
+
+
+
+<script src="config.js"></script>
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getFirestore, collection, getDocs, doc, getDoc, query, where, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
+
+    const loadingScreen = document.getElementById('loading-screen');
+    const mainContentWrapper = document.getElementById('main-content-wrapper');
+    let currentUserStatus = null;
+
+    // Funções de Acesso e Menu
+    async function loadMenuSettings() { return getDoc(doc(db, 'paineis', 'paineis menu')).then(d => d.exists() ? d.data() : {}); }
+    async function checkPageAccess(userStatus, menuSettings) { if (!menuSettings || menuSettings['1x'] !== 'on') { if (!userStatus || userStatus !== 'ruler') { window.location.href = '404.html'; return false; } } return true; }
+    function updateTopRightButtonsVisibility(menuSettings) {
+    if (!menuSettings) return; // Se não houver configurações, não faz nada
+
+    const calendarBtn = document.getElementById('calendar-btn');
+    const modsBtn = document.getElementById('mods-btn');
+
+    if (calendarBtn && menuSettings.calendario === 'off') {
+        calendarBtn.style.display = 'none';
+    }
+
+    if (modsBtn && menuSettings.mods === 'off') {
+        modsBtn.style.display = 'none';
+    }
+}
+    async function getUserStatus(userId) { const userDoc = doc(db, 'users', userId); const docSnap = await getDoc(userDoc); if (docSnap.exists()) { const userData = docSnap.data(); return { estatuto: userData.estatuto, aceite: userData.aceite }; } else { return null; } }
+async function setupPageAccess() {
+    try {
+        const menuSettings = await loadMenuSettings();
+        const hasPageAccess = await checkPageAccess(currentUserStatus, menuSettings);
+        if (!hasPageAccess) {
+            return;
+        }
+        updateMenuVisibility(menuSettings);
+        // ADICIONE ESTA LINHA AQUI
+        updateTopRightButtonsVisibility(menuSettings); 
+        
+    } catch (error) {
+        window.location.href = '404.html';
+    }
+}
+    async function loadActiveGames() {
+        const gamesContainer = document.getElementById('games-container');
+        const now = new Date();
+        try {
+            const gamesRef = collection(db, 'jogos');
+            const querySnapshot = await getDocs(gamesRef);
+            let activeGames = [];
+
+            for (const gameDoc of querySnapshot.docs) {
+                const game = gameDoc.data();
+                if (!game.inicioIntervalo || !game.fimIntervalo) continue;
+                const inicioPalpites = game.inicioIntervalo.toDate();
+                const fimPalpites = game.fimIntervalo.toDate();
+
+                if (now >= inicioPalpites && now <= fimPalpites) {
+                    if (auth.currentUser) {
+                        const userPalpitesRef = collection(db, 'users', auth.currentUser.uid, 'palpites');
+                        const q = query(userPalpitesRef, where('jogoId', '==', gameDoc.id));
+                        const palpiteSnapshot = await getDocs(q);
+                        game.hasVoted = !palpiteSnapshot.empty;
+                    } else {
+                        game.hasVoted = false;
+                    }
+                    if (typeof game.equipaCasaId !== 'string' || !game.equipaCasaId || typeof game.equipaForaId !== 'string' || !game.equipaForaId || typeof game.competicaoId !== 'string' || !game.competicaoId) continue;
+                    
+                    const [equipaCasaDoc, equipaForaDoc, competicaoDoc] = await Promise.all([
+                        getDoc(doc(db, 'clubes', game.equipaCasaId)),
+                        getDoc(doc(db, 'clubes', game.equipaForaId)),
+                        getDoc(doc(db, 'competicoes', game.competicaoId))
+                    ]);
+                    game.equipaCasaImagem = equipaCasaDoc.data()?.imagem || 'https://via.placeholder.com/50';
+                    game.equipaForaImagem = equipaForaDoc.data()?.imagem || 'https://via.placeholder.com/50';
+                    game.competicaoImagem = competicaoDoc.data()?.imagem || 'https://via.placeholder.com/30';
+                    
+                    activeGames.push({ id: gameDoc.id, ...game });
+                }
+            }
+            
+            gamesContainer.innerHTML = activeGames.length === 0 ? '<p class="no-games">Não há jogos disponíveis para palpites no momento.</p>' : '';
+            activeGames.forEach(game => {
+                const card = document.createElement('div');
+                card.className = `game-card ${game.hasVoted ? 'voted' : ''}`;
+                card.innerHTML = `
+                    <i class="vote-status-icon fas ${game.hasVoted ? 'fa-check voted' : 'fa-hourglass-half pending'}"></i>
+                    <div class="round-badge">Ronda ${game.ronda}</div>
+                    <div class="teams-container">
+                        <div class="team"><div class="team-image"><img src="${game.equipaCasaImagem}" alt="${game.equipaCasa}"></div><div class="team-name">${game.equipaCasa}</div></div>
+                        <div class="vs">VS</div>
+                        <div class="team"><div class="team-image"><img src="${game.equipaForaImagem}" alt="${game.equipaFora}"></div><div class="team-name">${game.equipaFora}</div></div>
+                    </div>
+                    <div class="game-datetime">${game.dataJogo?.toDate()?.toLocaleDateString('pt-PT')} - ${game.dataJogo?.toDate()?.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}</div>
+                    <div class="competition-info">
+                        <div class="competition-image"><img src="${game.competicaoImagem}" alt="${game.competicao}"></div>
+                        <div class="competition-details"><div class="competition-name">${game.competicao}</div></div>
+                    </div>
+                    <button class="predict-button" onclick="window.location.href='palpite.html?id=${game.id}'">${game.hasVoted ? 'Ver Palpite' : 'Palpitar'}</button>
+                `;
+                gamesContainer.appendChild(card);
+            });
+        } catch (error) {
+            console.error("Erro ao carregar jogos: ", error);
+            gamesContainer.innerHTML = '<p class="error">Erro ao carregar os jogos. Por favor, tente novamente mais tarde.</p>';
+        } finally {
+            // AQUI ESTÁ A CORREÇÃO:
+            loadingScreen.style.display = 'none';
+        }
+    }
+
+    /* NOVO: Função para verificar e exibir o card do ModsPlay */
+   async function checkAndDisplayModsPlayCard() {
+        const container = document.getElementById('modsplay-card-container');
+        if (!container) return;
+
+        try {
+            // 1. Obter o documento de configuração do modsplay
+            const modsPlayQuery = await getDocs(collection(db, 'modsplay'));
+            if (modsPlayQuery.empty) {
+                // Não há evento modsplay configurado, então não faz nada.
+                return;
+            }
+            
+            const modsPlayDoc = modsPlayQuery.docs[0];
+            const modsPlayData = modsPlayDoc.data();
+
+            // 2. Verificar as datas
+            const now = new Date();
+            const inicio = modsPlayData.dataInicio.toDate();
+            const fim = modsPlayData.dataFim.toDate();
+
+            if (now >= inicio && now <= fim) {
+                // O evento está ativo!
+                const modId = modsPlayData.modId;
+                if (!modId) {
+                    console.error("ModsPlay ativo, mas sem modId definido.");
+                    return;
+                }
+
+                // 3. Buscar os detalhes do mod correspondente
+                const modDocSnap = await getDoc(doc(db, 'mods', modId));
+                if (!modDocSnap.exists()) {
+                    console.error(`Mod com ID ${modId} não encontrado.`);
+                    return;
+                }
+                const modData = modDocSnap.data();
+
+                // 4. Extrair posições e zoom da imagem (com valores padrão para segurança)
+                const position = modData.imagePosition || { x: 'center', y: 'center' };
+                const zoom = modData.imagePosition?.zoom || 100; // Usa 100 como padrão se não existir
+
+                // 5. Construir e exibir o card com a nova estrutura e estilos inline para a imagem
+                container.innerHTML = `
+                    <div class="modsplay-card">
+                        <div class="modsplay-image" style="
+                            background-image: url('${modData.imagem}');
+                            background-position: ${position.x} ${position.y};
+                            background-size: ${zoom}%;
+                        "></div>
+                        <div class="modsplay-card-content">
+                            <h3 class="modsplay-card-title">${modData.nomeMod}</h3>
+                            <a href="modsplay.html" class="modsplay-play-button">Jogar</a>
+                        </div>
+                    </div>
+                `;
+            } else {
+                // O evento não está ativo, garantir que o contentor está vazio.
+                container.innerHTML = '';
+            }
+
+        } catch (error) {
+            console.error("Erro ao verificar o evento ModsPlay:", error);
+            container.innerHTML = ''; // Limpa em caso de erro
+        }
+    }
+
+    async function openModPopup(modId) { /* ... (código do popup) ... */ }
+    async function checkAndDisplayMods() { /* ... (código dos mods) ... */ }
+
+    onAuthStateChanged(auth, async (user) => {
+        if (user) {
+            const userInfo = await getUserStatus(user.uid);
+            if (userInfo && userInfo.aceite === "Yes") {
+                currentUserStatus = userInfo.estatuto;
+
+                try {
+                    await updateDoc(doc(db, 'users', user.uid), { ultimoacesso: serverTimestamp() });
+                } catch (error) { console.error("Erro ao atualizar ultimoacesso: ", error); }
+                
+                mainContentWrapper.style.display = 'block';
+
+                await setupPageAccess();
+                
+                // NOVO: Chamada da função para verificar o card do ModsPlay
+                await checkAndDisplayModsPlayCard();
+
+                await loadActiveGames();
+                await checkAndDisplayMods();
+            } else {
+                window.location.href = 'index.html';
+            }
+        } else {
+            window.location.href = 'index.html';
+        }
+    });
+
+    // Event listeners para o popup de mod (sem alterações)
+    // ...
+</script>
+<script src="menu-component.js"></script> 
+</body>
+</html>
