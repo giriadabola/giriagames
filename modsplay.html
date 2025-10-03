@@ -72,6 +72,14 @@
             opacity: 1; /* Torna-se visível */
         }
         
+        .submit-button.verify-step {
+    background-color: #ffc107; /* Amarelo */
+    color: #212529; /* Texto escuro para melhor contraste */
+}
+.submit-button.verify-step:hover:not(:disabled) {
+    background-color: #e0a800; /* Amarelo mais escuro no hover */
+}
+
     </style>
 </head>
 <body>
@@ -92,381 +100,406 @@
 
 
 
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, doc, getDoc, collection, getDocs, query, where, orderBy, limit, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getFirestore, doc, getDoc, collection, getDocs, query, where, orderBy, limit, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-        const auth = getAuth(app);
+// --- LOG INICIAL ---
+console.log("--- SCRIPT INICIADO ---");
+console.log("Firebase config a ser usada:", firebaseConfig); // LOG CRÍTICO: Mostra o projectId
 
-        const loadingScreen = document.getElementById('loading-screen');
-        const content = document.querySelector('.content');
-        const contentTitle = document.querySelector('h1');
-        const timerContainer = document.getElementById('timer-container');
-        const modsplayContent = document.getElementById('modsplay-content');
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const auth = getAuth(app);
+
+// --- LOG DE INICIALIZAÇÃO ---
+console.log("Firebase App e Serviços inicializados com sucesso.");
+
+const loadingScreen = document.getElementById('loading-screen');
+const content = document.querySelector('.content');
+const contentTitle = document.querySelector('h1');
+const timerContainer = document.getElementById('timer-container');
+const modsplayContent = document.getElementById('modsplay-content');
+
+let countdownInterval = null;
+let selectedPredictions = {};
+let currentTemporada = null;
+
+// --- INICIANDO O LISTENER DE AUTENTICAÇÃO ---
+console.log("A aguardar estado de autenticação (onAuthStateChanged)...");
+
+onAuthStateChanged(auth, async (user) => {
+    console.log("onAuthStateChanged: O listener foi acionado.");
+
+    if (!user) {
+        console.error("onAuthStateChanged: NENHUM utilizador autenticado. A redirecionar para index.html.");
+        window.location.href = 'index.html';
+        return;
+    }
+
+    console.log("onAuthStateChanged: Utilizador DETETADO. UID:", user.uid);
+    console.log("onAuthStateChanged: A verificar documento do utilizador na coleção 'users'...");
+
+    try {
+        const userInfoRef = doc(db, 'users', user.uid);
+        const userInfo = await getDoc(userInfoRef);
+
+        if (!userInfo.exists()) {
+            console.error("onAuthStateChanged: ERRO - O documento do utilizador no Firestore NÃO EXISTE. A redirecionar para 404.html.");
+            window.location.href = '404.html';
+            return;
+        }
+
+        console.log("onAuthStateChanged: Documento do utilizador encontrado. A verificar campo 'aceite'.");
+        const userData = userInfo.data();
+
+        if (userData.aceite !== "Yes") {
+            console.error(`onAuthStateChanged: ERRO - O campo 'aceite' não é 'Yes'. Valor atual: '${userData.aceite}'. A redirecionar para 404.html.`);
+            window.location.href = '404.html';
+            return;
+        }
+
+        console.log("onAuthStateChanged: SUCESSO - Utilizador autenticado e autorizado. A iniciar a página...");
         
-        let countdownInterval = null;
-        let selectedPredictions = {};
-        let currentTemporada = null; // Variável para guardar a temporada
-
-        onAuthStateChanged(auth, async (user) => {
-            if (!user) { window.location.href = 'index.html'; return; }
-            const userInfo = await getDoc(doc(db, 'users', user.uid));
-            if (!userInfo.exists() || userInfo.data().aceite !== "Yes") { window.location.href = '404.html'; return; }
-            try {
-            // 1. Obter as configurações do menu a partir do Firestore
+        // Carregar configurações do menu (bloco opcional)
+        try {
+            console.log("onAuthStateChanged: A carregar configurações do menu...");
             const menuSettingsDoc = await getDoc(doc(db, 'paineis', 'paineis menu'));
-            const menuSettings = menuSettingsDoc.exists() ? menuSettingsDoc.data() : {};
-
-            // 2. Chamar a função global do menu-component.js para aplicar a visibilidade
             if (window.updateMenuVisibility) {
-                window.updateMenuVisibility(menuSettings);
+                window.updateMenuVisibility(menuSettingsDoc.exists() ? menuSettingsDoc.data() : {});
             }
+            console.log("onAuthStateChanged: Configurações do menu carregadas.");
         } catch (error) {
-            console.error("Erro ao carregar as configurações do menu:", error);
-        }
-            await initializeModsPlay();
-        });
-
-        async function initializeModsPlay() {
-            try {
-                const modsPlayQuery = await getDocs(collection(db, 'modsplay'));
-                if (modsPlayQuery.empty) { showInfoMessage("Nenhum evento Mods Play ativo no momento."); return; }
-                const modsPlayData = modsPlayQuery.docs[0].data();
-
-                const modDoc = await getDoc(doc(db, 'mods', modsPlayData.modId));
-                if (!modDoc.exists()) { showInfoMessage("Erro: O Mod associado ao evento não foi encontrado."); return; }
-                const modData = modDoc.data();
-                contentTitle.textContent = modData.nomeMod;
-
-                startCountdown(modsPlayData.dataFim.toDate());
-                
-                if (modData.nomeMod === "CRUSH BONES") {
-                    await renderCrushBonesContent(modsPlayData);
-                } else {
-                    showInfoMessage("Este Mod não tem uma funcionalidade especial ativa.");
-                }
-
-            } catch (error) {
-                console.error("Erro ao inicializar Mods Play:", error);
-                showInfoMessage("Ocorreu um erro ao carregar o conteúdo.");
-            } finally {
-                loadingScreen.style.display = 'none';
-                content.style.display = 'block';
-            }
+            console.warn("onAuthStateChanged: Aviso - Erro ao carregar as configurações do menu:", error);
         }
 
-   function startCountdown(endTime) {
-            clearInterval(countdownInterval);
-            const update = () => {
-                const timeLeft = endTime.getTime() - new Date().getTime();
+        // Chamar a função principal
+        await initializeModsPlay();
 
-                if (timeLeft <= 0) {
-                    clearInterval(countdownInterval); // Pare o intervalo imediatamente
-                    timerContainer.innerHTML = `<span id="countdown">Tempo Esgotado!</span>`;
-                    timerContainer.classList.add('expired');
-                    
-                    // --- CORREÇÃO IMPORTANTE AQUI ---
-                    // Verifique se os elementos existem antes de tentar usá-los.
-                    const predictionsList = document.getElementById('predictions-list');
-                    if (predictionsList) {
-                        predictionsList.style.pointerEvents = 'none';
-                    }
+    } catch (error) {
+        console.error("onAuthStateChanged: ERRO CRÍTICO durante a verificação do utilizador no Firestore:", error);
+        showInfoMessage("Ocorreu um erro crítico ao verificar as suas permissões.");
+        loadingScreen.style.display = 'none';
+        content.style.display = 'block';
+    }
+});
 
-                    const submitButton = document.getElementById('submit-crushbones-btn');
-                    if (submitButton) {
-                        submitButton.setAttribute('disabled', 'true');
-                    }
-                    
-                    return;
-                }
-                const d = Math.floor(timeLeft / 86400000);
-                const h = Math.floor((timeLeft % 86400000) / 3600000);
-                const m = Math.floor((timeLeft % 3600000) / 60000);
-                const s = Math.floor((timeLeft % 60000) / 1000);
-                timerContainer.innerHTML = `Tempo Restante: ${d > 0 ? `<span class="timer-unit">${d}d</span>` : ''}<span class="timer-unit">${h}h</span><span class="timer-unit">${m}m</span><span class="timer-unit">${s}s</span>`;
-            };
-            update();
-            countdownInterval = setInterval(update, 1000);
+async function initializeModsPlay() {
+    console.log("--- initializeModsPlay: FUNÇÃO INICIADA ---");
+    try {
+        // ---- PASSO 1: LER A COLEÇÃO 'modsplay' ----
+        console.log("initializeModsPlay (Passo 1/5): A tentar ler a coleção 'modsplay'...");
+        const modsPlayQuery = await getDocs(collection(db, 'modsplay'));
+        console.log("initializeModsPlay (Passo 1/5): SUCESSO. Leitura da coleção 'modsplay' concluída. Documentos encontrados:", modsPlayQuery.size);
+
+        if (modsPlayQuery.empty) {
+            showInfoMessage("Nenhum evento Mods Play ativo no momento.");
+            return;
         }
+        const modsPlayData = modsPlayQuery.docs[0].data();
+        console.log("initializeModsPlay: Dados do evento Mods Play:", modsPlayData);
 
- async function renderCrushBonesContent(modsPlayData) {
-            // (A primeira parte da função continua igual: obter temporada, verificar participação, etc.)
-            const latestSeasonQuery = query(collection(db, 'palpites'), orderBy('temporada', 'desc'), limit(1));
-            const latestSeasonSnapshot = await getDocs(latestSeasonQuery);
-            if (latestSeasonSnapshot.empty) { showInfoMessage("Ainda não existem palpites para exibir."); return; }
-            const latestSeason = latestSeasonSnapshot.docs[0].data().temporada;
-            currentTemporada = latestSeason;
+        // ---- PASSO 2: LER O DOCUMENTO DO MOD ----
+        console.log(`initializeModsPlay (Passo 2/5): A tentar ler o documento do mod com ID: ${modsPlayData.modId}...`);
+        const modDoc = await getDoc(doc(db, 'mods', modsPlayData.modId));
+        console.log("initializeModsPlay (Passo 2/5): SUCESSO. Leitura do documento do mod concluída.");
 
-            const checkQuery = query(collection(db, 'palpitesmods'), 
-                where('userId', '==', auth.currentUser.uid),
-                where('temporada', '==', latestSeason),
-                where('ronda', '==', modsPlayData.ronda),
-                limit(1)
-            );
-            const existingPicksSnapshot = await getDocs(checkQuery);
-            const hasAlreadyPlayed = !existingPicksSnapshot.empty;
-
-            const palpitesQuery = query(collection(db, 'palpites'), where('ronda', '==', modsPlayData.ronda), where('temporada', '==', latestSeason));
-            const palpitesSnapshot = await getDocs(palpitesQuery);
-            if (palpitesSnapshot.empty) { showInfoMessage("Nenhum palpite encontrado para esta ronda."); return; }
-
-            const groupedPalpites = {};
-            palpitesSnapshot.forEach(doc => {
-                const palpite = doc.data();
-                if (!groupedPalpites[palpite.userId]) groupedPalpites[palpite.userId] = {};
-                if (!groupedPalpites[palpite.userId][palpite.jogoId]) groupedPalpites[palpite.userId][palpite.jogoId] = [];
-                groupedPalpites[palpite.userId][palpite.jogoId].push(palpite);
-            });
-
-            const userIds = Object.keys(groupedPalpites);
-            const jogoIds = new Set(palpitesSnapshot.docs.map(doc => doc.data().jogoId));
-
-            const [userNames, gameNames] = await Promise.all([
-                fetchNames(userIds, 'users', 'nometabela'),
-                fetchNames(Array.from(jogoIds), 'jogos', 'nomeJogo')
-            ]);
-            
-            // --- INÍCIO DA LÓGICA DE ORDENAÇÃO ---
-            // 1. Criar um array de objetos, combinando ID e nome para facilitar a ordenação.
-            const sortedUsers = userIds
-                .map(id => ({
-                    id: id,
-                    name: userNames[id] || 'Utilizador Desconhecido'
-                }))
-                .sort((a, b) => a.name.localeCompare(b.name)); // 2. Ordenar o array alfabeticamente pelo nome.
-            // --- FIM DA LÓGICA DE ORDENAÇÃO ---
-
-            let html = '<div id="predictions-list">';
-
-            // 3. Alterar o loop para usar o nosso novo array ordenado.
-            for (const user of sortedUsers) {
-                const userId = user.id; // Extrair o ID do utilizador do objeto
-                
-                if (userId === auth.currentUser.uid) { continue; }
-
-                // --- LÓGICA DAS CORES ---
-                // 4. Gerar uma cor única para o fundo do cabeçalho do utilizador.
-                const userColor = generatePastelColorFromId(userId);
-
-                let gamesHtml = '';
-                for (const jogoId in groupedPalpites[userId]) {
-                    const jogoNomeCompleto = gameNames[jogoId] || 'Jogo Desconhecido';
-                    const jogoNomeCurto = jogoNomeCompleto.split(' - ')[0];
-                    let predictionsHtml = '';
-                    const palpitesDoJogo = groupedPalpites[userId][jogoId][0];
-                    Object.keys(palpitesDoJogo)
-                        .filter(key => key.startsWith('palpite') && !key.includes('Status'))
-                        .sort()
-                        .forEach(key => {
-                            const itemClass = hasAlreadyPlayed ? 'prediction-item readonly' : 'prediction-item';
-                            predictionsHtml += `<li class="${itemClass}" data-jogo-id="${jogoId}" data-palpite-key="${key}" data-original-user-id="${userId}">
-                                                  ${palpitesDoJogo[key]}
-                                                </li>`;
-                        });
-                    if (predictionsHtml) {
-                         gamesHtml += `<div class="game-container">
-                                        <div class="game-header"><span>${jogoNomeCurto}</span><i class="fas fa-chevron-down toggle-icon"></i></div>
-                                        <ul class="predictions-sublist">${predictionsHtml}</ul>
-                                     </div>`;
-                    }
-                }
-                
-                if (gamesHtml) {
-                     // 5. Aplicar a cor gerada como um estilo inline no cabeçalho.
-                     html += `<div class="user-container" data-user-id="${userId}">
-                                <div class="user-header" style="background-color: ${userColor};">
-                                    <span>${user.name}<i class="fas fa-check-circle selection-indicator"></i></span>
-                                    <i class="fas fa-chevron-down toggle-icon"></i>
-                                </div>
-                                <div class="games-list">${gamesHtml}</div>
-                             </div>`;
-                }
-            }
-            html += '</div>';
-            modsplayContent.innerHTML = html;
-
-            if (!hasAlreadyPlayed) {
-                const submitContainer = document.getElementById('submit-container');
-                submitContainer.innerHTML = `<button id="submit-crushbones-btn" class="submit-button">Confirmar Seleções</button>`;
-                document.getElementById('submit-crushbones-btn').addEventListener('click', submitCrushBonesSelections);
-            } else {
-                modsplayContent.innerHTML += '<p class="info-message" style="margin-top: 25px;">As tuas seleções para esta ronda já foram registadas.</p>';
-            }
-
-            addAccordionListeners(hasAlreadyPlayed);
+        if (!modDoc.exists()) {
+            showInfoMessage("Erro: O Mod associado ao evento não foi encontrado.");
+            return;
         }
+        const modData = modDoc.data();
+        contentTitle.textContent = modData.nomeMod;
+
+        startCountdown(modsPlayData.dataFim.toDate());
         
-    async function submitCrushBonesSelections() {
-            const button = document.getElementById('submit-crushbones-btn');
-            if (Object.keys(selectedPredictions).length === 0) {
-                alert("Nenhum palpite selecionado!");
-                return;
-            }
-
-            button.disabled = true;
-            button.textContent = 'A processar...';
-
-            try {
-                // --- INÍCIO DA LÓGICA ANTI-DUPLICAÇÃO ---
-                const modsPlayData = (await getDocs(collection(db, 'modsplay'))).docs[0].data();
-                const ronda = modsPlayData.ronda;
-
-                // 1. Procurar todos os palpites que o user JÁ FEZ para esta ronda/temporada
-                const existingPicksQuery = query(collection(db, 'palpitesmods'), 
-                    where('userId', '==', auth.currentUser.uid),
-                    where('temporada', '==', currentTemporada),
-                    where('ronda', '==', ronda)
-                );
-                const existingPicksSnapshot = await getDocs(existingPicksQuery);
-                const submittedGameIds = new Set(existingPicksSnapshot.docs.map(doc => doc.data().jogoId));
-                
-                // 2. Filtrar as novas seleções, removendo as que correspondem a jogos já palpitados
-                const newSelections = {};
-                for (const jogoId in selectedPredictions) {
-                    if (!submittedGameIds.has(jogoId)) {
-                        newSelections[jogoId] = selectedPredictions[jogoId];
-                    }
-                }
-
-                if (Object.keys(newSelections).length === 0) {
-                    alert("Todos os palpites selecionados já foram submetidos anteriormente nesta ronda.");
-                    button.disabled = false;
-                    button.textContent = 'Confirmar Seleções';
-                    return;
-                }
-                // --- FIM DA LÓGICA ANTI-DUPLICAÇÃO ---
-
-                // Obter o nome do mod
-                const modId = modsPlayData.modId;
-                const modDoc = await getDoc(doc(db, 'mods', modId));
-                const nomeMod = modDoc.exists() ? modDoc.data().nomeMod : "Mod Desconhecido";
-
-                const batch = writeBatch(db);
-
-                // AGORA SÓ PERCORREMOS AS NOVAS SELEÇÕES FILTRADAS
-                for (const jogoId in newSelections) {
-                    const selection = newSelections[jogoId];
-
-                    const palpiteData = {
-                        userId: auth.currentUser.uid,
-                        temporada: currentTemporada,
-                        ronda: ronda,
-                        dataPalpite: serverTimestamp(),
-                        nomeMod: nomeMod,
-                        modId: modId,
-                        palpiteSelecionado: selection.palpiteText,
-                        jogoId: jogoId,
-                        copiedFromUserId: selection.originalUserId
-                    };
-
-                    const palpitesModsRef = doc(collection(db, 'palpitesmods'));
-                    batch.set(palpitesModsRef, palpiteData);
-
-                    const boxRef = doc(collection(db, 'box'));
-                    batch.set(boxRef, palpiteData);
-                }
-
-                await batch.commit();
-                
-                document.getElementById('predictions-list').style.pointerEvents = 'none';
-                button.style.display = 'none';
-                modsplayContent.innerHTML += `<p class="info-message">As tuas novas seleções foram registadas com sucesso!</p>`;
-
-            } catch (error) {
-                console.error("Erro ao submeter seleções:", error);
-                alert("Ocorreu um erro ao confirmar as seleções. Tente novamente.");
-                button.disabled = false;
-                button.textContent = 'Confirmar Seleções';
-            }
+        if (modData.nomeMod === "CRUSH BONES") {
+            await renderCrushBonesContent(modsPlayData);
+        } else {
+            showInfoMessage("Este Mod não tem uma funcionalidade especial ativa.");
         }
 
-        async function fetchNames(ids, collectionName, fieldName) {
-            if (ids.length === 0) return {};
-            const nameMap = {};
-            const promises = ids.map(id => getDoc(doc(db, collectionName, id)));
-            const results = await Promise.all(promises);
-            results.forEach(docSnap => {
-                if (docSnap.exists()) { nameMap[docSnap.id] = docSnap.data()[fieldName]; }
+    } catch (error) {
+        // ESTE É O LOG DE ERRO MAIS IMPORTANTE NESTA FASE
+        console.error("--- ERRO EM initializeModsPlay ---");
+        console.error("A inicialização da página falhou. O erro completo é:", error);
+        showInfoMessage("Ocorreu um erro ao carregar o conteúdo da página.");
+    } finally {
+        console.log("initializeModsPlay: Bloco 'finally' executado. A esconder ecrã de carregamento.");
+        loadingScreen.style.display = 'none';
+        content.style.display = 'block';
+    }
+}
+
+// (O resto das suas funções como startCountdown, renderCrushBonesContent, etc., podem permanecer iguais)
+// ... cole aqui o resto das suas funções ...
+// Para garantir, estou a incluir as outras funções também.
+
+function startCountdown(endTime) {
+    clearInterval(countdownInterval);
+    const update = () => {
+        const timeLeft = endTime.getTime() - new Date().getTime();
+        if (timeLeft <= 0) {
+            clearInterval(countdownInterval);
+            timerContainer.innerHTML = `<span id="countdown">Tempo Esgotado!</span>`;
+            timerContainer.classList.add('expired');
+            const predictionsList = document.getElementById('predictions-list');
+            if (predictionsList) predictionsList.style.pointerEvents = 'none';
+            const submitButton = document.getElementById('submit-crushbones-btn');
+            if (submitButton) submitButton.setAttribute('disabled', 'true');
+            return;
+        }
+        const d = Math.floor(timeLeft / 86400000);
+        const h = Math.floor((timeLeft % 86400000) / 3600000);
+        const m = Math.floor((timeLeft % 3600000) / 60000);
+        const s = Math.floor((timeLeft % 60000) / 1000);
+        timerContainer.innerHTML = `Tempo Restante: ${d > 0 ? `<span class="timer-unit">${d}d</span>` : ''}<span class="timer-unit">${h}h</span><span class="timer-unit">${m}m</span><span class="timer-unit">${s}s</span>`;
+    };
+    update();
+    countdownInterval = setInterval(update, 1000);
+}
+
+async function renderCrushBonesContent(modsPlayData) {
+    console.log("--- renderCrushBonesContent: INICIADO (VERSÃO CORRIGIDA) ---");
+    // ---- PASSO 3: LER A TEMPORADA MAIS RECENTE ----
+    console.log("renderCrushBonesContent (Passo 3/5): A ler a coleção 'palpites' para encontrar a última temporada...");
+    const latestSeasonQuery = query(collection(db, 'palpites'), orderBy('temporada', 'desc'), limit(1));
+    const latestSeasonSnapshot = await getDocs(latestSeasonQuery);
+    console.log("renderCrushBonesContent (Passo 3/5): SUCESSO. Leitura de palpites concluída.");
+
+    if (latestSeasonSnapshot.empty) { showInfoMessage("Ainda não existem palpites para exibir."); return; }
+    const latestSeason = latestSeasonSnapshot.docs[0].data().temporada;
+    currentTemporada = latestSeason;
+    console.log("renderCrushBonesContent: Temporada atual definida como:", currentTemporada);
+
+    // ---- PASSO 4: VERIFICAR SE O UTILIZADOR JÁ JOGOU (MÉTODO CORRIGIDO) ----
+    console.log(`renderCrushBonesContent (Passo 4/5): A verificar se o utilizador já jogou nesta ronda (${modsPlayData.ronda}) via getDoc...`);
+    
+    // Construir o ID do documento diretamente
+    const temporadaSanitizada = String(currentTemporada).replace(/\//g, '-');
+    const rondaSanitizada = String(modsPlayData.ronda).replace(/\//g, '-');
+    const docId = `${auth.currentUser.uid}_${temporadaSanitizada}_${rondaSanitizada}`;
+    
+    console.log("renderCrushBonesContent (Passo 4/5): ID do documento a verificar:", docId);
+    
+    // Fazer uma leitura direta (get) em vez de uma query (list)
+    const existingPickRef = doc(db, 'palpitesmods', docId);
+    const existingPickSnap = await getDoc(existingPickRef);
+    
+    console.log("renderCrushBonesContent (Passo 4/5): SUCESSO. Verificação com getDoc concluída.");
+    const hasAlreadyPlayed = existingPickSnap.exists(); // A verificação é muito mais simples!
+    console.log("renderCrushBonesContent: O utilizador já jogou?", hasAlreadyPlayed);
+    
+    // ---- PASSO 5: OBTER TODOS OS PALPITES DA RONDA ----
+    // (O resto da função continua igual)
+    console.log("renderCrushBonesContent (Passo 5/5): A obter todos os palpites para a ronda e temporada atuais...");
+    const palpitesQuery = query(collection(db, 'palpites'), where('ronda', '==', modsPlayData.ronda), where('temporada', '==', latestSeason));
+    const palpitesSnapshot = await getDocs(palpitesQuery);
+    console.log("renderCrushBonesContent (Passo 5/5): SUCESSO. Leitura de palpites concluída. Palpites encontrados:", palpitesSnapshot.size);
+
+    if (palpitesSnapshot.empty) { showInfoMessage("Nenhum palpite encontrado para esta ronda."); return; }
+    
+    const groupedPalpites = {};
+    palpitesSnapshot.forEach(doc => {
+        const palpite = doc.data();
+        if (!groupedPalpites[palpite.userId]) groupedPalpites[palpite.userId] = {};
+        if (!groupedPalpites[palpite.userId][palpite.jogoId]) groupedPalpites[palpite.userId][palpite.jogoId] = [];
+        groupedPalpites[palpite.userId][palpite.jogoId].push(palpite);
+    });
+    const userIds = Object.keys(groupedPalpites);
+    const jogoIds = new Set(palpitesSnapshot.docs.map(doc => doc.data().jogoId));
+    const [userNames, gameNames] = await Promise.all([
+        fetchNames(userIds, 'users', 'nometabela'),
+        fetchNames(Array.from(jogoIds), 'jogos', 'nomeJogo')
+    ]);
+    const sortedUsers = userIds.map(id => ({ id: id, name: userNames[id] || 'Utilizador Desconhecido' })).sort((a, b) => a.name.localeCompare(b.name));
+    let html = '<div id="predictions-list">';
+    for (const user of sortedUsers) {
+        const userId = user.id;
+        if (userId === auth.currentUser.uid) { continue; }
+        const userColor = generatePastelColorFromId(userId);
+        let gamesHtml = '';
+        for (const jogoId in groupedPalpites[userId]) {
+            const jogoNomeCompleto = gameNames[jogoId] || 'Jogo Desconhecido';
+            const jogoNomeCurto = jogoNomeCompleto.split(' - ')[0];
+            let predictionsHtml = '';
+            const palpitesDoJogo = groupedPalpites[userId][jogoId][0];
+            Object.keys(palpitesDoJogo).filter(key => key.startsWith('palpite') && !key.includes('Status')).sort().forEach(key => {
+                const itemClass = hasAlreadyPlayed ? 'prediction-item readonly' : 'prediction-item';
+                predictionsHtml += `<li class="${itemClass}" data-jogo-id="${jogoId}" data-palpite-key="${key}" data-original-user-id="${userId}">${palpitesDoJogo[key]}</li>`;
             });
-            return nameMap;
+            if (predictionsHtml) { gamesHtml += `<div class="game-container"><div class="game-header"><span>${jogoNomeCurto}</span><i class="fas fa-chevron-down toggle-icon"></i></div><ul class="predictions-sublist">${predictionsHtml}</ul></div>`; }
+        }
+        if (gamesHtml) { html += `<div class="user-container" data-user-id="${userId}"><div class="user-header" style="background-color: ${userColor};"><span>${user.name}<i class="fas fa-check-circle selection-indicator"></i></span><i class="fas fa-chevron-down toggle-icon"></i></div><div class="games-list">${gamesHtml}</div></div>`; }
+    }
+    html += '</div>';
+    modsplayContent.innerHTML = html;
+    if (!hasAlreadyPlayed) {
+        const submitContainer = document.getElementById('submit-container');
+        submitContainer.innerHTML = `<button id="submit-crushbones-btn" class="submit-button verify-step" data-step="verify">Confirmar Seleções</button>`;
+        document.getElementById('submit-crushbones-btn').addEventListener('click', handleConfirmationClick);
+    } else {
+        modsplayContent.innerHTML += '<p class="info-message" style="margin-top: 25px;">As tuas seleções para esta ronda já foram registadas.</p>';
+    }
+    addAccordionListeners(hasAlreadyPlayed);
+    console.log("--- renderCrushBonesContent: CONTEÚDO RENDERIZADO ---");
+}
+
+function handleConfirmationClick() {
+    const button = document.getElementById('submit-crushbones-btn');
+    const currentStep = button.dataset.step;
+    if (currentStep === 'verify') {
+        document.querySelectorAll('.user-header.active, .game-header.active').forEach(header => header.classList.remove('active'));
+        button.classList.remove('verify-step');
+        button.textContent = 'Verifiquei e confirmo';
+        button.dataset.step = 'confirm';
+    } else if (currentStep === 'confirm') {
+        submitCrushBonesSelections();
+    }
+}
+
+async function submitCrushBonesSelections() {
+    // A função de submissão original com a depuração de erros
+    const button = document.getElementById('submit-crushbones-btn');
+    if (Object.keys(selectedPredictions).length === 0) {
+        alert("Nenhum palpite selecionado!");
+        return;
+    }
+
+    button.disabled = true;
+    button.textContent = 'A processar...';
+
+    console.log("--- SUBMISSÃO INICIADA ---");
+
+    try {
+        const modsPlayData = (await getDocs(collection(db, 'modsplay'))).docs[0].data();
+        const ronda = modsPlayData.ronda;
+        
+        console.log("SUBMISSÃO: UID:", auth.currentUser.uid);
+        console.log("SUBMISSÃO: Temporada:", currentTemporada);
+        console.log("SUBMISSÃO: Ronda:", ronda);
+        
+        const temporadaSanitizada = String(currentTemporada).replace(/\//g, '-');
+        const rondaSanitizada = String(ronda).replace(/\//g, '-');
+        const docId = `${auth.currentUser.uid}_${temporadaSanitizada}_${rondaSanitizada}`;
+        
+        console.log("SUBMISSÃO: ID do Documento:", docId);
+
+        const modId = modsPlayData.modId;
+        const modDoc = await getDoc(doc(db, 'mods', modId));
+        const nomeMod = modDoc.exists() ? modDoc.data().nomeMod : "Mod Desconhecido";
+        
+        const submissaoData = {
+            userId: auth.currentUser.uid,
+            temporada: currentTemporada,
+            ronda: ronda,
+            dataSubmissao: serverTimestamp(),
+            nomeMod: nomeMod,
+            modId: modId,
+            selecoes: {}
+        };
+        
+        for (const jogoId in selectedPredictions) {
+            const selection = selectedPredictions[jogoId];
+            submissaoData.selecoes[jogoId] = {
+                palpiteSelecionado: selection.palpiteText,
+                copiedFromUserId: selection.originalUserId
+            };
         }
 
-        function updateUserSelectionIndicators() {
-            // Primeiro, remove o indicador de todos os utilizadores
-            document.querySelectorAll('.user-header').forEach(header => {
-                header.classList.remove('has-selection');
-            });
+        console.log("SUBMISSÃO: Dados a serem enviados:", submissaoData);
+        
+        const batch = writeBatch(db);
+        const palpitesModsRef = doc(db, 'palpitesmods', docId);
+        const boxRef = doc(db, 'box', docId);
 
-            // Depois, obtém uma lista de todos os IDs de utilizadores cujos palpites foram selecionados
-            const selectedUserIds = new Set(
-                Object.values(selectedPredictions).map(selection => selection.originalUserId)
-            );
+        batch.set(palpitesModsRef, submissaoData);
+        batch.set(boxRef, submissaoData);
+        
+        console.log("SUBMISSÃO: A executar batch.commit()...");
+        await batch.commit();
+        console.log("--- SUBMISSÃO CONCLUÍDA COM SUCESSO ---");
 
-            // Finalmente, adiciona o indicador apenas aos utilizadores selecionados
-            selectedUserIds.forEach(userId => {
-                const userContainer = document.querySelector(`.user-container[data-user-id="${userId}"]`);
-                if (userContainer) {
-                    userContainer.querySelector('.user-header').classList.add('has-selection');
-                }
-            });
+        document.getElementById('predictions-list').style.pointerEvents = 'none';
+        button.style.display = 'none';
+        modsplayContent.innerHTML += `<p class="info-message">As tuas seleções foram registadas com sucesso!</p>`;
+
+    } catch (error) {
+        console.error("--- ERRO NA SUBMISSÃO ---");
+        console.error("Nome do Erro:", error.name);
+        console.error("Código do Erro:", error.code);
+        console.error("Mensagem do Erro:", error.message);
+        console.error("Objeto de erro completo:", error);
+        alert("Ocorreu um erro ao confirmar as seleções. Verifique a consola para mais detalhes.");
+        button.disabled = false;
+        button.textContent = 'Confirmar Seleções';
+    }
+}
+
+async function fetchNames(ids, collectionName, fieldName) {
+    if (ids.length === 0) return {};
+    const nameMap = {};
+    const promises = ids.map(id => getDoc(doc(db, collectionName, id)));
+    const results = await Promise.all(promises);
+    results.forEach(docSnap => {
+        if (docSnap.exists()) { nameMap[docSnap.id] = docSnap.data()[fieldName]; }
+    });
+    return nameMap;
+}
+
+function updateUserSelectionIndicators() {
+    document.querySelectorAll('.user-header').forEach(header => {
+        header.classList.remove('has-selection');
+    });
+    const selectedUserIds = new Set(Object.values(selectedPredictions).map(selection => selection.originalUserId));
+    selectedUserIds.forEach(userId => {
+        const userContainer = document.querySelector(`.user-container[data-user-id="${userId}"]`);
+        if (userContainer) {
+            userContainer.querySelector('.user-header').classList.add('has-selection');
         }
-
+    });
+}
 
 function generatePastelColorFromId(id) {
     let hash = 0;
     for (let i = 0; i < id.length; i++) {
         hash = id.charCodeAt(i) + ((hash << 5) - hash);
     }
-    const h = hash % 360; // Gera uma "Hue" (matiz) entre 0 e 360
-    // Usamos Saturação e Luminosidade altas para garantir cores pastel claras
-    return `hsl(${h}, 80%, 92%)`; 
+    const h = hash % 360;
+    return `hsl(${h}, 80%, 92%)`;
 }
-        
-      function addAccordionListeners(isReadOnly = false) {
-            // Listeners para abrir/fechar os acordeões (Users e Jogos) - sempre ativos
-            document.querySelectorAll('.user-header, .game-header').forEach(header => {
-                header.addEventListener('click', () => header.classList.toggle('active'));
+
+function addAccordionListeners(isReadOnly = false) {
+    document.querySelectorAll('.user-header, .game-header').forEach(header => {
+        header.addEventListener('click', () => header.classList.toggle('active'));
+    });
+    if (!isReadOnly) {
+        document.querySelectorAll('.prediction-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const jogoId = item.dataset.jogoId;
+                const palpiteKey = item.dataset.palpiteKey;
+                const originalUserId = item.dataset.originalUserId;
+                const palpiteText = item.innerText.trim();
+                document.querySelectorAll(`.prediction-item[data-jogo-id="${jogoId}"]`).forEach(el => el.classList.remove('selected'));
+                item.classList.add('selected');
+                selectedPredictions[jogoId] = { palpiteKey, originalUserId, palpiteText };
+                updateUserSelectionIndicators();
             });
+        });
+    } else {
+        document.querySelectorAll('.prediction-item').forEach(item => {
+            item.style.cursor = 'default';
+        });
+    }
+}
 
-            // Só adiciona os listeners de clique nos palpites se NÃO estiver em modo "só de leitura"
-            if (!isReadOnly) {
-                document.querySelectorAll('.prediction-item').forEach(item => {
-                    item.addEventListener('click', () => {
-                        const jogoId = item.dataset.jogoId;
-                        const palpiteKey = item.dataset.palpiteKey;
-                        const originalUserId = item.dataset.originalUserId;
-                        const palpiteText = item.innerText.trim();
-
-                        // Desmarca o item antigo desse jogo (se houver)
-                        document.querySelectorAll(`.prediction-item[data-jogo-id="${jogoId}"]`).forEach(el => el.classList.remove('selected'));
-                        
-                        // Marca o novo item clicado
-                        item.classList.add('selected');
-
-                        // Atualiza o objeto de seleções na memória
-                        selectedPredictions[jogoId] = { palpiteKey, originalUserId, palpiteText };
-                        
-                        // Atualiza os ícones visuais
-                        updateUserSelectionIndicators(); 
-                    });
-                });
-            } else {
-                // Se for modo "só de leitura", podemos adicionar um estilo visual para deixar claro que não é clicável
-                document.querySelectorAll('.prediction-item').forEach(item => {
-                    item.style.cursor = 'default';
-                });
-            }
-        }
-
-        function showInfoMessage(message) {
-            contentTitle.textContent = "Mods Play";
-            modsplayContent.innerHTML = `<p class="info-message">${message}</p>`;
-            timerContainer.style.display = 'none';
-            loadingScreen.style.display = 'none';
-            content.style.display = 'block';
-        }
+function showInfoMessage(message) {
+    contentTitle.textContent = "Mods Play";
+    modsplayContent.innerHTML = `<p class="info-message">${message}</p>`;
+    timerContainer.style.display = 'none';
+    loadingScreen.style.display = 'none';
+    content.style.display = 'block';
+}
     </script>
     <script src="menu-component.js"></script> 
 </body>
