@@ -356,7 +356,6 @@ function handleConfirmationClick() {
 }
 
 async function submitCrushBonesSelections() {
-    // A função de submissão original com a depuração de erros
     const button = document.getElementById('submit-crushbones-btn');
     if (Object.keys(selectedPredictions).length === 0) {
         alert("Nenhum palpite selecionado!");
@@ -396,13 +395,21 @@ async function submitCrushBonesSelections() {
             selecoes: {}
         };
         
-        for (const jogoId in selectedPredictions) {
-            const selection = selectedPredictions[jogoId];
+        // --- INÍCIO DA CORREÇÃO ---
+        // A estrutura de selectedPredictions agora é: { userId: { jogoId: '...', palpiteText: '...' } }
+
+        // O loop agora percorre os IDs dos users de quem copiámos
+        for (const copiedUserId in selectedPredictions) {
+            const selectionDetails = selectedPredictions[copiedUserId]; // Este é o objeto com os detalhes
+            const jogoId = selectionDetails.jogoId; // O ID do jogo está DENTRO do objeto
+
+            // Construímos o objeto para guardar no Firebase
             submissaoData.selecoes[jogoId] = {
-                palpiteSelecionado: selection.palpiteText,
-                copiedFromUserId: selection.originalUserId
+                palpiteSelecionado: selectionDetails.palpiteText,
+                copiedFromUserId: copiedUserId // O ID do user de quem copiámos é a própria chave do loop
             };
         }
+        // --- FIM DA CORREÇÃO ---
 
         console.log("SUBMISSÃO: Dados a serem enviados:", submissaoData);
         
@@ -432,6 +439,7 @@ async function submitCrushBonesSelections() {
         button.textContent = 'Confirmar Seleções';
     }
 }
+
 
 async function fetchNames(ids, collectionName, fieldName) {
     if (ids.length === 0) return {};
