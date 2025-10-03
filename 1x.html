@@ -203,6 +203,89 @@
         .game-datetime { text-align: center; color: #666; font-size: 0.9em; margin-bottom: 15px; padding: 8px; background: #f8f9fa; border-radius: 8px; }
         .no-games, .error { text-align: center; color: #666; padding: 20px; background: white; border-radius: 8px; margin: 20px 0; }
         .error { color: #dc3545; background: #f8d7da; }
+
+        /* NOVO: Estilos para o Card Exclusivo do ModsPlay */
+       #modsplay-card-container {
+            margin-bottom: 30px;
+            /* Adicionado para centralizar o card na página */
+            display: flex;
+            justify-content: center;
+        }
+
+        .modsplay-card {
+            background: linear-gradient(135deg, #1f1c2c, #3a3a5a);
+            color: white;
+            border-radius: 20px;
+            padding: 0; /* Removido padding para a imagem poder preencher o topo */
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+            border: 2px solid #FFD700;
+            animation: fadeIn 0.8s ease-out;
+            
+            /* --- MODIFICAÇÃO DE TAMANHO --- */
+            /* Define uma largura que se assemelha a um card de jogo */
+            width: 100%;
+            max-width: 380px; 
+            min-height: 480px; /* Aprox. 1/3 mais alto que um card de jogo padrão */
+            
+            /* Adicionado para controlar layout interno da imagem e conteúdo */
+            display: flex;
+            flex-direction: column;
+            overflow: hidden; /* Garante que a imagem com borda arredondada não "vaze" */
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* NOVO: Estilo para o container da imagem que respeita a imagePosition */
+        .modsplay-image {
+            width: 100%;
+            height: 300px; /* Altura fixa para a área da imagem */
+            background-repeat: no-repeat;
+            /* As propriedades de imagem (URL, posição, zoom) serão aplicadas via JS */
+        }
+        
+        /* NOVO: Container para o conteúdo abaixo da imagem */
+        .modsplay-card-content {
+            padding: 0 20px 25px 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            flex-grow: 1; /* Faz este container ocupar o espaço vertical restante */
+        }
+
+        .modsplay-card-title {
+            font-size: 1.5em;
+            font-weight: bold;
+            margin-top: 15px;
+            margin-bottom: 20px;
+            text-shadow: 1px 1px 5px rgba(255, 215, 0, 0.5);
+        }
+
+        .modsplay-play-button {
+            display: inline-block;
+            padding: 14px;
+            background: linear-gradient(135deg, #FFD700, #FFA500);
+            color: #333;
+            border: none;
+            border-radius: 12px;
+            font-weight: bold;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(255, 215, 0, 0.4);
+            align-self: center; /* Centraliza o botão */
+        }
+
+        .modsplay-play-button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(255, 215, 0, 0.6);
+        }
+
     </style>
 </head>
 
@@ -257,6 +340,10 @@
 
         <div class="content">
             <h1>1x WhatIf...</h1>
+            
+            <!-- NOVO: Contentor para o Card Exclusivo do ModsPlay -->
+            <div id="modsplay-card-container"></div>
+
             <div id="games-container">
                 <!-- Jogos serão carregados aqui dinamicamente -->
             </div>
@@ -379,6 +466,72 @@ async function setupPageAccess() {
         }
     }
 
+    /* NOVO: Função para verificar e exibir o card do ModsPlay */
+   async function checkAndDisplayModsPlayCard() {
+        const container = document.getElementById('modsplay-card-container');
+        if (!container) return;
+
+        try {
+            // 1. Obter o documento de configuração do modsplay
+            const modsPlayQuery = await getDocs(collection(db, 'modsplay'));
+            if (modsPlayQuery.empty) {
+                // Não há evento modsplay configurado, então não faz nada.
+                return;
+            }
+            
+            const modsPlayDoc = modsPlayQuery.docs[0];
+            const modsPlayData = modsPlayDoc.data();
+
+            // 2. Verificar as datas
+            const now = new Date();
+            const inicio = modsPlayData.dataInicio.toDate();
+            const fim = modsPlayData.dataFim.toDate();
+
+            if (now >= inicio && now <= fim) {
+                // O evento está ativo!
+                const modId = modsPlayData.modId;
+                if (!modId) {
+                    console.error("ModsPlay ativo, mas sem modId definido.");
+                    return;
+                }
+
+                // 3. Buscar os detalhes do mod correspondente
+                const modDocSnap = await getDoc(doc(db, 'mods', modId));
+                if (!modDocSnap.exists()) {
+                    console.error(`Mod com ID ${modId} não encontrado.`);
+                    return;
+                }
+                const modData = modDocSnap.data();
+
+                // 4. Extrair posições e zoom da imagem (com valores padrão para segurança)
+                const position = modData.imagePosition || { x: 'center', y: 'center' };
+                const zoom = modData.imagePosition?.zoom || 100; // Usa 100 como padrão se não existir
+
+                // 5. Construir e exibir o card com a nova estrutura e estilos inline para a imagem
+                container.innerHTML = `
+                    <div class="modsplay-card">
+                        <div class="modsplay-image" style="
+                            background-image: url('${modData.imagem}');
+                            background-position: ${position.x} ${position.y};
+                            background-size: ${zoom}%;
+                        "></div>
+                        <div class="modsplay-card-content">
+                            <h3 class="modsplay-card-title">${modData.nomeMod}</h3>
+                            <a href="modsplay.html" class="modsplay-play-button">Jogar</a>
+                        </div>
+                    </div>
+                `;
+            } else {
+                // O evento não está ativo, garantir que o contentor está vazio.
+                container.innerHTML = '';
+            }
+
+        } catch (error) {
+            console.error("Erro ao verificar o evento ModsPlay:", error);
+            container.innerHTML = ''; // Limpa em caso de erro
+        }
+    }
+
     async function openModPopup(modId) { /* ... (código do popup) ... */ }
     async function checkAndDisplayMods() { /* ... (código dos mods) ... */ }
 
@@ -395,6 +548,10 @@ async function setupPageAccess() {
                 mainContentWrapper.style.display = 'block';
 
                 await setupPageAccess();
+                
+                // NOVO: Chamada da função para verificar o card do ModsPlay
+                await checkAndDisplayModsPlayCard();
+
                 await loadActiveGames();
                 await checkAndDisplayMods();
             } else {
