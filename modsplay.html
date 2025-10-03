@@ -473,6 +473,7 @@ function addAccordionListeners(isReadOnly = false) {
     document.querySelectorAll('.user-header, .game-header').forEach(header => {
         header.addEventListener('click', () => header.classList.toggle('active'));
     });
+
     if (!isReadOnly) {
         document.querySelectorAll('.prediction-item').forEach(item => {
             item.addEventListener('click', () => {
@@ -480,9 +481,41 @@ function addAccordionListeners(isReadOnly = false) {
                 const palpiteKey = item.dataset.palpiteKey;
                 const originalUserId = item.dataset.originalUserId;
                 const palpiteText = item.innerText.trim();
+
+                // --- INÍCIO DA NOVA LÓGICA ---
+
+                // 1. Verificar se já existe uma seleção para este 'originalUserId' noutro jogo.
+                let existingSelectionFromThisUser = null;
+                for (const gameId in selectedPredictions) {
+                    // Encontra uma seleção do mesmo utilizador, mas para um jogo DIFERENTE
+                    if (selectedPredictions[gameId].originalUserId === originalUserId && gameId !== jogoId) {
+                        existingSelectionFromThisUser = { gameId: gameId, ...selectedPredictions[gameId] };
+                        break;
+                    }
+                }
+
+                // 2. Se uma seleção de outro jogo para este utilizador já existir, desmarque-a primeiro.
+                if (existingSelectionFromThisUser) {
+                    // Remover a classe 'selected' do item HTML antigo
+                    const oldItem = document.querySelector(`.prediction-item[data-jogo-id="${existingSelectionFromThisUser.gameId}"].selected`);
+                    if (oldItem) {
+                        oldItem.classList.remove('selected');
+                    }
+                    // Remover a seleção antiga do nosso objeto de estado
+                    delete selectedPredictions[existingSelectionFromThisUser.gameId];
+                }
+
+                // --- FIM DA NOVA LÓGICA ---
+
+                // 3. Desmarcar qualquer item previamente selecionado PARA ESTE JOGO (lógica original mantida)
+                // Isto garante que, se mudar de palpite dentro do mesmo jogo, o antigo é desmarcado.
                 document.querySelectorAll(`.prediction-item[data-jogo-id="${jogoId}"]`).forEach(el => el.classList.remove('selected'));
+
+                // 4. Marcar o novo item e atualizar o estado
                 item.classList.add('selected');
                 selectedPredictions[jogoId] = { palpiteKey, originalUserId, palpiteText };
+                
+                // 5. Atualizar os indicadores visuais nos cabeçalhos dos utilizadores
                 updateUserSelectionIndicators();
             });
         });
