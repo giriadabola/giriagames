@@ -49,6 +49,43 @@
         .zoom-control input { width: 100%; margin-top: 10px; }
         .apply-btn { background-color: #28a745; color: white; border: none; border-radius: 4px; padding: 10px 15px; cursor: pointer; width: 100%; font-weight: bold; transition: background-color 0.3s ease; }
         .apply-btn:hover { background-color: #218838; }
+
+        /* --- NOVOS ESTILOS ADICIONADOS --- */
+        .rules-container {
+            background-color: #f7f7f9;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            border: 1px solid #e1e1e1;
+        }
+        .rules-container > .form-group {
+            margin-bottom: 0;
+        }
+        .rules-container > .form-group:not(:last-child) {
+            margin-bottom: 20px;
+        }
+        .rules-container .form-group > label {
+            font-size: 1.1em;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        .sub-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .sub-group label {
+            flex-basis: 100px;
+            flex-shrink: 0;
+            margin-bottom: 0;
+            color: #555;
+            font-weight: normal;
+        }
+        .sub-group input {
+            flex-grow: 1;
+        }
+        /* --- FIM DOS NOVOS ESTILOS --- */
     </style>
 </head>
 <body style="display: none;"> <!-- 2. O corpo da página está oculto por padrão -->
@@ -75,8 +112,34 @@
                 <div class="form-group"><label for="dataFimMod">Data de Fim (Opcional):</label><input type="date" id="dataFimMod" name="dataFimMod"></div>
                 <div class="form-group"><label for="imagemMod">Imagem de Mod (Link):</label><div class="image-input-container"><input type="text" id="imagemMod" name="imagemMod"><button type="button" id="previewImageBtn" class="preview-btn"><i class="fas fa-eye"></i></button></div><small class="form-hint">Clique no ícone para visualizar e posicionar a imagem no card</small></div>
                 <div class="form-group"><label for="descricaoMod">Descrição:</label><textarea id="descricaoMod" name="descricaoMod" rows="4"></textarea></div>
-                <div class="form-group"><label for="possivelVitoriaMod">Possível Vitória (Opcional):</label><input type="text" id="possivelVitoriaMod" name="possivelVitoriaMod" step="any"></div>
-                <div class="form-group"><label for="possivelDerrotaMod">Possível Derrota (Opcional):</label><input type="text" id="possivelDerrotaMod" name="possivelDerrotaMod" step="any"></div>
+                
+                <!-- --- SECÇÃO DE REGRAS MODIFICADA --- -->
+                <div class="rules-container">
+                    <div class="form-group">
+                        <label>Possível Vitória (Regras "onAcerto"):</label>
+                        <div class="sub-group">
+                            <label for="vitoriaJogador">Para Jogador:</label>
+                            <input type="number" id="vitoriaJogador" name="vitoriaJogador" step="any" placeholder="Ex: 10">
+                        </div>
+                        <div class="sub-group">
+                            <label for="vitoriaAlvo">Para Alvo:</label>
+                            <input type="number" id="vitoriaAlvo" name="vitoriaAlvo" step="any" placeholder="Ex: -3">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Possível Derrota (Regras "onFalha"):</label>
+                        <div class="sub-group">
+                            <label for="derrotaJogador">Para Jogador:</label>
+                            <input type="number" id="derrotaJogador" name="derrotaJogador" step="any" placeholder="Ex: -5">
+                        </div>
+                        <div class="sub-group">
+                            <label for="derrotaAlvo">Para Alvo:</label>
+                            <input type="number" id="derrotaAlvo" name="derrotaAlvo" step="any" placeholder="Ex: 3">
+                        </div>
+                    </div>
+                </div>
+                <!-- --- FIM DA SECÇÃO DE REGRAS --- -->
+
                 <div class="form-group"><label for="overallMod">Overall (Opcional):</label><input type="number" id="overallMod" name="overallMod"></div>
                 <div class="form-group"><label for="iconMod">Icon (Link Opcional):</label><input type="text" id="iconMod" name="iconMod"></div>
                 <div class="form-group"><label for="videoMod">Video (Link Opcional):</label><input type="text" id="videoMod" name="videoMod"></div>
@@ -172,6 +235,13 @@
             criarModForm.addEventListener('submit', async function(event) {
                 event.preventDefault();
 
+                // --- LÓGICA DO JAVASCRIPT ATUALIZADA ---
+                // Função auxiliar para converter o valor do input para número ou null
+                const getNumberValue = (id) => {
+                    const value = document.getElementById(id).value;
+                    return value === '' ? null : parseFloat(value);
+                };
+
                 // Objeto final que será enviado para o Firestore
                 const modData = {
                     nomeMod: document.getElementById('nomeMod').value,
@@ -180,9 +250,20 @@
                     dataFim: converterDataParaTimestamp(document.getElementById('dataFimMod').value),
                     imagem: document.getElementById('imagemMod').value || null,
                     descricao: document.getElementById('descricaoMod').value || null,
-                    possivelVitoria: document.getElementById('possivelVitoriaMod').value || null,
-                    possivelDerrota: document.getElementById('possivelDerrotaMod').value || null,
-                    overall: document.getElementById('overallMod').value || null,
+                    
+                    // Novo objeto "regras" conforme a estrutura da imagem
+                    regras: {
+                        onAcerto: {
+                            jogador: getNumberValue('vitoriaJogador'),
+                            alvo: getNumberValue('vitoriaAlvo')
+                        },
+                        onFalha: {
+                            jogador: getNumberValue('derrotaJogador'),
+                            alvo: getNumberValue('derrotaAlvo')
+                        }
+                    },
+                    
+                    overall: document.getElementById('overallMod').value ? parseInt(document.getElementById('overallMod').value) : null,
                     icon: document.getElementById('iconMod').value || null,
                     videoMod: document.getElementById('videoMod').value || null,
                     dataInicioNovoMod: converterDataParaTimestamp(document.getElementById('dataInicioNovoMod').value),
@@ -194,6 +275,7 @@
                     multiUsersMod: document.getElementById('multiUsersMod').value || null,
                     imagePosition: imagePosition
                 };
+                // --- FIM DA ATUALIZAÇÃO DO JAVASCRIPT ---
 
                 try {
                     const docRef = await addDoc(collection(db, "mods"), modData);
