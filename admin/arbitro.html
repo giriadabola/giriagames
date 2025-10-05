@@ -900,6 +900,39 @@ status-indicator {
             filteredPredictions = filteredPredictions.filter(p => p.userId === currentGPlayer);
         }
 
+        // ===================================================================
+        // === INÍCIO DA NOVA LÓGICA DE ORDENAÇÃO VISUAL ===
+        // ===================================================================
+        filteredPredictions.sort((a, b) => {
+            // Obter os dados completos dos jogos 'a' e 'b' a partir do mapa já carregado
+            const jogoA_data = jogosDataMap[a.jogoId];
+            const jogoB_data = jogosDataMap[b.jogoId];
+
+            // Medida de segurança: se por algum motivo um jogo não tiver dados, não quebra a ordenação
+            if (!jogoA_data || !jogoB_data || !jogoA_data.dataJogo || !jogoB_data.dataJogo) return 0;
+
+            // 1. Critério Principal: Ordenar por data do jogo (da mais antiga para a mais recente)
+            const dateA = jogoA_data.dataJogo.toDate();
+            const dateB = jogoB_data.dataJogo.toDate();
+            
+            // A subtracção de datas retorna um número negativo, zero ou positivo,
+            // que é exatamente o que a função sort() precisa.
+            const dateDifference = dateA - dateB; 
+
+            if (dateDifference !== 0) {
+                return dateDifference; // Se as datas são diferentes, a ordenação termina aqui.
+            }
+
+            // 2. Critério de Desempate: Ordenar por nome do jogo (A-Z)
+            // Este código só é executado se as datas forem exatamente iguais.
+            const nomeJogoA = jogoA_data.nomeJogo || '';
+            const nomeJogoB = jogoB_data.nomeJogo || '';
+            return nomeJogoA.localeCompare(nomeJogoB);
+        });
+        // ===================================================================
+        // === FIM DA NOVA LÓGICA DE ORDENAÇÃO VISUAL ===
+        // ===================================================================
+
        const voterCountDisplay = document.getElementById('voter-count-display');
         if (currentGame && totalEligibleVoters > 0) {
             const votedUserIds = new Set(filteredPredictions.map(p => p.userId));
