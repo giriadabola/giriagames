@@ -1131,14 +1131,12 @@ async function unifiedLaunchHandler() {
 async function processNormalPalpites(ronda) {
     const affectedUserIds = new Set();
     
-    // Busca os palpites da ronda diretamente da base de dados.
-    // Isto é mais robusto do que depender dos dados carregados no ecrã.
     const palpitesQuery = query(collection(db, 'palpites'), where("ronda", "==", ronda));
     const palpitesSnapshot = await getDocs(palpitesQuery);
     
     if (palpitesSnapshot.empty) {
         console.log("Nenhum palpite normal encontrado para a ronda.");
-        return affectedUserIds; // Retorna um set vazio
+        return affectedUserIds;
     }
     const allPalpitesDaRonda = palpitesSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
 
@@ -1148,50 +1146,66 @@ async function processNormalPalpites(ronda) {
             continue;
         }
 
-        // --- INÍCIO DA SUA LÓGICA ORIGINAL DE CÁLCULO DE PONTOS ---
         let cardTotalPontosPossiveis = 0;
         let cardTotalPontosGanhos = 0;
         let hasAtLeastOnePalpite = false;
         let containsNeutro = false;
 
-        for (let i = 1; i <= 10; i++) { // Assumindo um máximo de 10 palpites
+        // =================================================================
+        // === INÍCIO DA CORREÇÃO ###
+        // =================================================================
+        
+        // 1. Prepara um objeto para guardar TODAS as alterações a serem feitas no documento.
+        const palpiteUpdateData = {};
+
+        for (let i = 1; i <= 10; i++) {
             if (palpite.hasOwnProperty(`palpite${i}`)) {
                 hasAtLeastOnePalpite = true;
                 const pontosValue = palpite[`Palpite${i}PontosQuanto`] || 0;
                 const status = palpite[`palpite${i}Status`] || 'neutro';
 
+                let pontosGanhosParaEstePalpite = 0; // Por defeito, os pontos ganhos são 0.
+                
                 if (status === 'acerto') {
-                    cardTotalPontosGanhos += pontosValue;
+                    // Se o status for 'acerto', os pontos ganhos são iguais aos pontos que o palpite valia.
+                    pontosGanhosParaEstePalpite = pontosValue;
+                    cardTotalPontosGanhos += pontosValue; // Adiciona ao total.
                 }
+
+                // 2. ADICIONA O CAMPO INDIVIDUAL AO OBJETO DE ATUALIZAÇÃO.
+                // Isto garante que `Palpite[i]PontosGanhos` é definido como o valor correto (seja ele X ou 0).
+                palpiteUpdateData[`Palpite${i}PontosGanhos`] = pontosGanhosParaEstePalpite;
+
                 if (status === 'neutro') {
                     containsNeutro = true;
                 }
                 cardTotalPontosPossiveis += pontosValue;
             }
         }
-        // --- FIM DA SUA LÓGICA ORIGINAL DE CÁLCULO DE PONTOS ---
         
+        // =================================================================
+        // === FIM DA CORREÇÃO ###
+        // =================================================================
+
         if (hasAtLeastOnePalpite) {
-            // 1. Atualiza o próprio documento do palpite com os totais e o status 'Analisado'
-            const palpiteUpdateData = {
-                "Analisado": !containsNeutro ? "Sim" : "Não",
-                "TotalPontosGanhos": cardTotalPontosGanhos,
-                "TotalPontosPossiveis": cardTotalPontosPossiveis
-            };
+            // 3. Adiciona os campos de totais e de análise ao mesmo objeto de atualização.
+            palpiteUpdateData["Analisado"] = !containsNeutro ? "Sim" : "Não";
+            palpiteUpdateData["TotalPontosGanhos"] = cardTotalPontosGanhos;
+            palpiteUpdateData["TotalPontosPossiveis"] = cardTotalPontosPossiveis;
+            
+            // 4. Executa UMA ÚNICA operação de escrita na base de dados com todos os campos corretos.
             await updateDoc(doc(db, 'palpites', palpite.id), palpiteUpdateData);
 
-            // 2. *** LÓGICA IDEMPOTENTE PARA CRIAR/ATUALIZAR O MOVIMENTO ***
+            // A lógica de 'movimentos' que se segue permanece inalterada, pois já estava correta.
             const temporadaKey = palpite.temporada.replace('/', '');
             const transacaoId = `palpite-${palpite.userId}-${palpite.jogoId}`;
-
-            // Procura por um movimento que já tenha sido criado para este palpite
             const movQuery = query(collection(db, 'movimentos'), where("detalhes.transacaoId", "==", transacaoId));
             const movSnapshot = await getDocs(movQuery);
 
             const movimentoData = {
                 userId: palpite.userId,
                 para: palpite.userId,
-                de: 'ADMIN_USER_ID', // Ou outra referência de sistema
+                de: 'ADMIN_USER_ID',
                 valorreal: cardTotalPontosGanhos,
                 preco: cardTotalPontosGanhos,
                 estado: "Palpite Paid",
@@ -1201,19 +1215,15 @@ async function processNormalPalpites(ronda) {
             };
 
             if (movSnapshot.empty) {
-                // Se não existe, SÓ CRIA se o utilizador ganhou pontos (> 0)
                 if (cardTotalPontosGanhos > 0) {
                     movimentoData.movimentoData = serverTimestamp();
                     await addDoc(collection(db, 'movimentos'), movimentoData);
                 }
             } else {
-                // Se já existe, ATUALIZA com o novo valor.
-                // Isto corrige casos em que o árbitro muda de 'acerto' para 'falha' (valor vira 0)
                 const docId = movSnapshot.docs[0].id;
                 await updateDoc(doc(db, 'movimentos', docId), movimentoData);
             }
             
-            // Adiciona o utilizador à lista de afetados para recalcular o seu total no final
             affectedUserIds.add(palpite.userId);
         }
     }
