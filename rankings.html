@@ -182,12 +182,16 @@ import { getFirestore, doc, getDoc, collection, getDocs, query, where, updateDoc
          const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const auth = getAuth(app);
+        const modCache = new Map();
+    const userCache = new Map();
+    const gameCache = new Map();
 
     const loadingScreen = document.getElementById('loading-screen');
     const content = document.querySelector('.content');
     const rankingsBody = document.getElementById('rankings-body');
     let currentUserStatus = null; // Store user status (estatuto)
     let toastTimeout; 
+    
 
     // --- Function to load Menu Settings ---
     async function loadMenuSettings() {
@@ -222,6 +226,68 @@ import { getFirestore, doc, getDoc, collection, getDocs, query, where, updateDoc
     }
 
  
+
+// Função para buscar o nome do Mod
+    async function getModName(modId) {
+        if (modCache.has(modId)) {
+            return modCache.get(modId);
+        }
+        try {
+            const modDocRef = doc(db, 'mods', modId);
+            const modDocSnap = await getDoc(modDocRef);
+            if (modDocSnap.exists()) {
+                const modName = modDocSnap.data().nomeMod;
+                modCache.set(modId, modName); // Guarda em cache
+                return modName;
+            }
+        } catch (error) {
+            console.error("Erro ao buscar nome do mod:", error);
+        }
+        return 'Mod Desconhecido';
+    }
+
+    // Função para buscar o nome de tabela de um utilizador
+    async function getUserTableName(userId) {
+        if (userCache.has(userId)) {
+            return userCache.get(userId);
+        }
+        try {
+            const userDocRef = doc(db, 'users', userId);
+            const userDocSnap = await getDoc(userDocRef);
+            if (userDocSnap.exists()) {
+                const userName = userDocSnap.data().nometabela;
+                userCache.set(userId, userName); // Guarda em cache
+                return userName;
+            }
+        } catch (error) {
+            console.error("Erro ao buscar nometabela do user:", error);
+        }
+        return 'Utilizador Desconhecido';
+    }
+
+    // Função para buscar o nome de um jogo (assumindo que estão na coleção 'jogos')
+    async function getGameName(gameId) {
+        if (gameCache.has(gameId)) {
+            return gameCache.get(gameId);
+        }
+        try {
+            // Assumi que a coleção se chama 'jogos'. Altere se for diferente.
+            const gameDocRef = doc(db, 'jogos', gameId); 
+            const gameDocSnap = await getDoc(gameDocRef);
+            if (gameDocSnap.exists()) {
+                // Limpa o nome do jogo conforme pedido
+                const rawGameName = gameDocSnap.data().nomeJogo || '';
+                const cleanGameName = rawGameName.split(' - ')[0];
+                gameCache.set(gameId, cleanGameName); // Guarda em cache
+                return cleanGameName;
+            }
+        } catch (error) {
+            console.error("Erro ao buscar nome do jogo:", error);
+        }
+        return 'Jogo Desconhecido';
+    }
+
+
 
     // --- Function to get User Status (estatuto) ---
     async function getUserStatus(userId) {
@@ -469,50 +535,80 @@ async function loadRankings(season) {
     // --- Toggle Predictions Popup Logic (Unchanged, but ensure Firestore queries are correct) ---
     let selectedRounds = {}; // Store selected round per user/season key
 
-    async function togglePredictions(userId, season) {
+async function togglePredictions(userId, season) {
     const popup = document.getElementById('predictions-popup');
     const popupBody = document.getElementById('popup-predictions-body');
     const roundFilter = document.getElementById('round-filter');
 
     popupBody.innerHTML = 'A carregar previsões...';
-    popup.style.display = "block"; // Show popup immediately
+    popup.style.display = "block";
 
     try {
+        // 1. Buscar palpites normais
         const palpitesRef = collection(db, 'palpites');
-        const q = query(palpitesRef,
-            where('userId', '==', userId),
-            where('temporada', '==', season)
-        );
+        const q = query(palpitesRef, where('userId', '==', userId), where('temporada', '==', season));
         const palpitesSnap = await getDocs(q);
 
-        let predictionsHTML = '';
-        const predictions = [];
-        const rounds = new Set();
+        // 2. Buscar os MODS onde o user ATACA
+        const modPalpitesRef = collection(db, 'palpitesmods');
+        const attacksMadeQuery = query(modPalpitesRef, where('userId', '==', userId), where('temporada', '==', season));
+        const attacksMadeSnap = await getDocs(attacksMadeQuery);
 
-        palpitesSnap.forEach(doc => {
+        const attacksMadeByRound = new Map();
+        attacksMadeSnap.forEach(doc => {
             const data = doc.data();
-            predictions.push({
-                ...data,
-                id: doc.id,
-                timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : new Date(0)
-            });
-            if (data.ronda) rounds.add(data.ronda);
+            if (data.ronda) {
+                attacksMadeByRound.set(String(data.ronda), { id: doc.id, ...data });
+            }
         });
 
-        predictions.sort((a, b) => (b.ronda || 0) - (a.ronda || 0) || b.timestamp - a.timestamp);
+        // 3. Buscar os MODS onde o user é ALVO
+        const allModsQuery = query(modPalpitesRef, where('temporada', '==', season));
+        const allModsSnap = await getDocs(allModsQuery);
+        
+        const attacksReceivedByRound = new Map();
+        allModsSnap.forEach(doc => {
+            const modData = doc.data();
+            if (modData.selecoes) {
+                for (const gameId in modData.selecoes) {
+                    const selection = modData.selecoes[gameId];
+                    if (selection.copiedFromUserId === userId) {
+                        const roundStr = String(modData.ronda);
+                        if (!attacksReceivedByRound.has(roundStr)) {
+                            attacksReceivedByRound.set(roundStr, []);
+                        }
+                        attacksReceivedByRound.get(roundStr).push({
+                            attackerUserId: modData.userId,
+                            modId: modData.modId,
+                            ronda: modData.ronda,
+                            gameId: gameId,
+                            selection: selection
+                        });
+                    }
+                }
+            }
+        });
+
+        // --- Lógica de preparação de dados ---
+        const predictions = [];
+        const rounds = new Set();
+        palpitesSnap.forEach(doc => {
+            const data = doc.data();
+            predictions.push({ ...data, id: doc.id, timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : new Date(0) });
+            if (data.ronda) rounds.add(String(data.ronda));
+        });
+        attacksMadeByRound.forEach((mod) => rounds.add(String(mod.ronda)));
+        attacksReceivedByRound.forEach((attacks, round) => rounds.add(round));
 
         const sortedRounds = Array.from(rounds).sort((a, b) => parseInt(a) - parseInt(b));
         const userSeasonKey = `${userId}-${season}`;
         const currentSelection = selectedRounds[userSeasonKey] || '';
-
         roundFilter.innerHTML = '<option value="">Todas as Rondas</option>';
         sortedRounds.forEach(round => {
             const option = document.createElement('option');
             option.value = round;
             option.textContent = `Ronda ${round}`;
-            if (String(currentSelection) === String(round)) {
-                option.selected = true;
-            }
+            if (String(currentSelection) === String(round)) { option.selected = true; }
             roundFilter.appendChild(option);
         });
         roundFilter.value = currentSelection;
@@ -525,81 +621,170 @@ async function loadRankings(season) {
         const predictionsByRound = {};
         filteredPredictions.forEach(prediction => {
             const round = prediction.ronda || 'Desconhecida';
-            if (!predictionsByRound[round]) {
-                predictionsByRound[round] = [];
-            }
+            if (!predictionsByRound[round]) { predictionsByRound[round] = []; }
             predictionsByRound[round].push(prediction);
         });
+        
+        const allRoundsInView = new Set();
+        if (selectedRound) {
+            allRoundsInView.add(selectedRound);
+        } else {
+            sortedRounds.forEach(r => allRoundsInView.add(r));
+        }
 
-        // ### INÍCIO DA NOVA LÓGICA ###
-        // Calcula os totais e o status para cada ronda
+        // ### ALTERADO: Lógica de cálculo de totais de pontos por ronda ###
         const roundStats = {};
-        for (const round in predictionsByRound) {
+        for (const round of allRoundsInView) {
             let totalPoints = 0;
             let isPending = false;
-            const currentRoundPredictions = predictionsByRound[round];
-
+            
+            // 1. Calcula pontos dos jogos normais
+            const currentRoundPredictions = predictionsByRound[round] || [];
             for (const prediction of currentRoundPredictions) {
                 if (prediction.Analisado !== "Sim") {
                     isPending = true;
-                    break; // Se um palpite está em análise, a ronda toda está.
+                    break;
                 }
-                // Soma os pontos de todos os palpites (palpite1, palpite2, etc.)
                 for (let i = 1; i <= 10; i++) {
                     totalPoints += prediction[`Palpite${i}PontosGanhos`] || 0;
                 }
             }
+            if (isPending) {
+                roundStats[round] = { text: '[em análise]' };
+                continue; // Pula para a próxima ronda, já que está pendente
+            }
 
+            // 2. Adiciona pontos dos ATAQUES FEITOS
+            const attackMadeData = attacksMadeByRound.get(round);
+            if (attackMadeData) {
+                for (const gameId in attackMadeData.selecoes) {
+                    const selection = attackMadeData.selecoes[gameId];
+                    if (selection.hasOwnProperty('pontosGanhosJogador')) {
+                        totalPoints += selection.pontosGanhosJogador || 0;
+                    } else {
+                        isPending = true;
+                        break;
+                    }
+                }
+            }
+            if (isPending) {
+                roundStats[round] = { text: '[em análise]' };
+                continue;
+            }
+
+            // 3. Adiciona pontos dos ATAQUES SOFRIDOS
+            const attacksReceivedData = attacksReceivedByRound.get(round);
+            if (attacksReceivedData) {
+                for (const attack of attacksReceivedData) {
+                    if (attack.selection.hasOwnProperty('pontosGanhosJogadorAlvo')) {
+                        totalPoints += attack.selection.pontosGanhosJogadorAlvo || 0;
+                    } else {
+                        isPending = true;
+                        break;
+                    }
+                }
+            }
+
+            // 4. Define o texto final com a soma total
             if (isPending) {
                 roundStats[round] = { text: '[em análise]' };
             } else {
                 roundStats[round] = { text: `[${totalPoints} gPoints]` };
             }
         }
-        // ### FIM DA NOVA LÓGICA ###
-
-        predictionsHTML = '';
-        const displaySortedRounds = Object.keys(predictionsByRound).sort((a, b) => parseInt(b) - parseInt(a));
+        
+        // --- Lógica de renderização (sem alterações) ---
+        let predictionsHTML = '';
+        const displaySortedRounds = Array.from(allRoundsInView).sort((a, b) => parseInt(b) - parseInt(a));
 
         if (displaySortedRounds.length === 0) {
             predictionsHTML = 'Nenhuma previsão encontrada para esta seleção.';
         } else {
             const roundToOpen = selectedRound || displaySortedRounds[0];
 
-            displaySortedRounds.forEach(round => {
+            for (const round of displaySortedRounds) {
+                let hasContent = false;
                 const isOpen = String(round) === String(roundToOpen);
-                const roundPredictions = predictionsByRound[round];
+                const roundPredictions = predictionsByRound[round] || [];
                 let roundContentHTML = '';
 
-                roundPredictions.sort((a, b) => a.timestamp - b.timestamp);
-
-                roundPredictions.forEach(prediction => {
-                    let palpitesHTML = '';
-                    for (let i = 1; i <= 10; i++) {
-                        if (prediction[`palpite${i}`]) {
-                            let pointsContent = '';
-                            if (prediction.Analisado === "Sim") {
-                                const points = prediction[`Palpite${i}PontosGanhos`] || 0;
-                                const pointsClass = points > 0 ? 'prediction-points' : 'prediction-points-negative';
-                                pointsContent = `<span class="${pointsClass}">(${points} pts)</span>`;
-                            } else {
-                                pointsContent = `<span class="in-analysis"><em>(em análise)</em></span>`;
+                if (roundPredictions.length > 0) {
+                    hasContent = true;
+                    roundPredictions.sort((a, b) => a.timestamp - b.timestamp).forEach(prediction => {
+                        let palpitesHTML = '';
+                        for (let i = 1; i <= 10; i++) {
+                            if (prediction[`palpite${i}`]) {
+                                let pointsContent = '';
+                                if (prediction.Analisado === "Sim") {
+                                    const points = prediction[`Palpite${i}PontosGanhos`] || 0;
+                                    const pointsClass = points > 0 ? 'prediction-points' : 'prediction-points-negative';
+                                    pointsContent = `<span class="${pointsClass}">(${points} pts)</span>`;
+                                } else {
+                                    pointsContent = `<span class="in-analysis"><em>(em análise)</em></span>`;
+                                }
+                                palpitesHTML += `<div class="prediction-item">→ ${prediction[`palpite${i}`]} ${pointsContent}</div>`;
                             }
-                            palpitesHTML += `<div class="prediction-item">→ ${prediction[`palpite${i}`]} ${pointsContent}</div>`;
                         }
-                    }
+                        if (palpitesHTML) {
+                            roundContentHTML += `<div class="game-header">${prediction.nomeJogo || 'Jogo Desconhecido'}</div>${palpitesHTML}`;
+                        }
+                    });
+                }
 
-                    if (palpitesHTML) {
-                        roundContentHTML += `
-                            <div class="game-header">${prediction.nomeJogo || 'Jogo Desconhecido'}</div>
-                            ${palpitesHTML}
-                        `;
-                    }
-                });
+                const attackMadeData = attacksMadeByRound.get(round);
+                if (attackMadeData) {
+                    hasContent = true;
+                    let modHTML = '';
+                    const modName = await getModName(attackMadeData.modId);
+                    modHTML += `<div class="game-header" style="margin-top: 20px; border-top: 1px solid #ccc; padding-top: 10px; color: #E67E22;">Mod: ${modName} | Ataque | Ronda ${attackMadeData.ronda}</div>`;
 
-                if (roundContentHTML) {
-                    // ### ALTERAÇÃO NO CABEÇALHO DA RONDA ###
-                    const roundInfoText = roundStats[round].text;
+                    for (const gameId in attackMadeData.selecoes) {
+                        const selection = attackMadeData.selecoes[gameId];
+                        const targetUserName = await getUserTableName(selection.copiedFromUserId);
+                        const gameName = await getGameName(gameId);
+                        
+                        let pointsContent = '';
+                        if (selection.hasOwnProperty('pontosGanhosJogador')) {
+                            const points = selection.pontosGanhosJogador;
+                            const pointsClass = points > 0 ? 'prediction-points' : 'prediction-points-negative';
+                            pointsContent = `<span class="${pointsClass}">(${points} pts)</span>`;
+                        } else {
+                            pointsContent = `<span class="in-analysis"><em>(em análise)</em></span>`;
+                        }
+
+                        modHTML += `<div class="prediction-item">→ Alvo: ${targetUserName} | ${gameName} | ${selection.palpiteSelecionado} ${pointsContent}</div>`;
+                    }
+                    roundContentHTML += modHTML;
+                }
+
+                const attacksReceivedData = attacksReceivedByRound.get(round);
+                if (attacksReceivedData) {
+                    hasContent = true;
+                    let modHTML = '';
+                    const firstAttack = attacksReceivedData[0];
+                    const modName = await getModName(firstAttack.modId);
+                    modHTML += `<div class="game-header" style="margin-top: 20px; border-top: 1px solid #ccc; padding-top: 10px; color: #E67E22;">Mod: ${modName} | Defesa | Ronda ${firstAttack.ronda}</div>`;
+
+                    for (const attack of attacksReceivedData) {
+                         const attackerName = await getUserTableName(attack.attackerUserId);
+                         const gameName = await getGameName(attack.gameId);
+
+                         let pointsContent = '';
+                         if (attack.selection.hasOwnProperty('pontosGanhosJogadorAlvo')) {
+                            const points = attack.selection.pontosGanhosJogadorAlvo;
+                            const pointsClass = points > 0 ? 'prediction-points' : 'prediction-points-negative';
+                            pointsContent = `<span class="${pointsClass}">(${points} pts)</span>`;
+                        } else {
+                            pointsContent = `<span class="in-analysis"><em>(em análise)</em></span>`;
+                        }
+
+                        modHTML += `<div class="prediction-item">→ Alvo de: ${attackerName} | ${gameName} | ${attack.selection.palpiteSelecionado} ${pointsContent}</div>`;
+                    }
+                     roundContentHTML += modHTML;
+                }
+                
+                if (hasContent) {
+                    const roundInfoText = roundStats[round] ? roundStats[round].text : '';
                     predictionsHTML += `
                         <div class="round-section">
                             <div class="round-header" data-round="${round}">
@@ -615,7 +800,11 @@ async function loadRankings(season) {
                         </div>
                     `;
                 }
-            });
+            }
+        }
+        
+        if (!predictionsHTML) {
+            predictionsHTML = 'Nenhuma previsão encontrada para esta seleção.';
         }
 
         popupBody.innerHTML = predictionsHTML;
