@@ -1192,18 +1192,25 @@ async function processNormalPalpites(ronda) {
 async function processGameMods(ronda) {
     const affectedUserIds = new Set();
     
+    // Busca todos os palpites de mods para a ronda
     const pModsQuery = query(collection(db, 'palpitesmods'), where("ronda", "==", ronda));
     const pModsSnapshot = await getDocs(pModsQuery);
     const allPalpitesMods = pModsSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
 
-    if (allPalpitesMods.length === 0) return affectedUserIds;
+    if (allPalpitesMods.length === 0) {
+        // Se não houver palpites de mods, não há nada a fazer.
+        return affectedUserIds;
+    }
 
+    // Busca todos os palpites ORIGINAIS da mesma ronda para referência
     const pOriginaisQuery = query(collection(db, 'palpites'), where("ronda", "==", ronda));
     const pOriginaisSnapshot = await getDocs(pOriginaisQuery);
     const allPalpitesDaRonda = pOriginaisSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
     
+    // Estrutura para guardar as regras dos mods em cache e evitar leituras repetidas
     const modsRules = {};
 
+    // Agrupa os palpites por modId para processar em lotes
     const groupedByMod = allPalpitesMods.reduce((acc, p) => {
         acc[p.modId] = acc[p.modId] || [];
         acc[p.modId].push(p);
@@ -1211,6 +1218,7 @@ async function processGameMods(ronda) {
     }, {});
 
     for (const modId in groupedByMod) {
+        // Busca as regras do mod se ainda não as tivermos em cache
         if (!modsRules[modId]) {
             const modRef = doc(db, 'mods', modId);
             const modSnap = await getDoc(modRef);
@@ -1220,20 +1228,31 @@ async function processGameMods(ronda) {
         }
         
         const modData = modsRules[modId];
-        if (!modData) continue;
+        if (!modData) continue; // Pula se o documento do mod não for encontrado
 
+        // Lógica específica para o mod "CRUSH BONES"
         if (modData.nomeMod === 'CRUSH BONES') {
             for (const pMod of groupedByMod[modId]) {
                 const jogadorId = pMod.userId;
-                const updatesForThisModDoc = {};
+                
+                // Prepara um novo array para a lógica "Read-Modify-Replace"
+                const selecoesComPontos = []; 
 
-                for (const jogoId in pMod.selecoes) {
-                    const aposta = pMod.selecoes[jogoId];
+                for (const aposta of pMod.selecoes) {
+                    const jogoId = aposta.jogoId;
                     const alvoUserId = aposta.copiedFromUserId;
                     const palpiteAlvoTexto = aposta.palpiteSelecionado;
                     
+                    // Cria uma cópia da seleção para preservar os dados originais
+                    const apostaAtualizada = { ...aposta };
+
                     const palpiteDoAlvo = allPalpitesDaRonda.find(p => p.userId === alvoUserId && p.jogoId === jogoId);
-                    if (!palpiteDoAlvo) continue;
+                    
+                    if (!palpiteDoAlvo) {
+                        // Preserva a seleção no array se o palpite do alvo não for encontrado
+                        selecoesComPontos.push(apostaAtualizada); 
+                        continue;
+                    }
 
                     let statusDoAlvo = null;
                     for (let i = 1; i <= 10; i++) {
@@ -1243,8 +1262,13 @@ async function processGameMods(ronda) {
                         }
                     }
 
-                    if (statusDoAlvo !== 'acerto' && statusDoAlvo !== 'falha') continue;
+                    if (statusDoAlvo !== 'acerto' && statusDoAlvo !== 'falha') {
+                        // Preserva a seleção no array se o status for neutro
+                        selecoesComPontos.push(apostaAtualizada);
+                        continue;
+                    }
 
+                    // Calcula os pontos com base no resultado do alvo
                     let pontosJogador = 0, pontosAlvo = 0;
                     if (statusDoAlvo === 'falha') {
                         pontosJogador = modData.regras.onAcerto.jogador;
@@ -1254,17 +1278,11 @@ async function processGameMods(ronda) {
                         pontosAlvo = modData.regras.onFalha.alvo;
                     }
 
-                    // --- INÍCIO DO BLOCO MODIFICADO ---
-                    // Prepara a atualização para ambos os campos no documento 'palpitesmods'
-                    const updatePathJogador = `selecoes.${jogoId}.pontosGanhosJogador`;
-                    updatesForThisModDoc[updatePathJogador] = pontosJogador;
-                    
-                    // A LINHA NOVA ESTÁ AQUI:
-                    const updatePathAlvo = `selecoes.${jogoId}.pontosGanhosJogadorAlvo`;
-                    updatesForThisModDoc[updatePathAlvo] = pontosAlvo;
-                    // --- FIM DO BLOCO MODIFICADO ---
+                    // Adiciona os pontos calculados à cópia da seleção
+                    apostaAtualizada.pontosGanhosJogador = pontosJogador;
+                    apostaAtualizada.pontosGanhosJogadorAlvo = pontosAlvo;
 
-
+                    // Cria um ID único para a transação para garantir idempotência
                     const transacaoModId = `${jogadorId}-${alvoUserId}-${jogoId}`;
                     const movQuery = query(collection(db, 'movimentos'), where("detalhes.transacaoModId", "==", transacaoModId));
                     const movSnapshot = await getDocs(movQuery);
@@ -1277,10 +1295,15 @@ async function processGameMods(ronda) {
                     };
 
                     if (movSnapshot.empty) {
+                        // Se o movimento não existe, cria-o
                         const movJogador = { userId: jogadorId, valorreal: pontosJogador, estado: "Mod Play", temporada: temporadaKey, ronda: ronda, movimentoData: serverTimestamp(), detalhes: commonDetails };
                         const movAlvo = { userId: alvoUserId, valorreal: pontosAlvo, estado: "Mod Play", temporada: temporadaKey, ronda: ronda, movimentoData: serverTimestamp(), detalhes: commonDetails };
-                        await Promise.all([addDoc(collection(db, 'movimentos'), movJogador), addDoc(collection(db, 'movimentos'), movAlvo)]);
+                        await Promise.all([
+                            addDoc(collection(db, 'movimentos'), movJogador),
+                            addDoc(collection(db, 'movimentos'), movAlvo)
+                        ]);
                     } else {
+                        // Se o movimento já existe, atualiza-o
                         const updatePromises = movSnapshot.docs.map(docSnap => {
                             const movData = docSnap.data();
                             const novoValor = movData.userId === jogadorId ? pontosJogador : pontosAlvo;
@@ -1288,17 +1311,22 @@ async function processGameMods(ronda) {
                         });
                         await Promise.all(updatePromises);
                     }
+                    
                     affectedUserIds.add(jogadorId);
                     affectedUserIds.add(alvoUserId);
+                    
+                    selecoesComPontos.push(apostaAtualizada);
                 }
 
-                if (Object.keys(updatesForThisModDoc).length > 0) {
-                    await updateDoc(doc(db, 'palpitesmods', pMod.id), updatesForThisModDoc);
-                    console.log(`Documento palpite mod ${pMod.id} atualizado com os resultados.`);
+                // Substitui o array de seleções antigo pelo novo com os pontos calculados
+                if (selecoesComPontos.length > 0) {
+                    await updateDoc(doc(db, 'palpitesmods', pMod.id), { selecoes: selecoesComPontos });
                 }
             }
         }
+        // Adicionar aqui blocos `else if (modData.nomeMod === 'OUTRO_MOD')` para outros mods
     }
+    
     return affectedUserIds;
 }
 
