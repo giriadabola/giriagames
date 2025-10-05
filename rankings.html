@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt">
 <head>
-    <meta charset="UTF-8">
+    <meta charset="UTF-A">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tabela Classificativa - Ggames</title>
         <link rel="icon" type="image/png" href="https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhTl6Ljabwgx-VXdZz8FcAoygQprujSsCoXc32Y_iU0FjYVPu1B6MffWwp8gcCVuV8TWn39FRk9OIe1nc-esubVJYmdLsTptAoR9GyqNuw4R5MBaeaoWXTc3JaqH2YVNtEmfReQqohvQKvHiI0XwE5na2ty2B9Bt4oELxYv2BaZ7R3UmeylpiVEiIbiLnCB/s320/soccer-ball-png.webp">
@@ -55,10 +55,7 @@
             font-weight: bold;
         }
 
-        /* Removed hover effect conflicting with gradient */
-        /* .rankings-table tr:hover {
-            background-color: rgba(255, 255, 255, 0.8) !important;
-        } */
+        .rankings-table tr:hover { background-color: #e9efff !important; } /* Added specific hover */
 
         .info-icon {
             margin-left: auto;
@@ -92,8 +89,6 @@
         .round-content { display: none; padding: 0 10px; margin-bottom: 15px; }
         .round-content.open { display: block; }
         .position-circle { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 50%; background-color: #2176ff; color: white; font-weight: bold; }
-        /* .rankings-table tr:nth-child(even) { background-color: #f8f9fa; } */ /* Removed to allow gradient */
-        .rankings-table tr:hover { background-color: #e9efff !important; } /* Added specific hover */
         .predictions-popup { display: none; position: fixed; z-index: 1002; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.4); }
         .popup-content { background-color: #fefefe; margin: 15% auto; padding: 20px; border: 1px solid #888; width: 80%; border-radius: 8px; box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2); position: relative; }
         .close-button { color: #aaa; position: absolute; top: 0; right: 0; font-size: 28px; font-weight: bold; padding: 10px; cursor: pointer; }
@@ -106,7 +101,7 @@
         #loading-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #f0f0f0; display: flex; justify-content: center; align-items: center; z-index: 1001; }
         .loading-spinner { border: 16px solid #f3f3f3; border-top: 16px solid #3498db; border-radius: 50%; width: 120px; height: 120px; animation: spin 2s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-    .toast-notification {
+        .toast-notification {
             position: fixed;
             left: 50%;
             bottom: 80px; /* Posicionado acima do menu inferior */
@@ -128,8 +123,6 @@
             visibility: visible;
             transform: translate(-50%, -10px); /* Efeito de deslizar para cima */
         }
-    
-    
     </style>
 </head>
 <body>
@@ -171,690 +164,601 @@
         </div>
     </div>
 
-
-     <div id="toast-notification" class="toast-notification"></div>
+    <div id="toast-notification" class="toast-notification"></div>
 
     <script src="config.js"></script>
     <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getFirestore, doc, getDoc, collection, getDocs, query, where, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, doc, getDoc, collection, getDocs, query, where, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
-         const app = initializeApp(firebaseConfig);
+        const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const auth = getAuth(app);
         const modCache = new Map();
-    const userCache = new Map();
-    const gameCache = new Map();
+        const userCache = new Map();
+        const gameCache = new Map();
 
-    const loadingScreen = document.getElementById('loading-screen');
-    const content = document.querySelector('.content');
-    const rankingsBody = document.getElementById('rankings-body');
-    let currentUserStatus = null; // Store user status (estatuto)
-    let toastTimeout; 
-    
+        const loadingScreen = document.getElementById('loading-screen');
+        const content = document.querySelector('.content');
+        const rankingsBody = document.getElementById('rankings-body');
+        let currentUserStatus = null; // Store user status (estatuto)
+        let toastTimeout; 
 
-    // --- Function to load Menu Settings ---
-    async function loadMenuSettings() {
-        try {
-            const menuSettingsDocRef = doc(db, 'paineis', 'paineis menu');
-            const docSnap = await getDoc(menuSettingsDocRef);
-            if (docSnap.exists()) {
-                return docSnap.data();
-            } else {
-                return null; // Return null if document doesn't exist
-            }
-        } catch (error) {
-            return null; // Return null on error
-        }
-    }
-
-    // --- Function to check page access based on status and menu settings ---
-    function checkPageAccess(userStatus, menuSettings) {
-        if (!menuSettings) {
-            // Default behavior if settings are missing: only ruler access
-            return userStatus === 'ruler';
-        }
-
-        const rankingsEnabled = menuSettings['rankings'] === 'on';
-
-        if (rankingsEnabled) {
-            return true; // Access granted if rankings are 'on'
-        } else {
-            // Access granted only if rankings are 'off' BUT user is 'ruler'
-            return userStatus === 'ruler';
-        }
-    }
-
- 
-
-// Função para buscar o nome do Mod
-    async function getModName(modId) {
-        if (modCache.has(modId)) {
-            return modCache.get(modId);
-        }
-        try {
-            const modDocRef = doc(db, 'mods', modId);
-            const modDocSnap = await getDoc(modDocRef);
-            if (modDocSnap.exists()) {
-                const modName = modDocSnap.data().nomeMod;
-                modCache.set(modId, modName); // Guarda em cache
-                return modName;
-            }
-        } catch (error) {
-            console.error("Erro ao buscar nome do mod:", error);
-        }
-        return 'Mod Desconhecido';
-    }
-
-    // Função para buscar o nome de tabela de um utilizador
-    async function getUserTableName(userId) {
-        if (userCache.has(userId)) {
-            return userCache.get(userId);
-        }
-        try {
-            const userDocRef = doc(db, 'users', userId);
-            const userDocSnap = await getDoc(userDocRef);
-            if (userDocSnap.exists()) {
-                const userName = userDocSnap.data().nometabela;
-                userCache.set(userId, userName); // Guarda em cache
-                return userName;
-            }
-        } catch (error) {
-            console.error("Erro ao buscar nometabela do user:", error);
-        }
-        return 'Utilizador Desconhecido';
-    }
-
-    // Função para buscar o nome de um jogo (assumindo que estão na coleção 'jogos')
-    async function getGameName(gameId) {
-        if (gameCache.has(gameId)) {
-            return gameCache.get(gameId);
-        }
-        try {
-            // Assumi que a coleção se chama 'jogos'. Altere se for diferente.
-            const gameDocRef = doc(db, 'jogos', gameId); 
-            const gameDocSnap = await getDoc(gameDocRef);
-            if (gameDocSnap.exists()) {
-                // Limpa o nome do jogo conforme pedido
-                const rawGameName = gameDocSnap.data().nomeJogo || '';
-                const cleanGameName = rawGameName.split(' - ')[0];
-                gameCache.set(gameId, cleanGameName); // Guarda em cache
-                return cleanGameName;
-            }
-        } catch (error) {
-            console.error("Erro ao buscar nome do jogo:", error);
-        }
-        return 'Jogo Desconhecido';
-    }
-
-
-
-    // --- Function to get User Status (estatuto) ---
-    async function getUserStatus(userId) {
-        try {
-            const userDocRef = doc(db, 'users', userId);
-            const docSnap = await getDoc(userDocRef);
-            if (docSnap.exists()) {
-                const userData = docSnap.data();
-                if (userData.aceite !== "Yes") {
-                    return null; // Treat as not valid if terms not accepted
+        // --- Function to load Menu Settings ---
+        async function loadMenuSettings() {
+            try {
+                const menuSettingsDocRef = doc(db, 'paineis', 'paineis menu');
+                const docSnap = await getDoc(menuSettingsDocRef);
+                if (docSnap.exists()) {
+                    return docSnap.data();
+                } else {
+                    return null; // Return null if document doesn't exist
                 }
-                return userData.estatuto || null; // Return estatuto or null if missing
-            } else {
-                return null; // User document doesn't exist
-            }
-        } catch (error) {
-            console.error('Error fetching user status:', error);
-            return null; // Return null on error
-        }
-    }
-
-    // --- Consolidated Authentication and Initialization Logic ---
-   onAuthStateChanged(auth, async (user) => {
-    if (user) {
-        // 1. Get User Status
-        currentUserStatus = await getUserStatus(user.uid);
-
-        if (currentUserStatus === null) {
-            window.location.href = '404.html';
-            return; // Stop further execution
-        }
-
-        // CÓDIGO NOVO PARA ATUALIZAR O ÚLTIMO ACESSO
-        try {
-            const userDocRef = doc(db, 'users', user.uid);
-            await updateDoc(userDocRef, {
-                ultimoacesso: serverTimestamp()
-            });
-        } catch (error) {
-            console.error("Erro ao atualizar o campo ultimoacesso: ", error);
-        }
-        // FIM DO CÓDIGO NOVO
-
-        // 2. Load Menu Settings
-        const menuSettings = await loadMenuSettings();
-
-        // 3. Check Page Access
-        const hasAccess = checkPageAccess(currentUserStatus, menuSettings);
-
-        if (hasAccess) {
-            // 4. Update Menu Visibility (only if user has access)
-            updateMenuVisibility(menuSettings);
-
-            // 5. Load Page Content (Rankings)
-            await loadSeasons(); // Load rankings data
-
-            // 6. Show Content and Hide Loader
-            loadingScreen.style.display = 'none';
-            content.style.display = 'block';
-        } else {
-            window.location.href = '404.html';
-        }
-
-    } else {
-        // User is signed out
-        loadingScreen.style.display = 'none'; // Hide loader before redirecting
-        window.location.href = 'index.html';
-    }
-});
-
-
- function showToast(message) {
-        const toast = document.getElementById('toast-notification');
-        if (!toast) return;
-
-        // Se já houver um toast visível, limpa o temporizador anterior
-        clearTimeout(toastTimeout);
-
-        toast.textContent = message;
-        toast.classList.add('show');
-
-        // Esconde o toast após 3 segundos
-        toastTimeout = setTimeout(() => {
-            toast.classList.remove('show');
-        }, 3000);
-    }
-
-
- function updateStatusIndicator(isPending) {
-        const indicator = document.getElementById('status-indicator');
-        if (indicator) {
-            // Remove qualquer evento de clique anterior para evitar duplicados
-            indicator.onclick = null;
-            indicator.style.cursor = 'default'; // Restaura o cursor padrão
-
-            if (isPending) {
-                indicator.innerHTML = '🟠 Tabela Pendente';
-                indicator.setAttribute('title', 'Ainda faltam atribuir pontos em alguns palpites.'); // Mantém para desktop hover
-                indicator.style.cursor = 'pointer'; // Muda o cursor para indicar que é clicável
-
-                // Adiciona o evento de clique para mostrar o toast
-                indicator.onclick = () => {
-                    showToast('Ainda faltam atribuir pontos em alguns palpites.');
-                };
-
-            } else {
-                indicator.innerHTML = '🟢 Tabela Atualizada';
-                indicator.removeAttribute('title');
+            } catch (error) {
+                return null; // Return null on error
             }
         }
-    }
 
-    // --- Função para verificar se existem palpites pendentes para uma época ---
-    async function checkPendingPredictionsStatus(season) {
-        try {
+        // --- Function to check page access based on status and menu settings ---
+        function checkPageAccess(userStatus, menuSettings) {
+            if (!menuSettings) {
+                // Default behavior if settings are missing: only ruler access
+                return userStatus === 'ruler';
+            }
+
+            const rankingsEnabled = menuSettings['rankings'] === 'on';
+
+            if (rankingsEnabled) {
+                return true; // Access granted if rankings are 'on'
+            } else {
+                // Access granted only if rankings are 'off' BUT user is 'ruler'
+                return userStatus === 'ruler';
+            }
+        }
+
+        // Função para buscar o nome do Mod
+        async function getModName(modId) {
+            if (modCache.has(modId)) {
+                return modCache.get(modId);
+            }
+            try {
+                const modDocRef = doc(db, 'mods', modId);
+                const modDocSnap = await getDoc(modDocRef);
+                if (modDocSnap.exists()) {
+                    const modName = modDocSnap.data().nomeMod;
+                    modCache.set(modId, modName); // Guarda em cache
+                    return modName;
+                }
+            } catch (error) {
+                console.error("Erro ao buscar nome do mod:", error);
+            }
+            return 'Mod Desconhecido';
+        }
+
+        // Função para buscar o nome de tabela de um utilizador
+        async function getUserTableName(userId) {
+            if (userCache.has(userId)) {
+                return userCache.get(userId);
+            }
+            try {
+                const userDocRef = doc(db, 'users', userId);
+                const userDocSnap = await getDoc(userDocRef);
+                if (userDocSnap.exists()) {
+                    const userName = userDocSnap.data().nometabela;
+                    userCache.set(userId, userName); // Guarda em cache
+                    return userName;
+                }
+            } catch (error) {
+                console.error("Erro ao buscar nometabela do user:", error);
+            }
+            return 'Utilizador Desconhecido';
+        }
+
+        // Função para buscar o nome de um jogo (assumindo que estão na coleção 'jogos')
+        async function getGameName(gameId) {
+            if (!gameId) return 'Jogo Inválido'; // Adiciona uma verificação
+            if (gameCache.has(gameId)) {
+                return gameCache.get(gameId);
+            }
+            try {
+                const gameDocRef = doc(db, 'jogos', gameId); 
+                const gameDocSnap = await getDoc(gameDocRef);
+                if (gameDocSnap.exists()) {
+                    const rawGameName = gameDocSnap.data().nomeJogo || '';
+                    const cleanGameName = rawGameName.split(' - ')[0];
+                    gameCache.set(gameId, cleanGameName); // Guarda em cache
+                    return cleanGameName;
+                }
+            } catch (error) {
+                console.error("Erro ao buscar nome do jogo:", error);
+            }
+            return 'Jogo Desconhecido';
+        }
+
+        // --- Function to get User Status (estatuto) ---
+        async function getUserStatus(userId) {
+            try {
+                const userDocRef = doc(db, 'users', userId);
+                const docSnap = await getDoc(userDocRef);
+                if (docSnap.exists()) {
+                    const userData = docSnap.data();
+                    if (userData.aceite !== "Yes") {
+                        return null; // Treat as not valid if terms not accepted
+                    }
+                    return userData.estatuto || null; // Return estatuto or null if missing
+                } else {
+                    return null; // User document doesn't exist
+                }
+            } catch (error) {
+                console.error('Error fetching user status:', error);
+                return null; // Return null on error
+            }
+        }
+
+        // --- Consolidated Authentication and Initialization Logic ---
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                currentUserStatus = await getUserStatus(user.uid);
+                if (currentUserStatus === null) {
+                    window.location.href = '404.html';
+                    return;
+                }
+
+                try {
+                    const userDocRef = doc(db, 'users', user.uid);
+                    await updateDoc(userDocRef, {
+                        ultimoacesso: serverTimestamp()
+                    });
+                } catch (error) {
+                    console.error("Erro ao atualizar o campo ultimoacesso: ", error);
+                }
+
+                const menuSettings = await loadMenuSettings();
+                const hasAccess = checkPageAccess(currentUserStatus, menuSettings);
+
+                if (hasAccess) {
+                    updateMenuVisibility(menuSettings);
+                    await loadSeasons();
+                    loadingScreen.style.display = 'none';
+                    content.style.display = 'block';
+                } else {
+                    window.location.href = '404.html';
+                }
+            } else {
+                loadingScreen.style.display = 'none';
+                window.location.href = 'index.html';
+            }
+        });
+
+        function showToast(message) {
+            const toast = document.getElementById('toast-notification');
+            if (!toast) return;
+            clearTimeout(toastTimeout);
+            toast.textContent = message;
+            toast.classList.add('show');
+            toastTimeout = setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+
+        function updateStatusIndicator(isPending) {
+            const indicator = document.getElementById('status-indicator');
+            if (indicator) {
+                indicator.onclick = null;
+                indicator.style.cursor = 'default';
+                if (isPending) {
+                    indicator.innerHTML = '🟠 Tabela Pendente';
+                    indicator.setAttribute('title', 'Ainda faltam atribuir pontos em alguns palpites.');
+                    indicator.style.cursor = 'pointer';
+                    indicator.onclick = () => {
+                        showToast('Ainda faltam atribuir pontos em alguns palpites.');
+                    };
+                } else {
+                    indicator.innerHTML = '🟢 Tabela Atualizada';
+                    indicator.removeAttribute('title');
+                }
+            }
+        }
+
+        async function checkPendingPredictionsStatus(season) {
+            try {
+                const palpitesRef = collection(db, 'palpites');
+                const q = query(palpitesRef,
+                    where('temporada', '==', season),
+                    where('Analisado', '!=', 'Sim')
+                );
+                const querySnapshot = await getDocs(q);
+                return !querySnapshot.empty;
+            } catch (error) {
+                console.error("Erro ao verificar o status dos palpites:", error);
+                return true;
+            }
+        }
+
+        async function loadSeasons() {
             const palpitesRef = collection(db, 'palpites');
-            // A consulta procura por palpites na época especificada
-            // onde o campo 'Analisado' NÃO é igual a "Sim".
-            const q = query(palpitesRef,
-                where('temporada', '==', season),
-                where('Analisado', '!=', 'Sim')
-            );
-            const querySnapshot = await getDocs(q);
-            // Se a querySnapshot não estiver vazia, significa que há palpites pendentes.
-            return !querySnapshot.empty;
-        } catch (error) {
-            console.error("Erro ao verificar o status dos palpites:", error);
-            // Em caso de erro, assume-se que está pendente por segurança.
-            return true;
+            const palpitesSnap = await getDocs(palpitesRef);
+            const seasons = new Set();
+
+            palpitesSnap.forEach(doc => {
+                const temporada = doc.data().temporada;
+                if (temporada) seasons.add(temporada);
+            });
+
+            const sortedSeasons = Array.from(seasons).sort((a, b) => b.localeCompare(a));
+
+            if (sortedSeasons.length > 0) {
+                const mostRecentSeason = sortedSeasons[0];
+                const isPending = await checkPendingPredictionsStatus(mostRecentSeason);
+                updateStatusIndicator(isPending);
+                await loadRankings(mostRecentSeason);
+            } else {
+                rankingsBody.innerHTML = '<tr><td colspan="4">Sem épocas disponíveis.</td></tr>';
+                document.getElementById('status-indicator').style.display = 'none';
+            }
         }
-    }
 
-    // --- Load Seasons and Rankings (No changes needed here) ---
-  async function loadSeasons() {
-        const palpitesRef = collection(db, 'palpites');
-        const palpitesSnap = await getDocs(palpitesRef);
-        const seasons = new Set();
+        async function loadRankings(season) {
+            const usersRef = collection(db, 'users');
+            const usersSnap = await getDocs(usersRef);
+            const rankings = [];
 
-        palpitesSnap.forEach(doc => {
-            const temporada = doc.data().temporada;
-            if (temporada) seasons.add(temporada);
-        });
+            usersSnap.forEach(userDoc => {
+                const userData = userDoc.data();
+                if (userData.aceite === "Yes" && userData.estatuto && userData.natabela === "Yes") {
+                    const seasonPointsKey = season.replace('/', '') + 'Pontos';
+                    const seasonPoints = userData[seasonPointsKey] || 0;
+                    rankings.push({
+                        userId: userDoc.id,
+                        username: userData.nometabela || 'Utilizador Desconhecido',
+                        points: seasonPoints
+                    });
+                }
+            });
 
-        const sortedSeasons = Array.from(seasons).sort((a, b) => b.localeCompare(a));
+            rankings.sort((a, b) => b.points - a.points);
+            rankingsBody.innerHTML = '';
 
-        if (sortedSeasons.length > 0) {
-            const mostRecentSeason = sortedSeasons[0];
+            const totalUsers = rankings.length;
+            if (totalUsers === 0) {
+                rankingsBody.innerHTML = '<tr><td colspan="4">Sem jogadores classificados para esta época.</td></tr>';
+                return;
+            }
 
-            // --- CÓDIGO DE INTEGRAÇÃO ADICIONADO AQUI ---
-            // 1. Verifica o status dos palpites para a época mais recente.
-            const isPending = await checkPendingPredictionsStatus(mostRecentSeason);
-            // 2. Atualiza o texto e o emoji na interface.
-            updateStatusIndicator(isPending);
-            // --- FIM DA INTEGRAÇÃO ---
+            rankings.forEach((rank, index) => {
+                const row = document.createElement('tr');
+                const position = index + 1;
+                const positionCell = document.createElement('td');
+                const playerCell = document.createElement('td');
+                const pointsCell = document.createElement('td');
+                const infoCell = document.createElement('td');
 
-            await loadRankings(mostRecentSeason);
-        } else {
-            rankingsBody.innerHTML = '<tr><td colspan="4">Sem épocas disponíveis.</td></tr>';
-            // Esconde o indicador se não houver épocas
-            document.getElementById('status-indicator').style.display = 'none';
+                const percentage = totalUsers > 1 ? position / totalUsers : 0;
+                let backgroundColor;
+                if (percentage <= 0.33) {
+                    const factor = percentage / 0.33;
+                    const green = Math.floor(200 - 100 * factor);
+                    backgroundColor = `rgba(50, ${green}, 50, 0.2)`;
+                } else if (percentage <= 0.67) {
+                    const factor = (percentage - 0.33) / 0.34;
+                    const yellowComp = Math.floor(200 - 100 * factor);
+                    backgroundColor = `rgba(${yellowComp}, ${yellowComp}, 50, 0.2)`;
+                } else {
+                    const factor = (percentage - 0.67) / 0.33;
+                    const red = Math.floor(200 - 100 * factor);
+                    backgroundColor = `rgba(${red}, 50, 50, 0.2)`;
+                }
+
+                positionCell.innerHTML = `<div class="position-circle">${position}</div>`;
+                playerCell.innerHTML = `<span>${rank.username}</span>`;
+                pointsCell.textContent = rank.points;
+                infoCell.innerHTML = `<i class="fas fa-info-circle info-icon" data-userid="${rank.userId}" data-season="${season}"></i>`;
+                row.style.backgroundColor = backgroundColor;
+                row.appendChild(positionCell);
+                row.appendChild(playerCell);
+                row.appendChild(pointsCell);
+                row.appendChild(infoCell);
+                const infoIcon = infoCell.querySelector('.info-icon');
+                infoIcon.addEventListener('click', () => togglePredictions(rank.userId, season));
+                rankingsBody.appendChild(row);
+            });
         }
-    }
 
-async function loadRankings(season) {
-        const usersRef = collection(db, 'users');
-        const usersSnap = await getDocs(usersRef);
-        const rankings = [];
+        let selectedRounds = {};
 
-        usersSnap.forEach(userDoc => {
-            const userData = userDoc.data();
-            
-            // As condições para aparecer na tabela permanecem as mesmas
-            if (userData.aceite === "Yes" && userData.estatuto && userData.natabela === "Yes") {
-                const seasonPointsKey = season.replace('/', '') + 'Pontos'; // e.g., 20232024Pontos
-                const seasonPoints = userData[seasonPointsKey] || 0;
-                
-                rankings.push({
-                    userId: userDoc.id,
-                    // ### ALTERAÇÃO APLICADA AQUI ###
-                    // O nome do jogador agora vem do campo 'nometabela'.
-                    username: userData.nometabela || 'Utilizador Desconhecido',
-                    points: seasonPoints
+        async function togglePredictions(userId, season) {
+            const popup = document.getElementById('predictions-popup');
+            const popupBody = document.getElementById('popup-predictions-body');
+            const roundFilter = document.getElementById('round-filter');
+
+            popupBody.innerHTML = 'A carregar previsões...';
+            popup.style.display = "block";
+
+            try {
+                const palpitesRef = collection(db, 'palpites');
+                const q = query(palpitesRef, where('userId', '==', userId), where('temporada', '==', season));
+                const palpitesSnap = await getDocs(q);
+
+                const modPalpitesRef = collection(db, 'palpitesmods');
+                const attacksMadeQuery = query(modPalpitesRef, where('userId', '==', userId), where('temporada', '==', season));
+                const attacksMadeSnap = await getDocs(attacksMadeQuery);
+
+                const attacksMadeByRound = new Map();
+                attacksMadeSnap.forEach(doc => {
+                    const data = doc.data();
+                    if (data.ronda) {
+                        attacksMadeByRound.set(String(data.ronda), { id: doc.id, ...data });
+                    }
                 });
-             }
-        });
 
-        rankings.sort((a, b) => b.points - a.points);
-        rankingsBody.innerHTML = '';
-
-        const totalUsers = rankings.length;
-        if (totalUsers === 0) {
-             rankingsBody.innerHTML = '<tr><td colspan="4">Sem jogadores classificados para esta época.</td></tr>';
-             return;
-        }
-
-
-        rankings.forEach((rank, index) => {
-            const row = document.createElement('tr');
-            const position = index + 1;
-            const positionCell = document.createElement('td');
-            const playerCell = document.createElement('td');
-            const pointsCell = document.createElement('td');
-            const infoCell = document.createElement('td');
-
-            const percentage = totalUsers > 1 ? position / totalUsers : 0;
-
-            let backgroundColor;
-            if (percentage <= 0.33) {
-                const factor = percentage / 0.33;
-                const green = Math.floor(200 - 100 * factor);
-                backgroundColor = `rgba(50, ${green}, 50, 0.2)`;
-            } else if (percentage <= 0.67) {
-                 const factor = (percentage - 0.33) / 0.34;
-                 const yellowComp = Math.floor(200 - 100 * factor);
-                 backgroundColor = `rgba(${yellowComp}, ${yellowComp}, 50, 0.2)`;
-            } else {
-                 const factor = (percentage - 0.67) / 0.33;
-                 const red = Math.floor(200 - 100 * factor);
-                 backgroundColor = `rgba(${red}, 50, 50, 0.2)`;
-            }
-
-
-            positionCell.innerHTML = `<div class="position-circle">${position}</div>`;
-            // O 'rank.username' aqui já virá da propriedade 'nometabela' definida acima
-            playerCell.innerHTML = `<span>${rank.username}</span>`;
-            pointsCell.textContent = rank.points;
-            infoCell.innerHTML = `<i class="fas fa-info-circle info-icon" data-userid="${rank.userId}" data-season="${season}"></i>`;
-
-            row.style.backgroundColor = backgroundColor;
-
-
-            row.appendChild(positionCell);
-            row.appendChild(playerCell);
-            row.appendChild(pointsCell);
-            row.appendChild(infoCell);
-
-            const infoIcon = infoCell.querySelector('.info-icon');
-            infoIcon.addEventListener('click', () => togglePredictions(rank.userId, season));
-
-            rankingsBody.appendChild(row);
-        });
-    }
-
-
-    // --- Toggle Predictions Popup Logic (Unchanged, but ensure Firestore queries are correct) ---
-    let selectedRounds = {}; // Store selected round per user/season key
-
-async function togglePredictions(userId, season) {
-    const popup = document.getElementById('predictions-popup');
-    const popupBody = document.getElementById('popup-predictions-body');
-    const roundFilter = document.getElementById('round-filter');
-
-    popupBody.innerHTML = 'A carregar previsões...';
-    popup.style.display = "block";
-
-    try {
-        // 1. Buscar palpites normais
-        const palpitesRef = collection(db, 'palpites');
-        const q = query(palpitesRef, where('userId', '==', userId), where('temporada', '==', season));
-        const palpitesSnap = await getDocs(q);
-
-        // 2. Buscar os MODS onde o user ATACA
-        const modPalpitesRef = collection(db, 'palpitesmods');
-        const attacksMadeQuery = query(modPalpitesRef, where('userId', '==', userId), where('temporada', '==', season));
-        const attacksMadeSnap = await getDocs(attacksMadeQuery);
-
-        const attacksMadeByRound = new Map();
-        attacksMadeSnap.forEach(doc => {
-            const data = doc.data();
-            if (data.ronda) {
-                attacksMadeByRound.set(String(data.ronda), { id: doc.id, ...data });
-            }
-        });
-
-        // 3. Buscar os MODS onde o user é ALVO
-        const allModsQuery = query(modPalpitesRef, where('temporada', '==', season));
-        const allModsSnap = await getDocs(allModsQuery);
-        
-        const attacksReceivedByRound = new Map();
-        allModsSnap.forEach(doc => {
-            const modData = doc.data();
-            if (modData.selecoes) {
-                for (const gameId in modData.selecoes) {
-                    const selection = modData.selecoes[gameId];
-                    if (selection.copiedFromUserId === userId) {
-                        const roundStr = String(modData.ronda);
-                        if (!attacksReceivedByRound.has(roundStr)) {
-                            attacksReceivedByRound.set(roundStr, []);
+                const allModsQuery = query(modPalpitesRef, where('temporada', '==', season));
+                const allModsSnap = await getDocs(allModsQuery);
+                const attacksReceivedByRound = new Map();
+                
+                allModsSnap.forEach(doc => {
+                    const modData = doc.data();
+                    if (modData.selecoes) {
+                        // ### INÍCIO DA CORREÇÃO 1 ###
+                        for (const key in modData.selecoes) {
+                            const selection = modData.selecoes[key];
+                            if (selection.copiedFromUserId === userId) {
+                                const roundStr = String(modData.ronda);
+                                if (!attacksReceivedByRound.has(roundStr)) {
+                                    attacksReceivedByRound.set(roundStr, []);
+                                }
+                                attacksReceivedByRound.get(roundStr).push({
+                                    attackerUserId: modData.userId,
+                                    modId: modData.modId,
+                                    ronda: modData.ronda,
+                                    gameId: selection.jogoId, // Correção: Usa o campo 'jogoId'
+                                    selection: selection
+                                });
+                            }
                         }
-                        attacksReceivedByRound.get(roundStr).push({
-                            attackerUserId: modData.userId,
-                            modId: modData.modId,
-                            ronda: modData.ronda,
-                            gameId: gameId,
-                            selection: selection
-                        });
+                        // ### FIM DA CORREÇÃO 1 ###
                     }
+                });
+
+                const predictions = [];
+                const rounds = new Set();
+                palpitesSnap.forEach(doc => {
+                    const data = doc.data();
+                    predictions.push({ ...data, id: doc.id, timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : new Date(0) });
+                    if (data.ronda) rounds.add(String(data.ronda));
+                });
+                attacksMadeByRound.forEach((mod) => rounds.add(String(mod.ronda)));
+                attacksReceivedByRound.forEach((attacks, round) => rounds.add(round));
+
+                const sortedRounds = Array.from(rounds).sort((a, b) => parseInt(a) - parseInt(b));
+                const userSeasonKey = `${userId}-${season}`;
+                const currentSelection = selectedRounds[userSeasonKey] || '';
+                roundFilter.innerHTML = '<option value="">Todas as Rondas</option>';
+                sortedRounds.forEach(round => {
+                    const option = document.createElement('option');
+                    option.value = round;
+                    option.textContent = `Ronda ${round}`;
+                    if (String(currentSelection) === String(round)) { option.selected = true; }
+                    roundFilter.appendChild(option);
+                });
+                roundFilter.value = currentSelection;
+
+                const selectedRound = roundFilter.value;
+                const filteredPredictions = selectedRound ? predictions.filter(p => String(p.ronda) === selectedRound) : predictions;
+                const predictionsByRound = {};
+                filteredPredictions.forEach(prediction => {
+                    const round = prediction.ronda || 'Desconhecida';
+                    if (!predictionsByRound[round]) { predictionsByRound[round] = []; }
+                    predictionsByRound[round].push(prediction);
+                });
+                const allRoundsInView = new Set();
+                if (selectedRound) {
+                    allRoundsInView.add(selectedRound);
+                } else {
+                    sortedRounds.forEach(r => allRoundsInView.add(r));
                 }
-            }
-        });
 
-        // --- Lógica de preparação de dados ---
-        const predictions = [];
-        const rounds = new Set();
-        palpitesSnap.forEach(doc => {
-            const data = doc.data();
-            predictions.push({ ...data, id: doc.id, timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : new Date(0) });
-            if (data.ronda) rounds.add(String(data.ronda));
-        });
-        attacksMadeByRound.forEach((mod) => rounds.add(String(mod.ronda)));
-        attacksReceivedByRound.forEach((attacks, round) => rounds.add(round));
-
-        const sortedRounds = Array.from(rounds).sort((a, b) => parseInt(a) - parseInt(b));
-        const userSeasonKey = `${userId}-${season}`;
-        const currentSelection = selectedRounds[userSeasonKey] || '';
-        roundFilter.innerHTML = '<option value="">Todas as Rondas</option>';
-        sortedRounds.forEach(round => {
-            const option = document.createElement('option');
-            option.value = round;
-            option.textContent = `Ronda ${round}`;
-            if (String(currentSelection) === String(round)) { option.selected = true; }
-            roundFilter.appendChild(option);
-        });
-        roundFilter.value = currentSelection;
-
-        const selectedRound = roundFilter.value;
-        const filteredPredictions = selectedRound
-            ? predictions.filter(p => String(p.ronda) === selectedRound)
-            : predictions;
-
-        const predictionsByRound = {};
-        filteredPredictions.forEach(prediction => {
-            const round = prediction.ronda || 'Desconhecida';
-            if (!predictionsByRound[round]) { predictionsByRound[round] = []; }
-            predictionsByRound[round].push(prediction);
-        });
-        
-        const allRoundsInView = new Set();
-        if (selectedRound) {
-            allRoundsInView.add(selectedRound);
-        } else {
-            sortedRounds.forEach(r => allRoundsInView.add(r));
-        }
-
-        // ### ALTERADO: Lógica de cálculo de totais de pontos por ronda ###
-        const roundStats = {};
-        for (const round of allRoundsInView) {
-            let totalPoints = 0;
-            let isPending = false;
-            
-            // 1. Calcula pontos dos jogos normais
-            const currentRoundPredictions = predictionsByRound[round] || [];
-            for (const prediction of currentRoundPredictions) {
-                if (prediction.Analisado !== "Sim") {
-                    isPending = true;
-                    break;
-                }
-                for (let i = 1; i <= 10; i++) {
-                    totalPoints += prediction[`Palpite${i}PontosGanhos`] || 0;
-                }
-            }
-            if (isPending) {
-                roundStats[round] = { text: '[em análise]' };
-                continue; // Pula para a próxima ronda, já que está pendente
-            }
-
-            // 2. Adiciona pontos dos ATAQUES FEITOS
-            const attackMadeData = attacksMadeByRound.get(round);
-            if (attackMadeData) {
-                for (const gameId in attackMadeData.selecoes) {
-                    const selection = attackMadeData.selecoes[gameId];
-                    if (selection.hasOwnProperty('pontosGanhosJogador')) {
-                        totalPoints += selection.pontosGanhosJogador || 0;
-                    } else {
-                        isPending = true;
-                        break;
-                    }
-                }
-            }
-            if (isPending) {
-                roundStats[round] = { text: '[em análise]' };
-                continue;
-            }
-
-            // 3. Adiciona pontos dos ATAQUES SOFRIDOS
-            const attacksReceivedData = attacksReceivedByRound.get(round);
-            if (attacksReceivedData) {
-                for (const attack of attacksReceivedData) {
-                    if (attack.selection.hasOwnProperty('pontosGanhosJogadorAlvo')) {
-                        totalPoints += attack.selection.pontosGanhosJogadorAlvo || 0;
-                    } else {
-                        isPending = true;
-                        break;
-                    }
-                }
-            }
-
-            // 4. Define o texto final com a soma total
-            if (isPending) {
-                roundStats[round] = { text: '[em análise]' };
-            } else {
-                roundStats[round] = { text: `[${totalPoints} gPoints]` };
-            }
-        }
-        
-        // --- Lógica de renderização (sem alterações) ---
-        let predictionsHTML = '';
-        const displaySortedRounds = Array.from(allRoundsInView).sort((a, b) => parseInt(b) - parseInt(a));
-
-        if (displaySortedRounds.length === 0) {
-            predictionsHTML = 'Nenhuma previsão encontrada para esta seleção.';
-        } else {
-            const roundToOpen = selectedRound || displaySortedRounds[0];
-
-            for (const round of displaySortedRounds) {
-                let hasContent = false;
-                const isOpen = String(round) === String(roundToOpen);
-                const roundPredictions = predictionsByRound[round] || [];
-                let roundContentHTML = '';
-
-                if (roundPredictions.length > 0) {
-                    hasContent = true;
-                    roundPredictions.sort((a, b) => a.timestamp - b.timestamp).forEach(prediction => {
-                        let palpitesHTML = '';
+                const roundStats = {};
+                for (const round of allRoundsInView) {
+                    let totalPoints = 0;
+                    let isPending = false;
+                    const currentRoundPredictions = predictionsByRound[round] || [];
+                    for (const prediction of currentRoundPredictions) {
+                        if (prediction.Analisado !== "Sim") {
+                            isPending = true;
+                            break;
+                        }
                         for (let i = 1; i <= 10; i++) {
-                            if (prediction[`palpite${i}`]) {
+                            totalPoints += prediction[`Palpite${i}PontosGanhos`] || 0;
+                        }
+                    }
+                    if (isPending) {
+                        roundStats[round] = { text: '[em análise]' };
+                        continue;
+                    }
+                    const attackMadeData = attacksMadeByRound.get(round);
+                    if (attackMadeData) {
+                        for (const key in attackMadeData.selecoes) {
+                            const selection = attackMadeData.selecoes[key];
+                            if (selection.hasOwnProperty('pontosGanhosJogador')) {
+                                totalPoints += selection.pontosGanhosJogador || 0;
+                            } else {
+                                isPending = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (isPending) {
+                        roundStats[round] = { text: '[em análise]' };
+                        continue;
+                    }
+                    const attacksReceivedData = attacksReceivedByRound.get(round);
+                    if (attacksReceivedData) {
+                        for (const attack of attacksReceivedData) {
+                            if (attack.selection.hasOwnProperty('pontosGanhosJogadorAlvo')) {
+                                totalPoints += attack.selection.pontosGanhosJogadorAlvo || 0;
+                            } else {
+                                isPending = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (isPending) {
+                        roundStats[round] = { text: '[em análise]' };
+                    } else {
+                        roundStats[round] = { text: `[${totalPoints} gPoints]` };
+                    }
+                }
+
+                let predictionsHTML = '';
+                const displaySortedRounds = Array.from(allRoundsInView).sort((a, b) => parseInt(b) - parseInt(a));
+                if (displaySortedRounds.length === 0) {
+                    predictionsHTML = 'Nenhuma previsão encontrada para esta seleção.';
+                } else {
+                    const roundToOpen = selectedRound || displaySortedRounds[0];
+                    for (const round of displaySortedRounds) {
+                        let hasContent = false;
+                        const isOpen = String(round) === String(roundToOpen);
+                        const roundPredictions = predictionsByRound[round] || [];
+                        let roundContentHTML = '';
+                        if (roundPredictions.length > 0) {
+                            hasContent = true;
+                            roundPredictions.sort((a, b) => a.timestamp - b.timestamp).forEach(prediction => {
+                                let palpitesHTML = '';
+                                for (let i = 1; i <= 10; i++) {
+                                    if (prediction[`palpite${i}`]) {
+                                        let pointsContent = '';
+                                        if (prediction.Analisado === "Sim") {
+                                            const points = prediction[`Palpite${i}PontosGanhos`] || 0;
+                                            const pointsClass = points > 0 ? 'prediction-points' : 'prediction-points-negative';
+                                            pointsContent = `<span class="${pointsClass}">(${points} pts)</span>`;
+                                        } else {
+                                            pointsContent = `<span class="in-analysis"><em>(em análise)</em></span>`;
+                                        }
+                                        palpitesHTML += `<div class="prediction-item">→ ${prediction[`palpite${i}`]} ${pointsContent}</div>`;
+                                    }
+                                }
+                                if (palpitesHTML) {
+                                    roundContentHTML += `<div class="game-header">${prediction.nomeJogo || 'Jogo Desconhecido'}</div>${palpitesHTML}`;
+                                }
+                            });
+                        }
+                        
+                        // ### INÍCIO DA CORREÇÃO 2 ###
+                        const attackMadeData = attacksMadeByRound.get(round);
+                        if (attackMadeData) {
+                            hasContent = true;
+                            let modHTML = '';
+                            const modName = await getModName(attackMadeData.modId);
+                            modHTML += `<div class="game-header" style="margin-top: 20px; border-top: 1px solid #ccc; padding-top: 10px; color: #E67E22;">Mod: ${modName} | Ataque | Ronda ${attackMadeData.ronda}</div>`;
+
+                            for (const key in attackMadeData.selecoes) {
+                                const selection = attackMadeData.selecoes[key];
+                                const jogoId = selection.jogoId;
+                                const targetUserName = await getUserTableName(selection.copiedFromUserId);
+                                const gameName = await getGameName(jogoId);
+                                
                                 let pointsContent = '';
-                                if (prediction.Analisado === "Sim") {
-                                    const points = prediction[`Palpite${i}PontosGanhos`] || 0;
+                                if (selection.hasOwnProperty('pontosGanhosJogador')) {
+                                    const points = selection.pontosGanhosJogador;
                                     const pointsClass = points > 0 ? 'prediction-points' : 'prediction-points-negative';
                                     pointsContent = `<span class="${pointsClass}">(${points} pts)</span>`;
                                 } else {
                                     pointsContent = `<span class="in-analysis"><em>(em análise)</em></span>`;
                                 }
-                                palpitesHTML += `<div class="prediction-item">→ ${prediction[`palpite${i}`]} ${pointsContent}</div>`;
+
+                                modHTML += `<div class="prediction-item">→ Atacou: ${targetUserName} | ${gameName} | ${selection.palpiteSelecionado} ${pointsContent}</div>`;
                             }
+                            roundContentHTML += modHTML;
                         }
-                        if (palpitesHTML) {
-                            roundContentHTML += `<div class="game-header">${prediction.nomeJogo || 'Jogo Desconhecido'}</div>${palpitesHTML}`;
+                        // ### FIM DA CORREÇÃO 2 ###
+
+                        const attacksReceivedData = attacksReceivedByRound.get(round);
+                        if (attacksReceivedData) {
+                            hasContent = true;
+                            let modHTML = '';
+                            const firstAttack = attacksReceivedData[0];
+                            const modName = await getModName(firstAttack.modId);
+                            modHTML += `<div class="game-header" style="margin-top: 20px; border-top: 1px solid #ccc; padding-top: 10px; color: #E67E22;">Mod: ${modName} | Defesa | Ronda ${firstAttack.ronda}</div>`;
+
+                            for (const attack of attacksReceivedData) {
+                                const attackerName = await getUserTableName(attack.attackerUserId);
+                                const gameName = await getGameName(attack.gameId);
+
+                                let pointsContent = '';
+                                if (attack.selection.hasOwnProperty('pontosGanhosJogadorAlvo')) {
+                                    const points = attack.selection.pontosGanhosJogadorAlvo;
+                                    const pointsClass = points > 0 ? 'prediction-points' : 'prediction-points-negative';
+                                    pointsContent = `<span class="${pointsClass}">(${points} pts)</span>`;
+                                } else {
+                                    pointsContent = `<span class="in-analysis"><em>(em análise)</em></span>`;
+                                }
+
+                                modHTML += `<div class="prediction-item">→ Alvo de: ${attackerName} | ${gameName} | ${attack.selection.palpiteSelecionado} ${pointsContent}</div>`;
+                            }
+                            roundContentHTML += modHTML;
                         }
-                    });
-                }
-
-                const attackMadeData = attacksMadeByRound.get(round);
-                if (attackMadeData) {
-                    hasContent = true;
-                    let modHTML = '';
-                    const modName = await getModName(attackMadeData.modId);
-                    modHTML += `<div class="game-header" style="margin-top: 20px; border-top: 1px solid #ccc; padding-top: 10px; color: #E67E22;">Mod: ${modName} | Ataque | Ronda ${attackMadeData.ronda}</div>`;
-
-                    for (const gameId in attackMadeData.selecoes) {
-                        const selection = attackMadeData.selecoes[gameId];
-                        const targetUserName = await getUserTableName(selection.copiedFromUserId);
-                        const gameName = await getGameName(gameId);
                         
-                        let pointsContent = '';
-                        if (selection.hasOwnProperty('pontosGanhosJogador')) {
-                            const points = selection.pontosGanhosJogador;
-                            const pointsClass = points > 0 ? 'prediction-points' : 'prediction-points-negative';
-                            pointsContent = `<span class="${pointsClass}">(${points} pts)</span>`;
-                        } else {
-                            pointsContent = `<span class="in-analysis"><em>(em análise)</em></span>`;
+                        if (hasContent) {
+                            const roundInfoText = roundStats[round] ? roundStats[round].text : '';
+                            predictionsHTML += `
+                                <div class="round-section">
+                                    <div class="round-header" data-round="${round}">
+                                        <div style="display: flex; align-items: baseline; gap: 8px;">
+                                            <span>Ronda ${round}</span>
+                                            <span style="font-style: italic; font-size: 0.7em; font-weight: normal;">${roundInfoText}</span>
+                                        </div>
+                                        <span class="toggle-arrow ${isOpen ? 'open' : ''}">▶</span>
+                                    </div>
+                                    <div class="round-content ${isOpen ? 'open' : ''}">
+                                        ${roundContentHTML}
+                                    </div>
+                                </div>
+                            `;
                         }
-
-                        modHTML += `<div class="prediction-item">→ Atacou: ${targetUserName} | ${gameName} | ${selection.palpiteSelecionado} ${pointsContent}</div>`;
                     }
-                    roundContentHTML += modHTML;
-                }
-
-                const attacksReceivedData = attacksReceivedByRound.get(round);
-                if (attacksReceivedData) {
-                    hasContent = true;
-                    let modHTML = '';
-                    const firstAttack = attacksReceivedData[0];
-                    const modName = await getModName(firstAttack.modId);
-                    modHTML += `<div class="game-header" style="margin-top: 20px; border-top: 1px solid #ccc; padding-top: 10px; color: #E67E22;">Mod: ${modName} | Defesa | Ronda ${firstAttack.ronda}</div>`;
-
-                    for (const attack of attacksReceivedData) {
-                         const attackerName = await getUserTableName(attack.attackerUserId);
-                         const gameName = await getGameName(attack.gameId);
-
-                         let pointsContent = '';
-                         if (attack.selection.hasOwnProperty('pontosGanhosJogadorAlvo')) {
-                            const points = attack.selection.pontosGanhosJogadorAlvo;
-                            const pointsClass = points > 0 ? 'prediction-points' : 'prediction-points-negative';
-                            pointsContent = `<span class="${pointsClass}">(${points} pts)</span>`;
-                        } else {
-                            pointsContent = `<span class="in-analysis"><em>(em análise)</em></span>`;
-                        }
-
-                        modHTML += `<div class="prediction-item">→ Alvo de: ${attackerName} | ${gameName} | ${attack.selection.palpiteSelecionado} ${pointsContent}</div>`;
-                    }
-                     roundContentHTML += modHTML;
                 }
                 
-                if (hasContent) {
-                    const roundInfoText = roundStats[round] ? roundStats[round].text : '';
-                    predictionsHTML += `
-                        <div class="round-section">
-                            <div class="round-header" data-round="${round}">
-                                <div style="display: flex; align-items: baseline; gap: 8px;">
-                                    <span>Ronda ${round}</span>
-                                    <span style="font-style: italic; font-size: 0.7em; font-weight: normal;">${roundInfoText}</span>
-                                </div>
-                                <span class="toggle-arrow ${isOpen ? 'open' : ''}">▶</span>
-                            </div>
-                            <div class="round-content ${isOpen ? 'open' : ''}">
-                                ${roundContentHTML}
-                            </div>
-                        </div>
-                    `;
+                if (!predictionsHTML) {
+                    predictionsHTML = 'Nenhuma previsão encontrada para esta seleção.';
                 }
+
+                popupBody.innerHTML = predictionsHTML;
+                document.querySelectorAll('.round-header').forEach(header => {
+                    header.removeEventListener('click', toggleRoundContent);
+                    header.addEventListener('click', toggleRoundContent);
+                });
+
+                roundFilter.onchange = () => {
+                    selectedRounds[userSeasonKey] = roundFilter.value;
+                    togglePredictions(userId, season);
+                };
+            } catch (error) {
+                console.error("Error loading predictions:", error);
+                popupBody.innerHTML = 'Erro ao carregar previsões.';
             }
         }
-        
-        if (!predictionsHTML) {
-            predictionsHTML = 'Nenhuma previsão encontrada para esta seleção.';
+
+        function toggleRoundContent() {
+            const content = this.nextElementSibling;
+            const arrow = this.querySelector('.toggle-arrow');
+            if (content && arrow) {
+                content.classList.toggle('open');
+                arrow.classList.toggle('open');
+            }
         }
 
-        popupBody.innerHTML = predictionsHTML;
-
-        document.querySelectorAll('.round-header').forEach(header => {
-            header.removeEventListener('click', toggleRoundContent);
-            header.addEventListener('click', toggleRoundContent);
-        });
-
-        roundFilter.onchange = () => {
-            selectedRounds[userSeasonKey] = roundFilter.value;
-            togglePredictions(userId, season);
-        };
-
-    } catch (error) {
-        console.error("Error loading predictions:", error);
-        popupBody.innerHTML = 'Erro ao carregar previsões.';
-    }
-}
-
-
-
-
-
-
-    // Helper function to toggle round content visibility
-    function toggleRoundContent() {
-        const content = this.nextElementSibling;
-        const arrow = this.querySelector('.toggle-arrow');
-        if (content && arrow) {
-             content.classList.toggle('open');
-             arrow.classList.toggle('open');
-        }
-    }
-
-    // --- Popup Closing Logic (Unchanged) ---
-    const popup = document.getElementById('predictions-popup');
-    const closeButton = document.getElementById('close-popup');
-
-    closeButton.addEventListener('click', () => {
-        popup.style.display = "none";
-    });
-
-    window.addEventListener('click', (event) => {
-        if (event.target == popup) {
+        const popup = document.getElementById('predictions-popup');
+        const closeButton = document.getElementById('close-popup');
+        closeButton.addEventListener('click', () => {
             popup.style.display = "none";
-        }
-    });
-
-</script>
-<script src="menu-component.js"></script> 
+        });
+        window.addEventListener('click', (event) => {
+            if (event.target == popup) {
+                popup.style.display = "none";
+            }
+        });
+    </script>
+    <script src="menu-component.js"></script> 
 </body>
 </html>
