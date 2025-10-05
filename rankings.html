@@ -123,6 +123,46 @@
             visibility: visible;
             transform: translate(-50%, -10px); /* Efeito de deslizar para cima */
         }
+
+        /* --- NOVO CSS PARA A ANIMAÇÃO --- */
+        #ranking-changes-list li {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            border-bottom: 1px solid #eee;
+            font-size: 1.1em;
+            opacity: 0;
+            transform: translateY(20px);
+            animation: fadeInItem 0.5s ease-out forwards;
+        }
+
+        @keyframes fadeInItem {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .rank-change {
+            font-weight: bold;
+            width: 40px;
+            text-align: center;
+            margin-right: 15px;
+        }
+        .rank-change.up { color: #28a745; } /* Verde */
+        .rank-change.down { color: #dc3545; } /* Vermelho */
+        .rank-change.stable { color: #6c757d; } /* Cinza */
+
+        .player-name-animation {
+            font-weight: bold;
+            flex-grow: 1;
+        }
+
+        .rank-details {
+            font-size: 0.8em;
+            color: #555;
+        }
+        /* --- FIM DO NOVO CSS --- */
     </style>
 </head>
 <body>
@@ -148,7 +188,7 @@
             </tbody>
         </table>
 
-        <!-- Popup Container -->
+        <!-- Popup Container (Original) -->
         <div id="predictions-popup" class="predictions-popup">
             <div class="popup-content">
                 <span class="close-button" id="close-popup">×</span>
@@ -163,6 +203,19 @@
             </div>
         </div>
     </div>
+    
+    <!-- --- NOVO POPUP DE ANIMAÇÃO DE RANKINGS --- -->
+    <div id="ranking-animation-popup" class="predictions-popup" style="display: none;">
+        <div class="popup-content">
+            <span class="close-button" id="close-animation-popup">×</span>
+            <h2 id="animation-popup-title" style="text-align: center; margin-bottom: 20px;">Movimentações da Ronda</h2>
+            <ul id="ranking-changes-list" style="list-style: none; padding: 0;">
+                <!-- O conteúdo será gerado dinamicamente -->
+            </ul>
+        </div>
+    </div>
+    <!-- --- FIM DO NOVO POPUP --- -->
+
 
     <div id="toast-notification" class="toast-notification"></div>
 
@@ -185,6 +238,7 @@
         const rankingsBody = document.getElementById('rankings-body');
         let currentUserStatus = null; // Store user status (estatuto)
         let toastTimeout; 
+        let mostRecentSeason; // <-- Variável global para a época mais recente
 
         // --- Function to load Menu Settings ---
         async function loadMenuSettings() {
@@ -238,10 +292,10 @@
         }
 
 
-  const gameDetailsCache = new Map();
+        const gameDetailsCache = new Map();
 
         // Função para buscar detalhes de um jogo (incluindo dataJogo)
- async function getGameDetails(gameId) {
+        async function getGameDetails(gameId) {
             if (!gameId) return null;
             if (gameDetailsCache.has(gameId)) {
                 return gameDetailsCache.get(gameId);
@@ -347,6 +401,12 @@
                 if (hasAccess) {
                     updateMenuVisibility(menuSettings);
                     await loadSeasons();
+                    
+                    // --- NOVA CHAMADA PARA A FUNÇÃO DE ANIMAÇÃO ---
+                    if (mostRecentSeason) { // Garante que a época foi carregada
+                        await checkForRankingUpdateAndShowAnimation();
+                    }
+                    
                     loadingScreen.style.display = 'none';
                     content.style.display = 'block';
                 } else {
@@ -416,7 +476,7 @@
             const sortedSeasons = Array.from(seasons).sort((a, b) => b.localeCompare(a));
 
             if (sortedSeasons.length > 0) {
-                const mostRecentSeason = sortedSeasons[0];
+                mostRecentSeason = sortedSeasons[0]; // <-- Define a variável global
                 const isPending = await checkPendingPredictionsStatus(mostRecentSeason);
                 updateStatusIndicator(isPending);
                 await loadRankings(mostRecentSeason);
@@ -494,38 +554,29 @@
 
         let selectedRounds = {};
 
-     async function togglePredictions(userId, season) {
+        async function togglePredictions(userId, season) {
+            // ... (código da função togglePredictions inalterado)
+            console.log(`%c[LOG] Iniciando busca de palpites para UserID: ${userId}, Época: ${season}`, 'background-color: #2176ff; color: white; padding: 2px 5px; border-radius: 3px;');
             const popup = document.getElementById('predictions-popup');
             const popupBody = document.getElementById('popup-predictions-body');
             const roundFilter = document.getElementById('round-filter');
-
             popupBody.innerHTML = 'A carregar previsões...';
             popup.style.display = "block";
-
             try {
-                // 1. Buscar palpites normais
                 const palpitesRef = collection(db, 'palpites');
                 const q = query(palpitesRef, where('userId', '==', userId), where('temporada', '==', season));
                 const palpitesSnap = await getDocs(q);
-
-                // 2. Buscar os MODS onde o user ATACA
                 const modPalpitesRef = collection(db, 'palpitesmods');
                 const attacksMadeQuery = query(modPalpitesRef, where('userId', '==', userId), where('temporada', '==', season));
                 const attacksMadeSnap = await getDocs(attacksMadeQuery);
-
                 const attacksMadeByRound = new Map();
                 attacksMadeSnap.forEach(doc => {
                     const data = doc.data();
-                    if (data.ronda) {
-                        attacksMadeByRound.set(String(data.ronda), { id: doc.id, ...data });
-                    }
+                    if (data.ronda) { attacksMadeByRound.set(String(data.ronda), { id: doc.id, ...data }); }
                 });
-
-                // 3. Buscar os MODS onde o user é ALVO
                 const allModsQuery = query(modPalpitesRef, where('temporada', '==', season));
                 const allModsSnap = await getDocs(allModsQuery);
                 const attacksReceivedByRound = new Map();
-                
                 allModsSnap.forEach(doc => {
                     const modData = doc.data();
                     if (modData.selecoes) {
@@ -533,9 +584,7 @@
                             const selection = modData.selecoes[key];
                             if (selection.copiedFromUserId === userId) {
                                 const roundStr = String(modData.ronda);
-                                if (!attacksReceivedByRound.has(roundStr)) {
-                                    attacksReceivedByRound.set(roundStr, []);
-                                }
+                                if (!attacksReceivedByRound.has(roundStr)) { attacksReceivedByRound.set(roundStr, []); }
                                 attacksReceivedByRound.get(roundStr).push({
                                     attackerUserId: modData.userId,
                                     modId: modData.modId,
@@ -547,19 +596,15 @@
                         }
                     }
                 });
-
-                // --- Lógica de preparação de dados ---
                 const predictions = [];
                 const rounds = new Set();
                 palpitesSnap.forEach(doc => {
                     const data = doc.data();
-                    // O ID do documento 'palpite' corresponde ao ID do 'jogo'
                     predictions.push({ ...data, id: doc.id, timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : new Date(0) });
                     if (data.ronda) rounds.add(String(data.ronda));
                 });
                 attacksMadeByRound.forEach((mod) => rounds.add(String(mod.ronda)));
                 attacksReceivedByRound.forEach((attacks, round) => rounds.add(round));
-
                 const sortedRounds = Array.from(rounds).sort((a, b) => parseInt(a) - parseInt(b));
                 const userSeasonKey = `${userId}-${season}`;
                 const currentSelection = selectedRounds[userSeasonKey] || '';
@@ -572,7 +617,6 @@
                     roundFilter.appendChild(option);
                 });
                 roundFilter.value = currentSelection;
-
                 const selectedRound = roundFilter.value;
                 const filteredPredictions = selectedRound ? predictions.filter(p => String(p.ronda) === selectedRound) : predictions;
                 const predictionsByRound = {};
@@ -582,13 +626,8 @@
                     predictionsByRound[round].push(prediction);
                 });
                 const allRoundsInView = new Set();
-                if (selectedRound) {
-                    allRoundsInView.add(selectedRound);
-                } else {
-                    sortedRounds.forEach(r => allRoundsInView.add(r));
-                }
-
-                // --- Lógica de cálculo de totais ---
+                if (selectedRound) { allRoundsInView.add(selectedRound); } 
+                else { sortedRounds.forEach(r => allRoundsInView.add(r)); }
                 const roundStats = {};
                 for (const round of allRoundsInView) {
                     let totalPoints = 0; let isPending = false;
@@ -617,78 +656,55 @@
                     if (isPending) { roundStats[round] = { text: '[em análise]' }; } 
                     else { roundStats[round] = { text: `[${totalPoints} gPoints]` }; }
                 }
-                
-                // --- Lógica de renderização ---
                 let predictionsHTML = '';
                 const displaySortedRounds = Array.from(allRoundsInView).sort((a, b) => parseInt(b) - parseInt(a));
-
-                if (displaySortedRounds.length === 0) {
-                    predictionsHTML = 'Nenhuma previsão encontrada para esta seleção.';
-                } else {
+                if (displaySortedRounds.length === 0) { predictionsHTML = 'Nenhuma previsão encontrada para esta seleção.'; } 
+                else {
                     const roundToOpen = selectedRound || displaySortedRounds[0];
-
                     for (const round of displaySortedRounds) {
                         let hasContent = false;
                         const isOpen = String(round) === String(roundToOpen);
                         const roundPredictions = predictionsByRound[round] || [];
                         let roundContentHTML = '';
-
-                        // ### INÍCIO DA CORREÇÃO E ORDENAÇÃO POR DATA DO JOGO ###
                         if (roundPredictions.length > 0) {
                             hasContent = true;
-
-                            // 1. "Enriquecer" os palpites com os detalhes dos jogos (incluindo dataJogo)
-                         const enrichedPredictionsPromises = roundPredictions.map(async (prediction) => {
+                            const enrichedPredictionsPromises = roundPredictions.map(async (prediction) => {
                                 const gameDetails = await getGameDetails(prediction.jogoId);
-                                return {
-                                    ...prediction,
-                                    dataJogo: gameDetails ? gameDetails.dataJogo : null,
-                                    // Usar o nome completo do jogo que vem da base de dados
-                                    nomeJogoCompleto: gameDetails ? gameDetails.nomeJogo : (prediction.nomeJogo || 'Jogo Desconhecido')
-                                };
+                                return { ...prediction, dataJogo: gameDetails ? gameDetails.dataJogo : null, nomeJogoCompleto: gameDetails ? gameDetails.nomeJogo : (prediction.nomeJogo || 'Jogo Desconhecido') };
                             });
-
-                            // 2. Aguardar que todos os detalhes sejam buscados
                             let enrichedPredictions = await Promise.all(enrichedPredictionsPromises);
-
-                            // 3. Ordenar a lista pela data do jogo (a mais antiga primeiro)
                             enrichedPredictions.sort((a, b) => {
-                                if (!a.dataJogo) return 1; // Coloca jogos sem data no fim
+                                if (!a.dataJogo) return 1;
                                 if (!b.dataJogo) return -1;
                                 return a.dataJogo.toDate() - b.dataJogo.toDate();
                             });
-                            
-                            // 4. Gerar o HTML a partir da lista ordenada
                             enrichedPredictions.forEach(prediction => {
+                                console.groupCollapsed(`[LOG JOGO] ${prediction.nomeJogoCompleto}`);
+                                console.log('Objeto completo do palpite recebido do Firestore:', prediction);
                                 let palpitesHTML = '';
                                 for (let i = 1; i <= 10; i++) {
                                     if (prediction[`palpite${i}`]) {
                                         let pointsContent = '';
                                         if (prediction.Analisado === "Sim") {
-                                            const points = prediction[`Palpite${i}PontosGanhos`] || 0;
+                                            const fieldName = `Palpite${i}PontosGanhos`;
+                                            const rawValue = prediction[fieldName];
+                                            const points = rawValue || 0;
                                             const pointsClass = points > 0 ? 'prediction-points' : 'prediction-points-negative';
                                             pointsContent = `<span class="${pointsClass}">(${points} pts)</span>`;
-                                        } else {
-                                            pointsContent = `<span class="in-analysis"><em>(em análise)</em></span>`;
-                                        }
+                                        } else { pointsContent = `<span class="in-analysis"><em>(em análise)</em></span>`; }
                                         palpitesHTML += `<div class="prediction-item">→ ${prediction[`palpite${i}`]} ${pointsContent}</div>`;
                                     }
                                 }
-                             if (palpitesHTML) {
-                                    roundContentHTML += `<div class="game-header">${prediction.nomeJogoCompleto}</div>${palpitesHTML}`;
-                                }
+                                if (palpitesHTML) { roundContentHTML += `<div class="game-header">${prediction.nomeJogoCompleto}</div>${palpitesHTML}`; }
+                                console.groupEnd();
                             });
                         }
-                        // ### FIM DA CORREÇÃO E ORDENAÇÃO ###
-
-                        // Secção de Ataques Feitos
                         const attackMadeData = attacksMadeByRound.get(round);
                         if (attackMadeData) {
                             hasContent = true;
                             let modHTML = '';
                             const modName = await getModName(attackMadeData.modId);
                             modHTML += `<div class="game-header" style="margin-top: 20px; border-top: 1px solid #ccc; padding-top: 10px; color: #E67E22;">Mod: ${modName} | Ataque | Ronda ${attackMadeData.ronda}</div>`;
-
                             for (const key in attackMadeData.selecoes) {
                                 const selection = attackMadeData.selecoes[key];
                                 const jogoId = selection.jogoId;
@@ -704,8 +720,6 @@
                             }
                             roundContentHTML += modHTML;
                         }
-
-                        // Secção de Ataques Sofridos
                         const attacksReceivedData = attacksReceivedByRound.get(round);
                         if (attacksReceivedData) {
                             hasContent = true;
@@ -713,7 +727,6 @@
                             const firstAttack = attacksReceivedData[0];
                             const modName = await getModName(firstAttack.modId);
                             modHTML += `<div class="game-header" style="margin-top: 20px; border-top: 1px solid #ccc; padding-top: 10px; color: #E67E22;">Mod: ${modName} | Defesa | Ronda ${firstAttack.ronda}</div>`;
-
                             for (const attack of attacksReceivedData) {
                                 const attackerName = await getUserTableName(attack.attackerUserId);
                                 const gameName = await getGameName(attack.gameId);
@@ -727,37 +740,18 @@
                             }
                             roundContentHTML += modHTML;
                         }
-                        
-                        // Renderização final da ronda
                         if (hasContent) {
                             const roundInfoText = roundStats[round] ? roundStats[round].text : '';
-                            predictionsHTML += `
-                                <div class="round-section">
-                                    <div class="round-header" data-round="${round}">
-                                        <div style="display: flex; align-items: baseline; gap: 8px;">
-                                            <span>Ronda ${round}</span>
-                                            <span style="font-style: italic; font-size: 0.7em; font-weight: normal;">${roundInfoText}</span>
-                                        </div>
-                                        <span class="toggle-arrow ${isOpen ? 'open' : ''}">▶</span>
-                                    </div>
-                                    <div class="round-content ${isOpen ? 'open' : ''}">
-                                        ${roundContentHTML}
-                                    </div>
-                                </div>`;
+                            predictionsHTML += `<div class="round-section"><div class="round-header" data-round="${round}"><div style="display: flex; align-items: baseline; gap: 8px;"><span>Ronda ${round}</span><span style="font-style: italic; font-size: 0.7em; font-weight: normal;">${roundInfoText}</span></div><span class="toggle-arrow ${isOpen ? 'open' : ''}">▶</span></div><div class="round-content ${isOpen ? 'open' : ''}">${roundContentHTML}</div></div>`;
                         }
                     }
                 }
-                
-                if (!predictionsHTML) {
-                    predictionsHTML = 'Nenhuma previsão encontrada para esta seleção.';
-                }
-
+                if (!predictionsHTML) { predictionsHTML = 'Nenhuma previsão encontrada para esta seleção.'; }
                 popupBody.innerHTML = predictionsHTML;
                 document.querySelectorAll('.round-header').forEach(header => {
                     header.removeEventListener('click', toggleRoundContent);
                     header.addEventListener('click', toggleRoundContent);
                 });
-
                 roundFilter.onchange = () => {
                     selectedRounds[userSeasonKey] = roundFilter.value;
                     togglePredictions(userId, season);
@@ -767,13 +761,210 @@
                 popupBody.innerHTML = 'Erro ao carregar previsões.';
             }
         }
+        
+        // ###############################################
+        // ###           NOVAS FUNÇÕES ABAIXO          ###
+        // ###############################################
 
+        /**
+         * Verifica se uma nova ronda foi concluída desde a última visita do utilizador
+         * e, se for o caso, aciona a animação das movimentações no ranking.
+         */
+       async function checkForRankingUpdateAndShowAnimation() {
+            // 1. Obter todos os palpites da época mais recente
+            const palpitesRef = collection(db, 'palpites');
+            const q = query(palpitesRef, where('temporada', '==', mostRecentSeason));
+            const palpitesSnap = await getDocs(q);
 
+            const roundsData = {};
+            let highestRoundOverall = 0; // <-- Variável para guardar a ronda mais alta de todas
 
+            palpitesSnap.forEach(doc => {
+                const data = doc.data();
+                const round = data.ronda;
+                if (!round) return;
 
+                const roundNum = parseInt(round);
 
+                // Atualiza a ronda mais alta encontrada até agora
+                if (roundNum > highestRoundOverall) {
+                    highestRoundOverall = roundNum;
+                }
 
+                // Agrupa os dados para verificar a conclusão
+                if (!roundsData[round]) {
+                    roundsData[round] = { total: 0, analisado: 0 };
+                }
+                roundsData[round].total++;
+                if (data.Analisado === 'Sim') {
+                    roundsData[round].analisado++;
+                }
+            });
+            
+            // 2. Encontrar a ronda mais alta que está 100% analisada
+            let latestCompletedRound = 0;
+            for (const round in roundsData) {
+                if (roundsData[round].total > 0 && roundsData[round].total === roundsData[round].analisado) {
+                    const roundNum = parseInt(round);
+                    if (roundNum > latestCompletedRound) {
+                        latestCompletedRound = roundNum;
+                    }
+                }
+            }
 
+            if (latestCompletedRound === 0) return; // Nenhuma ronda completa ainda
+
+            // 3. Verificar no localStorage se o utilizador já viu esta atualização
+            const lastSeenRound = parseInt(localStorage.getItem('lastSeenRoundAnimation')) || 0;
+            
+            // --- NOVA CONDIÇÃO CRÍTICA ---
+            // A animação só é acionada se a última ronda completa for também a ronda mais
+            // alta que existe no geral, e se for uma novidade para o utilizador.
+            if (latestCompletedRound === highestRoundOverall && latestCompletedRound > lastSeenRound) {
+                // Gatilho! Uma nova ronda foi concluída e é a mais recente.
+                console.log(`Nova ronda concluída: ${latestCompletedRound}. É a ronda mais alta. A mostrar animação.`);
+                
+                await showRankingAnimation(mostRecentSeason, latestCompletedRound);
+                
+                // Atualizar o localStorage após mostrar a animação
+                localStorage.setItem('lastSeenRoundAnimation', latestCompletedRound);
+            } else {
+                // Log para depuração, caso a animação não apareça
+                console.log(`Animação não acionada. Motivo: latestCompletedRound (${latestCompletedRound}) !== highestRoundOverall (${highestRoundOverall}) ou já foi vista (lastSeenRound: ${lastSeenRound}).`);
+            }
+        }
+
+        /**
+         * Calcula os pontos totais de todos os jogadores na tabela até uma determinada ronda.
+         * @param {string} season - A época (ex: "2023/2024").
+         * @param {number} targetRound - A ronda limite para o cálculo de pontos.
+         * @returns {Promise<Array>} Uma lista ordenada de jogadores com os seus pontos.
+         */
+        async function calculateAllUserPointsUpToRound(season, targetRound) {
+            const userPoints = new Map();
+            const usersRef = collection(db, 'users');
+            const usersSnap = await getDocs(query(usersRef, where("natabela", "==", "Yes"), where("aceite", "==", "Yes")));
+
+            // Inicializa todos os jogadores com 0 pontos
+            usersSnap.forEach(doc => {
+                userPoints.set(doc.id, {
+                    userId: doc.id,
+                    username: doc.data().nometabela || 'Desconhecido',
+                    points: 0
+                });
+            });
+
+            // Buscar todos os palpites e palpitesmods da época UMA SÓ VEZ para otimizar
+            const palpitesRef = collection(db, 'palpites');
+            const qPalpites = query(palpitesRef, where('temporada', '==', season), where('ronda', '<=', targetRound));
+            const palpitesSnap = await getDocs(qPalpites);
+
+            const modsRef = collection(db, 'palpitesmods');
+            const qMods = query(modsRef, where('temporada', '==', season), where('ronda', '<=', targetRound));
+            const modsSnap = await getDocs(qMods);
+
+            // Processar palpites normais
+            palpitesSnap.forEach(doc => {
+                const data = doc.data();
+                if (userPoints.has(data.userId) && data.Analisado === 'Sim') {
+                    let userTotal = userPoints.get(data.userId).points;
+                    for (let i = 1; i <= 10; i++) {
+                        userTotal += data[`Palpite${i}PontosGanhos`] || 0;
+                    }
+                    userPoints.get(data.userId).points = userTotal;
+                }
+            });
+
+            // Processar palpites de mods
+            modsSnap.forEach(doc => {
+                const data = doc.data();
+                // Pontos do atacante
+                if (userPoints.has(data.userId)) {
+                    let userTotal = userPoints.get(data.userId).points;
+                    for (const key in data.selecoes) {
+                        userTotal += data.selecoes[key].pontosGanhosJogador || 0;
+                    }
+                    userPoints.get(data.userId).points = userTotal;
+                }
+                // Pontos do alvo
+                for (const key in data.selecoes) {
+                    const targetId = data.selecoes[key].copiedFromUserId;
+                    if (userPoints.has(targetId)) {
+                        let targetTotal = userPoints.get(targetId).points;
+                        targetTotal += data.selecoes[key].pontosGanhosJogadorAlvo || 0;
+                        userPoints.get(targetId).points = targetTotal;
+                    }
+                }
+            });
+            
+            // Converter o Map para um array e ordenar
+            const rankings = Array.from(userPoints.values()).sort((a, b) => b.points - a.points);
+            return rankings;
+        }
+
+        /**
+         * Constrói e exibe o popup com a animação das movimentações no ranking.
+         * @param {string} season - A época atual.
+         * @param {number} completedRound - A ronda que acabou de ser concluída.
+         */
+        async function showRankingAnimation(season, completedRound) {
+            const roundAnterior = completedRound - 1;
+
+            // 1. Calcular os dois rankings
+            const rankingsAnteriores = roundAnterior > 0 ? await calculateAllUserPointsUpToRound(season, roundAnterior) : [];
+            const rankingsAtuais = await calculateAllUserPointsUpToRound(season, completedRound);
+
+            const posicoesAnteriores = new Map();
+            rankingsAnteriores.forEach((user, index) => {
+                posicoesAnteriores.set(user.userId, index + 1);
+            });
+
+            const popupList = document.getElementById('ranking-changes-list');
+            popupList.innerHTML = ''; // Limpar lista anterior
+
+            document.getElementById('animation-popup-title').textContent = `Movimentações da Ronda ${completedRound}`;
+
+            // 2. Construir o HTML para cada jogador
+            rankingsAtuais.forEach((user, index) => {
+                const posAtual = index + 1;
+                const posAnterior = posicoesAnteriores.get(user.userId);
+                
+                let changeIcon = '●';
+                let changeClass = 'stable';
+                let changeText = `manteve a posição`;
+                
+                if (posAnterior) { // Jogador já existia no ranking anterior
+                    const mudanca = posAnterior - posAtual;
+                    if (mudanca > 0) {
+                        changeIcon = `▲ +${mudanca}`;
+                        changeClass = 'up';
+                        changeText = `subiu da ${posAnterior}ª`;
+                    } else if (mudanca < 0) {
+                        changeIcon = `▼ ${mudanca}`;
+                        changeClass = 'down';
+                        changeText = `desceu da ${posAnterior}ª`;
+                    }
+                } else { // Jogador novo no ranking
+                    changeIcon = '★';
+                    changeClass = 'up';
+                    changeText = 'entrou no ranking';
+                }
+
+                const listItem = document.createElement('li');
+                listItem.style.animationDelay = `${index * 0.1}s`;
+
+                listItem.innerHTML = `
+                    <span class="rank-change ${changeClass}">${changeIcon}</span>
+                    <span class="player-name-animation">${posAtual}º ${user.username}</span>
+                    <span class="rank-details">(${changeText})</span>
+                `;
+                popupList.appendChild(listItem);
+            });
+
+            // 3. Mostrar o popup
+            const popup = document.getElementById('ranking-animation-popup');
+            popup.style.display = 'block';
+        }
 
 
         function toggleRoundContent() {
@@ -785,6 +976,7 @@
             }
         }
 
+        // Event Listeners dos Popups
         const popup = document.getElementById('predictions-popup');
         const closeButton = document.getElementById('close-popup');
         closeButton.addEventListener('click', () => {
@@ -795,6 +987,19 @@
                 popup.style.display = "none";
             }
         });
+
+        // --- NOVO EVENT LISTENER PARA O POPUP DE ANIMAÇÃO ---
+        const animationPopup = document.getElementById('ranking-animation-popup');
+        const closeAnimationButton = document.getElementById('close-animation-popup');
+        closeAnimationButton.addEventListener('click', () => {
+            animationPopup.style.display = "none";
+        });
+        window.addEventListener('click', (event) => {
+            if (event.target == animationPopup) {
+                animationPopup.style.display = "none";
+            }
+        });
+        
     </script>
     <script src="menu-component.js"></script> 
 </body>
