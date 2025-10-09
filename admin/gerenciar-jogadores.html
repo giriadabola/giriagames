@@ -20,7 +20,7 @@
         .content { padding: 80px 20px 20px; max-width: 1200px; margin: 0 auto; }
         h1 { color: #333; margin-bottom: 24px; font-size: 28px; }
         .players-grid { display: flex; flex-direction: column; gap: 20px; margin-bottom: 32px; max-width: 800px; margin-left: auto; margin-right: auto; }
-        .player-card { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); transition: transform 0.2s ease, box-shadow 0.2s ease; display: flex; align-items: center; gap: 20px; }
+        .player-card { position: relative; background: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.3s ease; display: flex; align-items: center; gap: 20px; }
         .player-card:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15); }
         .player-image { width: 100px; height: 100px; object-fit: cover; border-radius: 4px; flex-shrink: 0; }
         .player-info-container { flex-grow: 1; }
@@ -62,43 +62,21 @@
         .search-result-item:hover { background-color: #f8f9fa; }
         .overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.5); z-index: 1000; }
         .overlay.active { display: block; }
-.player-actions { /* NOVO: Contêiner para alinhar o preço e o interruptor */ display: flex; align-items: center; gap: 12px; margin-left: auto; } .price-input-container { /* NOVO: Contêiner para o campo de preço e o símbolo de moeda */ position: relative; } .price-input { /* NOVO: Estilo para o campo de preço */ width: 100px; padding: 8px 8px 8px 20px; /* Espaço à esquerda para o símbolo */ border: 1px solid #ccc; border-radius: 4px; font-size: 14px; font-weight: bold; text-align: right; transition: border-color 0.2s; } .price-input:focus { outline: none; border-color: #2176ff; } .price-input-container::before { /* NOVO: Adiciona o símbolo de "€" dentro da caixa */ content: '€'; position: absolute; left: 8px; top: 50%; transform: translateY(-50%); color: #666; font-weight: normal; } .toggle-switch { position: relative; display: inline-block; width: 60px; height: 34px; /* ALTERADO: removido o margin-left: auto */ }
+        .player-actions { display: flex; align-items: center; gap: 12px; margin-left: auto; }
+        .price-input-container { position: relative; }
+        .price-input { width: 100px; padding: 8px 8px 8px 20px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; font-weight: bold; text-align: right; transition: border-color 0.2s; }
+        .price-input:focus { outline: none; border-color: #2176ff; }
+        .price-input-container::before { content: '€'; position: absolute; left: 8px; top: 50%; transform: translateY(-50%); color: #666; font-weight: normal; }
+        .toggle-switch { position: relative; display: inline-block; width: 60px; height: 34px; }
+        .player-flag { position: absolute; top: 8px; left: 8px; width: 16px; height: auto; border-radius: 2px; border: 1px solid #eee; box-shadow: 0 1px 2px rgba(0,0,0,0.2); }
+        .player-visuals { display: flex; flex-direction: column; align-items: center; gap: 8px; flex-shrink: 0; }
+        .player-position { font-weight: bold; color: #333; font-size: 14px; background-color: #f2f2f2; padding: 2px 8px; border-radius: 4px; }
 
-.player-card {
-    position: relative; 
-}
-
-/* Estilo e posicionamento da bandeira no canto superior esquerdo */
-.player-flag {
-    position: absolute;
-    top: 8px;         /* Ajustado para melhor alinhamento */
-    left: 8px;        /* Ajustado para melhor alinhamento */
-    width: 16px;      /* ALTERADO: Reduzido para metade */
-    height: auto;
-    border-radius: 2px; /* Ligeiro ajuste para a nova escala */
-    border: 1px solid #eee;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.2);
-}
-
-/* Novo contêiner para a imagem e a posição */
-.player-visuals {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px; /* Espaço entre a imagem e o texto da posição */
-    flex-shrink: 0; /* Impede que o contêiner encolha */
-}
-
-/* Estilo para o texto da posição */
-.player-position {
-    font-weight: bold;
-    color: #333;
-    font-size: 14px;
-    background-color: #f2f2f2;
-    padding: 2px 8px;
-    border-radius: 4px;
-}
-
+        /* NOVO: Estilo para o card de um jogador que já foi comprado */
+        .player-card.purchased {
+            background-color: #f0f5fb; /* Um tom de azul bem claro para diferenciar */
+            border-left: 4px solid #2176ff; /* Uma borda azul à esquerda para ênfase */
+        }
     </style>
 </head>
 <body style="display: none;"> <!-- 2. O corpo da página está oculto por padrão -->
@@ -118,35 +96,32 @@
         </div>
 
 
-<div class="filters-container" style="display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: center; margin-bottom: 24px; background: #fff; padding: 16px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-    <div style="flex: 1; min-width: 180px;">
-        <label for="filterPosicao" style="display: block; margin-bottom: 8px; color: #333; font-weight: 500;">Posição</label>
-        <select id="filterPosicao" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #ddd; background-color: #f8f9fa;">
-            <option value="">Todas</option>
-        </select>
-    </div>
-    <div style="flex: 1; min-width: 180px;">
-        <label for="filterCasta" style="display: block; margin-bottom: 8px; color: #333; font-weight: 500;">Casta</label>
-        <select id="filterCasta" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #ddd; background-color: #f8f9fa;">
-            <option value="">Todas</option>
-        </select>
-    </div>
-    <div style="flex: 1; min-width: 180px;">
-        <label for="filterCompeticao" style="display: block; margin-bottom: 8px; color: #333; font-weight: 500;">Competição</label>
-        <select id="filterCompeticao" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #ddd; background-color: #f8f9fa;">
-            <option value="">Todas</option>
-        </select>
-    </div>
-    <div style="flex: 1; min-width: 180px;">
-        <label for="filterPais" style="display: block; margin-bottom: 8px; color: #333; font-weight: 500;">País</label>
-        <select id="filterPais" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #ddd; background-color: #f8f9fa;">
-            <option value="">Todos</option>
-        </select>
-    </div>
-</div>
-
-
-
+        <div class="filters-container" style="display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: center; margin-bottom: 24px; background: #fff; padding: 16px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <div style="flex: 1; min-width: 180px;">
+                <label for="filterPosicao" style="display: block; margin-bottom: 8px; color: #333; font-weight: 500;">Posição</label>
+                <select id="filterPosicao" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #ddd; background-color: #f8f9fa;">
+                    <option value="">Todas</option>
+                </select>
+            </div>
+            <div style="flex: 1; min-width: 180px;">
+                <label for="filterCasta" style="display: block; margin-bottom: 8px; color: #333; font-weight: 500;">Casta</label>
+                <select id="filterCasta" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #ddd; background-color: #f8f9fa;">
+                    <option value="">Todas</option>
+                </select>
+            </div>
+            <div style="flex: 1; min-width: 180px;">
+                <label for="filterCompeticao" style="display: block; margin-bottom: 8px; color: #333; font-weight: 500;">Competição</label>
+                <select id="filterCompeticao" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #ddd; background-color: #f8f9fa;">
+                    <option value="">Todas</option>
+                </select>
+            </div>
+            <div style="flex: 1; min-width: 180px;">
+                <label for="filterPais" style="display: block; margin-bottom: 8px; color: #333; font-weight: 500;">País</label>
+                <select id="filterPais" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #ddd; background-color: #f8f9fa;">
+                    <option value="">Todos</option>
+                </select>
+            </div>
+        </div>
 
         <div class="players-grid" id="players-grid"></div>
     </main>
@@ -156,13 +131,11 @@
    <div class="market-time-menu" id="marketTimeMenu">
     <h2>Configurar Hora do Mercado</h2>
     
-    <!-- Campos de Data e Hora (permanecem iguais) -->
     <div class="market-time-field"><label for="marketOpenTime">Abertura</label><input type="datetime-local" id="marketOpenTime"></div>
     <div class="market-time-field"><label for="marketCloseTime">Fechamento</label><input type="datetime-local" id="marketCloseTime"></div>
 
     <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
 
-    <!-- Novo Seletor de Modo de Aplicação -->
     <div class="market-time-field">
         <label for="applyMode">Aplicar para:</label>
         <select id="applyMode" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
@@ -173,19 +146,16 @@
         </select>
     </div>
 
-    <!-- Grupo que aparece para seleção por Posição -->
     <div id="positionSelectGroup" class="market-time-field" style="display: none;">
         <label for="applyPositionSelect">Selecione a Posição</label>
         <select id="applyPositionSelect" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;"></select>
     </div>
 
-    <!-- Grupo que aparece para seleção por Casta -->
     <div id="casteSelectGroup" class="market-time-field" style="display: none;">
         <label for="applyCasteSelect">Selecione a Casta</label>
         <select id="applyCasteSelect" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;"></select>
     </div>
 
-    <!-- Área de pesquisa para jogadores específicos (agora controlada pelo seletor) -->
     <div class="player-search" id="playerSearchContainer">
         <input type="text" id="playerSearch" placeholder="Pesquisar jogadores...">
         <div class="selected-players" id="selectedPlayers"></div>
@@ -226,72 +196,71 @@
         }
     }
 
-  function createPlayerCard(player, docId) {
-    const card = document.createElement('div');
-    card.className = 'player-card';
-    const tierClass = getTierClass(player.casta);
-    
-    // Cria o HTML da bandeira apenas se a imagem existir no objeto do jogador
-    const flagHtml = player.paisImagem 
-        ? `<img src="${player.paisImagem}" alt="Bandeira do país" class="player-flag">` 
-        : '';
+    function createPlayerCard(player, docId) {
+        const card = document.createElement('div');
+        card.className = 'player-card';
+        const tierClass = getTierClass(player.casta);
         
-    // Cria o HTML para a posição do jogador
-    const positionHtml = player.posicao 
-        ? `<div class="player-position">${player.posicao}</div>` 
-        : '';
-
-    card.innerHTML = `
-        ${flagHtml}
-
-        <!-- Novo contêiner para agrupar a imagem e a posição -->
-        <div class="player-visuals">
-            <img src="${player.imagem || 'https://via.placeholder.com/200'}" alt="${player.nome}" class="player-image">
-            ${positionHtml}
-        </div>
+        // ADIÇÃO: Adiciona a classe 'purchased' se o jogador tiver um comprador
+        if (player.compradorNome) {
+            card.classList.add('purchased');
+        }
         
-        <div class="player-info-container">
-            <div class="player-name">${player.nome}</div>
-            <!-- NOVO: Campo Clube adicionado logo abaixo do nome -->
-            <div class="player-info">Clube: ${player.clube || 'Não definido'}</div>
-            <!-- ANTIGO: Campo Posição foi removido desta área -->
-            <div class="player-info ${tierClass}">Casta: ${player.casta}</div>
-            <div class="player-info">Comprado por: ${player.compradorNome || 'Não comprado'}</div>
-            <div class="player-info">Abertura: ${player.marketTimes?.abertura ? new Date(player.marketTimes.abertura).toLocaleString() : 'Não definido'}</div>
-            <div class="player-info">Fechamento: ${player.marketTimes?.fechamento ? new Date(player.marketTimes.fechamento).toLocaleString() : 'Não definido'}</div>
-        </div>
+        const flagHtml = player.paisImagem 
+            ? `<img src="${player.paisImagem}" alt="Bandeira do país" class="player-flag">` 
+            : '';
+            
+        const positionHtml = player.posicao 
+            ? `<div class="player-position">${player.posicao}</div>` 
+            : '';
 
-        <div class="player-actions">
-            <div class="price-input-container">
-                <input type="number" class="price-input" value="${player.preco || 0}" data-player-id="${docId}">
+        card.innerHTML = `
+            ${flagHtml}
+
+            <div class="player-visuals">
+                <img src="${player.imagem || 'https://via.placeholder.com/200'}" alt="${player.nome}" class="player-image">
+                ${positionHtml}
             </div>
-            <label class="toggle-switch">
-                <input type="checkbox" ${player.noMercado ? 'checked' : ''} data-player-id="${docId}">
-                <span class="slider"></span>
-            </label>
-        </div>
-    `;
+            
+            <div class="player-info-container">
+                <div class="player-name">${player.nome}</div>
+                <div class="player-info">Clube: ${player.clube || 'Não definido'}</div>
+                <div class="player-info ${tierClass}">Casta: ${player.casta}</div>
+                <div class="player-info">Comprado por: ${player.compradorNome || 'Não comprado'}</div>
+                <div class="player-info">Abertura: ${player.marketTimes?.abertura ? new Date(player.marketTimes.abertura).toLocaleString() : 'Não definido'}</div>
+                <div class="player-info">Fechamento: ${player.marketTimes?.fechamento ? new Date(player.marketTimes.fechamento).toLocaleString() : 'Não definido'}</div>
+            </div>
 
-    // A lógica dos 'event listeners' permanece a mesma
-    const updateChanges = (playerId, field, value) => {
-        const currentChanges = changedPlayers.get(playerId) || {};
-        currentChanges[field] = value;
-        changedPlayers.set(playerId, currentChanges);
-    };
+            <div class="player-actions">
+                <div class="price-input-container">
+                    <input type="number" class="price-input" value="${player.preco || 0}" data-player-id="${docId}">
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" ${player.noMercado ? 'checked' : ''} data-player-id="${docId}">
+                    <span class="slider"></span>
+                </label>
+            </div>
+        `;
 
-    const toggleSwitch = card.querySelector('input[type="checkbox"]');
-    toggleSwitch.addEventListener('change', (e) => {
-        updateChanges(docId, 'noMercado', e.target.checked);
-    });
+        const updateChanges = (playerId, field, value) => {
+            const currentChanges = changedPlayers.get(playerId) || {};
+            currentChanges[field] = value;
+            changedPlayers.set(playerId, currentChanges);
+        };
 
-    const priceInput = card.querySelector('.price-input');
-    priceInput.addEventListener('input', (e) => {
-        const priceValue = parseFloat(e.target.value) || 0;
-        updateChanges(docId, 'preco', priceValue);
-    });
-    
-    return card;
-}
+        const toggleSwitch = card.querySelector('input[type="checkbox"]');
+        toggleSwitch.addEventListener('change', (e) => {
+            updateChanges(docId, 'noMercado', e.target.checked);
+        });
+
+        const priceInput = card.querySelector('.price-input');
+        priceInput.addEventListener('input', (e) => {
+            const priceValue = parseFloat(e.target.value) || 0;
+            updateChanges(docId, 'preco', priceValue);
+        });
+        
+        return card;
+    }
 
     function displayPlayers(playersToDisplay) {
         const playersGrid = document.getElementById('players-grid');
@@ -350,7 +319,6 @@
        const fieldNames = {
         posicao: 'posicao',
         casta: 'casta',
-        // Diz à função para usar a propriedade 'competicaoNome' para o filtro de competição
         competicao: 'competicaoNome', 
         pais: 'pais'
         };
@@ -364,14 +332,12 @@
                 });
             });
 
-  relevantPlayers.forEach(player => {
-        const value = player[fieldNames[filterKey]]; // Para competição, isso é player['competicaoNome']
-        if (value) {
-            // A estrutura do objeto 'counts' garante que as chaves (nomes das competições)
-            // sejam únicas por natureza.
-            counts[value] = (counts[value] || 0) + 1;
-        }
-    });
+            relevantPlayers.forEach(player => {
+                const value = player[fieldNames[filterKey]];
+                if (value) {
+                    counts[value] = (counts[value] || 0) + 1;
+                }
+            });
 
             const selectElement = selects[filterKey];
             const firstOptionText = selectElement.querySelector('option:first-child').textContent;
@@ -411,28 +377,16 @@
             }
 
             await Promise.all(batch);
-
-            // AVISO DE SUCESSO: Informa o usuário que a gravação no banco de dados foi bem-sucedida.
             alert('Alterações salvas com sucesso!');
 
-            // --- INÍCIO DA ATUALIZAÇÃO LOCAL (BLOCO ADICIONADO) ---
-            // Passo 1: Percorre o mapa de alterações que acabaram de ser salvas.
             for (const [playerId, updates] of changedPlayers) {
-                // Passo 2: Encontra o jogador correspondente na nossa cópia local de dados.
                 const playerToUpdate = allPlayers.find(p => p.id === playerId);
                 if (playerToUpdate) {
-                    // Passo 3: Aplica as alterações (ex: {preco: 45}) diretamente no objeto do jogador local.
-                    // O Object.assign mescla as propriedades de 'updates' em 'playerToUpdate'.
                     Object.assign(playerToUpdate, updates);
                 }
             }
-            // --- FIM DA ATUALIZAÇÃO LOCAL ---
-
-            // Limpa o mapa para a próxima rodada de edições.
+            
             changedPlayers.clear(); 
-
-            // ATUALIZA A EXIBIÇÃO: Chama a função que redesenha os jogadores na tela,
-            // que agora usará a lista 'allPlayers' que acabamos de atualizar.
             updateFiltersAndDisplay();
 
         } catch (error) {
@@ -443,7 +397,6 @@
 
     // --- LÓGICA DOS MENUS POP-UP ---
 
-    // Elementos dos Menus
     const overlay = document.getElementById('overlay');
     const marketTimeButton = document.getElementById('marketTimeButton');
     const marketTimeMenu = document.getElementById('marketTimeMenu');
@@ -462,7 +415,6 @@
     const playerSearchContainer = document.getElementById('playerSearchContainer');
     let selectedPlayersList = new Set();
 
-    // Funções e Event Listeners dos Menus
     const closeAllMenus = () => {
         marketTimeMenu.classList.remove('active');
         multiChangeMenu.classList.remove('active');
@@ -592,7 +544,6 @@
         searchResults.innerHTML = '';
         if (searchTerm.length < 2) return;
         try {
-            // Filtra a partir da lista já carregada (mais rápido)
             const playerResults = allPlayers.filter(p => p.nome.toLowerCase().includes(searchTerm));
             searchResults.innerHTML = playerResults
                 .map(player => `<div class="search-result-item" data-id="${player.id}" data-name="${player.nome}">${player.nome}</div>`)
@@ -627,13 +578,12 @@
     try {
         document.getElementById('players-grid').innerHTML = '<p>A carregar jogadores...</p>';
         
-        // 1. Adicionada a busca pela coleção 'users'
         const [jogadoresSnapshot, clubesSnapshot, competicoesSnapshot, paisesSnapshot, usersSnapshot] = await Promise.all([
             getDocs(collection(db, 'jogadores')),
             getDocs(collection(db, 'clubes')),
             getDocs(collection(db, 'competicoes')),
             getDocs(collection(db, 'paises')),
-            getDocs(collection(db, 'users')) // NOVO: Carrega os dados dos utilizadores
+            getDocs(collection(db, 'users'))
         ]);
 
         const clubesByNameMap = new Map();
@@ -648,14 +598,12 @@
         const paisesMap = new Map();
         paisesSnapshot.forEach(doc => paisesMap.set(doc.id, doc.data()));
 
-        // 2. Criado um mapa para os utilizadores para pesquisa rápida
         const usersMap = new Map();
         usersSnapshot.forEach(doc => usersMap.set(doc.id, doc.data()));
 
         allPlayers = jogadoresSnapshot.docs.map(doc => {
             const player = { id: doc.id, ...doc.data() };
             
-            // Lógica de clubes e competições (inalterada)
             const clubeData = clubesByNameMap.get(player.clube); 
             if (clubeData) {
                 player.clubeData = clubeData;
@@ -663,17 +611,15 @@
                 if (competicaoData) player.competicaoNome = competicaoData.nome;
             }
 
-            // Lógica da bandeira do país (inalterada)
             if (player.paisId) {
                 const paisData = paisesMap.get(player.paisId);
                 if (paisData && paisData.imagem) player.paisImagem = paisData.imagem;
             }
 
-            // 3. NOVO: Adiciona o nome do comprador ao objeto do jogador
             if (player.compradopor) {
-                const userData = usersMap.get(player.compradopor); // Usa o ID para encontrar o user
+                const userData = usersMap.get(player.compradopor);
                 if (userData && userData.nometabela) {
-                    player.compradorNome = userData.nometabela; // Adiciona a propriedade com o nome
+                    player.compradorNome = userData.nometabela;
                 }
             }
 
@@ -693,7 +639,6 @@
     }
 }
 
-    // Dispara a inicialização e adiciona o listener para o botão de salvar principal
     initializeApp();
     document.getElementById('saveChanges').addEventListener('click', saveChanges);
 
