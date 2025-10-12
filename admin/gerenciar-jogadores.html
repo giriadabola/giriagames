@@ -5,9 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gerenciar Jogadores - G EMPIRE</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
-
-    <!-- 1. Adiciona o nosso guardião de segurança. Ele protegerá a página. -->
-  <script type="module" src="js/auth-guard.js"></script>
+    <script type="module" src="js/auth-guard.js"></script>
 
     <style>
         /* O seu CSS original permanece exatamente o mesmo */
@@ -67,19 +65,13 @@
         .price-input { width: 100px; padding: 8px 8px 8px 20px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; font-weight: bold; text-align: right; transition: border-color 0.2s; }
         .price-input:focus { outline: none; border-color: #2176ff; }
         .price-input-container::before { content: '€'; position: absolute; left: 8px; top: 50%; transform: translateY(-50%); color: #666; font-weight: normal; }
-        .toggle-switch { position: relative; display: inline-block; width: 60px; height: 34px; }
         .player-flag { position: absolute; top: 8px; left: 8px; width: 16px; height: auto; border-radius: 2px; border: 1px solid #eee; box-shadow: 0 1px 2px rgba(0,0,0,0.2); }
         .player-visuals { display: flex; flex-direction: column; align-items: center; gap: 8px; flex-shrink: 0; }
         .player-position { font-weight: bold; color: #333; font-size: 14px; background-color: #f2f2f2; padding: 2px 8px; border-radius: 4px; }
-
-        /* NOVO: Estilo para o card de um jogador que já foi comprado */
-        .player-card.purchased {
-            background-color: #f0f5fb; /* Um tom de azul bem claro para diferenciar */
-            border-left: 4px solid #2176ff; /* Uma borda azul à esquerda para ênfase */
-        }
+        .player-card.purchased { background-color: #f0f5fb; border-left: 4px solid #2176ff; }
     </style>
 </head>
-<body style="display: none;"> <!-- 2. O corpo da página está oculto por padrão -->
+<body style="display: none;">
 
     <nav class="top-menu">
         <a href="engrenagem.html" class="menu-item"><i class="fas fa-home"></i>Home</a>
@@ -92,9 +84,9 @@
         <div style="display: flex; justify-content: flex-end; margin-bottom: 20px;">
             <button id="multiChangeButton" class="market-time-button">Mudar Vários</button>
             <button id="marketTimeButton" class="market-time-button">Hora Mercado</button>
+            <button id="viewSchedulesButton" class="market-time-button" style="background-color: #f39c12;">Ver Horários</button>
             <button id="saveChanges" class="save-button">Salvar</button>
         </div>
-
 
         <div class="filters-container" style="display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: center; margin-bottom: 24px; background: #fff; padding: 16px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
             <div style="flex: 1; min-width: 180px;">
@@ -128,42 +120,35 @@
 
     <div class="overlay" id="overlay"></div>
     
-   <div class="market-time-menu" id="marketTimeMenu">
-    <h2>Configurar Hora do Mercado</h2>
-    
-    <div class="market-time-field"><label for="marketOpenTime">Abertura</label><input type="datetime-local" id="marketOpenTime"></div>
-    <div class="market-time-field"><label for="marketCloseTime">Fechamento</label><input type="datetime-local" id="marketCloseTime"></div>
-
-    <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
-
-    <div class="market-time-field">
-        <label for="applyMode">Aplicar para:</label>
-        <select id="applyMode" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-            <option value="specific" selected>Jogadores Específicos</option>
-            <option value="all">Todos os Jogadores</option>
-            <option value="position">Jogadores de uma Posição</option>
-            <option value="caste">Jogadores de uma Casta</option>
-        </select>
+    <div class="market-time-menu" id="marketTimeMenu">
+        <h2>Configurar Hora do Mercado</h2>
+        <div class="market-time-field"><label for="marketOpenTime">Abertura</label><input type="datetime-local" id="marketOpenTime"></div>
+        <div class="market-time-field"><label for="marketCloseTime">Fechamento</label><input type="datetime-local" id="marketCloseTime"></div>
+        <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+        <div class="market-time-field">
+            <label for="applyMode">Aplicar para:</label>
+            <select id="applyMode" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                <option value="specific" selected>Jogadores Específicos</option>
+                <option value="all">Todos os Jogadores</option>
+                <option value="position">Jogadores de uma Posição</option>
+                <option value="caste">Jogadores de uma Casta</option>
+            </select>
+        </div>
+        <div id="positionSelectGroup" class="market-time-field" style="display: none;">
+            <label for="applyPositionSelect">Selecione a Posição</label>
+            <select id="applyPositionSelect" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;"></select>
+        </div>
+        <div id="casteSelectGroup" class="market-time-field" style="display: none;">
+            <label for="applyCasteSelect">Selecione a Casta</label>
+            <select id="applyCasteSelect" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;"></select>
+        </div>
+        <div class="player-search" id="playerSearchContainer">
+            <input type="text" id="playerSearch" placeholder="Pesquisar jogadores...">
+            <div class="selected-players" id="selectedPlayers"></div>
+            <div class="search-results" id="searchResults"></div>
+        </div>
+        <button class="save-button" style="margin-top: 20px;" id="saveMarketTime">Salvar</button>
     </div>
-
-    <div id="positionSelectGroup" class="market-time-field" style="display: none;">
-        <label for="applyPositionSelect">Selecione a Posição</label>
-        <select id="applyPositionSelect" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;"></select>
-    </div>
-
-    <div id="casteSelectGroup" class="market-time-field" style="display: none;">
-        <label for="applyCasteSelect">Selecione a Casta</label>
-        <select id="applyCasteSelect" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;"></select>
-    </div>
-
-    <div class="player-search" id="playerSearchContainer">
-        <input type="text" id="playerSearch" placeholder="Pesquisar jogadores...">
-        <div class="selected-players" id="selectedPlayers"></div>
-        <div class="search-results" id="searchResults"></div>
-    </div>
-
-    <button class="save-button" style="margin-top: 20px;" id="saveMarketTime">Salvar</button>
-</div>
 
     <div class="multi-change-menu" id="multiChangeMenu">
         <h2>Ativar/Desativar Posições</h2>
@@ -174,19 +159,28 @@
         <button class="save-button" style="margin-top: 20px; background-color: #6c757d;" id="closeMultiChange">Fechar</button>
     </div>
 
-    <!-- 3. O script da página foi limpo e usa a conexão do guardião -->
+    <div class="market-time-menu" id="viewSchedulesPopup">
+        <h2>Histórico de Janelas de Transferências</h2>
+        <div id="schedulesList" style="max-height: 400px; overflow-y: auto;">
+            <!-- A lista de horários será inserida aqui pelo JavaScript -->
+        </div>
+        <button class="save-button" style="margin-top: 20px; background-color: #6c757d;" id="closeSchedulesPopup">Fechar</button>
+    </div>
+
    <script type="module">
-    // Importa a variável 'db' do guardião e as funções do Firestore
     import { db } from './js/auth-guard.js';
-    import { collection, getDocs, doc, updateDoc, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+    import { 
+        collection, getDocs, doc, updateDoc, query, where, addDoc, Timestamp, orderBy, deleteDoc 
+    } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
     // --- VARIÁVEIS GLOBAIS ---
     let changedPlayers = new Map();
-    let allPlayers = []; // Armazena a lista completa de jogadores "enriquecidos"
+    let allPlayers = [];
 
     // --- FUNÇÕES DE LÓGICA PRINCIPAL ---
 
     function getTierClass(casta) {
+        // ... (função sem alterações)
         switch(casta) {
             case 'Jogador Ouro': return 'gold';
             case 'Jogador Prata': return 'silver';
@@ -201,7 +195,6 @@
         card.className = 'player-card';
         const tierClass = getTierClass(player.casta);
         
-        // ADIÇÃO: Adiciona a classe 'purchased' se o jogador tiver um comprador
         if (player.compradorNome) {
             card.classList.add('purchased');
         }
@@ -216,21 +209,18 @@
 
         card.innerHTML = `
             ${flagHtml}
-
             <div class="player-visuals">
                 <img src="${player.imagem || 'https://via.placeholder.com/200'}" alt="${player.nome}" class="player-image">
                 ${positionHtml}
             </div>
-            
             <div class="player-info-container">
                 <div class="player-name">${player.nome}</div>
                 <div class="player-info">Clube: ${player.clube || 'Não definido'}</div>
                 <div class="player-info ${tierClass}">Casta: ${player.casta}</div>
                 <div class="player-info">Comprado por: ${player.compradorNome || 'Não comprado'}</div>
-                <div class="player-info">Abertura: ${player.marketTimes?.abertura ? new Date(player.marketTimes.abertura).toLocaleString() : 'Não definido'}</div>
-                <div class="player-info">Fechamento: ${player.marketTimes?.fechamento ? new Date(player.marketTimes.fechamento).toLocaleString() : 'Não definido'}</div>
+                <div class="player-info">Abertura: ${player.marketTimes?.abertura ? new Date(player.marketTimes.abertura.seconds * 1000).toLocaleString('pt-PT') : 'Não definido'}</div>
+                <div class="player-info">Fechamento: ${player.marketTimes?.fechamento ? new Date(player.marketTimes.fechamento.seconds * 1000).toLocaleString('pt-PT') : 'Não definido'}</div>
             </div>
-
             <div class="player-actions">
                 <div class="price-input-container">
                     <input type="number" class="price-input" value="${player.preco || 0}" data-player-id="${docId}">
@@ -248,13 +238,11 @@
             changedPlayers.set(playerId, currentChanges);
         };
 
-        const toggleSwitch = card.querySelector('input[type="checkbox"]');
-        toggleSwitch.addEventListener('change', (e) => {
+        card.querySelector('input[type="checkbox"]').addEventListener('change', (e) => {
             updateChanges(docId, 'noMercado', e.target.checked);
         });
 
-        const priceInput = card.querySelector('.price-input');
-        priceInput.addEventListener('input', (e) => {
+        card.querySelector('.price-input').addEventListener('input', (e) => {
             const priceValue = parseFloat(e.target.value) || 0;
             updateChanges(docId, 'preco', priceValue);
         });
@@ -263,6 +251,7 @@
     }
 
     function displayPlayers(playersToDisplay) {
+        // ... (função sem alterações)
         const playersGrid = document.getElementById('players-grid');
         playersGrid.innerHTML = ''; 
 
@@ -299,9 +288,10 @@
         });
     }
 
-    // --- FUNÇÕES DE FILTRAGEM DINÂMICA ---
+    // --- FUNÇÕES DE FILTRAGEM ---
 
     function updateFiltersAndDisplay() {
+        // ... (função sem alterações)
         const selectedValues = {
             posicao: document.getElementById('filterPosicao').value,
             casta: document.getElementById('filterCasta').value,
@@ -364,6 +354,7 @@
     }
 
     async function saveChanges() {
+        // ... (função sem alterações)
         try {
             if (changedPlayers.size === 0) {
                 alert('Nenhuma alteração para salvar.');
@@ -418,6 +409,7 @@
     const closeAllMenus = () => {
         marketTimeMenu.classList.remove('active');
         multiChangeMenu.classList.remove('active');
+        viewSchedulesPopup.classList.remove('active'); // Adicionado
         overlay.classList.remove('active');
     };
 
@@ -435,6 +427,7 @@
     closeMultiChange.addEventListener('click', closeAllMenus);
 
     function populateMarketTimeSelectors(players) {
+        // ... (função sem alterações)
         const posicoes = new Set();
         const castas = new Set();
         players.forEach(player => {
@@ -455,6 +448,7 @@
     }
     
     function updateApplyModeUI() {
+        // ... (função sem alterações)
         const selectedMode = applyMode.value;
         playerSearchContainer.style.display = 'none';
         positionSelectGroup.style.display = 'none';
@@ -473,7 +467,10 @@
         if (!openTime || !closeTime) {
             return alert('Por favor, preencha os horários de abertura e fechamento.');
         }
-        const marketTimes = { abertura: new Date(openTime).toISOString(), fechamento: new Date(closeTime).toISOString() };
+        const marketTimes = { 
+            abertura: Timestamp.fromDate(new Date(openTime)), 
+            fechamento: Timestamp.fromDate(new Date(closeTime)) 
+        };
         const selectedMode = applyMode.value;
         let batch = [];
         let targetDescription = "";
@@ -508,10 +505,28 @@
                     break;
             }
             if (batch.length === 0) return alert(`Nenhum jogador encontrado para ${targetDescription}.`);
+            
             await Promise.all(batch);
+
+            // Salva o log inteligente
+            const logCollectionRef = collection(db, 'paineis', 'Banca', 'horarioMercado');
+            await addDoc(logCollectionRef, {
+                abertura: marketTimes.abertura,
+                fechamento: marketTimes.fechamento,
+                observacoes: targetDescription,
+                dataCriacao: Timestamp.now(),
+                tipoAplicacao: selectedMode,
+                valorAplicacao: 
+                    selectedMode === 'position' ? applyPositionSelect.value :
+                    selectedMode === 'caste' ? applyCasteSelect.value :
+                    selectedMode === 'specific' ? Array.from(selectedPlayersList) :
+                    'all'
+            });
+
             alert(`Horários do mercado atualizados com sucesso para ${targetDescription}!`);
             closeAllMenus();
-            initializeApp();
+            initializeApp(); // Recarrega tudo para mostrar os novos horários nos cards
+
         } catch (error) {
             console.error('Error saving market times:', error);
             alert('Erro ao salvar horários do mercado.');
@@ -519,6 +534,7 @@
     });
 
     document.querySelectorAll('.toggle-action-button').forEach(button => {
+        // ... (função sem alterações)
         button.addEventListener('click', async (e) => {
             const position = e.target.dataset.position;
             const activate = e.target.dataset.action === 'activate';
@@ -540,6 +556,7 @@
     });
 
     playerSearch.addEventListener('input', async (e) => {
+        // ... (função sem alterações)
         const searchTerm = e.target.value.toLowerCase();
         searchResults.innerHTML = '';
         if (searchTerm.length < 2) return;
@@ -572,72 +589,185 @@
         }
     });
 
+    // --- LÓGICA DO HISTÓRICO DE HORÁRIOS ---
+
+    const viewSchedulesButton = document.getElementById('viewSchedulesButton');
+    const viewSchedulesPopup = document.getElementById('viewSchedulesPopup');
+    const closeSchedulesPopup = document.getElementById('closeSchedulesPopup');
+    const schedulesList = document.getElementById('schedulesList');
+
+    viewSchedulesButton.addEventListener('click', async () => {
+        schedulesList.innerHTML = '<p>A carregar horários...</p>';
+        overlay.classList.add('active');
+        viewSchedulesPopup.classList.add('active');
+
+        try {
+            const logCollectionRef = collection(db, 'paineis', 'Banca', 'horarioMercado');
+            const q = query(logCollectionRef, orderBy("dataCriacao", "desc"));
+            const querySnapshot = await getDocs(q);
+
+            if (querySnapshot.empty) {
+                schedulesList.innerHTML = '<p>Nenhum horário agendado encontrado.</p>';
+                return;
+            }
+
+            schedulesList.innerHTML = '';
+            
+            querySnapshot.forEach(doc => {
+                const data = doc.data();
+                const abertura = data.abertura.toDate().toLocaleString('pt-PT');
+                const fechamento = data.fechamento.toDate().toLocaleString('pt-PT');
+                
+                const scheduleEntry = document.createElement('div');
+                scheduleEntry.style.border = '1px solid #eee';
+                scheduleEntry.style.borderRadius = '4px';
+                scheduleEntry.style.padding = '12px';
+                scheduleEntry.style.marginBottom = '10px';
+                scheduleEntry.dataset.docId = doc.id;
+                scheduleEntry.dataset.docData = JSON.stringify({ ...data, id: doc.id });
+
+                scheduleEntry.innerHTML = `
+                    <p><strong>Abertura:</strong> ${abertura}</p>
+                    <p><strong>Fechamento:</strong> ${fechamento}</p>
+                    <p><strong>Observações:</strong> ${data.observacoes}</p>
+                    <div style="margin-top: 10px; display: flex; gap: 10px; justify-content: flex-end;">
+                        <button class="toggle-action-button edit-schedule" style="background-color: #3498db;">Editar</button>
+                        <button class="toggle-action-button delete-schedule" style="background-color: #e74c3c;">Excluir</button>
+                    </div>
+                `;
+                schedulesList.appendChild(scheduleEntry);
+            });
+        } catch (error) {
+            console.error("Erro ao buscar horários:", error);
+            schedulesList.innerHTML = '<p style="color: red;">Erro ao carregar os horários.</p>';
+        }
+    });
+
+    closeSchedulesPopup.addEventListener('click', () => {
+        overlay.classList.remove('active');
+        viewSchedulesPopup.classList.remove('active');
+    });
+
+    schedulesList.addEventListener('click', async (e) => {
+        if (!e.target.closest('[data-doc-id]')) return;
+
+        const docId = e.target.closest('[data-doc-id]').dataset.docId;
+        const logData = JSON.parse(e.target.closest('[data-doc-id]').dataset.docData);
+
+        if (e.target.classList.contains('delete-schedule')) {
+            if (!confirm(`Tem a certeza que quer excluir este agendamento e REVERTER o horário para os jogadores afetados?\n\nObservação: ${logData.observacoes}`)) return;
+
+            try {
+                let playersToUpdateQuery;
+                const { tipoAplicacao, valorAplicacao } = logData;
+                const revertedTimes = { marketTimes: { abertura: null, fechamento: null } };
+                let updates = [];
+
+                switch (tipoAplicacao) {
+                    case 'all':
+                        playersToUpdateQuery = query(collection(db, 'jogadores'));
+                        break;
+                    case 'position':
+                        playersToUpdateQuery = query(collection(db, 'jogadores'), where("posicao", "==", valorAplicacao));
+                        break;
+                    case 'caste':
+                        playersToUpdateQuery = query(collection(db, 'jogadores'), where("casta", "==", valorAplicacao));
+                        break;
+                    case 'specific':
+                        updates = valorAplicacao.map(playerId => updateDoc(doc(db, 'jogadores', playerId), revertedTimes));
+                        break;
+                }
+
+                if (playersToUpdateQuery) {
+                    const snapshot = await getDocs(playersToUpdateQuery);
+                    updates = snapshot.docs.map(playerDoc => updateDoc(playerDoc.ref, revertedTimes));
+                }
+                
+                await Promise.all(updates);
+                await deleteDoc(doc(db, 'paineis', 'Banca', 'horarioMercado', docId));
+
+                alert('Agendamento excluído e horários dos jogadores revertidos com sucesso!');
+                viewSchedulesButton.click();
+                initializeApp(); // Recarrega os dados da página principal
+
+            } catch (error) {
+                console.error("Erro ao excluir agendamento:", error);
+                alert("Ocorreu um erro ao excluir o agendamento.");
+            }
+        }
+
+        if (e.target.classList.contains('edit-schedule')) {
+            alert("Função de Edição:\n\nPara editar, a melhor abordagem seria reabrir o popup 'Configurar Hora do Mercado', pré-preencher com os dados deste agendamento e, ao salvar, usar `updateDoc` em vez de `addDoc` no registo.\n\nIsto requer uma lógica mais integrada, mas a base (saber quais jogadores afetar) já está feita!");
+        }
+    });
+
     // --- INICIALIZAÇÃO DA APLICAÇÃO ---
 
- async function initializeApp() {
-    try {
-        document.getElementById('players-grid').innerHTML = '<p>A carregar jogadores...</p>';
-        
-        const [jogadoresSnapshot, clubesSnapshot, competicoesSnapshot, paisesSnapshot, usersSnapshot] = await Promise.all([
-            getDocs(collection(db, 'jogadores')),
-            getDocs(collection(db, 'clubes')),
-            getDocs(collection(db, 'competicoes')),
-            getDocs(collection(db, 'paises')),
-            getDocs(collection(db, 'users'))
-        ]);
-
-        const clubesByNameMap = new Map();
-        clubesSnapshot.forEach(doc => {
-            const clubeData = doc.data();
-            if (clubeData.nome) clubesByNameMap.set(clubeData.nome, clubeData);
-        });
-
-        const competicoesMap = new Map();
-        competicoesSnapshot.forEach(doc => competicoesMap.set(doc.id, doc.data()));
-
-        const paisesMap = new Map();
-        paisesSnapshot.forEach(doc => paisesMap.set(doc.id, doc.data()));
-
-        const usersMap = new Map();
-        usersSnapshot.forEach(doc => usersMap.set(doc.id, doc.data()));
-
-        allPlayers = jogadoresSnapshot.docs.map(doc => {
-            const player = { id: doc.id, ...doc.data() };
+    async function initializeApp() {
+        // ... (função sem alterações, apenas certificando que está correta)
+        try {
+            document.getElementById('players-grid').innerHTML = '<p>A carregar jogadores...</p>';
             
-            const clubeData = clubesByNameMap.get(player.clube); 
-            if (clubeData) {
-                player.clubeData = clubeData;
-                const competicaoData = competicoesMap.get(clubeData.competicaoId);
-                if (competicaoData) player.competicaoNome = competicaoData.nome;
-            }
+            const [jogadoresSnapshot, clubesSnapshot, competicoesSnapshot, paisesSnapshot, usersSnapshot] = await Promise.all([
+                getDocs(collection(db, 'jogadores')),
+                getDocs(collection(db, 'clubes')),
+                getDocs(collection(db, 'competicoes')),
+                getDocs(collection(db, 'paises')),
+                getDocs(collection(db, 'users'))
+            ]);
 
-            if (player.paisId) {
-                const paisData = paisesMap.get(player.paisId);
-                if (paisData && paisData.imagem) player.paisImagem = paisData.imagem;
-            }
+            const clubesByNameMap = new Map();
+            clubesSnapshot.forEach(doc => {
+                const clubeData = doc.data();
+                if (clubeData.nome) clubesByNameMap.set(clubeData.nome, clubeData);
+            });
 
-            if (player.compradopor) {
-                const userData = usersMap.get(player.compradopor);
-                if (userData && userData.nometabela) {
-                    player.compradorNome = userData.nometabela;
+            const competicoesMap = new Map();
+            competicoesSnapshot.forEach(doc => competicoesMap.set(doc.id, doc.data()));
+
+            const paisesMap = new Map();
+            paisesSnapshot.forEach(doc => paisesMap.set(doc.id, doc.data()));
+
+            const usersMap = new Map();
+            usersSnapshot.forEach(doc => usersMap.set(doc.id, doc.data()));
+
+            allPlayers = jogadoresSnapshot.docs.map(doc => {
+                const player = { id: doc.id, ...doc.data() };
+                
+                const clubeData = clubesByNameMap.get(player.clube); 
+                if (clubeData) {
+                    player.clubeData = clubeData;
+                    const competicaoData = competicoesMap.get(clubeData.competicaoId);
+                    if (competicaoData) player.competicaoNome = competicaoData.nome;
                 }
-            }
 
-            return player;
-        });
-        
-        populateMarketTimeSelectors(allPlayers);
-        updateFiltersAndDisplay();
+                if (player.paisId) {
+                    const paisData = paisesMap.get(player.paisId);
+                    if (paisData && paisData.imagem) player.paisImagem = paisData.imagem;
+                }
 
-        document.getElementById('filterPosicao').addEventListener('change', updateFiltersAndDisplay);
-        document.getElementById('filterCasta').addEventListener('change', updateFiltersAndDisplay);
-        document.getElementById('filterCompeticao').addEventListener('change', updateFiltersAndDisplay);
-        document.getElementById('filterPais').addEventListener('change', updateFiltersAndDisplay);
-    } catch (error) {
-        console.error('Error initializing app:', error);
-        document.getElementById('players-grid').innerHTML = '<p style="color: red; text-align: center;">Ocorreu um erro ao carregar os dados.</p>';
+                if (player.compradopor) {
+                    const userData = usersMap.get(player.compradopor);
+                    if (userData && userData.nometabela) {
+                        player.compradorNome = userData.nometabela;
+                    }
+                }
+
+                return player;
+            });
+            
+            populateMarketTimeSelectors(allPlayers);
+            updateFiltersAndDisplay();
+
+            document.getElementById('filterPosicao').addEventListener('change', updateFiltersAndDisplay);
+            document.getElementById('filterCasta').addEventListener('change', updateFiltersAndDisplay);
+            document.getElementById('filterCompeticao').addEventListener('change', updateFiltersAndDisplay);
+            document.getElementById('filterPais').addEventListener('change', updateFiltersAndDisplay);
+        } catch (error) {
+            console.error('Error initializing app:', error);
+            document.getElementById('players-grid').innerHTML = '<p style="color: red; text-align: center;">Ocorreu um erro ao carregar os dados.</p>';
+        }
     }
-}
 
     initializeApp();
     document.getElementById('saveChanges').addEventListener('click', saveChanges);
