@@ -156,46 +156,58 @@
                 }
             }
 
-            async function recalculateUserFameForSeason(userIds, season) {
-    // Se não houver utilizadores afetados, não faz nada.
-    if (userIds.size === 0) return 0;
+          async function recalculateUserFameForSeason(userIds, season) {
+    console.log(`--- [INÍCIO - FAMA] Função 'recalculateUserFameForSeason' chamada.`);
+    console.log(`- Temporada para cálculo: ${season}`);
+    console.log(`- Utilizadores a recalcular (${userIds.size}):`, Array.from(userIds));
+
+    if (userIds.size === 0) {
+        console.log("- Nenhum utilizador para atualizar. A função vai terminar.");
+        return 0;
+    }
 
     try {
-        // 1. Consulta todos os palpites da temporada especificada.
+        console.log("- A consultar a base de dados por TODOS os palpites da temporada...");
         const predictionsQuery = query(collection(db, 'palpiteswhowins'),
             where("temporada", "==", season)
         );
         const predictionsSnapshot = await getDocs(predictionsQuery);
+        console.log(`- Encontrados ${predictionsSnapshot.size} palpites no total para a temporada '${season}'.`);
 
-        // 2. Prepara um objeto para armazenar a soma da fama para cada utilizador.
         const userFameTotals = {};
         userIds.forEach(id => { userFameTotals[id] = 0; });
+        console.log("- Totais de fama inicializados a zero:", userFameTotals);
 
-        // 3. Itera sobre os palpites e soma o 'valorreal' para cada utilizador.
+        console.log("- A processar cada palpite para somar o 'valorreal'...");
         predictionsSnapshot.forEach(predDoc => {
             const prediction = predDoc.data();
             // Verifica se o palpite pertence a um dos utilizadores afetados.
             if (userFameTotals.hasOwnProperty(prediction.userId)) {
-                // O 'valorreal' aqui representa os GCoins ganhos, que se traduzem em 'Fama'.
-                userFameTotals[prediction.userId] += prediction.valorreal || 0;
+                const fameToAdd = prediction.valorreal || 0;
+                userFameTotals[prediction.userId] += fameToAdd;
+                if (fameToAdd > 0) {
+                    console.log(`  -> Palpite do UserID: ${prediction.userId} | valorreal: ${prediction.valorreal} | Nova Fama Parcial: ${userFameTotals[prediction.userId]}`);
+                }
             }
         });
 
-        // 4. Prepara uma operação em lote para atualizar o campo 'fame' de todos os utilizadores.
+        console.log("--- [IMPORTANTE] TOTAIS DE FAMA CALCULADOS ANTES DE ATUALIZAR A BD: ---", userFameTotals);
+
         const userUpdateBatch = writeBatch(db);
         for (const userId of userIds) {
             const userRef = doc(db, 'users', userId);
             userUpdateBatch.update(userRef, { fame: userFameTotals[userId] });
         }
 
-        // 5. Executa a atualização em lote.
+        console.log("- A preparar a atualização em lote para o campo 'fame' de cada utilizador...");
         await userUpdateBatch.commit();
+        console.log(`- Sucesso! Campo 'fame' atualizado para ${userIds.size} utilizadores.`);
         
-        // Retorna o número de utilizadores cuja fama foi atualizada.
+        console.log("--- [FIM - FAMA] Função concluída com sucesso. ---");
         return userIds.size;
 
     } catch (error) {
-        console.error("Erro ao recalcular a fama dos utilizadores:", error);
+        console.error("--- [ERRO - FAMA] Erro ao recalcular a fama dos utilizadores: ---", error);
         throw new Error("Falha ao atualizar a fama dos utilizadores.");
     }
 }
@@ -313,12 +325,16 @@
                 }
             }
 
-          async function handleLaunchResults() {
+    async function handleLaunchResults() {
+    console.log("--- [INÍCIO] Botão 'Lançar Resultados' clicado. (Versão Modificada) ---");
     launchBtn.disabled = true;
     launchBtn.textContent = 'A processar...';
     
-    const affectedUserIds = new Set();
+    // A lista de utilizadores afetados DIRETAMENTE pelas mudanças ainda é útil para o recálculo dos GCoins.
+    const directlyAffectedUserIds = new Set();
     const currentSeason = temporadaSelect.value;
+    console.log(`[PASSO 1] Temporada selecionada para processamento: ${currentSeason}`);
+
     let arenaPrizesCache = null;
 
     try {
@@ -326,24 +342,35 @@
             const arenaDocRef = doc(db, 'paineis', 'paineis arena');
             const arenaDocSnap = await getDoc(arenaDocRef);
             arenaPrizesCache = arenaDocSnap.exists() ? arenaDocSnap.data() : {};
+            console.log("[PASSO 2] Cache de prémios da arena carregado:", arenaPrizesCache);
         }
+
         const batch = writeBatch(db);
         let processedPredictionsCount = 0;
+        console.log("[PASSO 3] A percorrer os jogos exibidos na tela para encontrar palpites...");
 
         for (const game of currentlyDisplayedGames) {
-            if (!game.resultado) continue;
+            if (!game.resultado) {
+                console.log(`- Jogo '${game.nomeJogo}' ignorado (sem resultado definido).`);
+                continue;
+            }
             
             const gameResult = game.resultado;
             const prizeValue = arenaPrizesCache[game.arena]?.ganhos || 0;
+            console.log(`- Processando Jogo: '${game.nomeJogo}', Resultado: '${gameResult}', Prémio da Arena ('${game.arena}'): ${prizeValue} GCoins.`);
+            
             const predictionsQuery = query(collection(db, 'palpiteswhowins'), where("nomeJogo", "==", game.id));
             const predictionsSnapshot = await getDocs(predictionsQuery);
 
             predictionsSnapshot.forEach(predictionDoc => {
                 const predictionData = predictionDoc.data();
-                affectedUserIds.add(predictionData.userId);
+                // Adiciona à lista de utilizadores diretamente afetados
+                directlyAffectedUserIds.add(predictionData.userId);
                 
                 const userGuessedCorrectly = (predictionData.winsId === gameResult);
                 const finalPrize = userGuessedCorrectly ? prizeValue : 0;
+                
+                console.log(`  -> Encontrado palpite do UserID: ${predictionData.userId}. Palpite: '${predictionData.winsId}'. Acertou? ${userGuessedCorrectly}. Prémio: ${finalPrize}`);
                 
                 batch.update(predictionDoc.ref, { resultado: gameResult, acertou: userGuessedCorrectly ? "sim" : "nao", valorreal: finalPrize });
                 
@@ -355,20 +382,33 @@
             });
         }
         
-        // Executa o lote principal com as atualizações de palpites e movimentos
+        console.log(`[PASSO 4] Fim do processamento de jogos. ${processedPredictionsCount} palpites adicionados ao lote de atualização.`);
+        console.log(`[PASSO 5] Utilizadores DIRETAMENTE afetados:`, Array.from(directlyAffectedUserIds));
+
         await batch.commit();
+        console.log("[PASSO 6] Lote de atualizações (palpites e movimentos) executado com sucesso.");
         
-        // 1. Recalcula os saldos de GCoins (como já fazia)
-        const updatedUsersCount = await recalculateUserTotalsForSeason(affectedUserIds, currentSeason);
+        // Recalcula os GCoins APENAS para quem foi afetado agora, para ser eficiente.
+        const updatedUsersCount = await recalculateUserTotalsForSeason(directlyAffectedUserIds, currentSeason);
         
-        // 2. [NOVO] Recalcula a Fama para os mesmos utilizadores e temporada
-        const updatedFameCount = await recalculateUserFameForSeason(affectedUserIds, currentSeason);
+        // --- NOVA LÓGICA PARA FORÇAR O RECÁLCULO DA FAMA ---
+        console.log("[NOVO PASSO 7] A encontrar TODOS os utilizadores com palpites na temporada para recalcular a FAMA.");
+        const allSeasonUsersIds = new Set();
+        const allPredictionsQuery = query(collection(db, 'palpiteswhowins'), where("temporada", "==", currentSeason));
+        const allPredictionsSnapshot = await getDocs(allPredictionsQuery);
+        allPredictionsSnapshot.forEach(doc => {
+            allSeasonUsersIds.add(doc.data().userId);
+        });
+        console.log(`- Encontrados ${allSeasonUsersIds.size} utilizadores únicos na temporada '${currentSeason}'.`);
+
+        // Agora chama a função de recálculo da fama com a lista COMPLETA de utilizadores.
+        const updatedFameCount = await recalculateUserFameForSeason(allSeasonUsersIds, currentSeason);
         
-        // 3. [ATUALIZADO] Exibe uma mensagem de feedback mais completa
         showFeedback(`Resultados lançados! ${processedPredictionsCount} palpites atualizados. ${updatedUsersCount} saldos e ${updatedFameCount} pontuações de fama recalculados.`, 'success');
+        console.log(`--- [FIM] Processo concluído com sucesso. ---`);
 
     } catch (error) {
-        console.error("Erro ao lançar resultados:", error);
+        console.error("--- [ERRO] Ocorreu um erro ao lançar resultados: ---", error);
         showFeedback(error.message || 'Ocorreu um erro ao processar os resultados.', 'error');
     } finally {
         launchBtn.disabled = false;
