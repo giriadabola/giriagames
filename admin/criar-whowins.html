@@ -5,10 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Criar WhoWins - G EMPIRE</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
-
-    <!-- 1. Adiciona o nosso guardião de segurança. Ele é o responsável por verificar o login e a permissão. -->
     <script type="module" src="js/auth-guard.js"></script>
-
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { min-height: 100vh; background-color: #f0f0f0; font-family: Arial, sans-serif; }
@@ -22,7 +19,7 @@
         .form-group.highlight-section { background-color: #f8f9fa; padding: 15px; border-radius: 6px; border: 1px solid #e9ecef; }
         .form-group label { display: block; margin-bottom: 8px; color: #333; font-weight: 500; }
         .form-group .input-container { flex: 1; position: relative; }
-        .form-group input, .form-group select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px; transition: border-color 0.3s ease; }
+        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px; transition: border-color 0.3s ease; }
         .club-image { width: 40px; height: 40px; border-radius: 4px; object-fit: cover; border: 1px solid #ddd; }
         .club-image.placeholder { background-color: #f0f0f0; display: flex; align-items: center; justify-content: center; }
         .form-group input:focus, .form-group select:focus { outline: none; border-color: #2176ff; }
@@ -31,106 +28,44 @@
         .search-option:hover { background-color: #f5f5f5; }
         .submit-btn { background-color: #2176ff; color: #ffffff; border: none; padding: 12px 24px; border-radius: 4px; font-size: 16px; font-weight: 500; cursor: pointer; transition: background-color 0.3s ease; width: 100%; margin-top: 20px; }
         .submit-btn:hover { background-color: #1a5cc4; }
+        .submit-btn:disabled { background-color: #a0a0a0; cursor: not-allowed; }
 
-        /* --- NOVO CSS PARA O MODAL DAS ARENAS --- */
-        .modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.6);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 2000;
-        }
-        .modal-content {
-            background: white;
-            padding: 25px;
-            border-radius: 8px;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
-            width: 90%;
-            max-width: 500px;
-            position: relative;
-        }
-        .close-btn {
-            position: absolute;
-            top: 10px;
-            right: 15px;
-            font-size: 28px;
-            font-weight: bold;
-            color: #888;
-            cursor: pointer;
-        }
-        .close-btn:hover {
-            color: #000;
-        }
-        #arenas-list {
-            list-style-type: none;
-            padding: 0;
-            max-height: 250px;
-            overflow-y: auto;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            margin-top: 10px;
-        }
-        #arenas-list li {
-            padding: 12px 15px;
-            border-bottom: 1px solid #eee;
-            cursor: pointer;
-            transition: background-color 0.2s ease;
-        }
-        #arenas-list li:last-child {
-            border-bottom: none;
-        }
-        #arenas-list li:hover {
-            background-color: #f5f5f5;
-        }
-        #arena-form textarea {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 16px;
-            font-family: Arial, sans-serif;
-            resize: vertical;
-        }
-        /* Ajuste para usar a classe do botão submit no modal */
-        #arena-form .form-control {
-             width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px;
-        }
-        .floating-arena-icon {
-    position: fixed;
-    top: 15px;
-    right: 20px;
-    z-index: 1001; /* Garante que fica acima do menu de topo */
-    width: 50px;
-    height: 50px;
-    background-color: #2176ff; /* Cor primária do seu design */
-    color: white;
-    border-radius: 50%; /* Para o tornar circular */
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 20px;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-    text-decoration: none;
-    transition: transform 0.2s ease-in-out;
-}
+        /* --- CSS PARA MODAIS --- */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.6); display: none; justify-content: center; align-items: center; z-index: 2000; }
+        .modal-content { background: white; padding: 25px; border-radius: 8px; box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3); width: 90%; max-width: 600px; position: relative; }
+        .close-btn { position: absolute; top: 10px; right: 15px; font-size: 28px; font-weight: bold; color: #888; cursor: pointer; }
+        .close-btn:hover { color: #000; }
+        #arenas-list { list-style-type: none; padding: 0; max-height: 250px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; margin-top: 10px; }
+        #arenas-list li { padding: 12px 15px; border-bottom: 1px solid #eee; cursor: pointer; transition: background-color 0.2s ease; }
+        #arenas-list li:last-child { border-bottom: none; }
+        #arenas-list li:hover { background-color: #f5f5f5; }
+        #arena-form textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px; font-family: Arial, sans-serif; resize: vertical; }
+        #arena-form .form-control { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px; }
+        
+        /* --- ÍCONES FLUTUANTES --- */
+        .floating-icon { position: fixed; right: 20px; z-index: 1001; width: 50px; height: 50px; background-color: #2176ff; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); text-decoration: none; transition: transform 0.2s ease-in-out; }
+        .floating-icon:hover { transform: scale(1.1); background-color: #1a5cc4; }
+        #manage-arenas-btn { top: 15px; }
+        #multi-add-btn { top: 75px; background-color: #28a745; } /* Cor diferente para distinguir */
+        #multi-add-btn:hover { background-color: #218838; }
 
-.floating-arena-icon:hover {
-    transform: scale(1.1);
-    background-color: #1a5cc4; /* Um tom mais escuro no hover */
-}
-
+        /* --- CSS PARA MODAL DE MÚLTIPLOS JOGOS --- */
+        #multi-add-modal .form-group { display: block; }
+        #multi-add-modal .form-group label { margin-bottom: 5px; }
+        #multi-add-textarea { min-height: 200px; font-family: monospace; font-size: 12px; }
+        #multi-add-results { margin-top: 20px; max-height: 250px; overflow-y: auto; border: 1px solid #eee; padding: 10px; border-radius: 4px; }
+        .result-item { padding: 8px; border-radius: 4px; margin-bottom: 5px; }
+        .result-item.success { background-color: #e9f7ef; border-left: 4px solid #28a745; }
+        .result-item.error { background-color: #fce8e6; border-left: 4px solid #dc3545; }
+        .result-item strong { color: #333; }
+        .result-item span { color: #666; font-size: 12px; }
     </style>
 </head>
-<body style="display: none;"> <!-- O corpo da página está oculto por padrão -->
- <!-- NOVO ÍCONE FLUTUANTE DO GESTOR DE ARENAS -->
-    <a href="#" id="manage-arenas-btn" class="floating-arena-icon" title="Gerir Arenas WhoWins">
-        <i class="fas fa-landmark"></i>
-    </a>
+<body style="display: none;">
+    <!-- ÍCONE FLUTUANTE DO GESTOR DE ARENAS -->
+    <a href="#" id="manage-arenas-btn" class="floating-icon" title="Gerir Arenas WhoWins"><i class="fas fa-landmark"></i></a>
+    <!-- NOVO ÍCONE FLUTUANTE PARA ADICIONAR MÚLTIPLOS JOGOS -->
+    <a href="#" id="multi-add-btn" class="floating-icon" title="Adicionar Múltiplos Jogos"><i class="fas fa-list-ol"></i></a>
 
     <nav class="top-menu">
         <a href="javascript:history.back()" class="menu-item"><i class="fas fa-arrow-left"></i></a>
@@ -143,8 +78,6 @@
         <a href="criar-pais.html" class="menu-item"><i class="fas fa-globe"></i>CRIAR PAIS</a>
         <a href="criar-mods.html" class="menu-item"><i class="fas fa-puzzle-piece"></i>CRIAR MODS</a>
         <a href="criar-odds.html" class="menu-item"><i class="fas fa-percentage"></i>CRIAR ODDS</a>
-       
-       
     </nav>
     <div class="content">
         <h1>Criar WhoWins</h1>
@@ -160,90 +93,134 @@
                 <div class="form-group highlight-section"><label for="fim-palpite">Fim dos Palpites</label><input type="datetime-local" id="fim-palpite" name="fim-palpite" required></div>
                 <div class="form-group" style="display: none;"><label for="anexado">Anexado</label><select id="anexado" name="anexado"><option value="whowins" selected>whowins</option></select></div>
                 <div class="form-group" style="display: none;"><label for="nome-jogo">Nome do Jogo</label><input type="text" id="nome-jogo" name="nome-jogo" required></div>
+                <div class="form-group"><label for="ronda">Ronda</label><select id="ronda" name="ronda" required></select></div>
                 <div class="form-group"><label for="temporada">Temporada</label><input type="text" id="temporada" name="temporada" value="2025/2026" required></div>
                 <button type="submit" class="submit-btn">Criar WhoWins</button>
             </form>
         </div>
     </div>
 
-    <!-- NOVO HTML PARA O MODAL DAS ARENAS -->
-    <div id="arena-modal" class="modal-overlay" style="display: none;">
+    <!-- MODAL DAS ARENAS -->
+    <div id="arena-modal" class="modal-overlay">
         <div class="modal-content">
             <span id="close-arena-modal" class="close-btn">&times;</span>
             <h2>Gerir Arenas WhoWins</h2>
-    
-            <!-- Vista da Lista de Arenas -->
             <div id="arena-list-view">
                 <button id="show-create-arena-form-btn" class="submit-btn" style="margin: 0 0 20px 0;">Criar Nova Arena</button>
-                <p>Selecione uma arena para editar:</p>
-                <ul id="arenas-list">
-                    <!-- A lista de arenas será preenchida via JavaScript -->
-                </ul>
+                <p>Selecione uma arena para editar:</p><ul id="arenas-list"></ul>
             </div>
-    
-            <!-- Vista do Formulário de Criação/Edição -->
             <div id="arena-form-view" style="display: none;">
                 <h3 id="arena-form-title"></h3>
-                <form id="arena-form">
-                    <input type="hidden" id="arena-name-hidden">
-                    <div class="form-group"><label for="arena-image">Link da Imagem</label><input type="url" id="arena-image" class="form-control" placeholder="https://exemplo.com/imagem.png"></div>
-                    <div class="form-group"><label for="arena-video">Link do Vídeo (Opcional)</label><input type="url" id="arena-video" class="form-control" placeholder="https://exemplo.com/video.mp4"></div>
-                    <div class="form-group"><label for="arena-nota">Nota (Descrição)</label><textarea id="arena-nota" class="form-control" rows="3"></textarea></div>
-                    <div class="form-group"><label for="arena-fama">Fama (Número)</label><input type="number" id="arena-fama" class="form-control" placeholder="Ex: 100"></div>
-                    <div style="display: flex; gap: 10px; margin-top: 20px;">
-                        <button type="submit" class="submit-btn" style="margin-top: 0;">Salvar</button>
-                        <button type="button" id="cancel-arena-edit-btn" class="submit-btn" style="background-color: #6c757d; margin-top: 0;">Cancelar</button>
-                    </div>
-                </form>
+                <form id="arena-form"><input type="hidden" id="arena-name-hidden"><div class="form-group"><label for="arena-image">Link da Imagem</label><input type="url" id="arena-image" class="form-control" placeholder="https://exemplo.com/imagem.png"></div><div class="form-group"><label for="arena-video">Link do Vídeo (Opcional)</label><input type="url" id="arena-video" class="form-control" placeholder="https://exemplo.com/video.mp4"></div><div class="form-group"><label for="arena-nota">Nota (Descrição)</label><textarea id="arena-nota" class="form-control" rows="3"></textarea></div><div class="form-group"><label for="arena-fama">Fama (Número)</label><input type="number" id="arena-fama" class="form-control" placeholder="Ex: 100"></div><div style="display: flex; gap: 10px; margin-top: 20px;"><button type="submit" class="submit-btn" style="margin-top: 0;">Salvar</button><button type="button" id="cancel-arena-edit-btn" class="submit-btn" style="background-color: #6c757d; margin-top: 0;">Cancelar</button></div></form>
             </div>
         </div>
     </div>
     
+    <!-- NOVO MODAL PARA MÚLTIPLOS JOGOS -->
+    <div id="multi-add-modal" class="modal-overlay">
+        <div class="modal-content">
+            <span id="close-multi-add-modal" class="close-btn">&times;</span>
+            <h2>Adicionar Múltiplos Jogos</h2>
+            <div style="display: flex; gap: 15px; margin-bottom: 15px;">
+                <div class="form-group" style="flex: 1;"><label for="multi-temporada">Temporada</label><select id="multi-temporada" name="multi-temporada" required></select></div>
+                <div class="form-group" style="flex: 1;"><label for="multi-ronda">Ronda</label><select id="multi-ronda" name="multi-ronda" required></select></div>
+            </div>
+            <div class="form-group"><label for="multi-add-textarea">Cole a lista de jogos aqui</label><textarea id="multi-add-textarea" placeholder="Exemplo:&#10;Quarta - 15.10.&#10;...&#10;16:30&#10;Mouna&#10;Mouna&#10;Racing d'Abidjan&#10;Racing d'Abidjan&#10;-&#10;-"></textarea></div>
+            <button id="analyze-btn" class="submit-btn" style="margin-top: 0;">Analisar Texto</button>
+            <div id="multi-add-results"></div>
+            <button id="confirm-create-btn" class="submit-btn" style="margin-top: 10px; display: none; background-color: #28a745;">Confirmar e Criar Jogos</button>
+        </div>
+    </div>
 
-    <!-- O script da página foi modificado para usar o guardião e incluir a nova funcionalidade -->
     <script type="module">
-        // Importa as variáveis 'auth' e 'db' do guardião central.
         import { db, auth } from './js/auth-guard.js';
-        // Importa as outras funções do Firebase que esta página precisa (updateDoc foi adicionado).
-        import { collection, addDoc, getDocs, query, where, doc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { collection, addDoc, getDocs, query, where, doc, getDoc, updateDoc, setDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
         let currentUser = null;
-
-        onAuthStateChanged(auth, (user) => {
-            currentUser = user;
-        });
-
-        // FUNÇÕES ORIGINAIS DO FORMULÁRIO 'CRIAR WHOWINS'
-        async function searchClubs(searchTerm) {
-            const clubesRef = collection(db, 'clubes');
-            const searchTermLower = searchTerm.toLowerCase();
-            const querySnapshot = await getDocs(collection(db, 'clubes'));
-            const results = querySnapshot.docs
-                .map(doc => ({ id: doc.id, ...doc.data() }))
-                .filter(club => club.nome.toLowerCase().includes(searchTermLower));
-            return results;
-        }
+        onAuthStateChanged(auth, (user) => { currentUser = user; });
         
-        async function loadCompetitions() {
-            try {
-                const competicoesRef = collection(db, 'competicoes');
-                const querySnapshot = await getDocs(competicoesRef);
-                const competicaoSelect = document.getElementById('competicao');
-                competicaoSelect.innerHTML = '<option value="">Selecione uma competição</option>';
-                querySnapshot.forEach(doc => {
-                    const competicao = doc.data();
-                    const option = document.createElement('option');
-                    option.value = doc.id;
-                    option.textContent = competicao.nome;
-                    competicaoSelect.appendChild(option);
-                });
-            } catch (error) {
-                console.error('Erro ao carregar competições:', error);
+        // --- FUNÇÕES GLOBAIS DE RONDA E TEMPORADA ---
+        function populateRondaDropdown(selectElementId) {
+            const rondaSelect = document.getElementById(selectElementId);
+            rondaSelect.innerHTML = '';
+            for (let i = 0; i <= 70; i++) {
+                const option = document.createElement('option'); option.value = i; option.textContent = i; rondaSelect.appendChild(option);
             }
         }
         
+        async function setDefaultRonda() {
+            try {
+                const configRef = doc(db, 'paineis', 'configuracoes_gerais');
+                const configSnap = await getDoc(configRef);
+                if (!configSnap.exists() || !configSnap.data().temporadaAtual) {
+                    console.log("Temporada atual não configurada. Predefinindo como 0.");
+                    document.getElementById('ronda').value = 0;
+                    document.getElementById('multi-ronda').value = 0;
+                    return;
+                }
+                const temporadaAtual = configSnap.data().temporadaAtual;
+                document.getElementById('temporada').value = temporadaAtual; 
+                
+                // Preencher dropdown de temporada no modal
+                const multiTemporadaSelect = document.getElementById('multi-temporada');
+                multiTemporadaSelect.innerHTML = ''; // Limpar opções antigas
+                const currentYear = new Date(temporadaAtual.split('/')[0], 8, 1).getFullYear();
+                for(let i = -1; i < 4; i++) {
+                    const year = currentYear + i;
+                    const season = `${year}/${year + 1}`;
+                    const option = document.createElement('option');
+                    option.value = season;
+                    option.textContent = season;
+                    multiTemporadaSelect.appendChild(option);
+                }
+                multiTemporadaSelect.value = temporadaAtual;
+
+
+                const jogosRef = collection(db, 'whowinsJogos');
+                const q = query(jogosRef, where('temporada', '==', temporadaAtual));
+                const querySnapshot = await getDocs(q);
+                let maxRonda = 0;
+                querySnapshot.forEach((doc) => {
+                    const rondaNum = Number(doc.data().ronda);
+                    if (!isNaN(rondaNum) && rondaNum > maxRonda) { maxRonda = rondaNum; }
+                });
+                document.getElementById('ronda').value = maxRonda;
+                document.getElementById('multi-ronda').value = maxRonda;
+            } catch (error) { console.error("Erro ao definir a ronda predefinida:", error); }
+        }
+
+        async function searchClubs(searchTerm) {
+            const clubesRef = collection(db, 'clubes');
+            const searchTermLower = searchTerm.toLowerCase();
+            const querySnapshot = await getDocs(clubesRef);
+            return querySnapshot.docs
+                .map(doc => ({ id: doc.id, ...doc.data() }))
+                .filter(club => club.nome.toLowerCase().includes(searchTermLower));
+        }
+        
+        async function loadCompetitions() {
+            const competicoesRef = collection(db, 'competicoes');
+            const querySnapshot = await getDocs(competicoesRef);
+            const competicaoSelect = document.getElementById('competicao');
+            competicaoSelect.innerHTML = '<option value="">Selecione uma competição</option>';
+            querySnapshot.forEach(doc => {
+                const competicao = doc.data();
+                const option = document.createElement('option');
+                option.value = doc.id;
+                option.textContent = competicao.nome;
+                competicaoSelect.appendChild(option);
+            });
+        }
+        
         document.addEventListener('DOMContentLoaded', async () => {
+            // --- INICIALIZAÇÃO FORMULÁRIO PRINCIPAL ---
+            populateRondaDropdown('ronda');
+            populateRondaDropdown('multi-ronda');
+            await setDefaultRonda();
+            await loadCompetitions();
+
+            // --- LÓGICA DO FORMULÁRIO PRINCIPAL ---
             const form = document.getElementById('criar-whowins-form');
             const equipaCasaInput = document.getElementById('equipa-casa');
             const equipaForaInput = document.getElementById('equipa-fora');
@@ -253,10 +230,9 @@
             const nomeJogoInput = document.getElementById('nome-jogo');
             let selectedEquipaCasaId = null;
             let selectedEquipaForaId = null;
-
-            await loadCompetitions();
-
-            competicaoSelect.addEventListener('change', async () => {
+            
+            // ... (Toda a lógica existente do formulário de criação individual vai aqui, sem alterações)
+             competicaoSelect.addEventListener('change', async () => {
                 const selectedCompetitionId = competicaoSelect.value;
                 if (selectedCompetitionId) {
                     try {
@@ -400,7 +376,7 @@
                     return;
                 }
                 try {
-                    updateGameName(); // Garante que o nome do jogo está atualizado
+                    updateGameName();
                     const nomeJogo = nomeJogoInput.value;
                     const whoWinsRef = collection(db, 'whowinsJogos');
                     const q = query(whoWinsRef, where('nomeJogo', '==', nomeJogo));
@@ -426,6 +402,7 @@
                         fimIntervalo: document.getElementById('fim-palpite').value ? new Date(document.getElementById('fim-palpite').value) : null,
                         anexado: document.getElementById('anexado').value,
                         nomeJogo: nomeJogoInput.value,
+                        ronda: Number(document.getElementById('ronda').value), // Campo ronda adicionado para gravação
                         temporada: document.getElementById('temporada').value,
                         dataCriacao: new Date(),
                         timestamp: Date.now(),
@@ -443,17 +420,21 @@
                     document.getElementById('competicao-image').innerHTML = '<i class="fas fa-trophy"></i>';
                     document.getElementById('competicao-image').className = 'club-image placeholder';
                     setDefaultPredictionTimes();
+                    await setDefaultRonda(); // Recalcula a ronda para o próximo jogo
                 } catch (error) {
                     console.error('Erro ao criar WhoWins:', error);
                     alert('Erro ao criar WhoWins. Por favor, tente novamente.');
                 }
             });
 
-            // --- NOVO CÓDIGO DO GESTOR DE ARENAS ---
-
+            // --- LÓGICA DO GESTOR DE ARENAS ---
             const manageArenasBtn = document.getElementById('manage-arenas-btn');
             const arenaModal = document.getElementById('arena-modal');
             const closeArenaModalBtn = document.getElementById('close-arena-modal');
+            // ... (A lógica do gestor de arenas existente vai aqui, sem alterações)
+            
+            // --- CÓDIGO DO GESTOR DE ARENAS ---
+
             const arenaListView = document.getElementById('arena-list-view');
             const arenaFormView = document.getElementById('arena-form-view');
             const arenasList = document.getElementById('arenas-list');
@@ -573,27 +554,275 @@
 
                 try {
                     const docRef = doc(db, 'paineis', 'paineis arena');
-                    await updateDoc(docRef, {
-                        [arenaName]: dataToSave
-                    }, { merge: true }); // Usar merge para não apagar outras arenas
+                    await setDoc(docRef, { [arenaName]: dataToSave }, { merge: true });
                     
                     alert(`Arena '${arenaName}' salva com sucesso!`);
                     arenaModal.style.display = 'none';
                 } catch (error) {
-                    if (error.code === 'not-found') {
-                        // Se o documento não existe, cria-o
-                        await setDoc(docRef, { [arenaName]: dataToSave });
-                        alert(`Arena '${arenaName}' criada com sucesso!`);
-                        arenaModal.style.display = 'none';
-                    } else {
-                        console.error("Erro ao salvar arena:", error);
-                        alert("Ocorreu um erro ao salvar. Tente novamente.");
-                    }
+                    console.error("Erro ao salvar arena:", error);
+                    alert("Ocorreu um erro ao salvar. Tente novamente.");
                 } finally {
                      btn.disabled = false;
                      btn.textContent = 'Salvar';
                 }
             });
+
+
+            // --- NOVA LÓGICA PARA MÚLTIPLOS JOGOS ---
+            const multiAddBtn = document.getElementById('multi-add-btn');
+            const multiAddModal = document.getElementById('multi-add-modal');
+            const closeMultiAddModalBtn = document.getElementById('close-multi-add-modal');
+            const analyzeBtn = document.getElementById('analyze-btn');
+            const confirmCreateBtn = document.getElementById('confirm-create-btn');
+            const resultsDiv = document.getElementById('multi-add-results');
+            
+            let validGamesToCreate = []; // Armazena os jogos prontos para criação
+
+            multiAddBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                multiAddModal.style.display = 'flex';
+                resultsDiv.innerHTML = '';
+                confirmCreateBtn.style.display = 'none';
+                document.getElementById('multi-add-textarea').value = '';
+            });
+
+            closeMultiAddModalBtn.addEventListener('click', () => { multiAddModal.style.display = 'none'; });
+            multiAddModal.addEventListener('click', (e) => { if (e.target === multiAddModal) multiAddModal.style.display = 'none'; });
+
+            analyzeBtn.addEventListener('click', async () => {
+                const text = document.getElementById('multi-add-textarea').value;
+                const temporada = document.getElementById('multi-temporada').value;
+                const ronda = Number(document.getElementById('multi-ronda').value);
+                
+                if (!text || !temporada) {
+                    alert("Por favor, preencha a temporada e cole o texto dos jogos.");
+                    return;
+                }
+
+                analyzeBtn.disabled = true;
+                analyzeBtn.textContent = 'Analisando...';
+                resultsDiv.innerHTML = 'A processar...';
+
+                try {
+                    const parsedGames = parseGamesFromText(text, temporada);
+                    const { validGames, invalidGames } = await processAndValidateGames(parsedGames, temporada, ronda);
+                    
+                    validGamesToCreate = validGames; // Armazena os jogos válidos
+                    displayAnalysisResults(validGames, invalidGames);
+
+                    if (validGames.length > 0) {
+                        confirmCreateBtn.style.display = 'block';
+                        confirmCreateBtn.textContent = `Confirmar e Criar ${validGames.length} Jogos`;
+                    } else {
+                        confirmCreateBtn.style.display = 'none';
+                    }
+
+                } catch (error) {
+                    console.error("Erro na análise:", error);
+                    resultsDiv.innerHTML = `<div class="result-item error"><strong>Erro inesperado durante a análise.</strong><span>Verifique a consola para mais detalhes.</span></div>`;
+                } finally {
+                    analyzeBtn.disabled = false;
+                    analyzeBtn.textContent = 'Analisar Texto';
+                }
+            });
+
+            confirmCreateBtn.addEventListener('click', async () => {
+                if (validGamesToCreate.length === 0) {
+                    alert("Não há jogos válidos para criar.");
+                    return;
+                }
+
+                confirmCreateBtn.disabled = true;
+                confirmCreateBtn.textContent = `Criando ${validGamesToCreate.length} jogos...`;
+
+                try {
+                    const batch = writeBatch(db);
+                    validGamesToCreate.forEach(gameData => {
+                        const newGameRef = doc(collection(db, 'whowinsJogos'));
+                        batch.set(newGameRef, gameData);
+                    });
+                    
+                    await batch.commit();
+
+                    alert(`${validGamesToCreate.length} jogos criados com sucesso!`);
+                    multiAddModal.style.display = 'none';
+
+                } catch (error) {
+                    console.error("Erro ao criar jogos em massa:", error);
+                    alert("Ocorreu um erro ao criar os jogos. Por favor, tente novamente.");
+                } finally {
+                    confirmCreateBtn.disabled = false;
+                }
+            });
+
+            function parseGamesFromText(text, temporada) {
+                const lines = text.split('\n').filter(line => line.trim() !== '');
+                const games = [];
+                let currentDateStr = '';
+                const year = parseInt(temporada.split('/')[0]);
+
+                for (let i = 0; i < lines.length; i++) {
+                    const line = lines[i].trim();
+
+                    // Verifica se a linha é uma data, ex: "Quarta - 15.10."
+                    const dateMatch = line.match(/(\d{1,2})\.(\d{1,2})/);
+                    if (dateMatch) {
+                        const day = dateMatch[1].padStart(2, '0');
+                        const month = dateMatch[2].padStart(2, '0');
+                        currentDateStr = `${year}-${month}-${day}`;
+                        continue;
+                    }
+
+                    // Verifica se a linha é uma hora, ex: "16:30"
+                    const timeMatch = line.match(/^(\d{2}:\d{2})$/);
+                    if (timeMatch && currentDateStr && i + 4 < lines.length) {
+                        const timeStr = timeMatch[1];
+                        // O formato espera: HORA, EQUIPA1, EQUIPA1, EQUIPA2, EQUIPA2
+                        const equipaCasa = lines[i + 1]?.trim();
+                        const equipaFora = lines[i + 3]?.trim();
+
+                        if (equipaCasa && equipaFora) {
+                            games.push({ 
+                                dataJogoStr: `${currentDateStr}T${timeStr}`,
+                                equipaCasa,
+                                equipaFora 
+                            });
+                            i += 4; // Pula as linhas já processadas
+                        }
+                    }
+                }
+                return games;
+            }
+
+           async function processAndValidateGames(parsedGames, temporada, ronda) {
+                const validGames = [];
+                const invalidGames = [];
+                const clubCache = new Map();
+                const competitionCache = new Map();
+
+                // 1. OTIMIZAÇÃO: Buscar todos os jogos existentes para a temporada de uma só vez.
+                const existingGamesQuery = query(collection(db, 'whowinsJogos'), where('temporada', '==', temporada));
+                const existingGamesSnapshot = await getDocs(existingGamesQuery);
+                const existingGameNames = new Set(existingGamesSnapshot.docs.map(doc => doc.data().nomeJogo));
+                
+                // 2. OTIMIZAÇÃO: Controlar duplicados dentro do próprio texto colado.
+                const batchGameNames = new Set();
+
+                async function getClubData(name) {
+                    if (clubCache.has(name)) return clubCache.get(name);
+                    const q = query(collection(db, 'clubes'), where('nome', '==', name));
+                    const snapshot = await getDocs(q);
+                    if (snapshot.empty) {
+                        clubCache.set(name, null);
+                        return null;
+                    }
+                    const data = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
+                    clubCache.set(name, data);
+                    return data;
+                }
+                 async function getCompetitionData(id) {
+                    if (competitionCache.has(id)) return competitionCache.get(id);
+                    const docRef = doc(db, 'competicoes', id);
+                    const docSnap = await getDoc(docRef);
+                    if (!docSnap.exists()) {
+                         competitionCache.set(id, null);
+                         return null;
+                    }
+                    const data = { id: docSnap.id, ...docSnap.data() };
+                    competitionCache.set(id, data);
+                    return data;
+                }
+
+                for (const game of parsedGames) {
+                    const { dataJogoStr, equipaCasa, equipaFora } = game;
+                    const homeClub = await getClubData(equipaCasa);
+                    if (!homeClub) {
+                        invalidGames.push({ ...game, error: `Equipa da casa "${equipaCasa}" não encontrada.` }); continue;
+                    }
+                    const awayClub = await getClubData(equipaFora);
+                    if (!awayClub) {
+                        invalidGames.push({ ...game, error: `Equipa de fora "${equipaFora}" não encontrada.` }); continue;
+                    }
+                    if (!homeClub.competicaoId) {
+                        invalidGames.push({ ...game, error: `Equipa "${equipaCasa}" não tem competição associada.` }); continue;
+                    }
+                    const competition = await getCompetitionData(homeClub.competicaoId);
+                    if (!competition) {
+                        invalidGames.push({ ...game, error: `Competição ID "${homeClub.competicaoId}" não encontrada.` }); continue;
+                    }
+
+                    const dataJogo = new Date(dataJogoStr);
+                    const nomeJogo = `${equipaCasa} x ${equipaFora} - ${dataJogo.toLocaleDateString('pt-PT')}`;
+
+                    // --- INÍCIO DA NOVA LÓGICA ANTI-DUPLICAÇÃO ---
+                    if (existingGameNames.has(nomeJogo)) {
+                        invalidGames.push({ ...game, error: `Jogo duplicado. Já existe na base de dados.` });
+                        continue; // Pula para o próximo jogo
+                    }
+                    if (batchGameNames.has(nomeJogo)) {
+                        invalidGames.push({ ...game, error: `Jogo duplicado no texto que colou.` });
+                        continue; // Pula para o próximo jogo
+                    }
+                    // --- FIM DA NOVA LÓGICA ANTI-DUPLICAÇÃO ---
+
+
+                    const fimIntervalo = new Date(dataJogo.getTime() - (60 * 60 * 1000)); // 1 hora antes
+
+                    // Se o jogo é válido e não é duplicado, adiciona-o ao controlo do lote atual
+                    batchGameNames.add(nomeJogo);
+
+                    validGames.push({
+                        equipaCasaId: homeClub.id,
+                        equipaCasa: homeClub.nome,
+                        equipaForaId: awayClub.id,
+                        equipaFora: awayClub.nome,
+                        competicaoId: competition.id,
+                        competicao: competition.nome,
+                        arena: competition.arena || '',
+                        dataJogo,
+                        inicioIntervalo: new Date(),
+                        fimIntervalo,
+                        anexado: "whowins",
+                        nomeJogo,
+                        ronda,
+                        temporada,
+                        dataCriacao: new Date(),
+                        timestamp: Date.now(),
+                        userId: currentUser.uid
+                    });
+                }
+                return { validGames, invalidGames };
+            }
+
+            function displayAnalysisResults(validGames, invalidGames) {
+                resultsDiv.innerHTML = '';
+                if (validGames.length > 0) {
+                    const title = document.createElement('h4');
+                    title.textContent = 'Jogos a Serem Criados:';
+                    resultsDiv.appendChild(title);
+                    validGames.forEach(game => {
+                        const div = document.createElement('div');
+                        div.className = 'result-item success';
+                        div.innerHTML = `<strong>${game.nomeJogo}</strong><span>Competição: ${game.competicao}</span>`;
+                        resultsDiv.appendChild(div);
+                    });
+                }
+                 if (invalidGames.length > 0) {
+                    const title = document.createElement('h4');
+                    title.style.marginTop = '15px';
+                    title.textContent = 'Jogos com Erros:';
+                    resultsDiv.appendChild(title);
+                    invalidGames.forEach(game => {
+                        const div = document.createElement('div');
+                        div.className = 'result-item error';
+                        div.innerHTML = `<strong>${game.equipaCasa} vs ${game.equipaFora}</strong><span>Erro: ${game.error}</span>`;
+                        resultsDiv.appendChild(div);
+                    });
+                }
+                if (validGames.length === 0 && invalidGames.length === 0) {
+                    resultsDiv.innerHTML = '<div class="result-item">Nenhum jogo encontrado no texto. Verifique o formato.</div>';
+                }
+            }
         });
     </script>
 </body>
