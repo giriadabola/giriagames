@@ -1083,6 +1083,7 @@
             <p>Receberá: <strong id="conversionResult">0.00</strong> gCoins</p>
         </div>
         <p id="conversionRateNote" class="conversion-rate-note"></p>
+        <p id="conversionRuleNote" class="conversion-rate-note" style="margin-top: 5px; font-weight: bold;"></p>
         <button id="confirmConversionBtn" class="popup-btn" style="background-color: #27ae60; color: white;">Confirmar Conversão</button>
         <p id="conversionFeedback"></p>
     </div>
@@ -1141,8 +1142,8 @@
         import { getAuth, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
         import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
-import { getFirestore, doc, getDoc, collection, getDocs, query, orderBy, limit, where, updateDoc, addDoc, serverTimestamp, onSnapshot, writeBatch } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
-             const app = initializeApp(firebaseConfig);
+import { getFirestore, doc, getDoc, collection, getDocs, query, orderBy, limit, where, updateDoc, addDoc, serverTimestamp, onSnapshot, writeBatch, increment } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const auth = getAuth(app);
        const functions = getFunctions(app, 'us-central1');
@@ -1834,10 +1835,22 @@ openConversionBtn.addEventListener('click', () => {
     // Preenche o popup de conversão com os dados já buscados
     currentMiniGCoins.textContent = currentUserMiniGCoins.toFixed(0);
     currentGCoins.textContent = currentUserGCoins.toFixed(0);
-    conversionRateNote.textContent = `Taxa de conversão: ${conversionRate} mini-gCoins para 1 gCoin.`;
     conversionAmountInput.value = '';
     conversionResult.textContent = '0.00';
     conversionFeedback.textContent = '';
+
+    // Lógica para preencher as notas de texto
+    const conversionRateNote = document.getElementById('conversionRateNote');
+    const conversionRuleNote = document.getElementById('conversionRuleNote'); // Pega o novo elemento
+
+    conversionRateNote.textContent = `Taxa de conversão: ${conversionRate} mini-gCoins para 1 gCoin.`;
+
+    // Mostra a regra apenas se for relevante (taxa > 1)
+    if (conversionRate > 1) {
+        conversionRuleNote.textContent = `Nota: O valor a converter deve ser um múltiplo de ${conversionRate}.`;
+    } else {
+        conversionRuleNote.textContent = ''; // Esconde a nota se a taxa for 1
+    }
     
     bancaPopup.style.display = 'none';
     conversionPopup.style.display = 'flex';
@@ -1862,94 +1875,49 @@ async function handleConversion() {
     const amountToConvert = parseFloat(conversionAmountInput.value);
     const user = auth.currentUser;
 
-    // --- Validação Completa ---
+    // Validação simples no cliente
     if (!user) {
-        conversionFeedback.textContent = "Erro: Utilizador não autenticado. Por favor, recarregue a página.";
+        conversionFeedback.textContent = "Erro: Utilizador não autenticado.";
         conversionFeedback.style.color = 'red';
         return;
     }
     if (isNaN(amountToConvert) || amountToConvert <= 0) {
-        conversionFeedback.textContent = "Por favor, insira um valor numérico válido e positivo.";
+        conversionFeedback.textContent = "Por favor, insira um valor válido.";
         conversionFeedback.style.color = 'red';
         return;
     }
-    if (amountToConvert > currentUserMiniGCoins) {
-        conversionFeedback.textContent = "Não tem mini-gCoins suficientes para esta conversão.";
+     if (amountToConvert > currentUserMiniGCoins) {
+        conversionFeedback.textContent = "Não tem mini-gCoins suficientes.";
         conversionFeedback.style.color = 'red';
         return;
     }
 
-    // --- Início do Processamento ---
     confirmConversionBtn.disabled = true;
-    conversionFeedback.textContent = 'A processar a sua transação...';
+    conversionFeedback.textContent = 'A processar...';
     conversionFeedback.style.color = 'black';
-    
+
     try {
-        const gCoinsGained = amountToConvert / conversionRate;
-        const batch = writeBatch(db);
-        
-        // Gera um timestamp único para esta transação para criar IDs previsíveis
-        const transactionTimestamp = Date.now();
-        const debitId = `conv_saida_${user.uid}_${transactionTimestamp}`;
-        const creditId = `conv_entrada_${user.uid}_${transactionTimestamp}`;
+        // Chama a Cloud Function segura
+        const convertCoins = httpsCallable(functions, 'convertCoins');
+        const result = await convertCoins({ amount: amountToConvert });
 
-        // 1. Atualiza os saldos no documento do utilizador
-        const userRef = doc(db, 'users', user.uid);
-        const newMiniGCoins = currentUserMiniGCoins - amountToConvert;
-        const newGCoins = currentUserGCoins + gCoinsGained;
-        const gcoinsField = currentSeason + 'GCoins'; 
-        
-        batch.update(userRef, {
-            whowinsgCoins: newMiniGCoins,
-            [gcoinsField]: newGCoins
-        });
-
-        // 2. Cria o movimento de SAÍDA de mini-gCoins ("WhoWins Paid")
-        const debitMovRef = doc(db, 'movimentos', debitId);
-        batch.set(debitMovRef, {
-            estado: "WhoWins Paid",
-            valorreal: -amountToConvert,
-            userId: user.uid,
-            para: user.uid,
-            movimentoData: serverTimestamp(),
-            temporada: currentSeason,
-            descricao: "Conversão",
-            taxa: conversionRate
-        });
-
-        // 3. Cria o movimento de ENTRADA de gCoins ("Palpite Paid")
-        const creditMovRef = doc(db, 'movimentos', creditId);
-        batch.set(creditMovRef, {
-            estado: "Palpite Paid",
-            valorreal: gCoinsGained,
-            userId: user.uid,
-            para: user.uid,
-            movimentoData: serverTimestamp(),
-            temporada: currentSeason,
-            descricao: "Recebido por conversão"
-        });
-
-        // Executa todas as operações de uma só vez
-        await batch.commit();
-
-        // --- Sucesso ---
-        conversionFeedback.textContent = "Conversão bem-sucedida!";
-        conversionFeedback.style.color = 'green';
-        
-        // Atualiza a UI e fecha o popup após 2 segundos
-        setTimeout(() => {
-            conversionPopup.style.display = 'none';
-            updateGCoinsDisplay(); // Atualiza os valores visíveis na página
-        }, 2000);
+        if (result.data.success) {
+            conversionFeedback.textContent = result.data.message || "Conversão bem-sucedida!";
+            conversionFeedback.style.color = 'green';
+            setTimeout(() => {
+                conversionPopup.style.display = 'none';
+                location.reload(); // Recarrega a página para ver todos os novos valores
+            }, 2000);
+        } else {
+            // Este 'else' pode não ser necessário se a função sempre lançar um erro em caso de falha
+            throw new Error(result.data.error || 'Ocorreu um erro no servidor.');
+        }
 
     } catch (error) {
-        // --- Tratamento de Erro ---
-        console.error("Erro ao realizar conversão:", error);
-        conversionFeedback.textContent = "Ocorreu um erro. Por favor, tente novamente.";
+        console.error("Erro ao chamar a função de conversão:", error);
+        conversionFeedback.textContent = error.message; // A mensagem de erro da função será exibida aqui
         conversionFeedback.style.color = 'red';
     } finally {
-        // --- Finalização ---
-        // Garante que o botão é reativado, quer a operação tenha sucesso ou falhe
         confirmConversionBtn.disabled = false;
     }
 }
