@@ -16,21 +16,17 @@
         .menu-item:hover, .menu-item.active { color: #2176ff; background-color: rgba(33, 118, 255, 0.1); }
         .content { max-width: 1200px; margin: 80px auto 20px; padding: 20px; }
         h1 { color: #1a1a1a; text-align: center; margin-bottom: 30px; }
-        
         .filters-container { background-color: #ffffff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; display: flex; gap: 20px; align-items: flex-end; }
         .filter-group { display: flex; flex-direction: column; }
         .filter-group label { font-weight: bold; color: #333; margin-bottom: 5px; }
         .filter-group select { padding: 8px 12px; border-radius: 4px; border: 1px solid #ccc; font-size: 16px; }
-        
         #launch-results-btn { background-color: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 4px; font-size: 16px; font-weight: bold; cursor: pointer; margin-left: auto; transition: background-color 0.2s; }
         #launch-results-btn:hover { background-color: #218838; }
         #launch-results-btn:disabled { background-color: #a0a0a0; cursor: not-allowed; }
-
         #feedback-message { text-align: center; padding: 12px; margin-bottom: 15px; border-radius: 5px; font-weight: bold; display: none; transition: opacity 0.5s ease; }
         #feedback-message.success { background-color: #d4edda; color: #155724; }
         #feedback-message.error { background-color: #f8d7da; color: #721c24; }
         #feedback-message.info { background-color: #d1ecf1; color: #0c5460; }
-
         .game-list { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); gap: 20px; }
         .game-item { background: linear-gradient(135deg, #4a4a4a 0%, #2c2c2c 100%); color: #ffffff; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); padding: 15px; display: flex; flex-direction: column; align-items: center; text-align: center; font-family: 'Roboto Condensed', sans-serif; transition: transform 0.2s ease; }
         .teams-container { display: flex; align-items: center; justify-content: space-around; width: 100%; }
@@ -100,25 +96,20 @@
             const placeholder = document.getElementById('placeholder-message');
             const feedbackMessage = document.getElementById('feedback-message');
             
-            let currentAdminId = "ADMIN_USER_ID"; // Valor padrão caso o auth demore
-            onAuthStateChanged(auth, (user) => {
-                if (user) currentAdminId = user.uid;
-            });
+            let currentAdminId = "ADMIN_USER_ID";
+            onAuthStateChanged(auth, (user) => { if (user) currentAdminId = user.uid; });
 
             let allGamesData = [];
             let currentlyDisplayedGames = [];
             const clubCache = new Map();
-            let arenaPrizesCache = null;
             let feedbackTimeout;
 
-            function showFeedback(message, type = 'success', duration = 4000) {
+            function showFeedback(message, type = 'success', duration = 5000) {
                 clearTimeout(feedbackTimeout);
                 feedbackMessage.textContent = message;
                 feedbackMessage.className = type;
                 feedbackMessage.style.display = 'block';
-                feedbackTimeout = setTimeout(() => {
-                    feedbackMessage.style.display = 'none';
-                }, duration);
+                feedbackTimeout = setTimeout(() => { feedbackMessage.style.display = 'none'; }, duration);
             }
 
             async function getClubData(clubId) {
@@ -128,6 +119,41 @@
                 const clubData = clubSnap.exists() ? clubSnap.data() : { imagem: '', nome: 'Clube Desconhecido' };
                 clubCache.set(clubId, clubData);
                 return clubData;
+            }
+            
+            async function recalculateUserTotalsForSeason(userIds, season) {
+                if (userIds.size === 0) return 0;
+
+                try {
+                    const movementsQuery = query(collection(db, 'movimentos'),
+                        where("estado", "==", "WhoWins Paid"),
+                        where("temporada", "==", season)
+                    );
+                    const movementsSnapshot = await getDocs(movementsQuery);
+
+                    const userTotals = {};
+                    userIds.forEach(id => { userTotals[id] = 0; });
+
+                    movementsSnapshot.forEach(movDoc => {
+                        const movimento = movDoc.data();
+                        if (userTotals.hasOwnProperty(movimento.userId)) {
+                            userTotals[movimento.userId] += movimento.valorreal || 0;
+                        }
+                    });
+
+                    const userUpdateBatch = writeBatch(db);
+                    for (const userId of userIds) {
+                        const userRef = doc(db, 'users', userId);
+                        userUpdateBatch.update(userRef, { whowinsgCoins: userTotals[userId] });
+                    }
+
+                    await userUpdateBatch.commit();
+                    return userIds.size;
+
+                } catch (error) {
+                    console.error("Erro ao recalcular totais dos utilizadores:", error);
+                    throw new Error("Falha ao atualizar saldos dos utilizadores.");
+                }
             }
 
             async function initializeFilters() {
@@ -205,6 +231,9 @@
 
                 clickedButton.disabled = true;
                 clickedButton.textContent = 'A limpar...';
+                
+                const affectedUserIds = new Set();
+                const currentSeason = temporadaSelect.value;
 
                 try {
                     const batch = writeBatch(db);
@@ -215,6 +244,7 @@
 
                     predictionsSnapshot.forEach(predictionDoc => {
                         const userId = predictionDoc.data().userId;
+                        affectedUserIds.add(userId);
                         batch.update(predictionDoc.ref, { resultado: null, acertou: null, valorreal: null });
                         const movimentoId = `whowins_${userId}_${gameId}`;
                         const movimentoRef = doc(db, 'movimentos', movimentoId);
@@ -223,13 +253,16 @@
 
                     await batch.commit();
                     
+                    const updatedUsersCount = await recalculateUserTotalsForSeason(affectedUserIds, currentSeason);
+
                     gameItem.querySelectorAll('.selected').forEach(el => el.classList.remove('selected'));
                     const gameIndex = allGamesData.findIndex(g => g.id === gameId);
                     if (gameIndex > -1) allGamesData[gameIndex].resultado = null;
-                    showFeedback(`Resultado, ${predictionsSnapshot.size} palpites e movimentos associados foram limpos/revertidos.`, 'info');
+                    
+                    showFeedback(`Resultado e ${predictionsSnapshot.size} palpites limpos. ${updatedUsersCount} saldos de utilizadores recalculados.`, 'info');
                 } catch (error) {
-                    console.error("Erro ao remover resultado e limpar palpites:", error);
-                    showFeedback("Ocorreu um erro ao remover o resultado.", 'error');
+                    console.error("Erro ao remover resultado:", error);
+                    showFeedback(error.message || "Ocorreu um erro ao remover o resultado.", 'error');
                 } finally {
                     clickedButton.disabled = false;
                     clickedButton.textContent = 'Sem Resultado';
@@ -240,6 +273,10 @@
                 launchBtn.disabled = true;
                 launchBtn.textContent = 'A processar...';
                 
+                const affectedUserIds = new Set();
+                const currentSeason = temporadaSelect.value;
+                let arenaPrizesCache = null;
+
                 try {
                     if (!arenaPrizesCache) {
                         const arenaDocRef = doc(db, 'paineis', 'paineis arena');
@@ -254,45 +291,34 @@
                         
                         const gameResult = game.resultado;
                         const prizeValue = arenaPrizesCache[game.arena]?.ganhos || 0;
-                        
                         const predictionsQuery = query(collection(db, 'palpiteswhowins'), where("nomeJogo", "==", game.id));
                         const predictionsSnapshot = await getDocs(predictionsQuery);
 
                         predictionsSnapshot.forEach(predictionDoc => {
                             const predictionData = predictionDoc.data();
+                            affectedUserIds.add(predictionData.userId);
+                            
                             const userGuessedCorrectly = (predictionData.winsId === gameResult);
                             const finalPrize = userGuessedCorrectly ? prizeValue : 0;
                             
-                            const updatePredictionData = {
-                                resultado: gameResult,
-                                acertou: userGuessedCorrectly ? "sim" : "nao",
-                                valorreal: finalPrize
-                            };
-                            batch.update(predictionDoc.ref, updatePredictionData);
+                            batch.update(predictionDoc.ref, { resultado: gameResult, acertou: userGuessedCorrectly ? "sim" : "nao", valorreal: finalPrize });
                             
                             const movimentoId = `whowins_${predictionData.userId}_${game.id}`;
                             const movimentoRef = doc(db, 'movimentos', movimentoId);
-                            const movimentoData = {
-                                de: currentAdminId,
-                                estado: "WhoWins Paid",
-                                movimentoData: Timestamp.now(),
-                                nomeJogo: game.nomeJogo,
-                                para: predictionData.userId,
-                                temporada: game.temporada,
-                                userId: predictionData.userId,
-                                valorreal: finalPrize
-                            };
-                            batch.set(movimentoRef, movimentoData, { merge: true });
-
+                            batch.set(movimentoRef, { de: currentAdminId, estado: "WhoWins Paid", movimentoData: Timestamp.now(), nomeJogo: game.nomeJogo, para: predictionData.userId, temporada: game.temporada, userId: predictionData.userId, valorreal: finalPrize }, { merge: true });
+                            
                             processedPredictionsCount++;
                         });
                     }
                     
                     await batch.commit();
-                    showFeedback(`Resultados lançados! ${processedPredictionsCount} palpites e movimentos foram atualizados.`, 'success');
+                    
+                    const updatedUsersCount = await recalculateUserTotalsForSeason(affectedUserIds, currentSeason);
+                    
+                    showFeedback(`Resultados lançados! ${processedPredictionsCount} palpites atualizados e ${updatedUsersCount} saldos de utilizadores recalculados.`, 'success');
                 } catch (error) {
                     console.error("Erro ao lançar resultados:", error);
-                    showFeedback('Ocorreu um erro ao processar os resultados.', 'error');
+                    showFeedback(error.message || 'Ocorreu um erro ao processar os resultados.', 'error');
                 } finally {
                     launchBtn.disabled = false;
                     launchBtn.textContent = 'Lançar Resultados';
