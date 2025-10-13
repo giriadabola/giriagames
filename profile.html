@@ -903,6 +903,38 @@
     padding-bottom: 9px;
 }
 
+/* NOVOS ESTILOS PARA POPUP DE CONVERSÃO */
+.conversion-info { 
+    text-align: left; 
+    margin-bottom: 1.5rem; 
+}
+.conversion-info p { 
+    margin-bottom: 0.5rem; 
+    font-size: 1.1em; 
+}
+.conversion-info strong { 
+    color: #3498db; 
+}
+.conversion-rate-note { 
+    font-size: 0.8em; 
+    color: #777; 
+    margin-top: 1rem; 
+}
+#conversionFeedback { 
+    margin-top: 1rem; 
+    font-weight: bold; 
+    min-height: 20px; 
+}
+.banca-option-btn { 
+    background-color: #3498db; 
+    color: white; 
+    width: 100%; 
+    margin-top: 1rem; 
+}
+.banca-display {
+    cursor: pointer; /* Garante que o card da banca mostra o cursor de clique */
+}
+
     </style>
 </head>
 <body>
@@ -1027,6 +1059,35 @@
         </div>
     </div>
 
+<!-- NOVO POPUP DA BANCA -->
+<div class="popup-overlay" id="bancaPopup">
+    <div class="popup-content">
+        <button class="popup-btn popup-btn-icon" id="closeBancaPopupBtn"><i class="fas fa-times"></i></button>
+        <h2>Banca</h2>
+        <p>Selecione uma opção.</p>
+        <button id="openConversionBtn" class="popup-btn banca-option-btn">Converter mini-gCoins</button>
+    </div>
+</div>
+
+<!-- NOVO POPUP DE CONVERSÃO -->
+<div class="popup-overlay" id="conversionPopup">
+    <div class="popup-content" style="max-width: 500px;">
+        <button class="popup-btn popup-btn-icon" id="closeConversionPopupBtn"><i class="fas fa-times"></i></button>
+        <h2>Converter mini-gCoins</h2>
+        <div class="conversion-info">
+            <p>Seus mini-gCoins: <strong id="currentMiniGCoins">0</strong></p>
+            <p>Seus gCoins: <strong id="currentGCoins">0</strong></p>
+        </div>
+        <input type="number" id="conversionAmountInput" class="password-input" placeholder="Valor a converter" min="1">
+        <div class="conversion-info">
+            <p>Receberá: <strong id="conversionResult">0.00</strong> gCoins</p>
+        </div>
+        <p id="conversionRateNote" class="conversion-rate-note"></p>
+        <button id="confirmConversionBtn" class="popup-btn" style="background-color: #27ae60; color: white;">Confirmar Conversão</button>
+        <p id="conversionFeedback"></p>
+    </div>
+</div>
+
     <div class="popup-overlay" id="miniGamesPopup">
         <div class="popup-content">
             <button class="popup-btn popup-btn-icon" id="closeMiniGamesPopupIcon">
@@ -1113,8 +1174,21 @@ import { getFirestore, doc, getDoc, collection, getDocs, query, orderBy, limit, 
         const logoutBtn = document.getElementById('logoutBtn');
          const manualDisplay = document.getElementById('manualDisplay');
         const trophiesDisplay = document.getElementById('trophiesDisplay');
-const bancaDisplay = document.getElementById('bancaDisplay');
-        const bancaValue = document.getElementById('bancaValue');
+         const bancaValue = document.getElementById('bancaValue');
+         const bancaDisplay = document.getElementById('bancaDisplay');
+const bancaPopup = document.getElementById('bancaPopup');
+const closeBancaPopupBtn = document.getElementById('closeBancaPopupBtn');
+const openConversionBtn = document.getElementById('openConversionBtn');
+const conversionPopup = document.getElementById('conversionPopup');
+const closeConversionPopupBtn = document.getElementById('closeConversionPopupBtn');
+const currentMiniGCoins = document.getElementById('currentMiniGCoins');
+const currentGCoins = document.getElementById('currentGCoins');
+const conversionAmountInput = document.getElementById('conversionAmountInput');
+const conversionResult = document.getElementById('conversionResult');
+const conversionRateNote = document.getElementById('conversionRateNote');
+const confirmConversionBtn = document.getElementById('confirmConversionBtn');
+const conversionFeedback = document.getElementById('conversionFeedback');
+       
 
         // Bottom Menu Items
         const debtValueElement = document.getElementById('debtValue');
@@ -1134,6 +1208,9 @@ const debtFeedback = document.getElementById('debtFeedback');
         let totalUserDebt = 0;
 let currentUserGCoins = 0;
 let userDebtDocuments = [];
+let conversionRate = 0;
+let currentSeason = '';
+let currentUserMiniGCoins = 0;
 
         // Function to update mini-games visibility based on panel settings
         async function updateMiniGamesVisibility(panelSettings) {
@@ -1532,22 +1609,41 @@ async function handleDebtPayment() {
 
 
 
-        async function updateGCoinsDisplay() {
-             const user = auth.currentUser;
-            const gcoinsValue = document.getElementById('gcoinsValue');
+     async function updateGCoinsDisplay() {
+    const user = auth.currentUser;
+    const gcoinsValue = document.getElementById('gcoinsValue');
 
-            if (user) {
-                const userDoc = await getDoc(doc(db, 'users', user.uid));
-                if (userDoc.exists()) {
-                    const userData = userDoc.data();
-                    const latestGcoinsField = findLatestGcoinsField(userData);
-                    const gcoins = latestGcoinsField ? (userData[latestGcoinsField] || 0) : 0;
-                    gcoinsValue.textContent = gcoins;
-                    return { field: latestGcoinsField, value: gcoins };
+    if (user) {
+        try {
+            // 1. Busca a temporada atual como fonte da verdade
+            const configRef = doc(db, 'paineis', 'configuracoes_gerais');
+            const userRef = doc(db, 'users', user.uid);
+            
+            const [configSnap, userSnap] = await Promise.all([
+                getDoc(configRef),
+                getDoc(userRef)
+            ]);
+
+            if (userSnap.exists()) {
+                const userData = userSnap.data();
+                const temporadaAtual = configSnap.exists() ? configSnap.data().temporadaAtual : '';
+                
+                if (temporadaAtual) {
+                    const seasonString = temporadaAtual.replace('/', '');
+                    const gcoinsField = seasonString + 'GCoins';
+                    
+                    const gcoins = userData[gcoinsField] || 0;
+                    gcoinsValue.textContent = gcoins.toFixed(0);
+                } else {
+                    gcoinsValue.textContent = '0'; // Fallback se a temporada não for encontrada
                 }
             }
-            return null;
+        } catch (error) {
+            console.error("Erro ao atualizar o display de GCoins:", error);
+            gcoinsValue.textContent = 'Erro';
         }
+    }
+}
 
         async function loadTransactions() {
             gcoinsTransactionsList.innerHTML = '';
@@ -1690,6 +1786,174 @@ async function handleDebtPayment() {
 
    
    
+        // --- Lógica de Abertura/Fecho dos Popups da Banca ---
+bancaDisplay.addEventListener('click', async () => {
+    const user = auth.currentUser;
+    if (!user) return;
+    
+    try {
+        const bancaRef = doc(db, 'paineis', 'Banca');
+        const configRef = doc(db, 'paineis', 'configuracoes_gerais');
+        const userRef = doc(db, 'users', user.uid);
+
+        const [bancaSnap, configSnap, userSnap] = await Promise.all([
+            getDoc(bancaRef),
+            getDoc(configRef),
+            getDoc(userRef)
+        ]);
+
+        const temporadaAtual = configSnap.exists() ? configSnap.data().temporadaAtual : new Date().getFullYear().toString();
+        currentSeason = temporadaAtual.replace('/', ''); // Ex: "20252026"
+
+        conversionRate = bancaSnap.exists() ? bancaSnap.data().taxaWhoWins : 0;
+        
+        if(userSnap.exists()){
+            const userData = userSnap.data();
+            const gcoinsField = currentSeason + 'GCoins'; // Constrói o nome do campo dinamicamente
+            
+            currentUserMiniGCoins = userData.whowinsgCoins || 0;
+            currentUserGCoins = userData[gcoinsField] || 0; // Lê do campo dinâmico
+        }
+
+        if (conversionRate > 0) {
+            bancaPopup.style.display = 'flex';
+        } else {
+            alert("A funcionalidade de conversão não está disponível no momento.");
+        }
+
+    } catch (error) {
+        console.error("Erro ao preparar a conversão:", error);
+        alert("Ocorreu um erro ao aceder à banca. Tente novamente.");
+    }
+});
+
+closeBancaPopupBtn.addEventListener('click', () => { bancaPopup.style.display = 'none'; });
+closeConversionPopupBtn.addEventListener('click', () => { conversionPopup.style.display = 'none'; });
+
+openConversionBtn.addEventListener('click', () => {
+    // Preenche o popup de conversão com os dados já buscados
+    currentMiniGCoins.textContent = currentUserMiniGCoins.toFixed(0);
+    currentGCoins.textContent = currentUserGCoins.toFixed(0);
+    conversionRateNote.textContent = `Taxa de conversão: ${conversionRate} mini-gCoins para 1 gCoin.`;
+    conversionAmountInput.value = '';
+    conversionResult.textContent = '0.00';
+    conversionFeedback.textContent = '';
+    
+    bancaPopup.style.display = 'none';
+    conversionPopup.style.display = 'flex';
+});
+
+// --- Lógica da Simulação e Conversão ---
+conversionAmountInput.addEventListener('input', updateConversionSimulation);
+
+function updateConversionSimulation() {
+    const amount = parseFloat(conversionAmountInput.value);
+    if (!isNaN(amount) && amount > 0 && conversionRate > 0) {
+        const result = amount / conversionRate;
+        conversionResult.textContent = result.toFixed(2);
+    } else {
+        conversionResult.textContent = '0.00';
+    }
+}
+
+confirmConversionBtn.addEventListener('click', handleConversion);
+
+async function handleConversion() {
+    const amountToConvert = parseFloat(conversionAmountInput.value);
+    const user = auth.currentUser;
+
+    // --- Validação Completa ---
+    if (!user) {
+        conversionFeedback.textContent = "Erro: Utilizador não autenticado. Por favor, recarregue a página.";
+        conversionFeedback.style.color = 'red';
+        return;
+    }
+    if (isNaN(amountToConvert) || amountToConvert <= 0) {
+        conversionFeedback.textContent = "Por favor, insira um valor numérico válido e positivo.";
+        conversionFeedback.style.color = 'red';
+        return;
+    }
+    if (amountToConvert > currentUserMiniGCoins) {
+        conversionFeedback.textContent = "Não tem mini-gCoins suficientes para esta conversão.";
+        conversionFeedback.style.color = 'red';
+        return;
+    }
+
+    // --- Início do Processamento ---
+    confirmConversionBtn.disabled = true;
+    conversionFeedback.textContent = 'A processar a sua transação...';
+    conversionFeedback.style.color = 'black';
+    
+    try {
+        const gCoinsGained = amountToConvert / conversionRate;
+        const batch = writeBatch(db);
+        
+        // Gera um timestamp único para esta transação para criar IDs previsíveis
+        const transactionTimestamp = Date.now();
+        const debitId = `conv_saida_${user.uid}_${transactionTimestamp}`;
+        const creditId = `conv_entrada_${user.uid}_${transactionTimestamp}`;
+
+        // 1. Atualiza os saldos no documento do utilizador
+        const userRef = doc(db, 'users', user.uid);
+        const newMiniGCoins = currentUserMiniGCoins - amountToConvert;
+        const newGCoins = currentUserGCoins + gCoinsGained;
+        const gcoinsField = currentSeason + 'GCoins'; 
+        
+        batch.update(userRef, {
+            whowinsgCoins: newMiniGCoins,
+            [gcoinsField]: newGCoins
+        });
+
+        // 2. Cria o movimento de SAÍDA de mini-gCoins ("WhoWins Paid")
+        const debitMovRef = doc(db, 'movimentos', debitId);
+        batch.set(debitMovRef, {
+            estado: "WhoWins Paid",
+            valorreal: -amountToConvert,
+            userId: user.uid,
+            para: user.uid,
+            movimentoData: serverTimestamp(),
+            temporada: currentSeason,
+            descricao: "Conversão",
+            taxa: conversionRate
+        });
+
+        // 3. Cria o movimento de ENTRADA de gCoins ("Palpite Paid")
+        const creditMovRef = doc(db, 'movimentos', creditId);
+        batch.set(creditMovRef, {
+            estado: "Palpite Paid",
+            valorreal: gCoinsGained,
+            userId: user.uid,
+            para: user.uid,
+            movimentoData: serverTimestamp(),
+            temporada: currentSeason,
+            descricao: "Recebido por conversão"
+        });
+
+        // Executa todas as operações de uma só vez
+        await batch.commit();
+
+        // --- Sucesso ---
+        conversionFeedback.textContent = "Conversão bem-sucedida!";
+        conversionFeedback.style.color = 'green';
+        
+        // Atualiza a UI e fecha o popup após 2 segundos
+        setTimeout(() => {
+            conversionPopup.style.display = 'none';
+            updateGCoinsDisplay(); // Atualiza os valores visíveis na página
+        }, 2000);
+
+    } catch (error) {
+        // --- Tratamento de Erro ---
+        console.error("Erro ao realizar conversão:", error);
+        conversionFeedback.textContent = "Ocorreu um erro. Por favor, tente novamente.";
+        conversionFeedback.style.color = 'red';
+    } finally {
+        // --- Finalização ---
+        // Garante que o botão é reativado, quer a operação tenha sucesso ou falhe
+        confirmConversionBtn.disabled = false;
+    }
+}
+
    
 onAuthStateChanged(auth, async (user) => {
     // Limpa qualquer listener anterior para evitar múltiplas execuções se o estado de auth mudar
