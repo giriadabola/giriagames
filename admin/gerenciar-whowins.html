@@ -156,6 +156,50 @@
                 }
             }
 
+            async function recalculateUserFameForSeason(userIds, season) {
+    // Se não houver utilizadores afetados, não faz nada.
+    if (userIds.size === 0) return 0;
+
+    try {
+        // 1. Consulta todos os palpites da temporada especificada.
+        const predictionsQuery = query(collection(db, 'palpiteswhowins'),
+            where("temporada", "==", season)
+        );
+        const predictionsSnapshot = await getDocs(predictionsQuery);
+
+        // 2. Prepara um objeto para armazenar a soma da fama para cada utilizador.
+        const userFameTotals = {};
+        userIds.forEach(id => { userFameTotals[id] = 0; });
+
+        // 3. Itera sobre os palpites e soma o 'valorreal' para cada utilizador.
+        predictionsSnapshot.forEach(predDoc => {
+            const prediction = predDoc.data();
+            // Verifica se o palpite pertence a um dos utilizadores afetados.
+            if (userFameTotals.hasOwnProperty(prediction.userId)) {
+                // O 'valorreal' aqui representa os GCoins ganhos, que se traduzem em 'Fama'.
+                userFameTotals[prediction.userId] += prediction.valorreal || 0;
+            }
+        });
+
+        // 4. Prepara uma operação em lote para atualizar o campo 'fame' de todos os utilizadores.
+        const userUpdateBatch = writeBatch(db);
+        for (const userId of userIds) {
+            const userRef = doc(db, 'users', userId);
+            userUpdateBatch.update(userRef, { fame: userFameTotals[userId] });
+        }
+
+        // 5. Executa a atualização em lote.
+        await userUpdateBatch.commit();
+        
+        // Retorna o número de utilizadores cuja fama foi atualizada.
+        return userIds.size;
+
+    } catch (error) {
+        console.error("Erro ao recalcular a fama dos utilizadores:", error);
+        throw new Error("Falha ao atualizar a fama dos utilizadores.");
+    }
+}
+
             async function initializeFilters() {
                 placeholder.innerHTML = '<i class="fas fa-spinner fa-spin"></i> A carregar dados...';
                 try {
@@ -269,63 +313,70 @@
                 }
             }
 
-            async function handleLaunchResults() {
-                launchBtn.disabled = true;
-                launchBtn.textContent = 'A processar...';
+          async function handleLaunchResults() {
+    launchBtn.disabled = true;
+    launchBtn.textContent = 'A processar...';
+    
+    const affectedUserIds = new Set();
+    const currentSeason = temporadaSelect.value;
+    let arenaPrizesCache = null;
+
+    try {
+        if (!arenaPrizesCache) {
+            const arenaDocRef = doc(db, 'paineis', 'paineis arena');
+            const arenaDocSnap = await getDoc(arenaDocRef);
+            arenaPrizesCache = arenaDocSnap.exists() ? arenaDocSnap.data() : {};
+        }
+        const batch = writeBatch(db);
+        let processedPredictionsCount = 0;
+
+        for (const game of currentlyDisplayedGames) {
+            if (!game.resultado) continue;
+            
+            const gameResult = game.resultado;
+            const prizeValue = arenaPrizesCache[game.arena]?.ganhos || 0;
+            const predictionsQuery = query(collection(db, 'palpiteswhowins'), where("nomeJogo", "==", game.id));
+            const predictionsSnapshot = await getDocs(predictionsQuery);
+
+            predictionsSnapshot.forEach(predictionDoc => {
+                const predictionData = predictionDoc.data();
+                affectedUserIds.add(predictionData.userId);
                 
-                const affectedUserIds = new Set();
-                const currentSeason = temporadaSelect.value;
-                let arenaPrizesCache = null;
+                const userGuessedCorrectly = (predictionData.winsId === gameResult);
+                const finalPrize = userGuessedCorrectly ? prizeValue : 0;
+                
+                batch.update(predictionDoc.ref, { resultado: gameResult, acertou: userGuessedCorrectly ? "sim" : "nao", valorreal: finalPrize });
+                
+                const movimentoId = `whowins_${predictionData.userId}_${game.id}`;
+                const movimentoRef = doc(db, 'movimentos', movimentoId);
+                batch.set(movimentoRef, { de: currentAdminId, estado: "WhoWins Paid", movimentoData: Timestamp.now(), nomeJogo: game.nomeJogo, para: predictionData.userId, temporada: game.temporada, userId: predictionData.userId, valorreal: finalPrize }, { merge: true });
+                
+                processedPredictionsCount++;
+            });
+        }
+        
+        // Executa o lote principal com as atualizações de palpites e movimentos
+        await batch.commit();
+        
+        // 1. Recalcula os saldos de GCoins (como já fazia)
+        const updatedUsersCount = await recalculateUserTotalsForSeason(affectedUserIds, currentSeason);
+        
+        // 2. [NOVO] Recalcula a Fama para os mesmos utilizadores e temporada
+        const updatedFameCount = await recalculateUserFameForSeason(affectedUserIds, currentSeason);
+        
+        // 3. [ATUALIZADO] Exibe uma mensagem de feedback mais completa
+        showFeedback(`Resultados lançados! ${processedPredictionsCount} palpites atualizados. ${updatedUsersCount} saldos e ${updatedFameCount} pontuações de fama recalculados.`, 'success');
 
-                try {
-                    if (!arenaPrizesCache) {
-                        const arenaDocRef = doc(db, 'paineis', 'paineis arena');
-                        const arenaDocSnap = await getDoc(arenaDocRef);
-                        arenaPrizesCache = arenaDocSnap.exists() ? arenaDocSnap.data() : {};
-                    }
-                    const batch = writeBatch(db);
-                    let processedPredictionsCount = 0;
+    } catch (error) {
+        console.error("Erro ao lançar resultados:", error);
+        showFeedback(error.message || 'Ocorreu um erro ao processar os resultados.', 'error');
+    } finally {
+        launchBtn.disabled = false;
+        launchBtn.textContent = 'Lançar Resultados';
+    }
+}
 
-                    for (const game of currentlyDisplayedGames) {
-                        if (!game.resultado) continue;
-                        
-                        const gameResult = game.resultado;
-                        const prizeValue = arenaPrizesCache[game.arena]?.ganhos || 0;
-                        const predictionsQuery = query(collection(db, 'palpiteswhowins'), where("nomeJogo", "==", game.id));
-                        const predictionsSnapshot = await getDocs(predictionsQuery);
-
-                        predictionsSnapshot.forEach(predictionDoc => {
-                            const predictionData = predictionDoc.data();
-                            affectedUserIds.add(predictionData.userId);
-                            
-                            const userGuessedCorrectly = (predictionData.winsId === gameResult);
-                            const finalPrize = userGuessedCorrectly ? prizeValue : 0;
-                            
-                            batch.update(predictionDoc.ref, { resultado: gameResult, acertou: userGuessedCorrectly ? "sim" : "nao", valorreal: finalPrize });
-                            
-                            const movimentoId = `whowins_${predictionData.userId}_${game.id}`;
-                            const movimentoRef = doc(db, 'movimentos', movimentoId);
-                            batch.set(movimentoRef, { de: currentAdminId, estado: "WhoWins Paid", movimentoData: Timestamp.now(), nomeJogo: game.nomeJogo, para: predictionData.userId, temporada: game.temporada, userId: predictionData.userId, valorreal: finalPrize }, { merge: true });
-                            
-                            processedPredictionsCount++;
-                        });
-                    }
-                    
-                    await batch.commit();
-                    
-                    const updatedUsersCount = await recalculateUserTotalsForSeason(affectedUserIds, currentSeason);
-                    
-                    showFeedback(`Resultados lançados! ${processedPredictionsCount} palpites atualizados e ${updatedUsersCount} saldos de utilizadores recalculados.`, 'success');
-                } catch (error) {
-                    console.error("Erro ao lançar resultados:", error);
-                    showFeedback(error.message || 'Ocorreu um erro ao processar os resultados.', 'error');
-                } finally {
-                    launchBtn.disabled = false;
-                    launchBtn.textContent = 'Lançar Resultados';
-                }
-            }
-
-            initializeFilters();
+initializeFilters();
         });
     </script>
 </body>
