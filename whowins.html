@@ -488,7 +488,7 @@
     <script src="config.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.js"></script>
 
-   <script type="module">
+  <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
     import { getFirestore, collection, getDocs, doc, getDoc, Timestamp, setDoc, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
@@ -536,14 +536,110 @@
     const arenaWelcomeText = document.getElementById('arena-welcome-text');
     const placeholderImage = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
 
-    async function loadMenuSettings() { return getDoc(doc(db, 'paineis', 'paineis menu')).then(d => d.exists() ? d.data() : {}); }
-    function checkPageAccess(userStatus, menuSettings) { return (menuSettings['whowins'] === 'on' || userStatus === 'ruler'); }
+    // ==================================================================
+    // FUNÇÕES DE ACESSO E MENU SEPARADAS (VERSÃO CORRIGIDA)
+    // ==================================================================
+
+    // Função para carregar as REGRAS DE ACESSO À PÁGINA (de 'paineis perfil')
+    async function loadAccessSettings() {
+        return getDoc(doc(db, 'paineis', 'paineis perfil')).then(d => d.exists() ? d.data() : {});
+    }
+
+    // Função para carregar as REGRAS DE VISIBILIDADE DO MENU (de 'paineis menu')
+    async function loadMenuSettings() {
+        return getDoc(doc(db, 'paineis', 'paineis menu')).then(d => d.exists() ? d.data() : {});
+    }
+
+    // Função que usa as regras de ACESSO para verificar se o utilizador pode ver a página
+    function checkPageAccess(userStatus, accessSettings) {
+        return (accessSettings['quemganha'] === 'on' || userStatus === 'ruler');
+    }
+
     async function getUserStatus(userId) {
         const userDoc = await getDoc(doc(db, 'users', userId));
         if (userDoc.exists() && userDoc.data().aceite === "Yes") return userDoc.data();
         return null;
     }
-    
+
+    onAuthStateChanged(auth, async (user) => {
+        if (user) {
+            currentUserId = user.uid;
+            const userInfo = await getUserStatus(user.uid);
+            if (!userInfo) {
+                window.location.href = 'index.html';
+                return;
+            }
+
+            // PASSO 1: Carrega as regras de ACESSO e verifica se pode entrar na página
+            const accessSettings = await loadAccessSettings();
+            if (!checkPageAccess(userInfo.estatuto, accessSettings)) {
+                window.location.href = '404.html';
+                return;
+            }
+
+            // PASSO 2: Se o acesso foi permitido, carrega as regras do MENU para passar ao componente
+            const menuSettings = await loadMenuSettings();
+            
+            // Esta linha assume que 'menu-component.js' tem uma função global 'updateMenuVisibility'
+            // para receber as configurações e desenhar o menu corretamente.
+            if (typeof updateMenuVisibility === 'function') {
+                updateMenuVisibility(menuSettings);
+            }
+            
+            // O resto da lógica da página continua a executar normalmente
+            document.getElementById('user-name').textContent = userInfo.nomeDeUsuario || 'Jogador';
+
+            const arenaDocRef = doc(db, 'paineis', 'paineis arena');
+            const arenaDocSnap = await getDoc(arenaDocRef);
+            let arenaNameToLoad = null;
+
+            if (arenaDocSnap.exists()) {
+                const arenaData = arenaDocSnap.data();
+                const arenas = Object.keys(arenaData).map(key => ({
+                    name: key, fama: arenaData[key].fama, image: arenaData[key].image
+                })).sort((a, b) => a.fama - b.fama);
+                
+                const userFame = userInfo.fame || 0;
+                let currentUserArena = arenas[0]; 
+                for (let i = arenas.length - 1; i >= 0; i--) {
+                    if (userFame >= arenas[i].fama) {
+                        currentUserArena = arenas[i];
+                        break;
+                    }
+                }
+
+                if (currentUserArena) {
+                    arenaNameToLoad = currentUserArena.name;
+                    arenaLoadingImage.src = currentUserArena.image;
+                    arenaLoadingImage.style.display = 'block';
+                    arenaWelcomeText.textContent = `Bem-Vindo à ${currentUserArena.name}`;
+                    arenaWelcomeText.style.display = 'block';
+
+                    document.getElementById('user-fame-display').textContent = userFame;
+                    document.getElementById('user-arena-image-display').src = currentUserArena.image;
+                    const arenaNumber = currentUserArena.name.match(/\d+/);
+                    if (arenaNumber) document.getElementById('user-arena-number-display').textContent = arenaNumber[0];
+                }
+            }
+            
+            arenaLoadingVideo.style.display = 'block';
+            document.querySelector('.loading-spinner').classList.add('hidden');
+            
+            setTimeout(async () => {
+                await loadGames(arenaNameToLoad);
+                setTimeout(() => { document.getElementById('tutorial-popup').style.display = 'flex'; }, 500);
+            }, 2500);
+
+        } else {
+            currentUserId = null;
+            window.location.href = 'index.html';
+        }
+    });
+
+    // ==================================================================
+    // O RESTO DO CÓDIGO DA PÁGINA PERMANECE IGUAL
+    // ==================================================================
+
     async function loadGames(userArenaName) {
         const gamesListElement = document.getElementById('games-list');
         gamesListElement.innerHTML = '';
@@ -559,20 +655,9 @@
         const paisesCollection = collection(db, 'paises');
 
         try {
-            // ==================================================================
-            // INÍCIO DA CORREÇÃO
-            // A consulta original filtrava por tempo. A nova consulta abaixo
-            // busca todos os jogos da arena do utilizador, ignorando as datas.
-            // ==================================================================
             const gamesQuery = query(gamesCollection,
                 where("arena", "==", userArenaName)
-                // As linhas abaixo foram removidas para mostrar todos os jogos da arena.
-                // where("inicioIntervalo", "<=", now),
-                // where("fimIntervalo", ">=", now)
             );
-            // ==================================================================
-            // FIM DA CORREÇÃO
-            // ==================================================================
             
             const gamesSnapshot = await getDocs(gamesQuery);
 
@@ -687,9 +772,7 @@
         const gameData = gamesDataMap[gameId];
 
         if (!gameData || !currentUserId) return;
-
-        // VERIFICAÇÃO DE TEMPO NO LADO DO CLIENTE (BOA PRÁTICA)
-        // Mesmo que a lista mostre todos os jogos, só permite clicar se o período for válido.
+        
         const now = new Date();
         if (gameData.fimIntervalo.toDate() < now) {
             alert("O período para palpitar neste jogo já terminou!");
@@ -718,65 +801,6 @@
             console.error("Erro ao guardar o palpite: ", error);
         }
     }
-
-    onAuthStateChanged(auth, async (user) => {
-        if (user) {
-            currentUserId = user.uid;
-            const userInfo = await getUserStatus(user.uid);
-            if (!userInfo) { window.location.href = 'index.html'; return; }
-
-            const menuSettings = await loadMenuSettings();
-            if (!checkPageAccess(userInfo.estatuto, menuSettings)) { window.location.href = '404.html'; return; }
-            updateMenuVisibility(menuSettings);
-            
-            document.getElementById('user-name').textContent = userInfo.nomeDeUsuario || 'Jogador';
-
-            const arenaDocRef = doc(db, 'paineis', 'paineis arena');
-            const arenaDocSnap = await getDoc(arenaDocRef);
-            let arenaNameToLoad = null;
-
-            if (arenaDocSnap.exists()) {
-                const arenaData = arenaDocSnap.data();
-                const arenas = Object.keys(arenaData).map(key => ({
-                    name: key, fama: arenaData[key].fama, image: arenaData[key].image
-                })).sort((a, b) => a.fama - b.fama);
-                
-                const userFame = userInfo.fame || 0;
-                let currentUserArena = arenas[0]; // Default to the first arena
-                for (let i = arenas.length - 1; i >= 0; i--) {
-                    if (userFame >= arenas[i].fama) {
-                        currentUserArena = arenas[i];
-                        break;
-                    }
-                }
-
-                if (currentUserArena) {
-                    arenaNameToLoad = currentUserArena.name;
-                    arenaLoadingImage.src = currentUserArena.image;
-                    arenaLoadingImage.style.display = 'block';
-                    arenaWelcomeText.textContent = `Bem-Vindo à ${currentUserArena.name}`;
-                    arenaWelcomeText.style.display = 'block';
-
-                    document.getElementById('user-fame-display').textContent = userFame;
-                    document.getElementById('user-arena-image-display').src = currentUserArena.image;
-                    const arenaNumber = currentUserArena.name.match(/\d+/);
-                    if (arenaNumber) document.getElementById('user-arena-number-display').textContent = arenaNumber[0];
-                }
-            }
-            
-            arenaLoadingVideo.style.display = 'block';
-            document.querySelector('.loading-spinner').classList.add('hidden');
-            
-            setTimeout(async () => {
-                await loadGames(arenaNameToLoad);
-                setTimeout(() => { document.getElementById('tutorial-popup').style.display = 'flex'; }, 500);
-            }, 2500);
-
-        } else {
-            currentUserId = null;
-            window.location.href = 'index.html';
-        }
-    });
 </script>
 </body>
 </html>
