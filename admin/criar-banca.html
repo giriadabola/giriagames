@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt">
 <head>
-    <meta charset="UTF-8">
+    <meta charset="UTF-ar">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>G Empire - Gerir Banca</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
@@ -76,6 +76,29 @@
             color: #dc3545; /* Vermelho */
             font-weight: bold;
         }
+        
+        /* Botão flutuante para nova funcionalidade */
+        .fab-button {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background-color: #ffc107;
+            color: white;
+            border: none;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            font-size: 24px;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1500;
+        }
+        .fab-button:hover {
+            background-color: #e0a800;
+        }
     </style>
 </head>
 <body>
@@ -113,6 +136,11 @@
             </button>
         </div>
     </main>
+    
+    <!-- Botão Flutuante para Taxa WhoWins -->
+    <button id="open-taxa-popup-btn" class="fab-button" title="Gerir Taxa WhoWins">
+        <i class="fas fa-cog"></i>
+    </button>
 
     <!-- POPUP DE CONSULTA DE MOVIMENTOS -->
     <div class="popup-overlay" id="query-popup">
@@ -151,16 +179,33 @@
                     <input type="text" id="loan-description" placeholder="Ex: Adiantamento prémio">
                 </div>
               <div class="form-group">
-    <!-- A label e o placeholder foram alterados para clareza -->
-    <label for="loan-interest">Juros (Valor Fixo em GCoins)</label>
-    <input type="number" id="loan-interest" placeholder="Ex: 50" value="0" required min="0" step="1">
-</div>
+                <label for="loan-interest">Juros (Valor Fixo em GCoins)</label>
+                <input type="number" id="loan-interest" placeholder="Ex: 50" value="0" required min="0" step="1">
+              </div>
                 <div class="popup-buttons">
                     <button type="submit" class="popup-button confirm">Confirmar</button>
                     <button type="button" class="popup-button cancel" id="cancel-loan-btn">Cancelar</button>
                 </div>
             </form>
             <p id="loan-feedback" class="feedback-message"></p>
+        </div>
+    </div>
+    
+    <!-- POPUP PARA GERIR TAXA WHOWINS -->
+    <div class="popup-overlay" id="taxa-popup">
+        <div class="popup-content">
+            <h2>Gerir Taxa Câmbio WhoWins</h2>
+            <form id="taxa-form">
+                <div class="form-group">
+                    <label for="taxa-whowins-input">Valor da Taxa</label>
+                    <input type="number" step="any" id="taxa-whowins-input" placeholder="Ex: 1.5" required>
+                </div>
+                <div class="popup-buttons">
+                    <button type="submit" class="popup-button confirm">Guardar Taxa</button>
+                    <button type="button" class="popup-button cancel" id="cancel-taxa-btn">Cancelar</button>
+                </div>
+            </form>
+            <p id="taxa-feedback" class="feedback-message"></p>
         </div>
     </div>
 
@@ -206,6 +251,14 @@
         const queryUserSelect = document.getElementById('query-user-select');
         const queryResultContainer = document.getElementById('query-result-container');
         const closeQueryBtn = document.getElementById('close-query-btn');
+        
+        // Elementos do novo popup da Taxa WhoWins
+        const openTaxaPopupBtn = document.getElementById('open-taxa-popup-btn');
+        const taxaPopup = document.getElementById('taxa-popup');
+        const taxaForm = document.getElementById('taxa-form');
+        const taxaInput = document.getElementById('taxa-whowins-input');
+        const cancelTaxaBtn = document.getElementById('cancel-taxa-btn');
+        const taxaFeedback = document.getElementById('taxa-feedback');
 
         let movimentosSum = 0;
         let currentSeason = null;
@@ -287,11 +340,6 @@
             }
         }
 
-        /**
-         * Lida com a submissão do empréstimo.
-         * Regista os movimentos e recalcula o saldo total do utilizador a partir de TODOS
-         * os seus movimentos na temporada, atualizando o campo ...GCoins.
-         */
       async function handleLoanSubmit(event) {
             event.preventDefault();
             loanFeedback.textContent = 'A processar empréstimo...';
@@ -306,7 +354,6 @@
             }
 
             try {
-                // 1. LER todos os movimentos existentes do utilizador para calcular o saldo base
                 const movimentosRef = collection(db, "movimentos");
                 const q = query(movimentosRef, where("userId", "==", userId), where("temporada", "==", currentSeason));
                 const querySnapshot = await getDocs(q);
@@ -319,51 +366,36 @@
                     }
                 });
 
-                // 2. CALCULAR o novo saldo final (saldo existente + novo empréstimo)
                 const novoSaldoTotal = saldoExistente + amount;
-
-                // 3. PREPARAR a transação atómica (batch)
                 const batch = writeBatch(db);
                 const description = loanDescriptionInput.value || "Empréstimo da Banca";
                 const selectedUserName = userSelect.options[userSelect.selectedIndex].text;
                 
-                // --- INÍCIO DA CORREÇÃO ---
-                // O valor do input é agora o juro fixo.
                 const jurosValorFixo = parseFloat(loanInterestInput.value) || 0;
-                const interestAmount = jurosValorFixo; // O valor do juro é o valor do input
+                const interestAmount = jurosValorFixo;
                 const totalDebt = amount + interestAmount;
 
-                // 3a. Registar movimento de débito da banca
                 batch.set(doc(collection(db, 'movimentos')), {
                     tipo: "Banca", preco: -amount, movimentoData: Timestamp.now(), temporada: currentSeason,
-                    // A descrição foi corrigida para usar o valor do juro (interestAmount)
                     descricao: `Empréstimo a ${selectedUserName} (Juros: ${interestAmount} GCoins)`, 
                     para_userId: userId
                 });
 
-                // 3b. Registar movimento de crédito do utilizador
                 batch.set(doc(collection(db, 'movimentos')), {
                     userId: userId, valorreal: amount, tipo: "Empréstimo", movimentoData: Timestamp.now(), temporada: currentSeason,
                     de: "Banca", descricao: description, 
-                    // O campo 'jurosPercentagem' foi removido e a variável 'interestRate' já não existe
                     valorJuros: interestAmount, 
                     valorTotalAPagar: totalDebt, estado: "Por Pagar"
                 });
-                // --- FIM DA CORREÇÃO ---
 
-                // 3c. Atualizar o saldo ...GCoins do utilizador com o valor RECALCULADO
                 const userRef = doc(db, 'users', userId);
                 const gCoinsField = `${currentSeason}GCoins`;
                 batch.update(userRef, { [gCoinsField]: novoSaldoTotal });
 
-                // 3d. Atualizar o saldo da banca
                 const newBankTotal = movimentosSum - amount;
                 batch.set(doc(db, "paineis", "Banca"), { valor: newBankTotal }, { merge: true });
-
-                // 4. EXECUTAR a transação
                 await batch.commit();
 
-                // 5. ATUALIZAR a interface
                 movimentosSum = newBankTotal;
                 updateCalculatedTotal();
                 loanForm.reset();
@@ -377,11 +409,41 @@
             }
         }
         
+        /**
+         * Lida com a submissão do formulário da taxa WhoWins.
+         * Grava o novo valor no Firestore.
+         */
+        async function handleTaxaSubmit(event) {
+            event.preventDefault();
+            const newValue = taxaInput.value;
+            if (newValue.trim() === '' || isNaN(parseFloat(newValue))) {
+                taxaFeedback.textContent = 'Por favor, insira um número válido.';
+                taxaFeedback.className = 'feedback-message error';
+                return;
+            }
 
+            taxaFeedback.textContent = 'A guardar...';
+            taxaFeedback.className = 'feedback-message';
 
+            try {
+                const bancaRef = doc(db, "paineis", "Banca");
+                // Usamos setDoc com merge:true para atualizar ou criar o campo sem apagar outros.
+                await setDoc(bancaRef, { taxaWhoWins: parseFloat(newValue) }, { merge: true });
 
+                taxaFeedback.textContent = 'Taxa atualizada com sucesso!';
+                taxaFeedback.className = 'feedback-message success';
 
+                setTimeout(() => {
+                    taxaPopup.style.display = 'none';
+                }, 1500);
 
+            } catch (error) {
+                console.error("Erro ao guardar taxa:", error);
+                taxaFeedback.textContent = 'Ocorreu um erro ao guardar.';
+                taxaFeedback.className = 'feedback-message error';
+            }
+        }
+        
         async function initializePage() {
             try {
                 currentSeason = await fetchCurrentSeason();
@@ -441,6 +503,30 @@
                 cancelLoanBtn.addEventListener('click', () => loanPopup.style.display = 'none');
                 loanPopup.addEventListener('click', (e) => { if (e.target === loanPopup) loanPopup.style.display = 'none'; });
                 loanForm.addEventListener('submit', handleLoanSubmit);
+                
+                // Eventos para o novo popup da taxa
+                openTaxaPopupBtn.addEventListener('click', async () => {
+                    taxaFeedback.textContent = '';
+                    taxaInput.value = 'A carregar...';
+                    taxaPopup.style.display = 'flex';
+                    try {
+                        const bancaRef = doc(db, "paineis", "Banca");
+                        const docSnap = await getDoc(bancaRef);
+                        if (docSnap.exists() && docSnap.data().taxaWhoWins) {
+                            taxaInput.value = docSnap.data().taxaWhoWins;
+                        } else {
+                            taxaInput.value = ''; // Deixar em branco se não existir
+                        }
+                    } catch (error) {
+                        taxaFeedback.textContent = 'Erro ao carregar a taxa atual.';
+                        taxaFeedback.className = 'feedback-message error';
+                        console.error("Erro ao carregar taxa WhoWins:", error);
+                    }
+                });
+                cancelTaxaBtn.addEventListener('click', () => taxaPopup.style.display = 'none');
+                taxaPopup.addEventListener('click', (e) => { if (e.target === taxaPopup) taxaPopup.style.display = 'none'; });
+                taxaForm.addEventListener('submit', handleTaxaSubmit);
+
             } catch (error) {
                 console.error("Erro na inicialização:", error);
                 statusMessage.textContent = `Erro: ${error.message}`;
