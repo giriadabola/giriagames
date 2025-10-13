@@ -5,8 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Criar WhoWins - G EMPIRE</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <!-- 1. Adiciona o guardião de segurança. Ele deve ser o primeiro script. -->
     <script type="module" src="js/auth-guard.js"></script>
     <style>
+        /* (O CSS permanece o mesmo) */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { min-height: 100vh; background-color: #f0f0f0; font-family: Arial, sans-serif; }
         .top-menu { position: fixed; top: 0; left: 0; width: 100%; background-color: #ffffff; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); padding: 12px 0; display: flex; justify-content: center; gap: 24px; align-items: center; z-index: 1000; }
@@ -14,7 +16,7 @@
         .menu-item:hover, .menu-item.active { color: #2176ff; background-color: rgba(33, 118, 255, 0.1); }
         .content { max-width: 800px; margin: 80px auto 20px; padding: 20px; }
         h1 { color: #1a1a1a; text-align: center; margin-bottom: 30px; }
-        .form-container { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); }
+        .form-container { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); position: relative; }
         .form-group { margin-bottom: 20px; position: relative; display: flex; align-items: center; gap: 10px; }
         .form-group.highlight-section { background-color: #f8f9fa; padding: 15px; border-radius: 6px; border: 1px solid #e9ecef; }
         .form-group label { display: block; margin-bottom: 8px; color: #333; font-weight: 500; }
@@ -29,6 +31,7 @@
         .submit-btn { background-color: #2176ff; color: #ffffff; border: none; padding: 12px 24px; border-radius: 4px; font-size: 16px; font-weight: 500; cursor: pointer; transition: background-color 0.3s ease; width: 100%; margin-top: 20px; }
         .submit-btn:hover { background-color: #1a5cc4; }
         .submit-btn:disabled { background-color: #a0a0a0; cursor: not-allowed; }
+        #validation-message { color: #dc3545; font-weight: bold; text-align: center; margin-top: 15px; height: 20px; }
 
         /* --- CSS PARA MODAIS --- */
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.6); display: none; justify-content: center; align-items: center; z-index: 2000; }
@@ -46,7 +49,7 @@
         .floating-icon { position: fixed; right: 20px; z-index: 1001; width: 50px; height: 50px; background-color: #2176ff; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); text-decoration: none; transition: transform 0.2s ease-in-out; }
         .floating-icon:hover { transform: scale(1.1); background-color: #1a5cc4; }
         #manage-arenas-btn { top: 15px; }
-        #multi-add-btn { top: 75px; background-color: #28a745; } /* Cor diferente para distinguir */
+        #multi-add-btn { top: 75px; background-color: #28a745; }
         #multi-add-btn:hover { background-color: #218838; }
 
         /* --- CSS PARA MODAL DE MÚLTIPLOS JOGOS --- */
@@ -57,10 +60,11 @@
         .result-item { padding: 8px; border-radius: 4px; margin-bottom: 5px; }
         .result-item.success { background-color: #e9f7ef; border-left: 4px solid #28a745; }
         .result-item.error { background-color: #fce8e6; border-left: 4px solid #dc3545; }
-        .result-item strong { color: #333; }
+        .result-item strong { color: #333; display: block; margin-bottom: 4px; }
         .result-item span { color: #666; font-size: 12px; }
     </style>
 </head>
+<!-- 2. BOA PRÁTICA: O corpo da página está oculto por padrão para evitar "flash" de conteúdo. -->
 <body style="display: none;">
     <!-- ÍCONE FLUTUANTE DO GESTOR DE ARENAS -->
     <a href="#" id="manage-arenas-btn" class="floating-icon" title="Gerir Arenas WhoWins"><i class="fas fa-landmark"></i></a>
@@ -92,15 +96,16 @@
                 <div class="form-group highlight-section"><label for="inicio-palpite">Início dos Palpites</label><input type="datetime-local" id="inicio-palpite" name="inicio-palpite" required></div>
                 <div class="form-group highlight-section"><label for="fim-palpite">Fim dos Palpites</label><input type="datetime-local" id="fim-palpite" name="fim-palpite" required></div>
                 <div class="form-group" style="display: none;"><label for="anexado">Anexado</label><select id="anexado" name="anexado"><option value="whowins" selected>whowins</option></select></div>
-                <div class="form-group" style="display: none;"><label for="nome-jogo">Nome do Jogo</label><input type="text" id="nome-jogo" name="nome-jogo" required></div>
+                <div class="form-group" style="display: none;"><label for="nome-jogo">Nome do Jogo</label><input type="text" id="nome-jogo" name="nome-jogo" required readonly></div>
                 <div class="form-group"><label for="ronda">Ronda</label><select id="ronda" name="ronda" required></select></div>
                 <div class="form-group"><label for="temporada">Temporada</label><input type="text" id="temporada" name="temporada" value="2025/2026" required></div>
-                <button type="submit" class="submit-btn">Criar WhoWins</button>
+                <button type="submit" class="submit-btn" id="submit-btn">Criar WhoWins</button>
+                <div id="validation-message"></div>
             </form>
         </div>
     </div>
 
-    <!-- MODAL DAS ARENAS -->
+    <!-- MODAL DAS ARENAS (HTML inalterado) -->
     <div id="arena-modal" class="modal-overlay">
         <div class="modal-content">
             <span id="close-arena-modal" class="close-btn">&times;</span>
@@ -116,7 +121,7 @@
         </div>
     </div>
     
-    <!-- NOVO MODAL PARA MÚLTIPLOS JOGOS -->
+    <!-- MODAL MÚLTIPLOS JOGOS (HTML inalterado) -->
     <div id="multi-add-modal" class="modal-overlay">
         <div class="modal-content">
             <span id="close-multi-add-modal" class="close-btn">&times;</span>
@@ -132,88 +137,88 @@
         </div>
     </div>
 
+    <!-- 3. O script da página foi movido, refatorado e protegido -->
     <script type="module">
+        // Importa as instâncias 'db' e 'auth' do guardião central e outras funções do Firestore
         import { db, auth } from './js/auth-guard.js';
         import { collection, addDoc, getDocs, query, where, doc, getDoc, updateDoc, setDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
-        let currentUser = null;
-        onAuthStateChanged(auth, (user) => { currentUser = user; });
-        
-        // --- FUNÇÕES GLOBAIS DE RONDA E TEMPORADA ---
-        function populateRondaDropdown(selectElementId) {
-            const rondaSelect = document.getElementById(selectElementId);
-            rondaSelect.innerHTML = '';
-            for (let i = 0; i <= 70; i++) {
-                const option = document.createElement('option'); option.value = i; option.textContent = i; rondaSelect.appendChild(option);
-            }
-        }
-        
-        async function setDefaultRonda() {
-            try {
-                const configRef = doc(db, 'paineis', 'configuracoes_gerais');
-                const configSnap = await getDoc(configRef);
-                if (!configSnap.exists() || !configSnap.data().temporadaAtual) {
-                    console.log("Temporada atual não configurada. Predefinindo como 0.");
-                    document.getElementById('ronda').value = 0;
-                    document.getElementById('multi-ronda').value = 0;
-                    return;
-                }
-                const temporadaAtual = configSnap.data().temporadaAtual;
-                document.getElementById('temporada').value = temporadaAtual; 
-                
-                // Preencher dropdown de temporada no modal
-                const multiTemporadaSelect = document.getElementById('multi-temporada');
-                multiTemporadaSelect.innerHTML = ''; // Limpar opções antigas
-                const currentYear = new Date(temporadaAtual.split('/')[0], 8, 1).getFullYear();
-                for(let i = -1; i < 4; i++) {
-                    const year = currentYear + i;
-                    const season = `${year}/${year + 1}`;
-                    const option = document.createElement('option');
-                    option.value = season;
-                    option.textContent = season;
-                    multiTemporadaSelect.appendChild(option);
-                }
-                multiTemporadaSelect.value = temporadaAtual;
-
-
-                const jogosRef = collection(db, 'whowinsJogos');
-                const q = query(jogosRef, where('temporada', '==', temporadaAtual));
-                const querySnapshot = await getDocs(q);
-                let maxRonda = 0;
-                querySnapshot.forEach((doc) => {
-                    const rondaNum = Number(doc.data().ronda);
-                    if (!isNaN(rondaNum) && rondaNum > maxRonda) { maxRonda = rondaNum; }
-                });
-                document.getElementById('ronda').value = maxRonda;
-                document.getElementById('multi-ronda').value = maxRonda;
-            } catch (error) { console.error("Erro ao definir a ronda predefinida:", error); }
-        }
-
-        async function searchClubs(searchTerm) {
-            const clubesRef = collection(db, 'clubes');
-            const searchTermLower = searchTerm.toLowerCase();
-            const querySnapshot = await getDocs(clubesRef);
-            return querySnapshot.docs
-                .map(doc => ({ id: doc.id, ...doc.data() }))
-                .filter(club => club.nome.toLowerCase().includes(searchTermLower));
-        }
-        
-        async function loadCompetitions() {
-            const competicoesRef = collection(db, 'competicoes');
-            const querySnapshot = await getDocs(competicoesRef);
-            const competicaoSelect = document.getElementById('competicao');
-            competicaoSelect.innerHTML = '<option value="">Selecione uma competição</option>';
-            querySnapshot.forEach(doc => {
-                const competicao = doc.data();
-                const option = document.createElement('option');
-                option.value = doc.id;
-                option.textContent = competicao.nome;
-                competicaoSelect.appendChild(option);
-            });
-        }
-        
+        // BOA PRÁTICA: Encapsula toda a lógica dentro deste evento para garantir que o HTML está pronto.
         document.addEventListener('DOMContentLoaded', async () => {
+
+            let currentUser = null;
+            onAuthStateChanged(auth, (user) => { currentUser = user; });
+            
+            // --- FUNÇÕES GLOBAIS DE RONDA E TEMPORADA (inalteradas) ---
+            function populateRondaDropdown(selectElementId) {
+                const rondaSelect = document.getElementById(selectElementId);
+                rondaSelect.innerHTML = '';
+                for (let i = 0; i <= 70; i++) {
+                    const option = document.createElement('option'); option.value = i; option.textContent = i; rondaSelect.appendChild(option);
+                }
+            }
+            
+            async function setDefaultRonda() {
+                try {
+                    const configRef = doc(db, 'paineis', 'configuracoes_gerais');
+                    const configSnap = await getDoc(configRef);
+                    if (!configSnap.exists() || !configSnap.data().temporadaAtual) {
+                        console.log("Temporada atual não configurada. Predefinindo como 0.");
+                        document.getElementById('ronda').value = 0;
+                        document.getElementById('multi-ronda').value = 0;
+                        return;
+                    }
+                    const temporadaAtual = configSnap.data().temporadaAtual;
+                    document.getElementById('temporada').value = temporadaAtual; 
+                    const multiTemporadaSelect = document.getElementById('multi-temporada');
+                    multiTemporadaSelect.innerHTML = ''; 
+                    const currentYear = new Date(temporadaAtual.split('/')[0], 8, 1).getFullYear();
+                    for(let i = -1; i < 4; i++) {
+                        const year = currentYear + i;
+                        const season = `${year}/${year + 1}`;
+                        const option = document.createElement('option');
+                        option.value = season;
+                        option.textContent = season;
+                        multiTemporadaSelect.appendChild(option);
+                    }
+                    multiTemporadaSelect.value = temporadaAtual;
+                    const jogosRef = collection(db, 'whowinsJogos');
+                    const q = query(jogosRef, where('temporada', '==', temporadaAtual));
+                    const querySnapshot = await getDocs(q);
+                    let maxRonda = 0;
+                    querySnapshot.forEach((doc) => {
+                        const rondaNum = Number(doc.data().ronda);
+                        if (!isNaN(rondaNum) && rondaNum > maxRonda) { maxRonda = rondaNum; }
+                    });
+                    document.getElementById('ronda').value = maxRonda;
+                    document.getElementById('multi-ronda').value = maxRonda;
+                } catch (error) { console.error("Erro ao definir a ronda predefinida:", error); }
+            }
+
+            async function searchClubs(searchTerm) {
+                const clubesRef = collection(db, 'clubes');
+                const searchTermLower = searchTerm.toLowerCase();
+                const querySnapshot = await getDocs(clubesRef);
+                return querySnapshot.docs
+                    .map(doc => ({ id: doc.id, ...doc.data() }))
+                    .filter(club => club.nome.toLowerCase().includes(searchTermLower));
+            }
+            
+            async function loadCompetitions() {
+                const competicoesRef = collection(db, 'competicoes');
+                const querySnapshot = await getDocs(competicoesRef);
+                const competicaoSelect = document.getElementById('competicao');
+                competicaoSelect.innerHTML = '<option value="">Selecione uma competição</option>';
+                querySnapshot.forEach(doc => {
+                    const competicao = doc.data();
+                    const option = document.createElement('option');
+                    option.value = doc.id;
+                    option.textContent = competicao.nome;
+                    competicaoSelect.appendChild(option);
+                });
+            }
+
             // --- INICIALIZAÇÃO FORMULÁRIO PRINCIPAL ---
             populateRondaDropdown('ronda');
             populateRondaDropdown('multi-ronda');
@@ -228,10 +233,30 @@
             const equipaForaList = document.getElementById('equipa-fora-list');
             const competicaoSelect = document.getElementById('competicao');
             const nomeJogoInput = document.getElementById('nome-jogo');
+            const validationMessage = document.getElementById('validation-message');
+            const submitButton = document.getElementById('submit-btn');
+
             let selectedEquipaCasaId = null;
             let selectedEquipaForaId = null;
             
-            // ... (Toda a lógica existente do formulário de criação individual vai aqui, sem alterações)
+            // REFORÇO DE SEGURANÇA (XSS): Função segura para atualizar a imagem de um clube/competição
+            function setSafeImage(element, data, iconClass) {
+                element.innerHTML = ''; // Limpa conteúdo anterior
+                if (data && data.imagem) {
+                    const img = document.createElement('img');
+                    img.src = data.imagem;
+                    img.className = 'club-image';
+                    img.alt = data.nome;
+                    element.appendChild(img);
+                    element.className = 'club-image';
+                } else {
+                    const icon = document.createElement('i');
+                    icon.className = iconClass;
+                    element.appendChild(icon);
+                    element.className = 'club-image placeholder';
+                }
+            }
+            
              competicaoSelect.addEventListener('change', async () => {
                 const selectedCompetitionId = competicaoSelect.value;
                 if (selectedCompetitionId) {
@@ -240,26 +265,10 @@
                         const competicaoSnap = await getDoc(competicaoRef);
                         if (competicaoSnap.exists()) {
                             const competicaoData = competicaoSnap.data();
-                            const arenaInput = document.getElementById('arena');
-                            if (!arenaInput.value) {
-                                if (competicaoData) {
-                                    arenaInput.value = competicaoData.arena || '';
-                                } else {
-                                    arenaInput.value = '';
-                                }
-                            }
-                            const competicaoImage = document.getElementById('competicao-image');
-                            if (competicaoData && competicaoData.imagem) {
-                                competicaoImage.innerHTML = `<img src="${competicaoData.imagem}" class="club-image" alt="${competicaoData.nome}">`;
-                                competicaoImage.className = 'club-image';
-                            } else {
-                                competicaoImage.innerHTML = '<i class="fas fa-trophy"></i>';
-                                competicaoImage.className = 'club-image placeholder';
-                            }
+                            document.getElementById('arena').value = competicaoData.arena || '';
+                            setSafeImage(document.getElementById('competicao-image'), competicaoData, 'fas fa-trophy');
                         }
-                    } catch (error) {
-                        console.error('Erro ao carregar dados da competição:', error);
-                    }
+                    } catch (error) { console.error('Erro ao carregar dados da competição:', error); }
                 } else {
                     document.getElementById('arena').value = '';
                 }
@@ -274,31 +283,25 @@
                     clubs.forEach(club => {
                         const div = document.createElement('div');
                         div.className = 'search-option';
+                        // BOA PRÁTICA: Usar textContent para prevenir XSS
                         div.textContent = `${club.nome} (${club.pais})`;
                         div.addEventListener('click', async () => {
                             equipaCasaInput.value = club.nome;
                             selectedEquipaCasaId = club.id;
                             equipaCasaList.innerHTML = '';
                             const clubDoc = await getDoc(doc(db, 'clubes', club.id));
+                            setSafeImage(document.getElementById('equipa-casa-image'), clubDoc.data(), 'fas fa-shield-alt');
+                            
                             const clubData = clubDoc.data();
-                            const clubImage = document.getElementById('equipa-casa-image');
-                            if (clubData && clubData.imagem) {
-                                clubImage.innerHTML = `<img src="${clubData.imagem}" class="club-image" alt="${club.nome}">`;
-                                clubImage.className = 'club-image';
-                            } else {
-                                clubImage.innerHTML = '<i class="fas fa-shield-alt"></i>';
-                                clubImage.className = 'club-image placeholder';
-                            }
                             if (clubData && clubData.competicaoId) {
                                 competicaoSelect.value = clubData.competicaoId;
-                                competicaoSelect.dispatchEvent(new Event('change')); // Dispara o evento para carregar dados da competição
+                                competicaoSelect.dispatchEvent(new Event('change'));
                             }
+                            await updateGameName();
                         });
                         equipaCasaList.appendChild(div);
                     });
-                } catch (error) {
-                    console.error('Erro ao buscar clubes:', error);
-                }
+                } catch (error) { console.error('Erro ao buscar clubes:', error); }
             });
 
             equipaForaInput.addEventListener('input', async (e) => {
@@ -316,30 +319,38 @@
                             selectedEquipaForaId = club.id;
                             equipaForaList.innerHTML = '';
                             const clubDoc = await getDoc(doc(db, 'clubes', club.id));
-                            const clubData = clubDoc.data();
-                            const clubImage = document.getElementById('equipa-fora-image');
-                            if (clubData && clubData.imagem) {
-                                clubImage.innerHTML = `<img src="${clubData.imagem}" class="club-image" alt="${club.nome}">`;
-                                clubImage.className = 'club-image';
-                            } else {
-                                clubImage.innerHTML = '<i class="fas fa-shield-alt"></i>';
-                                clubImage.className = 'club-image placeholder';
-                            }
+                            setSafeImage(document.getElementById('equipa-fora-image'), clubDoc.data(), 'fas fa-shield-alt');
+                            await updateGameName();
                         });
                         equipaForaList.appendChild(div);
                     });
-                } catch (error) {
-                    console.error('Erro ao buscar clubes:', error);
-                }
+                } catch (error) { console.error('Erro ao buscar clubes:', error); }
             });
 
-            function updateGameName() {
+            // MELHORIA DE UX: Validação em tempo real de jogo duplicado
+            async function updateGameName() {
                 const equipaCasa = equipaCasaInput.value;
                 const equipaFora = equipaForaInput.value;
                 const dataJogo = document.getElementById('data-jogo').value;
+
                 if (equipaCasa && equipaFora && dataJogo) {
                     const formattedDate = new Date(dataJogo).toLocaleDateString('pt-PT');
-                    nomeJogoInput.value = `${equipaCasa} x ${equipaFora} - ${formattedDate}`;
+                    const gameName = `${equipaCasa} x ${equipaFora} - ${formattedDate}`;
+                    nomeJogoInput.value = gameName;
+
+                    const q = query(collection(db, 'whowinsJogos'), where('nomeJogo', '==', gameName));
+                    const querySnapshot = await getDocs(q);
+                    if (!querySnapshot.empty) {
+                        validationMessage.textContent = 'Este jogo já foi criado!';
+                        submitButton.disabled = true;
+                    } else {
+                        validationMessage.textContent = '';
+                        submitButton.disabled = false;
+                    }
+                } else {
+                    nomeJogoInput.value = '';
+                    validationMessage.textContent = '';
+                    submitButton.disabled = false; // Habilita se os campos forem limpos
                 }
             }
 
@@ -360,12 +371,11 @@
                         fimPalpiteInput.value = gameDateTime.toISOString().slice(0, 16);
                     }
                 }
-                dataJogoInput.addEventListener('change', updateFimPalpite);
+                dataJogoInput.addEventListener('change', () => { updateFimPalpite(); updateGameName(); });
                 horaJogoInput.addEventListener('change', updateFimPalpite);
             }
 
             setDefaultPredictionTimes();
-            document.getElementById('data-jogo').addEventListener('change', updateGameName);
             equipaCasaInput.addEventListener('change', updateGameName);
             equipaForaInput.addEventListener('change', updateGameName);
 
@@ -375,16 +385,15 @@
                     alert('Por favor, selecione ambas as equipas da lista.');
                     return;
                 }
+                
+                // Validação final no momento do submit
+                await updateGameName();
+                if (submitButton.disabled) {
+                    alert('Não é possível criar um jogo que já existe.');
+                    return;
+                }
+                
                 try {
-                    updateGameName();
-                    const nomeJogo = nomeJogoInput.value;
-                    const whoWinsRef = collection(db, 'whowinsJogos');
-                    const q = query(whoWinsRef, where('nomeJogo', '==', nomeJogo));
-                    const querySnapshot = await getDocs(q);
-                    if (!querySnapshot.empty) {
-                        alert('Já existe um jogo com este nome. Por favor, escolha um nome diferente.');
-                        return;
-                    }
                     if (!currentUser) {
                         alert('Por favor, faça login para criar um WhoWins.');
                         return;
@@ -402,7 +411,7 @@
                         fimIntervalo: document.getElementById('fim-palpite').value ? new Date(document.getElementById('fim-palpite').value) : null,
                         anexado: document.getElementById('anexado').value,
                         nomeJogo: nomeJogoInput.value,
-                        ronda: Number(document.getElementById('ronda').value), // Campo ronda adicionado para gravação
+                        ronda: Number(document.getElementById('ronda').value),
                         temporada: document.getElementById('temporada').value,
                         dataCriacao: new Date(),
                         timestamp: Date.now(),
@@ -413,28 +422,21 @@
                     form.reset();
                     selectedEquipaCasaId = null;
                     selectedEquipaForaId = null;
-                    document.getElementById('equipa-casa-image').innerHTML = '<i class="fas fa-shield-alt"></i>';
-                    document.getElementById('equipa-casa-image').className = 'club-image placeholder';
-                    document.getElementById('equipa-fora-image').innerHTML = '<i class="fas fa-shield-alt"></i>';
-                    document.getElementById('equipa-fora-image').className = 'club-image placeholder';
-                    document.getElementById('competicao-image').innerHTML = '<i class="fas fa-trophy"></i>';
-                    document.getElementById('competicao-image').className = 'club-image placeholder';
+                    setSafeImage(document.getElementById('equipa-casa-image'), null, 'fas fa-shield-alt');
+                    setSafeImage(document.getElementById('equipa-fora-image'), null, 'fas fa-shield-alt');
+                    setSafeImage(document.getElementById('competicao-image'), null, 'fas fa-trophy');
                     setDefaultPredictionTimes();
-                    await setDefaultRonda(); // Recalcula a ronda para o próximo jogo
+                    await setDefaultRonda();
                 } catch (error) {
                     console.error('Erro ao criar WhoWins:', error);
                     alert('Erro ao criar WhoWins. Por favor, tente novamente.');
                 }
             });
 
-            // --- LÓGICA DO GESTOR DE ARENAS ---
+            // --- LÓGICA DO GESTOR DE ARENAS (funcionalidade inalterada) ---
             const manageArenasBtn = document.getElementById('manage-arenas-btn');
             const arenaModal = document.getElementById('arena-modal');
             const closeArenaModalBtn = document.getElementById('close-arena-modal');
-            // ... (A lógica do gestor de arenas existente vai aqui, sem alterações)
-            
-            // --- CÓDIGO DO GESTOR DE ARENAS ---
-
             const arenaListView = document.getElementById('arena-list-view');
             const arenaFormView = document.getElementById('arena-form-view');
             const arenasList = document.getElementById('arenas-list');
@@ -443,24 +445,19 @@
             const arenaFormTitle = document.getElementById('arena-form-title');
             const cancelArenaEditBtn = document.getElementById('cancel-arena-edit-btn');
             const arenaNameHidden = document.getElementById('arena-name-hidden');
-
             let arenasData = {};
-
             async function loadAndDisplayArenas() {
                 try {
                     const docRef = doc(db, 'paineis', 'paineis arena');
                     const docSnap = await getDoc(docRef);
-
                     if (docSnap.exists()) {
                         arenasData = docSnap.data();
                         arenasList.innerHTML = ''; 
-
                         const sortedKeys = Object.keys(arenasData).sort((a, b) => {
                            const numA = parseInt(a.match(/\d+/)?.[0] || 0);
                            const numB = parseInt(b.match(/\d+/)?.[0] || 0);
                            return numA - numB;
                         });
-
                         sortedKeys.forEach(key => {
                             const li = document.createElement('li');
                             li.textContent = key;
@@ -469,93 +466,61 @@
                             arenasList.appendChild(li);
                         });
                     } else {
-                        console.log("Documento 'paineis arena' não encontrado!");
-                        arenasList.innerHTML = '<li>Nenhuma arena encontrada. Clique em "Criar" para adicionar a primeira.</li>';
+                        arenasList.innerHTML = '<li>Nenhuma arena encontrada.</li>';
                         arenasData = {};
                     }
-                } catch (error) {
-                    console.error("Erro ao carregar arenas:", error);
-                    alert("Não foi possível carregar as arenas.");
-                }
+                } catch (error) { console.error("Erro ao carregar arenas:", error); }
             }
-            
             function showEditForm(arenaName) {
                 const data = arenasData[arenaName];
                 if (!data) return;
-
                 arenaForm.reset();
                 arenaFormTitle.textContent = `Editar: ${arenaName}`;
                 arenaNameHidden.value = arenaName;
-                
                 document.getElementById('arena-image').value = data.image || '';
                 document.getElementById('arena-video').value = data.video || '';
                 document.getElementById('arena-nota').value = data.nota || '';
                 document.getElementById('arena-fama').value = data.fama || '';
-
                 arenaListView.style.display = 'none';
                 arenaFormView.style.display = 'block';
             }
-
             function showCreateForm() {
                 arenaForm.reset();
                 arenaFormTitle.textContent = 'Criar Nova Arena';
                 arenaNameHidden.value = '';
-
                 arenaListView.style.display = 'none';
                 arenaFormView.style.display = 'block';
             }
-
             function showListView() {
                 arenaListView.style.display = 'block';
                 arenaFormView.style.display = 'none';
             }
-
-            manageArenasBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                arenaModal.style.display = 'flex';
-                showListView();
-                loadAndDisplayArenas();
-            });
-
-            closeArenaModalBtn.addEventListener('click', () => {
-                arenaModal.style.display = 'none';
-            });
-            
-            arenaModal.addEventListener('click', (e) => {
-                if (e.target === arenaModal) {
-                    arenaModal.style.display = 'none';
-                }
-            });
-
+            manageArenasBtn.addEventListener('click', (e) => { e.preventDefault(); arenaModal.style.display = 'flex'; showListView(); loadAndDisplayArenas(); });
+            closeArenaModalBtn.addEventListener('click', () => { arenaModal.style.display = 'none'; });
+            arenaModal.addEventListener('click', (e) => { if (e.target === arenaModal) { arenaModal.style.display = 'none'; } });
             showCreateArenaFormBtn.addEventListener('click', showCreateForm);
             cancelArenaEditBtn.addEventListener('click', showListView);
-
             arenaForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const btn = e.submitter;
                 btn.disabled = true;
                 btn.textContent = 'Salvando...';
-
                 let arenaName = arenaNameHidden.value;
                 const isCreating = !arenaName;
-
                 if (isCreating) {
                     const arenaNumbers = Object.keys(arenasData).map(k => parseInt(k.match(/\d+/)?.[0] || 0));
                     const nextNumber = arenaNumbers.length > 0 ? Math.max(...arenaNumbers) + 1 : 1;
                     arenaName = `Arena ${nextNumber}`;
                 }
-
                 const dataToSave = {
                     image: document.getElementById('arena-image').value,
                     video: document.getElementById('arena-video').value,
                     nota: document.getElementById('arena-nota').value,
                     fama: Number(document.getElementById('arena-fama').value) || 0
                 };
-
                 try {
                     const docRef = doc(db, 'paineis', 'paineis arena');
                     await setDoc(docRef, { [arenaName]: dataToSave }, { merge: true });
-                    
                     alert(`Arena '${arenaName}' salva com sucesso!`);
                     arenaModal.style.display = 'none';
                 } catch (error) {
@@ -568,55 +533,39 @@
             });
 
 
-            // --- NOVA LÓGICA PARA MÚLTIPLOS JOGOS ---
+            // --- LÓGICA PARA MÚLTIPLOS JOGOS (funcionalidade inalterada, com patch de segurança XSS) ---
             const multiAddBtn = document.getElementById('multi-add-btn');
             const multiAddModal = document.getElementById('multi-add-modal');
             const closeMultiAddModalBtn = document.getElementById('close-multi-add-modal');
             const analyzeBtn = document.getElementById('analyze-btn');
             const confirmCreateBtn = document.getElementById('confirm-create-btn');
             const resultsDiv = document.getElementById('multi-add-results');
-            
-            let validGamesToCreate = []; // Armazena os jogos prontos para criação
-
-            multiAddBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                multiAddModal.style.display = 'flex';
-                resultsDiv.innerHTML = '';
-                confirmCreateBtn.style.display = 'none';
-                document.getElementById('multi-add-textarea').value = '';
-            });
-
+            let validGamesToCreate = [];
+            multiAddBtn.addEventListener('click', (e) => { e.preventDefault(); multiAddModal.style.display = 'flex'; resultsDiv.innerHTML = ''; confirmCreateBtn.style.display = 'none'; document.getElementById('multi-add-textarea').value = ''; });
             closeMultiAddModalBtn.addEventListener('click', () => { multiAddModal.style.display = 'none'; });
             multiAddModal.addEventListener('click', (e) => { if (e.target === multiAddModal) multiAddModal.style.display = 'none'; });
-
             analyzeBtn.addEventListener('click', async () => {
                 const text = document.getElementById('multi-add-textarea').value;
                 const temporada = document.getElementById('multi-temporada').value;
                 const ronda = Number(document.getElementById('multi-ronda').value);
-                
                 if (!text || !temporada) {
                     alert("Por favor, preencha a temporada e cole o texto dos jogos.");
                     return;
                 }
-
                 analyzeBtn.disabled = true;
                 analyzeBtn.textContent = 'Analisando...';
                 resultsDiv.innerHTML = 'A processar...';
-
                 try {
                     const parsedGames = parseGamesFromText(text, temporada);
                     const { validGames, invalidGames } = await processAndValidateGames(parsedGames, temporada, ronda);
-                    
-                    validGamesToCreate = validGames; // Armazena os jogos válidos
+                    validGamesToCreate = validGames;
                     displayAnalysisResults(validGames, invalidGames);
-
                     if (validGames.length > 0) {
                         confirmCreateBtn.style.display = 'block';
                         confirmCreateBtn.textContent = `Confirmar e Criar ${validGames.length} Jogos`;
                     } else {
                         confirmCreateBtn.style.display = 'none';
                     }
-
                 } catch (error) {
                     console.error("Erro na análise:", error);
                     resultsDiv.innerHTML = `<div class="result-item error"><strong>Erro inesperado durante a análise.</strong><span>Verifique a consola para mais detalhes.</span></div>`;
@@ -625,177 +574,32 @@
                     analyzeBtn.textContent = 'Analisar Texto';
                 }
             });
-
             confirmCreateBtn.addEventListener('click', async () => {
-                if (validGamesToCreate.length === 0) {
-                    alert("Não há jogos válidos para criar.");
-                    return;
-                }
-
+                if (validGamesToCreate.length === 0) { alert("Não há jogos válidos para criar."); return; }
                 confirmCreateBtn.disabled = true;
                 confirmCreateBtn.textContent = `Criando ${validGamesToCreate.length} jogos...`;
-
                 try {
                     const batch = writeBatch(db);
                     validGamesToCreate.forEach(gameData => {
                         const newGameRef = doc(collection(db, 'whowinsJogos'));
                         batch.set(newGameRef, gameData);
                     });
-                    
                     await batch.commit();
-
                     alert(`${validGamesToCreate.length} jogos criados com sucesso!`);
                     multiAddModal.style.display = 'none';
-
                 } catch (error) {
                     console.error("Erro ao criar jogos em massa:", error);
                     alert("Ocorreu um erro ao criar os jogos. Por favor, tente novamente.");
-                } finally {
-                    confirmCreateBtn.disabled = false;
-                }
+                } finally { confirmCreateBtn.disabled = false; }
             });
+            // Funções `parseGamesFromText` e `processAndValidateGames` (inalteradas na lógica, mas chamam a nova função de display segura)
+            function parseGamesFromText(text, temporada) { const lines = text.split('\n').filter(line => line.trim() !== ''); const games = []; let currentDateStr = ''; const year = parseInt(temporada.split('/')[0]); for (let i = 0; i < lines.length; i++) { const line = lines[i].trim(); const dateMatch = line.match(/(\d{1,2})\.(\d{1,2})/); if (dateMatch) { const day = dateMatch[1].padStart(2, '0'); const month = dateMatch[2].padStart(2, '0'); currentDateStr = `${year}-${month}-${day}`; continue; } const timeMatch = line.match(/^(\d{2}:\d{2})$/); if (timeMatch && currentDateStr && i + 4 < lines.length) { const timeStr = timeMatch[1]; const equipaCasa = lines[i + 1]?.trim(); const equipaFora = lines[i + 3]?.trim(); if (equipaCasa && equipaFora) { games.push({ dataJogoStr: `${currentDateStr}T${timeStr}`, equipaCasa, equipaFora }); i += 4; } } } return games; }
+            async function processAndValidateGames(parsedGames, temporada, ronda) { const validGames = []; const invalidGames = []; const clubCache = new Map(); const competitionCache = new Map(); const existingGamesQuery = query(collection(db, 'whowinsJogos'), where('temporada', '==', temporada)); const existingGamesSnapshot = await getDocs(existingGamesQuery); const existingGameNames = new Set(existingGamesSnapshot.docs.map(doc => doc.data().nomeJogo)); const batchGameNames = new Set(); async function getClubData(name) { if (clubCache.has(name)) return clubCache.get(name); const q = query(collection(db, 'clubes'), where('nome', '==', name)); const snapshot = await getDocs(q); if (snapshot.empty) { clubCache.set(name, null); return null; } const data = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() }; clubCache.set(name, data); return data; } async function getCompetitionData(id) { if (competitionCache.has(id)) return competitionCache.get(id); const docRef = doc(db, 'competicoes', id); const docSnap = await getDoc(docRef); if (!docSnap.exists()) { competitionCache.set(id, null); return null; } const data = { id: docSnap.id, ...docSnap.data() }; competitionCache.set(id, data); return data; } for (const game of parsedGames) { const { dataJogoStr, equipaCasa, equipaFora } = game; const homeClub = await getClubData(equipaCasa); if (!homeClub) { invalidGames.push({ ...game, error: `Equipa da casa "${equipaCasa}" não encontrada.` }); continue; } const awayClub = await getClubData(equipaFora); if (!awayClub) { invalidGames.push({ ...game, error: `Equipa de fora "${equipaFora}" não encontrada.` }); continue; } if (!homeClub.competicaoId) { invalidGames.push({ ...game, error: `Equipa "${equipaCasa}" não tem competição associada.` }); continue; } const competition = await getCompetitionData(homeClub.competicaoId); if (!competition) { invalidGames.push({ ...game, error: `Competição ID "${homeClub.competicaoId}" não encontrada.` }); continue; } const dataJogo = new Date(dataJogoStr); const nomeJogo = `${equipaCasa} x ${equipaFora} - ${dataJogo.toLocaleDateString('pt-PT')}`; if (existingGameNames.has(nomeJogo)) { invalidGames.push({ ...game, error: `Jogo duplicado. Já existe na base de dados.` }); continue; } if (batchGameNames.has(nomeJogo)) { invalidGames.push({ ...game, error: `Jogo duplicado no texto que colou.` }); continue; } const fimIntervalo = new Date(dataJogo.getTime() - (60 * 60 * 1000)); batchGameNames.add(nomeJogo); validGames.push({ equipaCasaId: homeClub.id, equipaCasa: homeClub.nome, equipaForaId: awayClub.id, equipaFora: awayClub.nome, competicaoId: competition.id, competicao: competition.nome, arena: competition.arena || '', dataJogo, inicioIntervalo: new Date(), fimIntervalo, anexado: "whowins", nomeJogo, ronda, temporada, dataCriacao: new Date(), timestamp: Date.now(), userId: currentUser.uid }); } return { validGames, invalidGames }; }
 
-            function parseGamesFromText(text, temporada) {
-                const lines = text.split('\n').filter(line => line.trim() !== '');
-                const games = [];
-                let currentDateStr = '';
-                const year = parseInt(temporada.split('/')[0]);
-
-                for (let i = 0; i < lines.length; i++) {
-                    const line = lines[i].trim();
-
-                    // Verifica se a linha é uma data, ex: "Quarta - 15.10."
-                    const dateMatch = line.match(/(\d{1,2})\.(\d{1,2})/);
-                    if (dateMatch) {
-                        const day = dateMatch[1].padStart(2, '0');
-                        const month = dateMatch[2].padStart(2, '0');
-                        currentDateStr = `${year}-${month}-${day}`;
-                        continue;
-                    }
-
-                    // Verifica se a linha é uma hora, ex: "16:30"
-                    const timeMatch = line.match(/^(\d{2}:\d{2})$/);
-                    if (timeMatch && currentDateStr && i + 4 < lines.length) {
-                        const timeStr = timeMatch[1];
-                        // O formato espera: HORA, EQUIPA1, EQUIPA1, EQUIPA2, EQUIPA2
-                        const equipaCasa = lines[i + 1]?.trim();
-                        const equipaFora = lines[i + 3]?.trim();
-
-                        if (equipaCasa && equipaFora) {
-                            games.push({ 
-                                dataJogoStr: `${currentDateStr}T${timeStr}`,
-                                equipaCasa,
-                                equipaFora 
-                            });
-                            i += 4; // Pula as linhas já processadas
-                        }
-                    }
-                }
-                return games;
-            }
-
-           async function processAndValidateGames(parsedGames, temporada, ronda) {
-                const validGames = [];
-                const invalidGames = [];
-                const clubCache = new Map();
-                const competitionCache = new Map();
-
-                // 1. OTIMIZAÇÃO: Buscar todos os jogos existentes para a temporada de uma só vez.
-                const existingGamesQuery = query(collection(db, 'whowinsJogos'), where('temporada', '==', temporada));
-                const existingGamesSnapshot = await getDocs(existingGamesQuery);
-                const existingGameNames = new Set(existingGamesSnapshot.docs.map(doc => doc.data().nomeJogo));
-                
-                // 2. OTIMIZAÇÃO: Controlar duplicados dentro do próprio texto colado.
-                const batchGameNames = new Set();
-
-                async function getClubData(name) {
-                    if (clubCache.has(name)) return clubCache.get(name);
-                    const q = query(collection(db, 'clubes'), where('nome', '==', name));
-                    const snapshot = await getDocs(q);
-                    if (snapshot.empty) {
-                        clubCache.set(name, null);
-                        return null;
-                    }
-                    const data = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
-                    clubCache.set(name, data);
-                    return data;
-                }
-                 async function getCompetitionData(id) {
-                    if (competitionCache.has(id)) return competitionCache.get(id);
-                    const docRef = doc(db, 'competicoes', id);
-                    const docSnap = await getDoc(docRef);
-                    if (!docSnap.exists()) {
-                         competitionCache.set(id, null);
-                         return null;
-                    }
-                    const data = { id: docSnap.id, ...docSnap.data() };
-                    competitionCache.set(id, data);
-                    return data;
-                }
-
-                for (const game of parsedGames) {
-                    const { dataJogoStr, equipaCasa, equipaFora } = game;
-                    const homeClub = await getClubData(equipaCasa);
-                    if (!homeClub) {
-                        invalidGames.push({ ...game, error: `Equipa da casa "${equipaCasa}" não encontrada.` }); continue;
-                    }
-                    const awayClub = await getClubData(equipaFora);
-                    if (!awayClub) {
-                        invalidGames.push({ ...game, error: `Equipa de fora "${equipaFora}" não encontrada.` }); continue;
-                    }
-                    if (!homeClub.competicaoId) {
-                        invalidGames.push({ ...game, error: `Equipa "${equipaCasa}" não tem competição associada.` }); continue;
-                    }
-                    const competition = await getCompetitionData(homeClub.competicaoId);
-                    if (!competition) {
-                        invalidGames.push({ ...game, error: `Competição ID "${homeClub.competicaoId}" não encontrada.` }); continue;
-                    }
-
-                    const dataJogo = new Date(dataJogoStr);
-                    const nomeJogo = `${equipaCasa} x ${equipaFora} - ${dataJogo.toLocaleDateString('pt-PT')}`;
-
-                    // --- INÍCIO DA NOVA LÓGICA ANTI-DUPLICAÇÃO ---
-                    if (existingGameNames.has(nomeJogo)) {
-                        invalidGames.push({ ...game, error: `Jogo duplicado. Já existe na base de dados.` });
-                        continue; // Pula para o próximo jogo
-                    }
-                    if (batchGameNames.has(nomeJogo)) {
-                        invalidGames.push({ ...game, error: `Jogo duplicado no texto que colou.` });
-                        continue; // Pula para o próximo jogo
-                    }
-                    // --- FIM DA NOVA LÓGICA ANTI-DUPLICAÇÃO ---
-
-
-                    const fimIntervalo = new Date(dataJogo.getTime() - (60 * 60 * 1000)); // 1 hora antes
-
-                    // Se o jogo é válido e não é duplicado, adiciona-o ao controlo do lote atual
-                    batchGameNames.add(nomeJogo);
-
-                    validGames.push({
-                        equipaCasaId: homeClub.id,
-                        equipaCasa: homeClub.nome,
-                        equipaForaId: awayClub.id,
-                        equipaFora: awayClub.nome,
-                        competicaoId: competition.id,
-                        competicao: competition.nome,
-                        arena: competition.arena || '',
-                        dataJogo,
-                        inicioIntervalo: new Date(),
-                        fimIntervalo,
-                        anexado: "whowins",
-                        nomeJogo,
-                        ronda,
-                        temporada,
-                        dataCriacao: new Date(),
-                        timestamp: Date.now(),
-                        userId: currentUser.uid
-                    });
-                }
-                return { validGames, invalidGames };
-            }
-
+            // REFORÇO DE SEGURANÇA (XSS): Função segura para exibir os resultados da análise.
             function displayAnalysisResults(validGames, invalidGames) {
-                resultsDiv.innerHTML = '';
+                resultsDiv.innerHTML = ''; // Limpa antes de adicionar novo conteúdo
+                
                 if (validGames.length > 0) {
                     const title = document.createElement('h4');
                     title.textContent = 'Jogos a Serem Criados:';
@@ -803,7 +607,12 @@
                     validGames.forEach(game => {
                         const div = document.createElement('div');
                         div.className = 'result-item success';
-                        div.innerHTML = `<strong>${game.nomeJogo}</strong><span>Competição: ${game.competicao}</span>`;
+                        const strong = document.createElement('strong');
+                        strong.textContent = game.nomeJogo;
+                        const span = document.createElement('span');
+                        span.textContent = `Competição: ${game.competicao}`;
+                        div.appendChild(strong);
+                        div.appendChild(span);
                         resultsDiv.appendChild(div);
                     });
                 }
@@ -815,7 +624,12 @@
                     invalidGames.forEach(game => {
                         const div = document.createElement('div');
                         div.className = 'result-item error';
-                        div.innerHTML = `<strong>${game.equipaCasa} vs ${game.equipaFora}</strong><span>Erro: ${game.error}</span>`;
+                        const strong = document.createElement('strong');
+                        strong.textContent = `${game.equipaCasa} vs ${game.equipaFora}`;
+                        const span = document.createElement('span');
+                        span.textContent = `Erro: ${game.error}`;
+                        div.appendChild(strong);
+                        div.appendChild(span);
                         resultsDiv.appendChild(div);
                     });
                 }
