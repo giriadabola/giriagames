@@ -13,6 +13,13 @@
             box-sizing: border-box;
         }
 
+        /* --- NOVO: Regra global para proteger todas as imagens --- */
+        img {
+            pointer-events: none;
+            user-select: none;
+            -webkit-user-drag: none;
+        }
+
         /* Tutorial Popup Styles */
         .tutorial-popup {
             position: fixed;
@@ -134,9 +141,6 @@
             height: auto;
             border-radius: 10px;
             margin-bottom: 10px;
-            pointer-events: none;
-            user-select: none;
-            -webkit-user-drag: none;
         }
 
         .arena-card.glow-1 { box-shadow: 0 0 15px #ff6b6b; }
@@ -338,13 +342,6 @@
             max-height: 50px;
         }
 
-        .team-info img.team-logo,
-        .game-league-title img {
-            user-select: none;
-            -webkit-user-drag: none;
-            pointer-events: none;
-        }
-
         @media (max-width: 768px) {
             .game-list-container {
                 max-width: 100%;
@@ -359,9 +356,6 @@
             max-height: 30%;
             object-fit: contain;
             margin-bottom: 10px;
-            pointer-events: none;
-            user-select: none;
-            -webkit-user-drag: none;
         }
 
         #arena-welcome-text {
@@ -490,7 +484,8 @@
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getFirestore, collection, getDocs, doc, getDoc, Timestamp, setDoc, query, where, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+    import { getFirestore, collection, getDocs, doc, getDoc, Timestamp, setDoc, query, where, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
     let currentUserId = null;
     let gamesDataMap = {};
@@ -595,13 +590,13 @@ import { getFirestore, collection, getDocs, doc, getDoc, Timestamp, setDoc, quer
 
             // PASSO 2: Se o acesso foi permitido, carrega as regras do MENU para passar ao componente
             const menuSettings = await loadMenuSettings();
-            
+
             // Esta linha assume que 'menu-component.js' tem uma função global 'updateMenuVisibility'
             // para receber as configurações e desenhar o menu corretamente.
             if (typeof updateMenuVisibility === 'function') {
                 updateMenuVisibility(menuSettings);
             }
-            
+
             // O resto da lógica da página continua a executar normalmente
             document.getElementById('user-name').textContent = userInfo.nomeDeUsuario || 'Jogador';
 
@@ -614,9 +609,9 @@ import { getFirestore, collection, getDocs, doc, getDoc, Timestamp, setDoc, quer
                 const arenas = Object.keys(arenaData).map(key => ({
                     name: key, fama: arenaData[key].fama, image: arenaData[key].image
                 })).sort((a, b) => a.fama - b.fama);
-                
+
                 const userFame = userInfo.fame || 0;
-                let currentUserArena = arenas[0]; 
+                let currentUserArena = arenas[0];
                 for (let i = arenas.length - 1; i >= 0; i--) {
                     if (userFame >= arenas[i].fama) {
                         currentUserArena = arenas[i];
@@ -637,28 +632,28 @@ import { getFirestore, collection, getDocs, doc, getDoc, Timestamp, setDoc, quer
                     if (arenaNumber) document.getElementById('user-arena-number-display').textContent = arenaNumber[0];
                 }
             }
-            
+
             arenaLoadingVideo.style.display = 'block';
             document.querySelector('.loading-spinner').classList.add('hidden');
-            
+
             setTimeout(async () => {
-    // A função para carregar os jogos executa para todos
-    await loadGames(arenaNameToLoad);
+                // A função para carregar os jogos executa para todos
+                await loadGames(arenaNameToLoad);
 
-    // Verificamos se o utilizador já viu o tutorial
-    // Se o campo 'hasSeenWhoWinsTutorial' NÃO existir ou for falso, mostramos o tutorial
-    const hasSeenTutorial = userInfo.hasSeenWhoWinsTutorial || false;
-    
-    if (!hasSeenTutorial) {
-        // Atraso de 500ms para garantir que a transição é suave
-        setTimeout(() => {
-            document.getElementById('tutorial-popup').style.display = 'flex';
-        }, 500);
-    }
-    // Se 'hasSeenTutorial' for true, o código simplesmente não faz nada,
-    // e o tutorial permanece escondido.
+                // Verificamos se o utilizador já viu o tutorial
+                // Se o campo 'hasSeenWhoWinsTutorial' NÃO existir ou for falso, mostramos o tutorial
+                const hasSeenTutorial = userInfo.hasSeenWhoWinsTutorial || false;
 
-}, 2500);
+                if (!hasSeenTutorial) {
+                    // Atraso de 500ms para garantir que a transição é suave
+                    setTimeout(() => {
+                        document.getElementById('tutorial-popup').style.display = 'flex';
+                    }, 500);
+                }
+                // Se 'hasSeenTutorial' for true, o código simplesmente não faz nada,
+                // e o tutorial permanece escondido.
+
+            }, 2500);
 
         } else {
             currentUserId = null;
@@ -670,129 +665,151 @@ import { getFirestore, collection, getDocs, doc, getDoc, Timestamp, setDoc, quer
     // O RESTO DO CÓDIGO DA PÁGINA PERMANECE IGUAL
     // ==================================================================
 
-    async function loadGames(userArenaName) {
-        const gamesListElement = document.getElementById('games-list');
-        gamesListElement.innerHTML = '';
+   async function loadGames(userArenaName) {
+    const gamesListElement = document.getElementById('games-list');
+    gamesListElement.innerHTML = '';
 
-        if (!userArenaName) {
-            gamesListElement.innerHTML = '<p class="no-games-message">Não foi possível determinar a tua arena.</p>';
+    if (!userArenaName) {
+        gamesListElement.innerHTML = '<p class="no-games-message">Não foi possível determinar a tua arena.</p>';
+        return;
+    }
+
+    const gamesCollection = collection(db, 'whowinsJogos');
+    const clubesCollection = collection(db, 'clubes');
+    const competicoesCollection = collection(db, 'competicoes');
+    const paisesCollection = collection(db, 'paises');
+
+    try {
+        const gamesQuery = query(gamesCollection,
+            where("arena", "==", userArenaName)
+        );
+        
+        const gamesSnapshot = await getDocs(gamesQuery);
+
+        if (gamesSnapshot.empty) {
+            gamesListElement.innerHTML = '<p class="no-games-message">Não há jogos disponíveis para a tua arena neste momento.</p>';
             return;
         }
 
-        const gamesCollection = collection(db, 'whowinsJogos');
-        const clubesCollection = collection(db, 'clubes');
-        const competicoesCollection = collection(db, 'competicoes');
-        const paisesCollection = collection(db, 'paises');
+        const games = gamesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const gameIds = games.map(game => game.id);
 
-        try {
-            const gamesQuery = query(gamesCollection,
-                where("arena", "==", userArenaName)
-            );
+        gamesDataMap = {};
+        games.forEach(game => { gamesDataMap[game.id] = game; });
+
+        const existingPredictions = new Map();
+        if (gameIds.length > 0 && currentUserId) {
+            // --- INÍCIO DA MODIFICAÇÃO PARA CORRIGIR O ERRO ---
             
-            const gamesSnapshot = await getDocs(gamesQuery);
+            // 1. Criar um array para guardar as promessas de cada consulta
+            const queryPromises = [];
 
-            if (gamesSnapshot.empty) {
-                gamesListElement.innerHTML = '<p class="no-games-message">Não há jogos disponíveis para a tua arena neste momento.</p>';
-                return;
-            }
-
-            const games = gamesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            const gameIds = games.map(game => game.id);
-
-            gamesDataMap = {};
-            games.forEach(game => { gamesDataMap[game.id] = game; });
-
-            const existingPredictions = new Map();
-            if (gameIds.length > 0 && currentUserId) {
+            // 2. Dividir o array gameIds em pedaços de 30
+            for (let i = 0; i < gameIds.length; i += 30) {
+                const chunk = gameIds.slice(i, i + 30);
+                
+                // 3. Criar uma consulta para cada pedaço
                 const predictionsQuery = query(collection(db, 'palpiteswhowins'),
                     where("userId", "==", currentUserId),
-                    where("nomeJogo", "in", gameIds)
+                    where("nomeJogo", "in", chunk) // Usar o pedaço aqui
                 );
-                const predictionsSnapshot = await getDocs(predictionsQuery);
-                predictionsSnapshot.forEach(doc => {
+                
+                // 4. Adicionar a promessa da consulta ao array
+                queryPromises.push(getDocs(predictionsQuery));
+            }
+
+            // 5. Executar todas as consultas em paralelo e esperar pelos resultados
+            const snapshots = await Promise.all(queryPromises);
+
+            // 6. Juntar os resultados de todas as consultas
+            snapshots.forEach(snapshot => {
+                snapshot.forEach(doc => {
                     const pred = doc.data();
                     existingPredictions.set(pred.nomeJogo, pred.winsId);
                 });
-            }
-
-            const leaguesGames = {};
-            for (const game of games) {
-                const leagueName = game.competicao || 'Outra Liga';
-                if (!leaguesGames[leagueName]) {
-                    leaguesGames[leagueName] = { games: [], competicaoId: game.competicaoId };
-                }
-                leaguesGames[leagueName].games.push(game);
-            }
-
-            let gamesHTML = '';
-            for (const leagueName in leaguesGames) {
-                const leagueData = leaguesGames[leagueName];
-                let countryFlagImage = placeholderImage;
-
-                if (leagueData.competicaoId) {
-                    const compDoc = await getDoc(doc(competicoesCollection, leagueData.competicaoId));
-                    if (compDoc.exists() && compDoc.data().paisId) {
-                        const countryDoc = await getDoc(doc(paisesCollection, compDoc.data().paisId));
-                        if (countryDoc.exists()) countryFlagImage = countryDoc.data().imagem || placeholderImage;
-                    }
-                }
-
-                leagueData.games.sort((a, b) => (a.dataJogo?.toDate() || 0) - (b.dataJogo?.toDate() || 0));
-                gamesHTML += `<h2 class="game-league-title"><img src="${countryFlagImage}" alt="${leagueName} Flag"> ${leagueName}</h2>`;
-
-                for (const game of leagueData.games) {
-                    const [homeTeamDoc, awayTeamDoc] = await Promise.all([
-                        getDoc(doc(clubesCollection, game.equipaCasaId)),
-                        getDoc(doc(clubesCollection, game.equipaForaId))
-                    ]);
-                    const homeTeamImage = homeTeamDoc.data()?.imagem || placeholderImage;
-                    const awayTeamImage = awayTeamDoc.data()?.imagem || placeholderImage;
-
-                    let formattedDateTime = 'N/A';
-                    if (game.dataJogo instanceof Timestamp) {
-                        const d = game.dataJogo.toDate();
-                        formattedDateTime = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}h${String(d.getMinutes()).padStart(2,'0')}`;
-                    }
-
-                    const homeSelected = existingPredictions.get(game.id) === game.equipaCasaId ? 'selected' : '';
-                    const drawSelected = existingPredictions.get(game.id) === 'draw' ? 'selected' : '';
-                    const awaySelected = existingPredictions.get(game.id) === game.equipaForaId ? 'selected' : '';
-
-                    gamesHTML += `
-                        <li class="game-item" data-game-id="${game.id}">
-                            <div class="teams-container">
-                                <div class="team-info ${homeSelected}" data-wins-name="${game.equipaCasa}" data-wins-id="${game.equipaCasaId}">
-                                    <img src="${homeTeamImage}" alt="${game.equipaCasa}" class="team-logo">
-                                    <span class="team-name">${game.equipaCasa}</span>
-                                </div>
-                                <span class="versus ${drawSelected}" data-wins-name="Empate" data-wins-id="draw">
-                                    EMPATE
-                                    <div class="game-date-time">${formattedDateTime}</div>
-                                </span>
-                                <div class="team-info ${awaySelected}" data-wins-name="${game.equipaFora}" data-wins-id="${game.equipaForaId}">
-                                    <img src="${awayTeamImage}" alt="${game.equipaFora}" class="team-logo">
-                                    <span class="team-name">${game.equipaFora}</span>
-                                </div>
-                            </div>
-                        </li>`;
-                }
-            }
-            gamesListElement.innerHTML = gamesHTML;
-
-            document.querySelectorAll('.game-item .team-info, .game-item .versus').forEach(el => {
-                el.addEventListener('click', handlePredictionClick);
             });
 
-        } catch (error) {
-            console.error("Error fetching games:", error);
-            gamesListElement.innerHTML = '<p class="no-games-message">Ocorreu um erro ao carregar os jogos.</p>';
-        } finally {
-             loadingScreen.style.display = 'none';
-             gameListContainer.style.display = 'block';
-             document.getElementById('user-stats-container').style.display = 'flex';
+            // --- FIM DA MODIFICAÇÃO ---
         }
+
+        const leaguesGames = {};
+        for (const game of games) {
+            const leagueName = game.competicao || 'Outra Liga';
+            if (!leaguesGames[leagueName]) {
+                leaguesGames[leagueName] = { games: [], competicaoId: game.competicaoId };
+            }
+            leaguesGames[leagueName].games.push(game);
+        }
+
+        let gamesHTML = '';
+        for (const leagueName in leaguesGames) {
+            const leagueData = leaguesGames[leagueName];
+            let countryFlagImage = placeholderImage;
+
+            if (leagueData.competicaoId) {
+                const compDoc = await getDoc(doc(competicoesCollection, leagueData.competicaoId));
+                if (compDoc.exists() && compDoc.data().paisId) {
+                    const countryDoc = await getDoc(doc(paisesCollection, compDoc.data().paisId));
+                    if (countryDoc.exists()) countryFlagImage = countryDoc.data().imagem || placeholderImage;
+                }
+            }
+
+            leagueData.games.sort((a, b) => (a.dataJogo?.toDate() || 0) - (b.dataJogo?.toDate() || 0));
+            gamesHTML += `<h2 class="game-league-title"><img src="${countryFlagImage}" alt="${leagueName} Flag"> ${leagueName}</h2>`;
+
+            for (const game of leagueData.games) {
+                const [homeTeamDoc, awayTeamDoc] = await Promise.all([
+                    getDoc(doc(clubesCollection, game.equipaCasaId)),
+                    getDoc(doc(clubesCollection, game.equipaForaId))
+                ]);
+                const homeTeamImage = homeTeamDoc.data()?.imagem || placeholderImage;
+                const awayTeamImage = awayTeamDoc.data()?.imagem || placeholderImage;
+
+                let formattedDateTime = 'N/A';
+                if (game.dataJogo instanceof Timestamp) {
+                    const d = game.dataJogo.toDate();
+                    formattedDateTime = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}h${String(d.getMinutes()).padStart(2,'0')}`;
+                }
+
+                const homeSelected = existingPredictions.get(game.id) === game.equipaCasaId ? 'selected' : '';
+                const drawSelected = existingPredictions.get(game.id) === 'draw' ? 'selected' : '';
+                const awaySelected = existingPredictions.get(game.id) === game.equipaForaId ? 'selected' : '';
+
+                gamesHTML += `
+                    <li class="game-item" data-game-id="${game.id}">
+                        <div class="teams-container">
+                            <div class="team-info ${homeSelected}" data-wins-name="${game.equipaCasa}" data-wins-id="${game.equipaCasaId}">
+                                <img src="${homeTeamImage}" alt="${game.equipaCasa}" class="team-logo">
+                                <span class="team-name">${game.equipaCasa}</span>
+                            </div>
+                            <span class="versus ${drawSelected}" data-wins-name="Empate" data-wins-id="draw">
+                                EMPATE
+                                <div class="game-date-time">${formattedDateTime}</div>
+                            </span>
+                            <div class="team-info ${awaySelected}" data-wins-name="${game.equipaFora}" data-wins-id="${game.equipaForaId}">
+                                <img src="${awayTeamImage}" alt="${game.equipaFora}" class="team-logo">
+                                <span class="team-name">${game.equipaFora}</span>
+                            </div>
+                        </div>
+                    </li>`;
+            }
+        }
+        gamesListElement.innerHTML = gamesHTML;
+
+        document.querySelectorAll('.game-item .team-info, .game-item .versus').forEach(el => {
+            el.addEventListener('click', handlePredictionClick);
+        });
+
+    } catch (error) {
+        console.error("Error fetching games:", error);
+        gamesListElement.innerHTML = '<p class="no-games-message">Ocorreu um erro ao carregar os jogos.</p>';
+    } finally {
+         loadingScreen.style.display = 'none';
+         gameListContainer.style.display = 'block';
+         document.getElementById('user-stats-container').style.display = 'flex';
     }
-    
+}
+
     async function handlePredictionClick(event) {
         const clickedElement = event.currentTarget;
         const gameItem = clickedElement.closest('.game-item');
@@ -802,7 +819,7 @@ import { getFirestore, collection, getDocs, doc, getDoc, Timestamp, setDoc, quer
         const gameData = gamesDataMap[gameId];
 
         if (!gameData || !currentUserId) return;
-        
+
         const now = new Date();
         if (gameData.fimIntervalo.toDate() < now) {
             alert("O período para palpitar neste jogo já terminou!");
@@ -812,7 +829,7 @@ import { getFirestore, collection, getDocs, doc, getDoc, Timestamp, setDoc, quer
             alert("Ainda não é possível palpitar neste jogo.");
             return;
         }
-        
+
         const predictionDocId = `${currentUserId}_${gameId}`;
         const predictionRef = doc(db, 'palpiteswhowins', predictionDocId);
 
@@ -822,7 +839,7 @@ import { getFirestore, collection, getDocs, doc, getDoc, Timestamp, setDoc, quer
             await setDoc(predictionRef, predictionData);
             gameItem.querySelectorAll('.selected').forEach(el => el.classList.remove('selected'));
             clickedElement.classList.add('selected');
-            
+
             const scalar = 0.7, sword = confetti.shapeFromText({ text: '⚔️', scalar });
             const rect = clickedElement.getBoundingClientRect();
             const origin = { x: (rect.left + rect.right) / 2 / window.innerWidth, y: (rect.top + rect.bottom) / 2 / window.innerHeight };
@@ -832,5 +849,17 @@ import { getFirestore, collection, getDocs, doc, getDoc, Timestamp, setDoc, quer
         }
     }
 </script>
+
+<!-- --- NOVO: Script para desativar o botão direito nas imagens --- -->
+<script>
+  // Desativa o menu de contexto (botão direito) nos itens de jogo e no ecrã de loading
+  document.addEventListener('contextmenu', function(e) {
+    // Verifica se o elemento clicado (ou um dos seus pais) é um item de jogo OU o ecrã de loading
+    if (e.target.closest('.game-item') || e.target.closest('#loading-screen')) {
+      e.preventDefault();
+    }
+  });
+</script>
+
 </body>
 </html>
