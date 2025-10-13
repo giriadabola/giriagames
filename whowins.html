@@ -490,8 +490,7 @@
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-    import { getFirestore, collection, getDocs, doc, getDoc, Timestamp, setDoc, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getFirestore, collection, getDocs, doc, getDoc, Timestamp, setDoc, query, where, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
     let currentUserId = null;
     let gamesDataMap = {};
@@ -504,7 +503,24 @@
         document.getElementById(`slide-${currentSlide}`).classList.add('active');
         if (currentSlide === 3) loadArenaCards();
     };
-    window.closeTutorial = () => { document.getElementById('tutorial-popup').style.display = 'none'; };
+   window.closeTutorial = async () => {
+    // Primeiro, esconde o popup visualmente
+    document.getElementById('tutorial-popup').style.display = 'none';
+
+    // Se tivermos um utilizador logado, atualiza o seu perfil na base de dados
+    if (currentUserId) {
+        const userDocRef = doc(db, 'users', currentUserId);
+        try {
+            // Adiciona o campo para que o tutorial não apareça novamente
+            await updateDoc(userDocRef, {
+                hasSeenWhoWinsTutorial: true
+            });
+            console.log("Utilizador marcou o tutorial como visto.");
+        } catch (error) {
+            console.error("Erro ao atualizar o estado do tutorial do utilizador:", error);
+        }
+    }
+};
 
     async function loadArenaCards() {
         const arenaGrid = document.getElementById('arena-grid');
@@ -626,9 +642,23 @@
             document.querySelector('.loading-spinner').classList.add('hidden');
             
             setTimeout(async () => {
-                await loadGames(arenaNameToLoad);
-                setTimeout(() => { document.getElementById('tutorial-popup').style.display = 'flex'; }, 500);
-            }, 2500);
+    // A função para carregar os jogos executa para todos
+    await loadGames(arenaNameToLoad);
+
+    // Verificamos se o utilizador já viu o tutorial
+    // Se o campo 'hasSeenWhoWinsTutorial' NÃO existir ou for falso, mostramos o tutorial
+    const hasSeenTutorial = userInfo.hasSeenWhoWinsTutorial || false;
+    
+    if (!hasSeenTutorial) {
+        // Atraso de 500ms para garantir que a transição é suave
+        setTimeout(() => {
+            document.getElementById('tutorial-popup').style.display = 'flex';
+        }, 500);
+    }
+    // Se 'hasSeenTutorial' for true, o código simplesmente não faz nada,
+    // e o tutorial permanece escondido.
+
+}, 2500);
 
         } else {
             currentUserId = null;
