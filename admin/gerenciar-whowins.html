@@ -41,6 +41,24 @@
         .no-result-btn:hover { background-color: #5a6268; }
         .no-result-btn:disabled { background-color: #a0a0a0; cursor: not-allowed; }
         .placeholder { text-align: center; color: #666; padding: 40px; font-size: 1.2em; }
+        /* Adicione este novo estilo para o título da liga */
+        .league-title-admin {
+            grid-column: 1 / -1; /* Faz o título ocupar todas as colunas da grelha */
+            color: #1a1a1a;
+            background-color: #e9ecef;
+            padding: 10px 15px;
+            border-radius: 6px;
+            margin-top: 20px;
+            margin-bottom: 10px;
+            font-size: 1.2em;
+            text-align: left;
+            font-family: Arial, sans-serif;
+        }
+        
+        /* Opcional: Remove a margem do topo do primeiro título para um melhor alinhamento */
+        .league-title-admin:first-of-type {
+            margin-top: 0;
+        }
     </style>
 </head>
 <body style="display: none;">
@@ -240,24 +258,64 @@
                 displayFilteredGames();
             }
 
-            async function displayFilteredGames() {
+        async function displayFilteredGames() {
+                // A filtragem inicial por temporada e ronda permanece a mesma
                 currentlyDisplayedGames = allGamesData.filter(g => g.temporada === temporadaSelect.value && g.ronda === parseInt(rondaSelect.value, 10));
+                
                 gamesList.innerHTML = '';
-                if (currentlyDisplayedGames.length === 0) { placeholder.style.display = 'block'; placeholder.textContent = 'Nenhum jogo encontrado para esta seleção.'; return; }
-                placeholder.style.display = 'none';
-                for (const game of currentlyDisplayedGames) {
-                    const [homeTeamData, awayTeamData] = await Promise.all([ getClubData(game.equipaCasaId), getClubData(game.equipaForaId) ]);
-                    let formattedDateTime = 'N/A';
-                    if (game.dataJogo instanceof Timestamp) { const d = game.dataJogo.toDate(); formattedDateTime = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}h${String(d.getMinutes()).padStart(2,'0')}`; }
-                    const homeSelected = game.resultado === game.equipaCasaId ? 'selected' : '';
-                    const drawSelected = game.resultado === 'draw' ? 'selected' : '';
-                    const awaySelected = game.resultado === game.equipaForaId ? 'selected' : '';
-                    const li = document.createElement('li');
-                    li.className = 'game-item';
-                    li.dataset.gameId = game.id;
-                    li.innerHTML = `<div class="teams-container"><div class="team-info ${homeSelected}" data-result-id="${game.equipaCasaId}"><img src="${homeTeamData.imagem}" alt="${homeTeamData.nome}" class="team-logo"><span>${game.equipaCasa}</span></div><span class="versus ${drawSelected}" data-result-id="draw">EMPATE<div class="game-date-time">${formattedDateTime}</div></span><div class="team-info ${awaySelected}" data-result-id="${game.equipaForaId}"><img src="${awayTeamData.imagem}" alt="${awayTeamData.nome}" class="team-logo"><span>${game.equipaFora}</span></div></div><button class="no-result-btn">Sem Resultado</button>`;
-                    gamesList.appendChild(li);
+                if (currentlyDisplayedGames.length === 0) {
+                    placeholder.style.display = 'block';
+                    placeholder.textContent = 'Nenhum jogo encontrado para esta seleção.';
+                    return;
                 }
+                placeholder.style.display = 'none';
+
+                // --- INÍCIO DA NOVA LÓGICA DE AGRUPAMENTO ---
+
+                // 1. Criar um objeto para agrupar os jogos por liga
+                const leaguesGames = {};
+                for (const game of currentlyDisplayedGames) {
+                    const leagueName = game.competicao || 'Competição Desconhecida';
+                    if (!leaguesGames[leagueName]) {
+                        leaguesGames[leagueName] = []; // Cria uma lista para a nova liga
+                    }
+                    leaguesGames[leagueName].push(game);
+                }
+
+                // 2. Ordenar os nomes das ligas alfabeticamente para uma exibição consistente
+                const sortedLeagues = Object.keys(leaguesGames).sort();
+
+                // 3. Gerar o HTML iterando sobre as ligas agrupadas
+                for (const leagueName of sortedLeagues) {
+                    // Adiciona o título da liga à lista
+                    const titleElement = document.createElement('h2');
+                    titleElement.className = 'league-title-admin';
+                    titleElement.textContent = leagueName;
+                    gamesList.appendChild(titleElement);
+
+                    const gamesInLeague = leaguesGames[leagueName];
+                    // Ordena os jogos dentro da liga por data
+                    gamesInLeague.sort((a, b) => (a.dataJogo?.toDate() || 0) - (b.dataJogo?.toDate() || 0));
+
+                    // Gera o HTML para cada jogo DENTRO desta liga
+                    for (const game of gamesInLeague) {
+                        const [homeTeamData, awayTeamData] = await Promise.all([ getClubData(game.equipaCasaId), getClubData(game.equipaForaId) ]);
+                        let formattedDateTime = 'N/A';
+                        if (game.dataJogo instanceof Timestamp) { const d = game.dataJogo.toDate(); formattedDateTime = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}h${String(d.getMinutes()).padStart(2,'0')}`; }
+                        const homeSelected = game.resultado === game.equipaCasaId ? 'selected' : '';
+                        const drawSelected = game.resultado === 'draw' ? 'selected' : '';
+                        const awaySelected = game.resultado === game.equipaForaId ? 'selected' : '';
+                        const li = document.createElement('li');
+                        li.className = 'game-item';
+                        li.dataset.gameId = game.id;
+                        li.innerHTML = `<div class="teams-container"><div class="team-info ${homeSelected}" data-result-id="${game.equipaCasaId}"><img src="${homeTeamData.imagem}" alt="${homeTeamData.nome}" class="team-logo"><span>${game.equipaCasa}</span></div><span class="versus ${drawSelected}" data-result-id="draw">EMPATE<div class="game-date-time">${formattedDateTime}</div></span><div class="team-info ${awaySelected}" data-result-id="${game.equipaForaId}"><img src="${awayTeamData.imagem}" alt="${awayTeamData.nome}" class="team-logo"><span>${game.equipaFora}</span></div></div><button class="no-result-btn">Sem Resultado</button>`;
+                        gamesList.appendChild(li);
+                    }
+                }
+
+                // --- FIM DA NOVA LÓGICA DE AGRUPAMENTO ---
+
+                // Os event listeners são adicionados no final, como antes, a todos os elementos gerados
                 document.querySelectorAll('.game-item .team-info, .game-item .versus').forEach(el => el.addEventListener('click', handleResultClick));
                 document.querySelectorAll('.game-item .no-result-btn').forEach(btn => btn.addEventListener('click', handleNoResultClick));
             }
