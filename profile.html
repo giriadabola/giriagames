@@ -1610,13 +1610,12 @@ async function handleDebtPayment() {
 
 
 
-     async function updateGCoinsDisplay() {
+    async function updateGCoinsDisplay() {
     const user = auth.currentUser;
     const gcoinsValue = document.getElementById('gcoinsValue');
 
     if (user) {
         try {
-            // 1. Busca a temporada atual como fonte da verdade
             const configRef = doc(db, 'paineis', 'configuracoes_gerais');
             const userRef = doc(db, 'users', user.uid);
             
@@ -1635,15 +1634,22 @@ async function handleDebtPayment() {
                     
                     const gcoins = userData[gcoinsField] || 0;
                     gcoinsValue.textContent = gcoins.toFixed(0);
-                } else {
-                    gcoinsValue.textContent = '0'; // Fallback se a temporada não for encontrada
+
+
+                    return gcoins; // <-- CORREÇÃO CRÍTICA: Devolver o valor numérico
                 }
             }
+            // Se algo falhar acima, retorna 0 como fallback
+            gcoinsValue.textContent = '0';
+            return 0;
+
         } catch (error) {
             console.error("Erro ao atualizar o display de GCoins:", error);
             gcoinsValue.textContent = 'Erro';
+            return 0; // Devolver 0 em caso de erro
         }
     }
+    return 0; // Devolver 0 se não houver utilizador
 }
 
         async function loadTransactions() {
@@ -2018,12 +2024,11 @@ onAuthStateChanged(auth, async (user) => {
             }
 
             // --- LÓGICA FINANCEIRA PRINCIPAL ---
-            const gcoinsData = await updateGCoinsDisplay();
-            if (gcoinsData) {
-                currentUserGCoins = gcoinsData.value;
-            }
+          currentUserGCoins = await updateGCoinsDisplay();
+
+
             await loadUserDebts();
-            await loadBancaValue();
+            await loadBancaValue(); // <-- LINHA ADICIONADA AQUI
             // --- FIM DA LÓGICA FINANCEIRA ---
 
             // Preenche o nome de utilizador e mostra o conteúdo da página
