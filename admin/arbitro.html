@@ -1376,20 +1376,29 @@ async function processGameMods(ronda) {
 
 
 async function recalculateUserTotals(userIds, temporadaKey) {
+    // A lógica de PONTOS permanece inalterada e correta.
     const estadosQueValemPontos = ["Palpite Paid", "Mod Play"];
 
     for (const userId of userIds) {
         const userRef = doc(db, 'users', userId);
         const userUpdatePayload = {};
 
-        // GCOINS (todos os movimentos)
+        // --- CORREÇÃO APLICADA AQUI (Cálculo de GCoins) ---
         const gcoinsQuery = query(collection(db, 'movimentos'), where("userId", "==", userId), where("temporada", "==", temporadaKey));
         let totalGCoins = 0;
         const gcoinsSnapshot = await getDocs(gcoinsQuery);
-        gcoinsSnapshot.forEach(doc => totalGCoins += (doc.data().valorreal || 0));
+        
+        gcoinsSnapshot.forEach(doc => {
+            const data = doc.data();
+            // Apenas somar se o estado NÃO for 'WhoWins Paid'
+            if (data.estado !== 'WhoWins Paid') {
+                totalGCoins += (data.valorreal || 0);
+            }
+        });
         userUpdatePayload[`${temporadaKey}GCoins`] = totalGCoins;
+        // --- FIM DA CORREÇÃO ---
 
-        // PONTOS (apenas estados válidos)
+        // A lógica de PONTOS já estava correta.
         const pontosQuery = query(collection(db, 'movimentos'), where("userId", "==", userId), where("temporada", "==", temporadaKey), where("estado", "in", estadosQueValemPontos));
         let totalPontos = 0;
         const pontosSnapshot = await getDocs(pontosQuery);
