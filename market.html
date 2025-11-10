@@ -1027,16 +1027,25 @@ async function createPlayerCard(player) {
                         return;
                     }
 
-                    const movimentosRef = collection(db, 'movimentos');
-                    const q = query(movimentosRef, where('userId', '==', auth.currentUser.uid), where('temporada', '==', currentSeason));
-                    const movimentosSnap = await getDocs(q);
-                    let totalValorReal = 0;
-                    movimentosSnap.forEach((movDoc) => {
-                        totalValorReal += movDoc.data()?.valorreal || 0;
-                    });
-                    await updateDoc(userRef, {
-                        [gCoinsField]: totalValorReal
-                    });
+                 const movimentosRef = collection(db, 'movimentos');
+const q = query(movimentosRef, where('userId', '==', auth.currentUser.uid), where('temporada', '==', currentSeason));
+const movimentosSnap = await getDocs(q);
+
+let totalValorReal = 0;
+
+// --- APLICAÇÃO DA LÓGICA CORRETA ---
+movimentosSnap.forEach((movDoc) => {
+    const data = movDoc.data();
+    // Apenas somar se o estado NÃO for 'WhoWins Paid'
+    if (data?.estado !== 'WhoWins Paid') {
+        totalValorReal += data?.valorreal || 0;
+    }
+});
+
+// Agora o saldo será atualizado com o valor correto
+await updateDoc(userRef, {
+    [gCoinsField]: totalValorReal
+});
 
                     displaySuccessMessage(playerPopupContent, "Jogador comprado com sucesso!");
 
