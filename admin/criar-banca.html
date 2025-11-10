@@ -340,74 +340,81 @@
             }
         }
 
-      async function handleLoanSubmit(event) {
-            event.preventDefault();
-            loanFeedback.textContent = 'A processar empréstimo...';
-            loanFeedback.className = 'feedback-message';
+     async function handleLoanSubmit(event) {
+    event.preventDefault();
+    loanFeedback.textContent = 'A processar empréstimo...';
+    loanFeedback.className = 'feedback-message';
 
-            const userId = userSelect.value;
-            const amount = parseFloat(loanAmountInput.value);
-            if (!userId || isNaN(amount) || amount <= 0) {
-                loanFeedback.textContent = 'Por favor, selecione um utilizador e insira um valor válido.';
-                loanFeedback.className = 'feedback-message error';
-                return;
+    const userId = userSelect.value;
+    const amount = parseFloat(loanAmountInput.value);
+    if (!userId || isNaN(amount) || amount <= 0) {
+        loanFeedback.textContent = 'Por favor, selecione um utilizador e insira um valor válido.';
+        loanFeedback.className = 'feedback-message error';
+        return;
+    }
+
+    try {
+        const movimentosRef = collection(db, "movimentos");
+        const q = query(movimentosRef, where("userId", "==", userId), where("temporada", "==", currentSeason));
+        const querySnapshot = await getDocs(q);
+        
+        let saldoExistente = 0;
+        
+        // --- CORREÇÃO APLICADA AQUI ---
+        // A lógica de cálculo do saldo agora ignora a transação 'WhoWins Paid'.
+        querySnapshot.forEach((doc) => {
+            const data = doc.data();
+            if (data.estado !== 'WhoWins Paid') {
+                const valor = parseFloat(data.valorreal);
+                if (!isNaN(valor)) {
+                    saldoExistente += valor;
+                }
             }
+        });
+        // --- FIM DA CORREÇÃO ---
 
-            try {
-                const movimentosRef = collection(db, "movimentos");
-                const q = query(movimentosRef, where("userId", "==", userId), where("temporada", "==", currentSeason));
-                const querySnapshot = await getDocs(q);
-                
-                let saldoExistente = 0;
-                querySnapshot.forEach((doc) => {
-                    const valor = parseFloat(doc.data().valorreal);
-                    if (!isNaN(valor)) {
-                        saldoExistente += valor;
-                    }
-                });
+        const novoSaldoTotal = saldoExistente + amount;
+        const batch = writeBatch(db);
+        const description = loanDescriptionInput.value || "Empréstimo da Banca";
+        const selectedUserName = userSelect.options[userSelect.selectedIndex].text;
+        
+        const jurosValorFixo = parseFloat(loanInterestInput.value) || 0;
+        const interestAmount = jurosValorFixo;
+        const totalDebt = amount + interestAmount;
 
-                const novoSaldoTotal = saldoExistente + amount;
-                const batch = writeBatch(db);
-                const description = loanDescriptionInput.value || "Empréstimo da Banca";
-                const selectedUserName = userSelect.options[userSelect.selectedIndex].text;
-                
-                const jurosValorFixo = parseFloat(loanInterestInput.value) || 0;
-                const interestAmount = jurosValorFixo;
-                const totalDebt = amount + interestAmount;
+        batch.set(doc(collection(db, 'movimentos')), {
+            tipo: "Banca", preco: -amount, movimentoData: Timestamp.now(), temporada: currentSeason,
+            descricao: `Empréstimo a ${selectedUserName} (Juros: ${interestAmount} GCoins)`, 
+            para_userId: userId
+        });
 
-                batch.set(doc(collection(db, 'movimentos')), {
-                    tipo: "Banca", preco: -amount, movimentoData: Timestamp.now(), temporada: currentSeason,
-                    descricao: `Empréstimo a ${selectedUserName} (Juros: ${interestAmount} GCoins)`, 
-                    para_userId: userId
-                });
+        batch.set(doc(collection(db, 'movimentos')), {
+            userId: userId, valorreal: amount, tipo: "Empréstimo", movimentoData: Timestamp.now(), temporada: currentSeason,
+            de: "Banca", descricao: description, 
+            valorJuros: interestAmount, 
+            valorTotalAPagar: totalDebt, estado: "Por Pagar"
+        });
 
-                batch.set(doc(collection(db, 'movimentos')), {
-                    userId: userId, valorreal: amount, tipo: "Empréstimo", movimentoData: Timestamp.now(), temporada: currentSeason,
-                    de: "Banca", descricao: description, 
-                    valorJuros: interestAmount, 
-                    valorTotalAPagar: totalDebt, estado: "Por Pagar"
-                });
+        const userRef = doc(db, 'users', userId);
+        const gCoinsField = `${currentSeason}GCoins`;
+        batch.update(userRef, { [gCoinsField]: novoSaldoTotal }); // Agora atualiza com o saldo correto
 
-                const userRef = doc(db, 'users', userId);
-                const gCoinsField = `${currentSeason}GCoins`;
-                batch.update(userRef, { [gCoinsField]: novoSaldoTotal });
+        const newBankTotal = movimentosSum - amount;
+        batch.set(doc(db, "paineis", "Banca"), { valor: newBankTotal }, { merge: true });
+        await batch.commit();
 
-                const newBankTotal = movimentosSum - amount;
-                batch.set(doc(db, "paineis", "Banca"), { valor: newBankTotal }, { merge: true });
-                await batch.commit();
-
-                movimentosSum = newBankTotal;
-                updateCalculatedTotal();
-                loanForm.reset();
-                loanFeedback.textContent = 'Empréstimo registado e saldo atualizado com sucesso!';
-                loanFeedback.className = 'feedback-message success';
-                setTimeout(() => { loanPopup.style.display = 'none'; }, 2000);
-            } catch (error) {
-                console.error("Erro ao conceder empréstimo:", error);
-                loanFeedback.textContent = `Erro: ${error.message}`;
-                loanFeedback.className = 'feedback-message error';
-            }
-        }
+        movimentosSum = newBankTotal;
+        updateCalculatedTotal();
+        loanForm.reset();
+        loanFeedback.textContent = 'Empréstimo registado e saldo atualizado com sucesso!';
+        loanFeedback.className = 'feedback-message success';
+        setTimeout(() => { loanPopup.style.display = 'none'; }, 2000);
+    } catch (error) {
+        console.error("Erro ao conceder empréstimo:", error);
+        loanFeedback.textContent = `Erro: ${error.message}`;
+        loanFeedback.className = 'feedback-message error';
+    }
+}
         
         /**
          * Lida com a submissão do formulário da taxa WhoWins.
