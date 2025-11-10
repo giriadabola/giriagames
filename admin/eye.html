@@ -20,12 +20,19 @@
         table { width: 100%; border-collapse: collapse; }
         th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #ddd; }
         tbody tr:nth-child(even) { background-color: #fafafa; }
-        tbody tr:hover { background-color: #f1f1f1; }
+        tbody tr:hover td { background-color: #f1f1f1 !important; }
         thead th.sortable { cursor: pointer; position: relative; user-select: none; }
         thead th.sortable:hover { background-color: #e9e9e9; }
         thead th.sortable::after { content: ''; position: absolute; right: 15px; top: 50%; margin-top: -8px; border: 5px solid transparent; opacity: 0.3; }
         thead th.sort-asc::after { opacity: 1; border-bottom-color: #333; }
         thead th.sort-desc::after { opacity: 1; border-top-color: #333; }
+        .highlight-update { background-color: #d4edda !important; transition: background-color 1.5s ease; }
+
+        /* Coloração das Colunas */
+        #users-table th:nth-child(3), #users-table td:nth-child(3) { background-color: #e7f3ff; }
+        #users-table th:nth-child(4), #users-table td:nth-child(4) { background-color: #fff8e1; }
+        #users-table th:nth-child(5), #users-table td:nth-child(5) { background-color: #e8f5e9; }
+        #users-table th:nth-child(6), #users-table td:nth-child(6) { background-color: #ffebee; color: #c62828; font-weight: 500;}
 
         .popup-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -54,6 +61,26 @@
         }
         #recalculate-button:hover { background-color: #0056b3; }
         #recalculate-button:disabled { background-color: #cccccc; cursor: not-allowed; }
+
+        #bulletin-button {
+            position: fixed; bottom: 25px; right: 25px; width: 60px; height: 60px;
+            background-color: #007bff; color: white; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 24px; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            z-index: 1500; transition: transform 0.3s ease, opacity 0.3s ease;
+            transform: scale(0); opacity: 0;
+        }
+        #bulletin-button.bulletin-visible { transform: scale(1); opacity: 1; }
+        #bulletin-badge {
+            position: absolute; top: -2px; right: -2px; width: 24px; height: 24px;
+            background-color: #dc3545; color: white; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 14px; font-weight: bold; border: 2px solid white;
+        }
+        #changelog-container .log-entry { padding: 12px 8px; border-bottom: 1px solid #eee; font-size: 15px; }
+        #changelog-container .log-entry:last-child { border-bottom: none; }
+        #changelog-container .log-entry .user { font-weight: bold; color: #0056b3; }
+        #changelog-container .log-entry .change-arrow { color: #ffc107; margin: 0 8px; }
     </style>
 </head>
 <body>
@@ -75,6 +102,7 @@
                         <th class="sortable" data-column="tatica">Tática</th>
                         <th class="sortable" data-column="pontos">Pontos</th>
                         <th class="sortable" data-column="gcoins">GCoins</th>
+                        <th class="sortable" data-column="whowins">WhoWins</th>
                         <th class="sortable" data-column="divida">Dívida</th>
                         <th class="sortable" data-column="jogadores">Jogadores</th>
                         <th class="sortable" data-column="ultimoacesso">Último Acesso</th>
@@ -85,7 +113,7 @@
         </div>
     </main>
 
-    <!-- HTML DO POPUP -->
+    <!-- HTML DO POPUP DE MOVIMENTAÇÕES -->
     <div id="movements-popup" class="popup-overlay">
         <div class="popup-content">
             <span class="close-button">&times;</span>
@@ -105,16 +133,28 @@
                         </tr>
                     </thead>
                     <tbody id="movements-table-body"></tbody>
-                    <!-- O TFOOT será adicionado dinamicamente via JS -->
                 </table>
             </div>
+        </div>
+    </div>
+
+    <!-- Botão do Boletim e Popup de Changelog -->
+    <div id="bulletin-button" class="bulletin-hidden">
+        <i class="fas fa-bell"></i>
+        <span id="bulletin-badge"></span>
+    </div>
+    <div id="changelog-popup" class="popup-overlay">
+        <div class="popup-content">
+            <span class="close-button">&times;</span>
+            <h2 style="margin-bottom: 20px;">Registo de Alterações em Tempo Real</h2>
+            <div id="changelog-container" class="popup-table-container"></div>
         </div>
     </div>
 
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
         import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
-        import { getFirestore, collection, getDocs, doc, getDoc, query, where, orderBy, updateDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        import { getFirestore, collection, getDocs, doc, getDoc, query, where, orderBy, updateDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
         const firebaseConfig = {
             apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0",
@@ -131,11 +171,25 @@
         const db = getFirestore(app);
 
         let allUsersData = [];
-        let currentSort = { column: null, direction: 'asc' };
-        let currentSeason = null; 
+        let playerCounts = {};
+        let debtTotals = {};
+        let currentSort = { column: 'pontos', direction: 'desc' };
+        let currentSeason = null;
+        let changesMap = new Map();
+
+        let isInitialLoadComplete = false;
+        let changeLog = [];
+        let newChangesCount = 0;
+        const fieldNames = {
+            pontos: 'Pontos',
+            gcoins: 'GCoins',
+            whowins: 'WhoWins',
+            divida: 'Dívida',
+            jogadores: 'Jogadores'
+        };
 
         async function fetchCurrentSeason() {
-            if (currentSeason) return currentSeason; 
+            if (currentSeason) return currentSeason;
             const configRef = doc(db, "paineis", "configuracoes_gerais");
             const docSnap = await getDoc(configRef);
             if (docSnap.exists() && docSnap.data().temporadaAtual) {
@@ -146,48 +200,29 @@
             throw new Error("Não foi possível encontrar a temporada atual.");
         }
 
-       async function handleRecalculateBalance(userId) {
+        async function handleRecalculateBalance(userId) {
             const button = document.getElementById('recalculate-button');
             const originalText = button.textContent;
             button.disabled = true;
             button.textContent = 'A calcular...';
-
             try {
                 const season = await fetchCurrentSeason();
                 const movimentosRef = collection(db, "movimentos");
                 const q = query(movimentosRef, where("userId", "==", userId), where("temporada", "==", season));
                 const querySnapshot = await getDocs(q);
-                
                 let newBalance = 0;
                 querySnapshot.forEach((doc) => {
-                    const data = doc.data(); // Obter todos os dados do documento uma vez
-
-                    // **** AQUI ESTÁ A CORREÇÃO ****
-                    // Apenas somar se o estado NÃO for 'WhoWins Paid'
+                    const data = doc.data();
                     if (data.estado !== 'WhoWins Paid') {
                         const valor = parseFloat(data.valorreal);
-                        if (!isNaN(valor)) {
-                            newBalance += valor;
-                        }
+                        if (!isNaN(valor)) newBalance += valor;
                     }
                 });
-
                 const userRef = doc(db, 'users', userId);
                 const gCoinsField = `${season}GCoins`;
                 await updateDoc(userRef, { [gCoinsField]: newBalance });
-
-                const userRow = document.querySelector(`tr[data-userid='${userId}']`);
-                if (userRow) {
-                    userRow.children[3].textContent = newBalance;
-                }
-                const userInData = allUsersData.find(u => u.id === userId);
-                if (userInData) {
-                    userInData.gcoins = newBalance;
-                }
-
                 button.textContent = 'Sucesso!';
                 button.style.backgroundColor = '#28a745';
-
             } catch (error) {
                 console.error("Erro ao recalcular saldo:", error);
                 button.textContent = 'Erro!';
@@ -200,16 +235,18 @@
                 }, 2000);
             }
         }
-        
+
         function formatFirebaseTimestamp(timestampObject) {
             if (!timestampObject || typeof timestampObject.toDate !== 'function') return 'Nunca';
             try {
                 const dateObj = timestampObject.toDate();
-                return `${dateObj.getDate()} ${dateObj.toLocaleString('pt-PT', { month: 'long' })} ${dateObj.getFullYear()}, ${String(dateObj.getHours()).padStart(2, '0')}h${String(dateObj.getMinutes()).padStart(2, '0')}`;
-            } catch (error) {
-                console.error("Erro ao converter Timestamp:", error);
-                return 'Data Inválida';
-            }
+                const day = String(dateObj.getDate()).padStart(2, '0');
+                const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+                const year = dateObj.getFullYear();
+                const hours = String(dateObj.getHours()).padStart(2, '0');
+                const minutes = String(dateObj.getMinutes()).padStart(2, '0');
+                return `${day}/${month}/${year}, ${hours}h${minutes}`;
+            } catch (error) { return 'Data Inválida'; }
         }
 
         function formatMovementDate(timestampObject) {
@@ -220,7 +257,7 @@
             const year = dateObj.getFullYear();
             return `${day} ${month} ${year}`;
         }
-
+        
         function renderTable(users) {
             const tableBody = document.getElementById('users-table-body');
             tableBody.innerHTML = '';
@@ -228,23 +265,136 @@
                 const row = document.createElement('tr');
                 row.setAttribute('data-userid', user.id);
                 row.setAttribute('data-username', user.displayName);
-                
-                // ALTERADO: Removido .toFixed(2)
+                const userChanges = changesMap.get(user.id) || {};
                 row.innerHTML = `
                     <td>${user.displayName}</td>
                     <td>${user.tatica}</td>
-                    <td>${user.pontos}</td>
-                    <td>${user.gcoins}</td>
-                    <td>${user.divida}</td>
-                    <td>${user.jogadores}</td>
+                    <td class="${userChanges.pontos ? 'highlight-update' : ''}">${user.pontos}</td>
+                    <td class="${userChanges.gcoins ? 'highlight-update' : ''}">${user.gcoins}</td>
+                    <td class="${userChanges.whowins ? 'highlight-update' : ''}">${user.whowins}</td>
+                    <td class="${userChanges.divida ? 'highlight-update' : ''}">${user.divida}</td>
+                    <td class="${userChanges.jogadores ? 'highlight-update' : ''}">${user.jogadores}</td>
                     <td>${user.ultimoacesso}</td>
                 `;
                 tableBody.appendChild(row);
             });
             addEventListenersToRows();
+            document.querySelectorAll('.highlight-update').forEach(cell => {
+                setTimeout(() => {
+                    cell.classList.remove('highlight-update');
+                }, 2500);
+            });
+            changesMap.clear();
         }
 
-       async function fetchAndShowMovements(userId, userName) {
+        function processAndRenderUsers(usersSnapshot) {
+            const statusMessage = document.getElementById('status-message');
+            const tableContainer = document.querySelector('.table-container');
+
+            if (usersSnapshot.empty) {
+                statusMessage.textContent = 'Nenhum utilizador encontrado.';
+                statusMessage.style.display = 'block';
+                tableContainer.style.display = 'none';
+                return;
+            }
+
+            const newUsersData = [];
+            const oldDataMap = new Map(allUsersData.map(u => [u.id, u]));
+
+            usersSnapshot.forEach(doc => {
+                const userData = doc.data();
+                const userId = doc.id;
+                const pontosField = `${currentSeason}Pontos`;
+                const gcoinsField = `${currentSeason}GCoins`;
+
+                const newUser = {
+                    id: userId,
+                    displayName: userData.nometabela || userData.email || 'N/A',
+                    tatica: userData.tática || 'N/A',
+                    pontos: userData[pontosField] || 0,
+                    gcoins: userData[gcoinsField] || 0,
+                    whowins: userData.whowinsgCoins || 0,
+                    divida: debtTotals[userId] || 0,
+                    jogadores: playerCounts[userId] || 0,
+                    ultimoacesso: formatFirebaseTimestamp(userData.ultimoacesso)
+                };
+                newUsersData.push(newUser);
+
+                const oldUser = oldDataMap.get(userId);
+                if (oldUser && isInitialLoadComplete) {
+                    const userChanges = {};
+                    for (const key of Object.keys(fieldNames)) {
+                        if (oldUser[key] !== newUser[key]) {
+                            userChanges[key] = true;
+                            changeLog.unshift({
+                                user: newUser.displayName,
+                                field: fieldNames[key],
+                                oldValue: oldUser[key],
+                                newValue: newUser[key],
+                                timestamp: new Date()
+                            });
+                            newChangesCount++;
+                        }
+                    }
+                    if (Object.keys(userChanges).length > 0) {
+                        changesMap.set(userId, userChanges);
+                    }
+                }
+            });
+
+            allUsersData = newUsersData;
+            sortTable(currentSort.column, true);
+
+            if (isInitialLoadComplete) {
+                updateBulletinUI();
+            }
+
+            statusMessage.style.display = 'none';
+            tableContainer.style.display = 'block';
+        }
+
+        function updateBulletinUI() {
+            const bulletinButton = document.getElementById('bulletin-button');
+            const bulletinBadge = document.getElementById('bulletin-badge');
+
+            if (newChangesCount > 0) {
+                bulletinBadge.textContent = newChangesCount > 9 ? '9+' : newChangesCount;
+                bulletinButton.classList.remove('bulletin-hidden');
+                bulletinButton.classList.add('bulletin-visible');
+            } else {
+                bulletinButton.classList.remove('bulletin-visible');
+                bulletinButton.classList.add('bulletin-hidden');
+            }
+        }
+
+        function renderAndShowChangeLog() {
+            const popup = document.getElementById('changelog-popup');
+            const container = document.getElementById('changelog-container');
+            container.innerHTML = '';
+
+            if (changeLog.length === 0) {
+                container.innerHTML = '<p style="text-align:center; color:#666;">Nenhuma alteração registada desde que a página foi carregada.</p>';
+            } else {
+                changeLog.forEach(log => {
+                    const logEntry = document.createElement('div');
+                    logEntry.className = 'log-entry';
+                    const time = `${String(log.timestamp.getHours()).padStart(2, '0')}:${String(log.timestamp.getMinutes()).padStart(2, '0')}`;
+                    
+                    logEntry.innerHTML = `
+                        <span>[${time}]</span>
+                        O campo <strong>${log.field}</strong> do utilizador <span class="user">${log.user}</span> mudou de
+                        <span>${log.oldValue}</span> <i class="fas fa-long-arrow-alt-right change-arrow"></i> <span>${log.newValue}</span>.
+                    `;
+                    container.appendChild(logEntry);
+                });
+            }
+            
+            popup.style.display = 'flex';
+            newChangesCount = 0;
+            updateBulletinUI();
+        }
+
+        async function fetchAndShowMovements(userId, userName) {
             const popup = document.getElementById('movements-popup');
             const popupTitle = document.getElementById('popup-title');
             const tableBody = document.getElementById('movements-table-body');
@@ -256,17 +406,12 @@
             tableBody.innerHTML = '<tr><td colspan="7" style="text-align: center;">A carregar movimentações...</td></tr>';
             
             const oldTfoot = movementsTable.querySelector('tfoot');
-            if (oldTfoot) {
-                oldTfoot.remove();
-            }
+            if (oldTfoot) { oldTfoot.remove(); }
             
             popup.style.display = 'flex';
 
             try {
-                let totalPreco = 0;
-                let totalValorReal = 0;
-                let totalValorAPagar = 0;
-
+                let totalPreco = 0, totalValorReal = 0, totalValorAPagar = 0;
                 const season = await fetchCurrentSeason();
                 const movementsRef = collection(db, "movimentos");
                 const q = query(movementsRef, where("userId", "==", userId), where("temporada", "==", season), orderBy("movimentoData", "desc"));
@@ -281,7 +426,6 @@
                 querySnapshot.forEach(doc => {
                     const data = doc.data();
                     const row = document.createElement('tr');
-                    
                     row.innerHTML = `
                         <td>${formatMovementDate(data.movimentoData)}</td>
                         <td>${data.estado || 'N/A'}</td>
@@ -294,18 +438,13 @@
                     tableBody.appendChild(row);
 
                     totalPreco += parseFloat(data.preco) || 0;
-                    
-                    // --- CORREÇÃO APLICADA AQUI ---
-                    // A soma para o total de 'Valor Real' agora ignora a transação 'WhoWins Paid'.
                     if (data.estado !== 'WhoWins Paid') {
                         totalValorReal += parseFloat(data.valorreal) || 0;
                     }
-                    
                     totalValorAPagar += parseFloat(data.valorTotalAPagar) || 0;
                 });
 
                 const tfoot = document.createElement('tfoot');
-                
                 tfoot.innerHTML = `
                     <tr style="background-color: #f2f2f2; font-weight: bold; border-top: 2px solid #ccc;">
                         <td colspan="3" style="text-align: right;">TOTAIS:</td>
@@ -335,106 +474,108 @@
             });
         }
         
-       function sortTable(columnKey) {
-            const isAscending = currentSort.column === columnKey && currentSort.direction === 'asc';
-            const direction = isAscending ? 'desc' : 'asc';
+       function sortTable(columnKey, keepDirection = false) {
+            const direction = keepDirection ? currentSort.direction : (currentSort.column === columnKey && currentSort.direction === 'asc' ? 'desc' : 'asc');
             
             allUsersData.sort((a, b) => {
                 let valA = a[columnKey]; 
                 let valB = b[columnKey];
-
                 if (typeof valA === 'number' && typeof valB === 'number') {
-                    // A CORREÇÃO ESTÁ AQUI: alterado de "valB - a" para "valB - valA"
-                    return direction === 'asc' ? valA - valB : valB - valA; 
-                } else { 
-                    return direction === 'asc' ? String(valA).localeCompare(String(valB)) : String(valB).localeCompare(String(valA)); 
+                    return direction === 'asc' ? valA - valB : valB - valA;
+                } else {
+                    return direction === 'asc' ? String(valA).localeCompare(String(valB)) : String(valB).localeCompare(String(valA));
                 }
             });
 
-            currentSort = { column: columnKey, direction: direction };
+            if (!keepDirection) {
+                currentSort = { column: columnKey, direction: direction };
+            }
             
             document.querySelectorAll('thead th.sortable').forEach(th => {
                 th.classList.remove('sort-asc', 'sort-desc');
-                if (th.dataset.column === columnKey) { 
-                    th.classList.add(direction === 'asc' ? 'sort-asc' : 'sort-desc'); 
+                if (th.dataset.column === currentSort.column) {
+                    th.classList.add(currentSort.direction === 'asc' ? 'sort-asc' : 'sort-desc');
                 }
             });
             
             renderTable(allUsersData);
         }
 
-        async function fetchAndDisplayUsers() {
+        async function initializeRealtimeListeners() {
             const statusMessage = document.getElementById('status-message');
-            const tableContainer = document.querySelector('.table-container');
             try {
-                await fetchCurrentSeason(); 
+                await fetchCurrentSeason();
 
-                const playerCounts = {};
-                const playersSnapshot = await getDocs(collection(db, "jogadores"));
-                playersSnapshot.forEach(playerDoc => {
-                    const buyerId = playerDoc.data().compradopor;
-                    if (buyerId) {
-                        playerCounts[buyerId] = (playerCounts[buyerId] || 0) + 1;
-                    }
+                const processFirstSnapshot = (snapshot) => {
+                     processAndRenderUsers(snapshot);
+                     if (!isInitialLoadComplete) {
+                         setTimeout(() => { isInitialLoadComplete = true; console.log("Carga inicial completa. A escutar alterações.") }, 1000);
+                     }
+                };
+
+                const usersQuery = query(collection(db, "users"));
+                onSnapshot(usersQuery, processFirstSnapshot, (error) => {
+                     console.error("Erro no listener de 'users':", error);
+                     statusMessage.textContent = `Erro de conexão com a base de dados de utilizadores.`;
                 });
 
-                const debtTotals = {};
-                const debtQuery = query(collection(db, "movimentos"), where("estado", "==", "Por Pagar"), where("temporada", "==", currentSeason));
-                const debtSnapshot = await getDocs(debtQuery);
-                debtSnapshot.forEach(debtDoc => {
-                    const debtData = debtDoc.data();
-                    const userId = debtData.userId;
-                    const debtAmount = debtData.valorTotalAPagar || 0;
-                    if (userId) {
-                        debtTotals[userId] = (debtTotals[userId] || 0) + debtAmount;
-                    }
-                });
-
-                const usersSnapshot = await getDocs(collection(db, "users"));
-                allUsersData = [];
-                if (usersSnapshot.empty) { statusMessage.textContent = 'Nenhum utilizador encontrado.'; return; }
-
-                usersSnapshot.forEach(doc => {
-                    const userData = doc.data();
-                    const userId = doc.id;
-                    const pontosField = `${currentSeason}Pontos`;
-                    const gcoinsField = `${currentSeason}GCoins`;
-
-                    allUsersData.push({
-                        id: userId,
-                        displayName: userData.nometabela || userData.email || 'N/A',
-                        tatica: userData.tática || 'N/A',
-                        pontos: userData[pontosField] || 0,
-                        gcoins: userData[gcoinsField] || 0,
-                        divida: debtTotals[userId] || 0,
-                        jogadores: playerCounts[userId] || 0,
-                        ultimoacesso: formatFirebaseTimestamp(userData.ultimoacesso)
+                const playersQuery = query(collection(db, "jogadores"));
+                onSnapshot(playersQuery, (playersSnapshot) => {
+                    console.log("Recebida atualização da coleção 'jogadores'. A recontar...");
+                    const newPlayerCounts = {};
+                    playersSnapshot.forEach(playerDoc => {
+                        const buyerId = playerDoc.data().compradopor;
+                        if (buyerId) {
+                            newPlayerCounts[buyerId] = (newPlayerCounts[buyerId] || 0) + 1;
+                        }
                     });
+                    playerCounts = newPlayerCounts;
+                    getDocs(collection(db, "users")).then(processAndRenderUsers);
                 });
-                
-                statusMessage.style.display = 'none';
-                tableContainer.style.display = 'block';
+
+                const debtQuery = query(collection(db, "movimentos"), where("estado", "==", "Por Pagar"), where("temporada", "==", currentSeason));
+                onSnapshot(debtQuery, (debtSnapshot) => {
+                    console.log("Recebida atualização da coleção 'movimentos'. A recalcular dívidas...");
+                    const newDebtTotals = {};
+                    debtSnapshot.forEach(debtDoc => {
+                        const debtData = debtDoc.data();
+                        const userId = debtData.userId;
+                        const debtAmount = debtData.valorTotalAPagar || 0;
+                        if (userId) {
+                            newDebtTotals[userId] = (newDebtTotals[userId] || 0) + debtAmount;
+                        }
+                    });
+                    debtTotals = newDebtTotals;
+                    getDocs(collection(db, "users")).then(processAndRenderUsers);
+                });
+
                 document.querySelectorAll('thead th.sortable').forEach(th => { th.addEventListener('click', () => sortTable(th.dataset.column)); });
-                currentSort = { column: 'pontos', direction: 'asc' };
-                sortTable('pontos');
 
             } catch (error) {
-                console.error("Erro CRÍTICO ao buscar dados:", error);
+                console.error("Erro CRÍTICO ao inicializar listeners:", error);
                 statusMessage.textContent = `Ocorreu um erro ao carregar os dados: ${error.message}`;
             }
         }
         
-        const popup = document.getElementById('movements-popup');
-        const closeBtn = document.querySelector('.close-button');
-        const recalculateBtn = document.getElementById('recalculate-button'); 
-
-        closeBtn.addEventListener('click', () => popup.style.display = 'none');
-        popup.addEventListener('click', (event) => { if (event.target === popup) popup.style.display = 'none'; });
-        
+        const movementsPopup = document.getElementById('movements-popup');
+        const closeMovementsBtn = movementsPopup.querySelector('.close-button');
+        const recalculateBtn = document.getElementById('recalculate-button');
+        closeMovementsBtn.addEventListener('click', () => movementsPopup.style.display = 'none');
+        movementsPopup.addEventListener('click', (event) => { if (event.target === movementsPopup) movementsPopup.style.display = 'none'; });
         recalculateBtn.addEventListener('click', (event) => {
             const userId = event.target.dataset.userid;
-            if (userId) {
-                handleRecalculateBalance(userId);
+            if (userId) handleRecalculateBalance(userId);
+        });
+        
+        const bulletinButton = document.getElementById('bulletin-button');
+        const changelogPopup = document.getElementById('changelog-popup');
+        const closeChangelogBtn = changelogPopup.querySelector('.close-button');
+
+        bulletinButton.addEventListener('click', renderAndShowChangeLog);
+        closeChangelogBtn.addEventListener('click', () => changelogPopup.style.display = 'none');
+        changelogPopup.addEventListener('click', (event) => {
+            if (event.target === changelogPopup) {
+                changelogPopup.style.display = 'none';
             }
         });
 
@@ -443,12 +584,12 @@
             if (user) {
                 const userDoc = await getDoc(doc(db, "users", user.uid));
                 if (userDoc.exists() && userDoc.data().estatuto === 'ruler') {
-                    fetchAndDisplayUsers();
+                    initializeRealtimeListeners();
                 } else {
                     window.location.replace('/acesso-negado.html');
                 }
             } else {
-                 statusMessage.textContent = 'É necessário fazer login para aceder a esta página.';
+                statusMessage.textContent = 'É necessário fazer login para aceder a esta página.';
             }
         });
     </script>
