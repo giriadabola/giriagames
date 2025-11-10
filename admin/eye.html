@@ -146,7 +146,7 @@
             throw new Error("Não foi possível encontrar a temporada atual.");
         }
 
-        async function handleRecalculateBalance(userId) {
+       async function handleRecalculateBalance(userId) {
             const button = document.getElementById('recalculate-button');
             const originalText = button.textContent;
             button.disabled = true;
@@ -160,9 +160,15 @@
                 
                 let newBalance = 0;
                 querySnapshot.forEach((doc) => {
-                    const valor = parseFloat(doc.data().valorreal);
-                    if (!isNaN(valor)) {
-                        newBalance += valor;
+                    const data = doc.data(); // Obter todos os dados do documento uma vez
+
+                    // **** AQUI ESTÁ A CORREÇÃO ****
+                    // Apenas somar se o estado NÃO for 'WhoWins Paid'
+                    if (data.estado !== 'WhoWins Paid') {
+                        const valor = parseFloat(data.valorreal);
+                        if (!isNaN(valor)) {
+                            newBalance += valor;
+                        }
                     }
                 });
 
@@ -172,7 +178,6 @@
 
                 const userRow = document.querySelector(`tr[data-userid='${userId}']`);
                 if (userRow) {
-                    // ALTERADO: Removido .toFixed(2)
                     userRow.children[3].textContent = newBalance;
                 }
                 const userInData = allUsersData.find(u => u.id === userId);
@@ -239,7 +244,7 @@
             addEventListenersToRows();
         }
 
-        async function fetchAndShowMovements(userId, userName) {
+       async function fetchAndShowMovements(userId, userName) {
             const popup = document.getElementById('movements-popup');
             const popupTitle = document.getElementById('popup-title');
             const tableBody = document.getElementById('movements-table-body');
@@ -276,7 +281,7 @@
                 querySnapshot.forEach(doc => {
                     const data = doc.data();
                     const row = document.createElement('tr');
-                    // ALTERADO: Removido .toFixed(2)
+                    
                     row.innerHTML = `
                         <td>${formatMovementDate(data.movimentoData)}</td>
                         <td>${data.estado || 'N/A'}</td>
@@ -289,12 +294,18 @@
                     tableBody.appendChild(row);
 
                     totalPreco += parseFloat(data.preco) || 0;
-                    totalValorReal += parseFloat(data.valorreal) || 0;
+                    
+                    // --- CORREÇÃO APLICADA AQUI ---
+                    // A soma para o total de 'Valor Real' agora ignora a transação 'WhoWins Paid'.
+                    if (data.estado !== 'WhoWins Paid') {
+                        totalValorReal += parseFloat(data.valorreal) || 0;
+                    }
+                    
                     totalValorAPagar += parseFloat(data.valorTotalAPagar) || 0;
                 });
 
                 const tfoot = document.createElement('tfoot');
-                // ALTERADO: Removido .toFixed(2)
+                
                 tfoot.innerHTML = `
                     <tr style="background-color: #f2f2f2; font-weight: bold; border-top: 2px solid #ccc;">
                         <td colspan="3" style="text-align: right;">TOTAIS:</td>
