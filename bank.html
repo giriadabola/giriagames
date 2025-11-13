@@ -231,12 +231,29 @@
     <script src="config.js"></script>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, doc, getDoc, collection, query, where, getDocs, orderBy, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getFirestore, doc, getDoc, collection, query, where, getDocs, orderBy, onSnapshot, addDoc, serverTimestamp, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const auth = getAuth(app);
+
+        async function logUserAction(actionDescription) {
+    if (!auth.currentUser) {
+        console.log("Nenhum utilizador logado para registar a ação.");
+        return;
+    }
+    
+    try {
+        const eyeCollection = collection(db, 'eye');
+        await addDoc(eyeCollection, {
+            dataacao: serverTimestamp(),
+            acao: actionDescription,
+            userId: auth.currentUser.uid
+        });
+    } catch (error) {
+        console.error("Erro ao registar ação na coleção 'eye':", error);
+    }
+}
 
         const loadingScreen = document.getElementById('loading-screen');
         const content = document.querySelector('.content');
@@ -499,38 +516,68 @@
             }
         }
 
-        onAuthStateChanged(auth, async (user) => {
-            updateLoadingProgress(10);
-            if (user) {
-                const userInfo = await getUserStatus(user.uid);
-                updateLoadingProgress(20);
-                if (userInfo && userInfo.aceite === "Yes") {
-                    currentUserStatus = userInfo.estatuto;
-                    const paineisMenuDoc = await getDoc(doc(db, 'paineis', 'paineis menu'));
-                    updateLoadingProgress(30);
-                    if (paineisMenuDoc.exists()) {
-                        const paineisMenuData = paineisMenuDoc.data();
-                        if (paineisMenuData.bank === "off" && currentUserStatus !== 'ruler') {
-                            window.location.href = '404.html';
-                            return;
-                        }
-                    updateMenuVisibility(paineisMenuData);
-                        content.style.display = 'block';
-                        loadingScreen.style.display = 'none';
-                        await loadTransactions();
-                    } else {
-                        console.error("Painéis menu document not found.");
-                        content.style.display = 'block';
-                        loadingScreen.style.display = 'none';
-                        await loadTransactions();
-                    }
-                } else {
+       onAuthStateChanged(auth, async (user) => {
+    updateLoadingProgress(10);
+    if (user) {
+        // --- ADICIONADO: Atualiza o último acesso ---
+        try {
+            await updateDoc(doc(db, 'users', user.uid), {
+                ultimoacesso: serverTimestamp()
+            });
+        } catch (error) {
+            console.error("Erro ao atualizar o campo ultimoacesso: ", error);
+        }
+        // --- FIM DA ADIÇÃO ---
+
+        const userInfo = await getUserStatus(user.uid);
+        updateLoadingProgress(20);
+        if (userInfo && userInfo.aceite === "Yes") {
+            currentUserStatus = userInfo.estatuto;
+            const paineisMenuDoc = await getDoc(doc(db, 'paineis', 'paineis menu'));
+            updateLoadingProgress(30);
+
+            if (paineisMenuDoc.exists()) {
+                const paineisMenuData = paineisMenuDoc.data();
+                if (paineisMenuData.bank === "off" && currentUserStatus !== 'ruler') {
                     window.location.href = '404.html';
+                    return;
                 }
+                
+                // --- ADICIONADO: Regista a entrada na página ---
+                await logUserAction(`Entrou em ${document.title}`);
+                // --- FIM DA ADIÇÃO ---
+
+                updateMenuVisibility(paineisMenuData);
+                content.style.display = 'block';
+                loadingScreen.style.display = 'none';
+                await loadTransactions();
             } else {
-                window.location.href = 'index.html';
+                console.error("Painéis menu document not found.");
+                content.style.display = 'block';
+                loadingScreen.style.display = 'none';
+                await loadTransactions();
             }
-        });
+        } else {
+            window.location.href = '404.html';
+        }
+    } else {
+        window.location.href = 'index.html';
+    }
+});
+
+document.addEventListener('click', async (event) => {
+    const menuItem = event.target.closest('a.menu-item');
+
+    if (!menuItem) return;
+
+    const actionName = `Navegou para: ${menuItem.querySelector('.menu-text')?.textContent.trim() || 'Menu'}`;
+    
+    // Impede a navegação, regista a ação e depois navega manualmente
+    event.preventDefault();
+    await logUserAction(actionName);
+    window.location.href = menuItem.href;
+});
+
     </script>
     <script src="menu-component.js"></script> 
 </body>
