@@ -222,12 +222,31 @@
     <script src="config.js"></script>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, doc, getDoc, collection, getDocs, query, where, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getFirestore, doc, getDoc, collection, getDocs, query, where, updateDoc, serverTimestamp, addDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const auth = getAuth(app);
+
+        async function logUserAction(actionDescription) {
+    if (!auth.currentUser) {
+        console.log("Nenhum utilizador logado para registar a ação.");
+        return;
+    }
+    
+    try {
+        const eyeCollection = collection(db, 'eye');
+        await addDoc(eyeCollection, {
+            dataacao: serverTimestamp(),
+            acao: actionDescription,
+            userId: auth.currentUser.uid
+        });
+    } catch (error) {
+        console.error("Erro ao registar ação na coleção 'eye':", error);
+    }
+}
+
+
         const modCache = new Map();
         const userCache = new Map();
         const gameCache = new Map();
@@ -378,45 +397,47 @@
         }
 
         // --- Consolidated Authentication and Initialization Logic ---
-        onAuthStateChanged(auth, async (user) => {
-            if (user) {
-                currentUserStatus = await getUserStatus(user.uid);
-                if (currentUserStatus === null) {
-                    window.location.href = '404.html';
-                    return;
-                }
+      onAuthStateChanged(auth, async (user) => {
+    if (user) {
+        currentUserStatus = await getUserStatus(user.uid);
+        if (currentUserStatus === null) {
+            window.location.href = '404.html';
+            return;
+        }
 
-                try {
-                    const userDocRef = doc(db, 'users', user.uid);
-                    await updateDoc(userDocRef, {
-                        ultimoacesso: serverTimestamp()
-                    });
-                } catch (error) {
-                    console.error("Erro ao atualizar o campo ultimoacesso: ", error);
-                }
+        try {
+            const userDocRef = doc(db, 'users', user.uid);
+            await updateDoc(userDocRef, {
+                ultimoacesso: serverTimestamp()
+            });
+        } catch (error) {
+            console.error("Erro ao atualizar o campo ultimoacesso: ", error);
+        }
 
-                const menuSettings = await loadMenuSettings();
-                const hasAccess = checkPageAccess(currentUserStatus, menuSettings);
+        const menuSettings = await loadMenuSettings();
+        const hasAccess = checkPageAccess(currentUserStatus, menuSettings);
 
-                if (hasAccess) {
-                    updateMenuVisibility(menuSettings);
-                    await loadSeasons();
-                    
-                    // --- NOVA CHAMADA PARA A FUNÇÃO DE ANIMAÇÃO ---
-                    if (mostRecentSeason) { // Garante que a época foi carregada
-                        await checkForRankingUpdateAndShowAnimation();
-                    }
-                    
-                    loadingScreen.style.display = 'none';
-                    content.style.display = 'block';
-                } else {
-                    window.location.href = '404.html';
-                }
-            } else {
-                loadingScreen.style.display = 'none';
-                window.location.href = 'index.html';
+        if (hasAccess) {
+            // Regista a entrada na página
+            await logUserAction(`Entrou em ${document.title}`);
+            
+            updateMenuVisibility(menuSettings);
+            await loadSeasons();
+            
+            if (mostRecentSeason) {
+                await checkForRankingUpdateAndShowAnimation();
             }
-        });
+            
+            loadingScreen.style.display = 'none';
+            content.style.display = 'block';
+        } else {
+            window.location.href = '404.html';
+        }
+    } else {
+        loadingScreen.style.display = 'none';
+        window.location.href = 'index.html';
+    }
+});
 
         function showToast(message) {
             const toast = document.getElementById('toast-notification');
@@ -1000,6 +1021,51 @@
             }
         });
         
+        /* ---- NOVO E CORRIGIDO: Listener Global para Cliques ---- */
+document.addEventListener('click', async (event) => {
+    // Selector para todos os elementos interativos da página
+    const clickableElement = event.target.closest('.info-icon, .round-header, .close-button, a.menu-item');
+
+    if (!clickableElement) return;
+
+    let actionName = '';
+
+    if (clickableElement.matches('.info-icon')) {
+        const userId = clickableElement.dataset.userid;
+        // Precisamos buscar o nome do utilizador para um log mais claro
+        const userName = await getUserTableName(userId);
+        actionName = `Visualizou os palpites de: ${userName || 'utilizador desconhecido'}`;
+    }
+    else if (clickableElement.matches('.round-header')) {
+        const roundNumber = clickableElement.dataset.round;
+        actionName = `Filtrou os palpites para a Ronda ${roundNumber}`;
+    }
+    else if (clickableElement.matches('.close-button')) {
+        const popup = clickableElement.closest('.predictions-popup');
+        let popupName = 'um popup';
+        if (popup.id === 'ranking-animation-popup') popupName = 'o popup de movimentações';
+        if (popup.id === 'predictions-popup') popupName = 'o popup de palpites';
+        actionName = `Fechou ${popupName}`;
+    }
+    else if (clickableElement.matches('a.menu-item')) {
+        actionName = `Navegou para: ${clickableElement.querySelector('.menu-text')?.textContent.trim() || 'Menu'}`;
+    }
+    
+    if (!actionName) return;
+
+    // Lida com a navegação para outras páginas (menu inferior)
+    const isNavLink = clickableElement.tagName === 'A' && clickableElement.href && clickableElement.target !== '_blank';
+    
+    if (isNavLink) {
+        event.preventDefault();
+        await logUserAction(actionName);
+        window.location.href = clickableElement.href;
+    } else {
+        // Para todos os outros cliques
+        await logUserAction(actionName);
+    }
+});
+
     </script>
     <script src="menu-component.js"></script> 
 </body>
