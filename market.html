@@ -549,6 +549,7 @@ import { getFirestore, collection, getDocs, doc, getDoc, updateDoc, Timestamp, a
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
+const activeListeners = new Map();
 
 async function logUserAction(actionDescription) {
     if (!auth.currentUser) {
@@ -804,7 +805,7 @@ async function createPlayerCard(player) {
         }
     });
 
-    card.dataset.unsubscribeCardListener = unsubscribeCard;
+activeListeners.set(`card-${player.id}`, unsubscribeCard);
 
     card.addEventListener('click', async (event) => {
         const clickedButton = event.target.closest('.buy-button');
@@ -820,6 +821,8 @@ async function createPlayerCard(player) {
             card.classList.remove('card-loading');
             return;
         }
+
+        popup.dataset.currentPlayerId = player.id;
 
         const existingUnsubscribeRef = popup.dataset.unsubscribePopupListener;
         if (existingUnsubscribeRef) {
@@ -919,7 +922,7 @@ async function createPlayerCard(player) {
                     popupBuyButton.textContent = 'Erro';
                 }
             });
-            popup.dataset.unsubscribePopupListener = unsubscribePopupListener;
+            activeListeners.set(`popup-${player.id}`, unsubscribePopupListener);
 
             popupBuyButton.onclick = async () => {
                 clearPopupMessages();
@@ -1558,21 +1561,26 @@ document.addEventListener('DOMContentLoaded', () => {
     const popup = document.getElementById('playerPopup');
     const exitButton = document.getElementById('popupExitButton');
 
-    const closePopup = () => {
-        if (popup) {
-            popup.classList.remove('active');
-            const unsubscribeFunc = popup.dataset.unsubscribePopupListener;
-            if (unsubscribeFunc && typeof unsubscribeFunc === 'function') {
-                try {
-                    unsubscribeFunc();
-                } catch (e) {
-                    console.error("Error detaching listener on close:", e);
-                }
+  const closePopup = () => {
+    if (popup) {
+        popup.classList.remove('active');
+
+        // DEPOIS (Lógica corrigida):
+        const playerId = popup.dataset.currentPlayerId; // 1. Recuperamos o ID do jogador
+        if (playerId) {
+            const listenerKey = `popup-${playerId}`;
+            const unsubscribeFunc = activeListeners.get(listenerKey); // 2. Buscamos a função no nosso Map
+
+            if (typeof unsubscribeFunc === 'function') {
+                unsubscribeFunc(); // 3. Executamos a função para parar de ouvir
+                activeListeners.delete(listenerKey); // 4. Removemos do nosso gestor
             }
-            delete popup.dataset.unsubscribePopupListener;
-            clearPopupMessages();
+            delete popup.dataset.currentPlayerId; // 5. Limpamos o ID do popup
         }
-    };
+
+        clearPopupMessages();
+    }
+};
 
     if (exitButton) exitButton.addEventListener('click', closePopup);
     if (popup) popup.addEventListener('click', (e) => {
@@ -1600,27 +1608,22 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 window.addEventListener('beforeunload', () => {
-    document.querySelectorAll('.player-card[data-unsubscribe-card-listener]').forEach(card => {
-        const unsubscribeCardFunc = card.dataset.unsubscribeCardListener;
-        if (unsubscribeCardFunc && typeof unsubscribeCardFunc === 'function') {
+    // DEPOIS (Lógica corrigida e muito mais eficiente):
+    
+    // Itera sobre todos os listeners guardados no nosso Map e desativa-os.
+    for (const unsubscribeFunc of activeListeners.values()) {
+        if (typeof unsubscribeFunc === 'function') {
             try {
-                unsubscribeCardFunc();
-            } catch (e) { /* ignore */ }
+                unsubscribeFunc();
+            } catch (e) {
+                console.error("Erro ao desativar listener:", e);
+            }
         }
-        delete card.dataset.unsubscribeCardListener;
-    });
-
-    const popup = document.getElementById('playerPopup');
-    if (popup?.dataset?.unsubscribePopupListener) {
-        const unsubscribePopupFunc = popup.dataset.unsubscribePopupListener;
-        if (unsubscribePopupFunc && typeof unsubscribePopupFunc === 'function') {
-            try {
-                unsubscribePopupFunc();
-            } catch (e) { /* ignore */ }
-        }
-        delete popup.dataset.unsubscribePopupListener;
     }
+    activeListeners.clear(); // Limpa o Map
 });
+
+
 
 document.addEventListener('click', async (event) => {
     // Selector adaptado para os elementos clicáveis desta página
