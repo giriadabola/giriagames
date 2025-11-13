@@ -218,15 +218,19 @@ exports.simulateWeeklyMatches = functions.pubsub.schedule('every monday 01:00')
         const currentMonth = now.getMonth();
         const semanaAtual = Math.floor((dayOfMonth - 1) / 7) + 1;
 
-        if (configData.ultimaSemanaSimulada === semanaAtual && currentMonth === configData.lastSimulationMonth) {
-            console.log(`A semana ${semanaAtual} já foi simulada este mês. A sair.`);
+        // --- LÓGICA DE VERIFICAÇÃO MELHORADA ---
+        const isNewMonth = currentMonth !== configData.lastSimulationMonth;
+        const lastSimulatedWeekForThisMonth = isNewMonth ? 0 : configData.ultimaSemanaSimulada;
+
+        if (semanaAtual <= lastSimulatedWeekForThisMonth) {
+            console.log(`A semana ${semanaAtual} (ou uma posterior) já foi simulada este mês. A sair.`);
             return null;
         }
         
-        if (currentMonth !== configData.lastSimulationMonth) {
-             await configRef.update({ ultimaSemanaSimulada: 0 });
-             console.log("Novo mês detetado, a reiniciar o contador de semanas.");
+        if (isNewMonth) {
+             console.log(`Novo mês detetado (${currentMonth}). A simular a semana ${semanaAtual}.`);
         }
+        // --- FIM DA LÓGICA DE VERIFICAÇÃO MELHORADA ---
 
         const clubsQuery = db.collection('endlessclubes').where("temporada", "==", seasonIdentifier);
         const clubsSnapshot = await clubsQuery.get();
@@ -237,7 +241,6 @@ exports.simulateWeeklyMatches = functions.pubsub.schedule('every monday 01:00')
             return null;
         }
         
-        // --- FUNÇÕES AUXILIARES DE SIMULAÇÃO ---
         const calculateTeamOverall = (club) => {
             if (!club.plantel || !club.treinador) return 100;
             const plantelOverall = club.plantel.reduce((sum, p) => sum + p.overall, 0);
@@ -255,7 +258,7 @@ exports.simulateWeeklyMatches = functions.pubsub.schedule('every monday 01:00')
         
         const generateScore = (winnerProbability) => {
             let homeScore = 0, awayScore = 0;
-            if (Math.random() < 0.20) { // 20% chance de empate
+            if (Math.random() < 0.20) {
                 homeScore = awayScore = Math.floor(Math.random() * 3);
             } else {
                 const winnerScore = Math.floor(Math.random() * 3) + 1;
@@ -285,7 +288,6 @@ exports.simulateWeeklyMatches = functions.pubsub.schedule('every monday 01:00')
             return { homeTeam, awayTeam, homeScore, awayScore, outcome };
         };
 
-        // --- LÓGICA PRINCIPAL DA SIMULAÇÃO ---
         const currentJornadaInSeason = (semanaAtual - 1) * 7;
         const batch = db.batch();
         const pointsUpdates = {};
@@ -329,6 +331,8 @@ exports.simulateWeeklyMatches = functions.pubsub.schedule('every monday 01:00')
         
         await batch.commit();
 
+        // --- ATUALIZAÇÃO DE CONFIGURAÇÃO CORRIGIDA ---
+        // Atualiza a semana e o mês de uma só vez, no final da execução.
         await configRef.update({
             ultimaSemanaSimulada: semanaAtual,
             lastSimulationMonth: currentMonth
