@@ -29,7 +29,6 @@ function findLatestGcoinsField(userData) {
 //          FUNÇÃO EXISTENTE: payDebt (sem alterações)
 // =================================================================
 exports.payDebt = functions.https.onCall(async (data, context) => {
-    // ... O código da sua função payDebt permanece aqui, exatamente como estava ...
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "O utilizador deve estar autenticado.");
     }
@@ -115,10 +114,9 @@ exports.payDebt = functions.https.onCall(async (data, context) => {
 });
 
 // =====================================================================
-//          FUNÇÃO EXISTENTE: convertCoins (sem alterações)
+//          FUNÇÃO CORRIGIDA: convertCoins
 // =====================================================================
 exports.convertCoins = functions.https.onCall(async (data, context) => {
-    // ... O código da sua função convertCoins permanece aqui, exatamente como estava ...
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "O utilizador deve estar autenticado para converter moedas.");
     }
@@ -144,9 +142,25 @@ exports.convertCoins = functions.https.onCall(async (data, context) => {
             if (conversionRate <= 0) {
                 throw new functions.https.HttpsError("failed-precondition", "A taxa de conversão não está ativa.");
             }
-            if (amountToConvert % conversionRate !== 0) {
+            
+            // =============================================================
+            //          INÍCIO DA CORREÇÃO APLICADA
+            // =============================================================
+            
+            // Primeiro, calculamos o resultado da conversão
+            const gCoinsResult = amountToConvert / conversionRate;
+            
+            // Agora, verificamos se o resultado é um número inteiro, usando uma tolerância
+            // para evitar problemas de precisão com ponto flutuante.
+            if (Math.abs(gCoinsResult - Math.round(gCoinsResult)) > 1e-9) {
+                // Se não for basicamente um inteiro, rejeita a transação
                 throw new functions.https.HttpsError("invalid-argument", `O valor a converter deve ser um múltiplo de ${conversionRate} para não gerar gCoins decimais.`);
             }
+
+            // =============================================================
+            //          FIM DA CORREÇÃO APLICADA
+            // =============================================================
+
             const currentSeason = (configData.temporadaAtual || "").replace("/", "");
             if (!currentSeason) {
                 throw new functions.https.HttpsError("failed-precondition", "A temporada atual não está configurada.");
@@ -156,19 +170,18 @@ exports.convertCoins = functions.https.onCall(async (data, context) => {
             if (amountToConvert > currentUserMiniGCoins) {
                 throw new functions.https.HttpsError("failed-precondition", "Não tem mini-gCoins suficientes para esta conversão.");
             }
-            const gCoinsGained = Math.floor(amountToConvert / conversionRate); 
-            const bankProfit = amountToConvert - gCoinsGained;
+            
+            // Usamos o resultado já calculado para garantir consistência.
+            // Math.round() remove qualquer imprecisão residual.
+            const gCoinsGained = Math.round(gCoinsResult);
+
             const newMiniGCoins = currentUserMiniGCoins - amountToConvert;
             const newGCoins = currentUserGCoins + gCoinsGained;
             transaction.update(userRef, {
                 whowinsgCoins: newMiniGCoins,
                 [gcoinsField]: newGCoins,
             });
-            if (bankProfit > 0) {
-                transaction.update(bancaRef, {
-                    valor: admin.firestore.FieldValue.increment(bankProfit),
-                });
-            }
+
             const timestamp = admin.firestore.FieldValue.serverTimestamp();
             const debitMovRef = db.collection("movimentos").doc();
             transaction.set(debitMovRef, {
@@ -193,7 +206,7 @@ exports.convertCoins = functions.https.onCall(async (data, context) => {
 });
 
 // =====================================================================
-//          NOVA FUNÇÃO ADICIONADA: simulateWeeklyMatches
+//          NOVA FUNÇÃO ADICIONADA: simulateWeeklyMatches (sem alterações)
 // =====================================================================
 
 exports.simulateWeeklyMatches = functions.pubsub.schedule('every monday 01:00')
