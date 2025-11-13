@@ -101,8 +101,7 @@
 
 
       import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getFirestore, doc, getDoc, collection, getDocs, query, where, orderBy, limit, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getFirestore, doc, getDoc, collection, getDocs, query, where, orderBy, limit, writeBatch, serverTimestamp, addDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
 // --- LOG INICIAL ---
 console.log("--- SCRIPT INICIADO ---");
@@ -111,6 +110,24 @@ console.log("Firebase config a ser usada:", firebaseConfig); // LOG CRÍTICO: Mo
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
+
+async function logUserAction(actionDescription) {
+    if (!auth.currentUser) {
+        console.log("Nenhum utilizador logado para registar a ação.");
+        return;
+    }
+    
+    try {
+        const eyeCollection = collection(db, 'eye');
+        await addDoc(eyeCollection, {
+            dataacao: serverTimestamp(),
+            acao: actionDescription,
+            userId: auth.currentUser.uid
+        });
+    } catch (error) {
+        console.error("Erro ao registar ação na coleção 'eye':", error);
+    }
+}
 
 // --- LOG DE INICIALIZAÇÃO ---
 console.log("Firebase App e Serviços inicializados com sucesso.");
@@ -138,6 +155,17 @@ onAuthStateChanged(auth, async (user) => {
     }
 
     console.log("onAuthStateChanged: Utilizador DETETADO. UID:", user.uid);
+
+    // --- ADIÇÃO: Atualiza o último acesso ---
+    try {
+        await updateDoc(doc(db, 'users', user.uid), {
+            ultimoacesso: serverTimestamp()
+        });
+    } catch (error) {
+        console.error("Erro ao atualizar o campo ultimoacesso:", error);
+    }
+    // --- FIM DA ADIÇÃO ---
+
     console.log("onAuthStateChanged: A verificar documento do utilizador na coleção 'users'...");
 
     try {
@@ -161,6 +189,10 @@ onAuthStateChanged(auth, async (user) => {
 
         console.log("onAuthStateChanged: SUCESSO - Utilizador autenticado e autorizado. A iniciar a página...");
         
+        // --- ADIÇÃO: Regista a entrada na página ---
+        await logUserAction(`Entrou em ${document.title}`);
+        
+
         // Carregar configurações do menu (bloco opcional)
         try {
             console.log("onAuthStateChanged: A carregar configurações do menu...");
@@ -599,6 +631,55 @@ function showInfoMessage(message) {
     loadingScreen.style.display = 'none';
     content.style.display = 'block';
 }
+
+document.addEventListener('click', async (event) => {
+    const clickableElement = event.target.closest('.user-header, .game-header, .prediction-item, .submit-button, a.menu-item');
+
+    if (!clickableElement) return;
+
+    let actionName = '';
+
+    // Lógica para identificar a ação com base no que foi clicado
+    if (clickableElement.matches('.prediction-item')) {
+        const userHeader = clickableElement.closest('.user-container')?.querySelector('.user-header span');
+        const userName = userHeader?.textContent.trim().replace('✓', '').trim();
+        const predictionText = clickableElement.textContent.trim();
+        actionName = `Selecionou o palpite '${predictionText}' de ${userName}`;
+    }
+    else if (clickableElement.matches('.submit-button')) {
+        const step = clickableElement.dataset.step;
+        if (step === 'verify') {
+            actionName = 'Clicou em "Confirmar Seleções" (Passo 1)';
+        } else if (step === 'confirm') {
+            actionName = 'Clicou em "Verifiquei e confirmo" (Submissão Final)';
+        }
+    }
+    else if (clickableElement.matches('.user-header')) {
+        const userName = clickableElement.querySelector('span')?.textContent.trim().replace('✓', '').trim();
+        actionName = `Interagiu com a lista de palpites de: ${userName}`;
+    }
+    else if (clickableElement.matches('.game-header')) {
+        const gameName = clickableElement.querySelector('span')?.textContent.trim();
+        actionName = `Interagiu com a lista de jogos: ${gameName}`;
+    }
+    else if (clickableElement.matches('a.menu-item')) {
+        actionName = `Navegou para: ${clickableElement.querySelector('.menu-text')?.textContent.trim() || 'Menu'}`;
+    }
+
+    if (!actionName) return;
+
+    // Lida com a navegação para outras páginas
+    const isNavLink = clickableElement.tagName === 'A' && clickableElement.href && clickableElement.target !== '_blank';
+    
+    if (isNavLink) {
+        event.preventDefault();
+        await logUserAction(actionName);
+        window.location.href = clickableElement.href;
+    } else {
+        // Para todos os outros cliques
+        await logUserAction(actionName);
+    }
+});
     </script>
     <script src="menu-component.js"></script> 
 </body>
