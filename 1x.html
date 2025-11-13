@@ -354,12 +354,32 @@
 <script src="config.js"></script>
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-    import { getFirestore, collection, getDocs, doc, getDoc, query, where, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getFirestore, collection, getDocs, doc, getDoc, query, where, updateDoc, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
     const auth = getAuth(app);
+
+
+    async function logUserAction(actionDescription) {
+    // Só executa se houver um utilizador autenticado
+    if (!auth.currentUser) {
+        console.log("Nenhum utilizador logado para registar a ação.");
+        return;
+    }
+    
+    try {
+        const eyeCollection = collection(db, 'eye');
+        await addDoc(eyeCollection, {
+            dataacao: serverTimestamp(), // Timestamp do servidor, mais fiável
+            acao: actionDescription,
+            userId: auth.currentUser.uid
+        });
+    } catch (error) {
+        console.error("Erro ao registar ação na coleção 'eye':", error);
+    }
+}
+
 
     const loadingScreen = document.getElementById('loading-screen');
     const mainContentWrapper = document.getElementById('main-content-wrapper');
@@ -536,31 +556,65 @@ async function setupPageAccess() {
     async function checkAndDisplayMods() { /* ... (código dos mods) ... */ }
 
     onAuthStateChanged(auth, async (user) => {
-        if (user) {
-            const userInfo = await getUserStatus(user.uid);
-            if (userInfo && userInfo.aceite === "Yes") {
-                currentUserStatus = userInfo.estatuto;
+    if (user) {
+        const userInfo = await getUserStatus(user.uid);
+        if (userInfo && userInfo.aceite === "Yes") {
+            currentUserStatus = userInfo.estatuto;
 
-                try {
-                    await updateDoc(doc(db, 'users', user.uid), { ultimoacesso: serverTimestamp() });
-                } catch (error) { console.error("Erro ao atualizar ultimoacesso: ", error); }
-                
-                mainContentWrapper.style.display = 'block';
+            // ADICIONE A LINHA AQUI
+            await logUserAction(`Entrou em ${document.title}`); 
 
-                await setupPageAccess();
-                
-                // NOVO: Chamada da função para verificar o card do ModsPlay
-                await checkAndDisplayModsPlayCard();
+            try {
+                await updateDoc(doc(db, 'users', user.uid), { ultimoacesso: serverTimestamp() });
+            } catch (error) { console.error("Erro ao atualizar ultimoacesso: ", error); }
+            
+            mainContentWrapper.style.display = 'block';
 
-                await loadActiveGames();
-                await checkAndDisplayMods();
-            } else {
-                window.location.href = 'index.html';
-            }
+            await setupPageAccess();
+            await checkAndDisplayModsPlayCard();
+            await loadActiveGames();
+            await checkAndDisplayMods();
         } else {
             window.location.href = 'index.html';
         }
-    });
+    } else {
+        window.location.href = 'index.html';
+    }
+});
+
+/* ---- NOVO: Listener Global para Cliques em Botões ---- */
+document.addEventListener('click', async (event) => {
+    // Tenta encontrar o elemento clicável mais próximo
+    const clickableElement = event.target.closest('button, a.action-button, a.modsplay-play-button');
+
+    if (!clickableElement) {
+        return; // Se não for um elemento de interesse, não faz nada
+    }
+
+    const actionName = clickableElement.id || clickableElement.textContent.trim();
+    if (!actionName) {
+        return; // Se não conseguirmos um nome para a ação, não faz nada
+    }
+
+    // Verifica se é um link que irá navegar para a mesma janela
+    const isNavLink = clickableElement.tagName === 'A' && clickableElement.href && clickableElement.target !== '_blank';
+
+    if (isNavLink) {
+        // 1. Impede a navegação imediata
+        event.preventDefault();
+        
+        // 2. Regista a ação e espera que termine
+        await logUserAction(`Clicou em: ${actionName}`);
+        
+        // 3. Agora, navega para o destino
+        window.location.href = clickableElement.href;
+
+    } else {
+        // Para botões normais ou links que abrem noutra aba,
+        // apenas regista a ação. O comportamento padrão do navegador continuará.
+        logUserAction(`Clicou em: ${actionName}`);
+    }
+});
 
     // Event listeners para o popup de mod (sem alterações)
     // ...
