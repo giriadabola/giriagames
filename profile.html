@@ -935,6 +935,17 @@
     cursor: pointer; /* Garante que o card da banca mostra o cursor de clique */
 }
 
+.popup-btn.loading {
+    cursor: not-allowed;
+    background-color: #999; /* Cor cinza para indicar inatividade */
+    opacity: 0.7;
+    pointer-events: none; /* Ignora completamente eventos de clique */
+}
+
+.popup-btn.loading .fa-spinner {
+    font-size: 1.2em;
+}
+
     </style>
 </head>
 <body>
@@ -1110,7 +1121,8 @@
     </div>
 
     <script src="config.js"></script>
-    <script type="module">
+   
+  <script type="module">
         import { getAuth, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
         import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
@@ -1540,7 +1552,7 @@ async function loadUserDebts() {
 async function handleDebtPayment() {
     const paymentAmount = parseFloat(paymentAmountInput.value);
 
-    // Validação inicial no cliente (continua igual)
+    // Validações...
     if (isNaN(paymentAmount) || paymentAmount <= 0) {
         debtFeedback.textContent = 'Valor inválido.';
         debtFeedback.style.color = 'red';
@@ -1557,44 +1569,45 @@ async function handleDebtPayment() {
         return;
     }
 
+    // --- ATIVAR O ESTADO DE CARREGAMENTO (e manter assim) ---
+    confirmPaymentBtn.disabled = true;
+    confirmPaymentBtn.classList.add('loading');
+    confirmPaymentBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
     debtFeedback.textContent = 'A processar...';
     debtFeedback.style.color = 'black';
-    confirmPaymentBtn.disabled = true;
 
     try {
         const user = auth.currentUser;
-        // ---- NOVA VERIFICAÇÃO DE SEGURANÇA ----
         if (!user) {
-            // Se por alguma razão o utilizador não for encontrado, pára aqui.
             throw new Error("Utilizador não autenticado. Por favor, faça login novamente.");
         }
         
-        // ---- FORÇA A ATUALIZAÇÃO DO TOKEN ANTES DA CHAMADA ----
-        // Esta é a linha mais importante. Garante que temos um "carimbo" válido.
         await user.getIdToken(true); 
         
-        // O resto do código continua igual
         const payDebt = httpsCallable(functions, 'payDebt');
         const result = await payDebt({ amount: paymentAmount });
 
         if (result.data.success) {
             debtFeedback.textContent = 'Pagamento bem-sucedido!';
             debtFeedback.style.color = 'green';
+            
+            // Em caso de sucesso, a página recarrega após 1.5 segundos.
             setTimeout(() => {
                 debtPaymentPopup.style.display = 'none';
                 location.reload();
             }, 1500);
         } else {
+            // Em caso de falha controlada, lança um erro para o bloco catch.
             throw new Error(result.data.error || 'Ocorreu um erro no servidor.');
         }
 
     } catch (error) {
+        // Em caso de erro, apenas mostra a mensagem. O botão permanece desativado.
         console.error("Erro no pagamento da dívida:", error);
-        // O erro do Firebase já vem com uma propriedade `message` mais clara
         debtFeedback.textContent = error.message; 
         debtFeedback.style.color = 'red';
-        confirmPaymentBtn.disabled = false;
     }
+    // O bloco 'finally' foi removido para que o botão não seja reativado.
 }
 
 
@@ -1873,10 +1886,9 @@ confirmConversionBtn.addEventListener('click', handleConversion);
 
 async function handleConversion() {
     const amountToConvert = parseFloat(conversionAmountInput.value);
-    const user = auth.currentUser;
 
-    // Validação simples no cliente
-    if (!user) {
+    // Validações...
+    if (!auth.currentUser) {
         conversionFeedback.textContent = "Erro: Utilizador não autenticado.";
         conversionFeedback.style.color = 'red';
         return;
@@ -1891,35 +1903,48 @@ async function handleConversion() {
         conversionFeedback.style.color = 'red';
         return;
     }
-
+    if (conversionRate > 0) {
+        const result = amountToConvert / conversionRate;
+        const isBasicallyInteger = Math.abs(result - Math.round(result)) < 1e-9;
+        if (!isBasicallyInteger) {
+            conversionFeedback.textContent = `O valor a converter deve ser um múltiplo de ${conversionRate} para não gerar gCoins decimais.`;
+            conversionFeedback.style.color = 'red';
+            return;
+        }
+    }
+    
+    // --- ATIVAR O ESTADO DE CARREGAMENTO (e manter assim) ---
     confirmConversionBtn.disabled = true;
+    confirmConversionBtn.classList.add('loading');
+    confirmConversionBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
     conversionFeedback.textContent = 'A processar...';
     conversionFeedback.style.color = 'black';
 
     try {
-        // Chama a Cloud Function segura
         const convertCoins = httpsCallable(functions, 'convertCoins');
         const result = await convertCoins({ amount: amountToConvert });
 
         if (result.data.success) {
             conversionFeedback.textContent = result.data.message || "Conversão bem-sucedida!";
             conversionFeedback.style.color = 'green';
+            
+            // Em caso de sucesso, a página recarrega após 2 segundos.
             setTimeout(() => {
                 conversionPopup.style.display = 'none';
-                location.reload(); // Recarrega a página para ver todos os novos valores
+                location.reload(); 
             }, 2000);
         } else {
-            // Este 'else' pode não ser necessário se a função sempre lançar um erro em caso de falha
+            // Em caso de falha controlada, lança um erro para o bloco catch.
             throw new Error(result.data.error || 'Ocorreu um erro no servidor.');
         }
 
     } catch (error) {
+        // Em caso de erro, apenas mostra a mensagem. O botão permanece desativado.
         console.error("Erro ao chamar a função de conversão:", error);
-        conversionFeedback.textContent = error.message; // A mensagem de erro da função será exibida aqui
+        conversionFeedback.textContent = error.message; 
         conversionFeedback.style.color = 'red';
-    } finally {
-        confirmConversionBtn.disabled = false;
     }
+    // O bloco 'finally' foi removido para que o botão não seja reativado.
 }
 
    
@@ -2103,35 +2128,6 @@ onAuthStateChanged(auth, async (user) => {
 
     </script>
 
-
-    <script>
-        function criarRipple(event, element) {
-            const ripple = document.createElement('span');
-            ripple.classList.add('ripple');
-    
-            const rect = element.getBoundingClientRect();
-            ripple.style.left = `${event.clientX - rect.left}px`;
-            ripple.style.top = `${event.clientY - rect.top}px`;
-    
-            element.appendChild(ripple);
-    
-            setTimeout(() => {
-                ripple.remove();
-            }, 600);
-        }
-    
-        function addRippleEffect(element) {
-            element.addEventListener('click', function (e) {
-                criarRipple(e, element);
-            });
-    
-            element.addEventListener('mouseenter', function (e) {
-                criarRipple(e, element);
-            });
-        }
-    
-        document.querySelectorAll('.ripple-effect').forEach(addRippleEffect);
-    </script>
      <script src="menu-component.js"></script> 
 
 </body>
