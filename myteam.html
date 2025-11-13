@@ -899,13 +899,32 @@
     <script src="config.js"></script>
    <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-    import { getFirestore, doc, getDoc, collection, getDocs, query, orderBy, limit, setDoc, addDoc, FieldValue, where, serverTimestamp, updateDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getFirestore, doc, getDoc, collection, getDocs, query, orderBy, limit, setDoc, addDoc, FieldValue, where, serverTimestamp, updateDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
     // --- Configuração Inicial ---
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
     const auth = getAuth(app);
+
+
+    async function logUserAction(actionDescription) {
+    if (!auth.currentUser) {
+        console.log("Nenhum utilizador logado para registar a ação.");
+        return;
+    }
+    
+    try {
+        const eyeCollection = collection(db, 'eye');
+        await addDoc(eyeCollection, {
+            dataacao: serverTimestamp(),
+            acao: actionDescription,
+            userId: auth.currentUser.uid
+        });
+    } catch (error) {
+        console.error("Erro ao registar ação na coleção 'eye':", error);
+    }
+}
+
 
     // --- Variáveis Globais ---
     let currentUserStatus = null;
@@ -1032,7 +1051,9 @@
     async function getUserStatus(userId) { const userDoc = await getDoc(doc(db, 'users', userId)); if (userDoc.exists() && userDoc.data().aceite === "Yes") { return userDoc.data().estatuto; } return null; }
 
     // --- Inicialização da Página ---
-    onAuthStateChanged(auth, async (user) => { if (user) { currentUserUid = user.uid; currentUserStatus = await getUserStatus(user.uid); if (!currentUserStatus) { window.location.href = '404.html'; return; } try { await updateDoc(doc(db, 'users', user.uid), { ultimoacesso: serverTimestamp() }); const paineisMenuDoc = await getDoc(doc(db, 'paineis', 'paineis menu')); if (paineisMenuDoc.exists()) { const menuData = paineisMenuDoc.data(); if (menuData.team === "off" && currentUserStatus !== 'ruler') { window.location.href = '404.html'; return; } updateMenuVisibility(menuData); } await Promise.all([ fetchCountries(), fetchUserOwnedPlayers(), fetchPlayerStyles(), fetchPaineisCoefficients() ]); await populateFormationDropdownFromFirestore(); populateCountryFilter(); populateClubFilter(); renderPlayerResults(); const activeFormation = await fetchActiveFormationFromPlanteis(); const formationsFromUser = await fetchFormationsFromFirestore(); let initialFormationToLoad = activeFormation || (formationsFromUser[0]?.value || null); if (initialFormationToLoad) { formationSelect.value = initialFormationToLoad; currentFormation = initialFormationToLoad; await loadFormation(); } else { renderFormation(null); } } catch (error) { console.error("Erro na inicialização:", error); } finally { loadingScreen.style.display = 'none'; content.style.display = 'block'; } } else { window.location.href = 'index.html'; } });
+    onAuthStateChanged(auth, async (user) => { if (user) { currentUserUid = user.uid; currentUserStatus = await getUserStatus(user.uid); if (!currentUserStatus) { window.location.href = '404.html'; return; } try { await updateDoc(doc(db, 'users', user.uid), { ultimoacesso: serverTimestamp() }); const paineisMenuDoc = await getDoc(doc(db, 'paineis', 'paineis menu')); if (paineisMenuDoc.exists()) { const menuData = paineisMenuDoc.data(); if (menuData.team === "off" && currentUserStatus !== 'ruler') { window.location.href = '404.html'; return; } updateMenuVisibility(menuData); } 
+    await logUserAction(`Entrou em ${document.title}`);
+    await Promise.all([ fetchCountries(), fetchUserOwnedPlayers(), fetchPlayerStyles(), fetchPaineisCoefficients() ]); await populateFormationDropdownFromFirestore(); populateCountryFilter(); populateClubFilter(); renderPlayerResults(); const activeFormation = await fetchActiveFormationFromPlanteis(); const formationsFromUser = await fetchFormationsFromFirestore(); let initialFormationToLoad = activeFormation || (formationsFromUser[0]?.value || null); if (initialFormationToLoad) { formationSelect.value = initialFormationToLoad; currentFormation = initialFormationToLoad; await loadFormation(); } else { renderFormation(null); } } catch (error) { console.error("Erro na inicialização:", error); } finally { loadingScreen.style.display = 'none'; content.style.display = 'block'; } } else { window.location.href = 'index.html'; } });
 
     // --- Adição de Event Listeners ---
     playerSearchInput.addEventListener('input', filterPlayers);
@@ -1044,9 +1065,98 @@
     playerStatCardOverlay.addEventListener('click', (e) => { if (e.target === playerStatCardOverlay) { playerStatCardOverlay.classList.remove('active'); } });
     playerStatCard.querySelector('.card-close-btn').addEventListener('click', () => { playerStatCardOverlay.classList.remove('active'); });
     chooseBtn.addEventListener('click', async () => { if (!currentUserUid || !currentFormation) { alert("Selecione uma formação."); return; } if (hasUnsavedChanges) { alert("Guarde as alterações antes de escolher."); return; } try { const palpitesSnap = await getDocs(query(collection(db, 'palpites'), orderBy('temporada', 'desc'), limit(1))); if (palpitesSnap.empty) throw new Error('Temporada não encontrada.'); const latestSeason = palpitesSnap.docs[0].data().temporada; const planteisRef = collection(db, 'planteis'); const q = query(planteisRef, where('userId', '==', currentUserUid), where('formacao', '==', currentFormation), where('temporada', '==', latestSeason), limit(1)); const currentSnap = await getDocs(q); if (currentSnap.empty) { alert(`A formação ${currentFormation} não está guardada. Guarde-a primeiro.`); return; } const batch = writeBatch(db); const allPlanteisSnap = await getDocs(query(planteisRef, where('userId', '==', currentUserUid), where('temporada', '==', latestSeason))); allPlanteisSnap.forEach(doc => batch.update(doc.ref, { estado: 'desativo' })); batch.update(currentSnap.docs[0].ref, { estado: 'ativo' }); await batch.commit(); alert(`Formação ${currentFormation} definida como ativa!`); } catch (error) { console.error('Erro ao definir formação ativa:', error); alert('Erro: ' + error.message); } });
-    formationSelect.addEventListener('change', async (e) => { const newFormation = e.target.value; if (!newFormation || newFormation === currentFormation) return; const switchFormation = async () => { hasUnsavedChanges = false; currentFormation = newFormation; await loadFormation(); }; if (hasUnsavedChanges) { showConfirmationModal('Existem alterações não guardadas. Quer guardá-las antes de mudar?', async () => { await saveFormation(); await switchFormation(); }, async () => { await switchFormation(); }); } else { await switchFormation(); } });
+
+formationSelect.addEventListener('change', async (e) => {
+    const newFormation = e.target.value;
+
+    // 1. Regista a ação de mudança de formação no log
+    if (newFormation) { // Garante que só regista se um valor válido for selecionado
+        logUserAction(`Selecionou a formação: ${newFormation}`);
+    }
+
+    // 2. Verifica se a formação é realmente nova antes de continuar
+    if (!newFormation || newFormation === currentFormation) return;
+
+    // 3. Define a função para trocar de formação
+    const switchFormation = async () => {
+        hasUnsavedChanges = false;
+        currentFormation = newFormation;
+        await loadFormation();
+    };
+
+    // 4. Verifica se existem alterações não guardadas e pergunta ao utilizador o que fazer
+    if (hasUnsavedChanges) {
+        showConfirmationModal(
+            'Existem alterações não guardadas. Quer guardá-las antes de mudar?',
+            async () => { // Função se o utilizador clicar "Sim"
+                await saveFormation();
+                await switchFormation();
+            },
+            async () => { // Função se o utilizador clicar "Não"
+                await switchFormation();
+            }
+        );
+    } else {
+        // Se não houver alterações, troca diretamente
+        await switchFormation();
+    }
+});
+
     document.querySelectorAll('.menu-item').forEach(item => { item.addEventListener('click', (e) => { const destination = item.href; if (hasUnsavedChanges && destination && !destination.endsWith('#') && destination !== window.location.href) { e.preventDefault(); showConfirmationModal('Tem alterações não guardadas. Quer guardá-las antes de sair?', async () => { await saveFormation(); window.location.href = destination; }, () => { hasUnsavedChanges = false; window.location.href = destination; }); } }); });
-    document.addEventListener('contextmenu', function(event) { if (event.target.tagName === 'IMG') { event.preventDefault(); } });
+
+document.addEventListener('click', async (event) => {
+    // Selector adaptado para os elementos clicáveis desta página
+    const clickableElement = event.target.closest('button, a.menu-item, .player-card, .position');
+
+    if (!clickableElement) return;
+
+    let actionName = '';
+
+    // Lógica para identificar a ação com base no elemento clicado
+    if (clickableElement.matches('.player-card') && !clickableElement.matches('.style-item') && !event.target.closest('.add-player-btn')) {
+        const playerName = clickableElement.querySelector('.player-name')?.textContent.trim();
+        actionName = `Abriu detalhes de ${playerName || 'jogador'}`;
+    } else if (clickableElement.matches('#saveFormationBtn')) {
+        actionName = 'Clicou em Guardar Formação';
+    } else if (clickableElement.matches('#chooseBtn')) {
+        actionName = 'Clicou em Escolher Formação Ativa';
+    } else if (clickableElement.matches('.add-player-btn')) {
+        actionName = 'Adicionou jogador à equipa a partir do modal';
+    } else if (clickableElement.matches('.position')) {
+        const positionId = clickableElement.dataset.position;
+        const hasPlayer = clickableElement.dataset.assignedPlayerId && clickableElement.dataset.assignedPlayerId !== 'null';
+        actionName = hasPlayer ? `Removeu jogador da posição ${positionId}` : `Abriu modal para a posição ${positionId}`;
+    } else if (clickableElement.matches('.menu-item')) {
+        // Ação para os itens do menu (o texto dentro do span)
+        actionName = `Navegou para: ${clickableElement.querySelector('.menu-text')?.textContent.trim() || 'Menu'}`;
+    } else {
+        // Fallback para outros botões
+        const buttonText = clickableElement.textContent.trim();
+        if (buttonText) {
+            actionName = `Clicou em: ${buttonText}`;
+        }
+    }
+
+    if (!actionName) return;
+
+    // Lida com a navegação para outras páginas
+    const isNavLink = clickableElement.tagName === 'A' && clickableElement.href && clickableElement.target !== '_blank';
+    
+    if (isNavLink) {
+        // Impede a navegação, regista a ação, e depois navega
+        if (hasUnsavedChanges) {
+            // A lógica de aviso de alterações não guardadas já existe e será acionada primeiro
+            return; 
+        }
+        event.preventDefault();
+        await logUserAction(actionName);
+        window.location.href = clickableElement.href;
+    } else {
+        // Para todos os outros cliques, apenas regista
+        await logUserAction(actionName);
+    }
+});
+
 </script>
     <script src="menu-component.js"></script> 
 </body>
