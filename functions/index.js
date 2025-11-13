@@ -200,7 +200,7 @@ exports.simulateWeeklyMatches = functions.pubsub.schedule('every monday 01:00')
     .timeZone('Europe/Lisbon')
     .onRun(async (context) => {
         
-        console.log('Iniciando simulação semanal de jogos...');
+        console.log('v2: Iniciando simulação semanal de jogos...'); // Adicionei um v2 para forçar a atualização
 
         const configRef = db.doc('paineis/configuracoes_gerais');
         const configSnap = await configRef.get();
