@@ -1148,6 +1148,25 @@ import { getFirestore, doc, getDoc, collection, getDocs, query, orderBy, limit, 
         const auth = getAuth(app);
        const functions = getFunctions(app, 'us-central1');
 
+
+       async function logUserAction(actionDescription) {
+    if (!auth.currentUser) {
+        console.log("Nenhum utilizador logado para registar a ação.");
+        return;
+    }
+    
+    try {
+        const eyeCollection = collection(db, 'eye');
+        await addDoc(eyeCollection, {
+            dataacao: serverTimestamp(),
+            acao: actionDescription,
+            userId: auth.currentUser.uid
+        });
+    } catch (error) {
+        console.error("Erro ao registar ação na coleção 'eye':", error);
+    }
+}
+
         // Get DOM elements
   
         const returnDisplay = document.getElementById('returnDisplay');
@@ -1986,6 +2005,7 @@ onAuthStateChanged(auth, async (user) => {
                 return;
             }
 
+            await logUserAction(`Entrou em ${document.title}`);
             const userData = userDocSnap.data();
             const userStatus = userData.estatuto || null;
 
@@ -2067,6 +2087,47 @@ onAuthStateChanged(auth, async (user) => {
                 alert('Failed to update setting. Please try again.');
             }
         }
+
+        document.addEventListener('click', async (event) => {
+    // Selector adaptado para esta página: apanha botões, links e os cards clicáveis.
+    const clickableElement = event.target.closest('button, a, [class*="-display"]');
+
+    if (!clickableElement) {
+        return; // Se não for um elemento de interesse, não faz nada
+    }
+
+    // Lógica melhorada para obter um nome de ação claro
+    let actionName = '';
+    const labelElement = clickableElement.querySelector('.display-label');
+    
+    if (clickableElement.id) {
+        actionName = clickableElement.id; // Prioridade 1: ID do elemento
+    } else if (labelElement) {
+        actionName = labelElement.textContent.trim(); // Prioridade 2: Texto do label dentro do card
+    } else {
+        actionName = clickableElement.textContent.trim(); // Fallback: Texto completo do elemento
+    }
+
+    if (!actionName) {
+        return; // Se não conseguirmos um nome, não faz nada
+    }
+
+    const isNavLink = clickableElement.tagName === 'A' && clickableElement.href && clickableElement.target !== '_blank';
+
+    if (isNavLink) {
+        // 1. Impede a navegação imediata
+        event.preventDefault();
+        
+        // 2. Regista a ação e espera que termine
+        await logUserAction(`Clicou em: ${actionName}`);
+        
+        // 3. Agora, navega para o destino
+        window.location.href = clickableElement.href;
+    } else {
+        // Para botões, divs clicáveis ou links para outras abas, apenas regista a ação
+        logUserAction(`Clicou em: ${actionName}`);
+    }
+});
 
     </script>
 
