@@ -213,57 +213,82 @@ exports.simulateWeeklyMatches = functions.pubsub.schedule('every monday 01:00')
     .timeZone('Europe/Lisbon')
     .onRun(async (context) => {
         
-        console.log('v5: Iniciando simulação com estatísticas completas, incluindo jogos disputados...');
+        console.log('v6: Iniciando simulação com calendário Round-Robin para garantir jogos únicos por jornada.');
 
         const globalConfigRef = db.doc('paineis/configuracoes_gerais');
         const endlessConfigRef = db.doc('paineis/endless_configuracoes');
-
-        const [globalConfigSnap, endlessConfigSnap] = await Promise.all([
-            globalConfigRef.get(),
-            endlessConfigRef.get()
-        ]);
+        const [globalConfigSnap, endlessConfigSnap] = await Promise.all([globalConfigRef.get(), endlessConfigRef.get()]);
 
         if (!globalConfigSnap.exists || !endlessConfigSnap.exists) {
-            console.error("Documento de configurações global ou do Endless não encontrado!");
+            console.error("Documento de configurações não encontrado!");
             return null;
         }
 
-        const globalConfigData = globalConfigSnap.data();
-        const endlessConfigData = endlessConfigSnap.data();
-
-        const seasonIdentifier = globalConfigData.temporadaAtual;
-        const JORNADAS_PER_SEASON = endlessConfigData.jornadasPorTemporada || 28;
-
-        if (!seasonIdentifier) {
-            console.error("'temporadaAtual' não encontrada em configuracoes_gerais.");
-            return null;
-        }
-
+        const seasonIdentifier = globalConfigSnap.data().temporadaAtual;
+        const JORNADAS_PER_SEASON = endlessConfigSnap.data().jornadasPorTemporada || 28;
         const now = new Date();
         const dayOfMonth = now.getDate();
-        const currentMonth = now.getMonth();
         const semanaAtual = Math.floor((dayOfMonth - 1) / 7) + 1;
-
-        const isNewMonth = currentMonth !== endlessConfigData.lastSimulationMonth;
-        const lastSimulatedWeekForThisMonth = isNewMonth ? 0 : endlessConfigData.ultimaSemanaSimulada;
-
+        
+        const lastSimulatedWeekForThisMonth = endlessConfigSnap.data().lastSimulationMonth === now.getMonth() ? endlessConfigSnap.data().ultimaSemanaSimulada : 0;
         if (semanaAtual <= lastSimulatedWeekForThisMonth) {
             console.log(`A semana ${semanaAtual} já foi simulada este mês. A sair.`);
             return null;
         }
-      
-        if (isNewMonth) {
-             console.log(`Novo mês detetado (${currentMonth}). A simular a semana ${semanaAtual}.`);
-        }
 
         const clubsQuery = db.collection('endlessclubes').where("temporada", "==", seasonIdentifier);
         const clubsSnapshot = await clubsQuery.get();
-        const leagueClubs = clubsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        let leagueClubs = clubsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
         if (leagueClubs.length < 2) {
             console.log("Não há clubes suficientes para simular.");
             return null;
         }
+        
+        // --- INÍCIO DA CORREÇÃO LÓGICA ---
+
+        // Função Helper para gerar um calendário Round-Robin para uma volta completa
+        function generateRoundRobinSchedule(clubs) {
+            const schedule = [];
+            const localClubs = [...clubs]; 
+
+            if (localClubs.length % 2 !== 0) {
+                localClubs.push({ id: 'BYE', nome: 'Folga' });
+            }
+
+            const numRounds = localClubs.length - 1;
+            const numMatchesPerRound = localClubs.length / 2;
+            const teams = [...localClubs];
+
+            for (let round = 0; round < numRounds; round++) {
+                const roundMatches = [];
+                for (let match = 0; match < numMatchesPerRound; match++) {
+                    const home = teams[match];
+                    const away = teams[teams.length - 1 - match];
+                    
+                    if (home.id !== 'BYE' && away.id !== 'BYE') {
+                       if (round % 2 === 0) {
+                           roundMatches.push({ home, away });
+                       } else {
+                           roundMatches.push({ home: away, away: home });
+                       }
+                    }
+                }
+                schedule.push(roundMatches);
+
+                const lastTeam = teams.pop();
+                teams.splice(1, 0, lastTeam);
+            }
+            return schedule;
+        }
+
+        const firstHalfSchedule = generateRoundRobinSchedule(leagueClubs);
+        const secondHalfSchedule = firstHalfSchedule.map(round => 
+            round.map(match => ({ home: match.away, away: match.home }))
+        );
+        const fullSeasonSchedule = [...firstHalfSchedule, ...secondHalfSchedule];
+
+        // --- FIM DA CORREÇÃO LÓGICA ---
         
         const calculateTeamOverall = (club) => {
             if (!club.plantel || !club.treinador) return 100;
@@ -272,30 +297,23 @@ exports.simulateWeeklyMatches = functions.pubsub.schedule('every monday 01:00')
             const formacaoOverall = club.formacaoatualpontos || 5;
             return plantelOverall + treinadorOverall + formacaoOverall;
         };
-
         const calculateTeamChemistry = (club) => {
             if (!club.treinador || !club.estadio) return 50;
             const treinadorQuimica = club.treinador.quimica;
             const estadioAmbiente = club.estadio.ambiente || 15;
             return treinadorQuimica + estadioAmbiente;
         };
-        
         const generateScore = (winnerProbability) => {
             let homeScore = 0, awayScore = 0;
-            if (Math.random() < 0.20) {
-                homeScore = awayScore = Math.floor(Math.random() * 3);
-            } else {
+            if (Math.random() < 0.20) { homeScore = awayScore = Math.floor(Math.random() * 3); } 
+            else {
                 const winnerScore = Math.floor(Math.random() * 3) + 1;
                 const loserScore = Math.floor(Math.random() * 2);
-                if (Math.random() < winnerProbability) {
-                    homeScore = winnerScore; awayScore = loserScore;
-                } else {
-                    homeScore = loserScore; awayScore = winnerScore;
-                }
+                if (Math.random() < winnerProbability) { homeScore = winnerScore; awayScore = loserScore; }
+                else { homeScore = loserScore; awayScore = winnerScore; }
             }
             return { homeScore, awayScore };
         };
-
         const simulateMatch = (homeTeam, awayTeam) => {
             const homeOverall = calculateTeamOverall(homeTeam);
             const awayOverall = calculateTeamOverall(awayTeam);
@@ -312,55 +330,55 @@ exports.simulateWeeklyMatches = functions.pubsub.schedule('every monday 01:00')
             return { homeTeam, awayTeam, homeScore, awayScore, outcome };
         };
 
-        const currentJornadaInSeason = (semanaAtual - 1) * 7;
+        const jornadaInicialDaSemana = (semanaAtual - 1) * 7;
         const batch = db.batch();
         const statsUpdates = {};
-        
+
         for (let i = 0; i < 7; i++) {
-            const jornadaNumber = currentJornadaInSeason + i + 1;
-            if (jornadaNumber > JORNADAS_PER_SEASON) break;
+            const jornadaIndex = jornadaInicialDaSemana + i;
+            if (jornadaIndex >= fullSeasonSchedule.length || (jornadaIndex + 1) > JORNADAS_PER_SEASON) break;
 
-            let teamsToSchedule = [...leagueClubs].sort(() => 0.5 - Math.random());
-            while (teamsToSchedule.length >= 2) {
-                const homeTeam = teamsToSchedule.pop();
-                const awayTeam = teamsToSchedule.pop();
-                const result = simulateMatch(homeTeam, awayTeam);
+            const jornadaNumber = jornadaIndex + 1;
+            const matchesForThisJornada = fullSeasonSchedule[jornadaIndex];
 
-                if (!statsUpdates[homeTeam.id]) statsUpdates[homeTeam.id] = {};
-                if (!statsUpdates[awayTeam.id]) statsUpdates[awayTeam.id] = {};
+            for (const match of matchesForThisJornada) {
+                const result = simulateMatch(match.home, match.away);
+                const homeTeam = result.homeTeam;
+                const awayTeam = result.awayTeam;
 
-                // --- NOVO CAMPO ADICIONADO AQUI ---
-                // Incrementar jogos disputados para ambas as equipas, sempre.
-                statsUpdates[homeTeam.id].jogosDisputados = (statsUpdates[homeTeam.id].jogosDisputados || 0) + 1;
-                statsUpdates[awayTeam.id].jogosDisputados = (statsUpdates[awayTeam.id].jogosDisputados || 0) + 1;
-                // --- FIM DA ADIÇÃO ---
-
-                statsUpdates[homeTeam.id].golosMarcados = (statsUpdates[homeTeam.id].golosMarcados || 0) + result.homeScore;
-                statsUpdates[homeTeam.id].golosSofridos = (statsUpdates[homeTeam.id].golosSofridos || 0) + result.awayScore;
-                statsUpdates[awayTeam.id].golosMarcados = (statsUpdates[awayTeam.id].golosMarcados || 0) + result.awayScore;
-                statsUpdates[awayTeam.id].golosSofridos = (statsUpdates[awayTeam.id].golosSofridos || 0) + result.homeScore;
+                if (!statsUpdates[homeTeam.id]) statsUpdates[homeTeam.id] = { vitorias: 0, empates: 0, derrotas: 0, golosMarcados: 0, golosSofridos: 0, pontos: 0, jogosDisputados: 0 };
+                if (!statsUpdates[awayTeam.id]) statsUpdates[awayTeam.id] = { vitorias: 0, empates: 0, derrotas: 0, golosMarcados: 0, golosSofridos: 0, pontos: 0, jogosDisputados: 0 };
+                
+                statsUpdates[homeTeam.id].jogosDisputados += 1;
+                statsUpdates[awayTeam.id].jogosDisputados += 1;
+                statsUpdates[homeTeam.id].golosMarcados += result.homeScore;
+                statsUpdates[homeTeam.id].golosSofridos += result.awayScore;
+                statsUpdates[awayTeam.id].golosMarcados += result.awayScore;
+                statsUpdates[awayTeam.id].golosSofridos += result.homeScore;
 
                 if (result.outcome === 'draw') {
-                    statsUpdates[homeTeam.id].pontos = (statsUpdates[homeTeam.id].pontos || 0) + 1;
-                    statsUpdates[homeTeam.id].empates = (statsUpdates[homeTeam.id].empates || 0) + 1;
-                    statsUpdates[awayTeam.id].pontos = (statsUpdates[awayTeam.id].pontos || 0) + 1;
-                    statsUpdates[awayTeam.id].empates = (statsUpdates[awayTeam.id].empates || 0) + 1;
+                    statsUpdates[homeTeam.id].pontos += 1;
+                    statsUpdates[homeTeam.id].empates += 1;
+                    statsUpdates[awayTeam.id].pontos += 1;
+                    statsUpdates[awayTeam.id].empates += 1;
                 } else if (result.outcome === 'home') {
-                    statsUpdates[homeTeam.id].pontos = (statsUpdates[homeTeam.id].pontos || 0) + 3;
-                    statsUpdates[homeTeam.id].vitorias = (statsUpdates[homeTeam.id].vitorias || 0) + 1;
-                    statsUpdates[awayTeam.id].derrotas = (statsUpdates[awayTeam.id].derrotas || 0) + 1;
+                    statsUpdates[homeTeam.id].pontos += 3;
+                    statsUpdates[homeTeam.id].vitorias += 1;
+                    statsUpdates[awayTeam.id].derrotas += 1;
                 } else { 
-                    statsUpdates[awayTeam.id].pontos = (statsUpdates[awayTeam.id].pontos || 0) + 3;
-                    statsUpdates[awayTeam.id].vitorias = (statsUpdates[awayTeam.id].vitorias || 0) + 1;
-                    statsUpdates[homeTeam.id].derrotas = (statsUpdates[homeTeam.id].derrotas || 0) + 1;
+                    statsUpdates[awayTeam.id].pontos += 3;
+                    statsUpdates[awayTeam.id].vitorias += 1;
+                    statsUpdates[homeTeam.id].derrotas += 1;
                 }
-
+                
                 const gameLogRef = db.collection('endlessjogos').doc();
                 batch.set(gameLogRef, {
                     seasonId: seasonIdentifier,
                     jornada: jornadaNumber,
-                    homeTeamId: result.homeTeam.id, awayTeamId: result.awayTeam.id,
-                    homeScore: result.homeScore, awayScore: result.awayScore,
+                    homeTeamId: result.homeTeam.id,
+                    awayTeamId: result.awayTeam.id,
+                    homeScore: result.homeScore,
+                    awayScore: result.awayScore,
                     simulatedAt: admin.firestore.FieldValue.serverTimestamp(),
                 });
             }
@@ -369,13 +387,11 @@ exports.simulateWeeklyMatches = functions.pubsub.schedule('every monday 01:00')
         for (const clubId in statsUpdates) {
             const clubRef = db.doc(`endlessclubes/${clubId}`);
             const updatesForThisClub = {};
-            
             for (const stat in statsUpdates[clubId]) {
                 if (statsUpdates[clubId][stat] > 0) {
                     updatesForThisClub[stat] = admin.firestore.FieldValue.increment(statsUpdates[clubId][stat]);
                 }
             }
-            
             if (Object.keys(updatesForThisClub).length > 0) {
                 batch.update(clubRef, updatesForThisClub);
             }
@@ -383,11 +399,10 @@ exports.simulateWeeklyMatches = functions.pubsub.schedule('every monday 01:00')
         
         await endlessConfigRef.update({
             ultimaSemanaSimulada: semanaAtual,
-            lastSimulationMonth: currentMonth
+            lastSimulationMonth: now.getMonth()
         });
-
         await batch.commit();
 
-        console.log(`Simulação da semana ${semanaAtual} (v5) para a temporada ${seasonIdentifier} concluída.`);
+        console.log(`Simulação da semana ${semanaAtual} (v6) para a temporada ${seasonIdentifier} concluída.`);
         return null;
     });
