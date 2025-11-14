@@ -319,59 +319,89 @@ input:checked + .slider:before { transform: translateX(26px); }
         return null;
     }
 
-async function fetchAndShowMovements(userId, userName) {
-    const popup = document.getElementById('movements-popup');
-    const popupTitle = document.getElementById('popup-title');
-    const tableBody = document.getElementById('movements-table-body');
-    const recalculateBtn = document.getElementById('recalculate-button');
-    const timelineBtn = document.getElementById('timeline-button');
-    const permissionsBtn = document.getElementById('permissions-button'); // NOVO
-    const movementsTable = document.getElementById('movements-detail-table');
+async function fetchAndShowTimeline(userId, userName) {
+    const popup = document.getElementById('timeline-popup');
+    const title = document.getElementById('timeline-popup-title');
+    const container = document.getElementById('timeline-container');
 
-    // Configura os 3 botões com os dados do utilizador selecionado
-    recalculateBtn.setAttribute('data-userid', userId);
-    timelineBtn.setAttribute('data-userid', userId);
-    timelineBtn.setAttribute('data-username', userName);
-    permissionsBtn.setAttribute('data-userid', userId); // NOVO
-    permissionsBtn.setAttribute('data-username', userName); // NOVO
-
-    popupTitle.textContent = `Movimentações de ${userName}`;
-    tableBody.innerHTML = '<tr><td colspan="7" style="text-align: center;">A carregar...</td></tr>';
-    
-    const oldTfoot = movementsTable.querySelector('tfoot');
-    if (oldTfoot) { oldTfoot.remove(); }
-    
+    title.textContent = `Timeline de Atividade: ${userName}`;
+    container.innerHTML = '<p style="text-align:center;">A carregar histórico...</p>';
     popup.style.display = 'flex';
 
     try {
-        let totalPreco = 0, totalValorReal = 0, totalValorAPagar = 0;
-        const season = await fetchCurrentSeason();
-        const q = query(collection(db, "movimentos"), where("userId", "==", userId), where("temporada", "==", season), orderBy("movimentoData", "desc"));
+        const q = query(collection(db, "eye"), where("userId", "==", userId), orderBy("dataacao", "desc"));
         const querySnapshot = await getDocs(q);
 
         if (querySnapshot.empty) {
-            tableBody.innerHTML = `<tr><td colspan="7" style="text-align: center;">Nenhuma movimentação para a temporada ${season}.</td></tr>`;
+            container.innerHTML = '<p style="text-align:center;">Nenhuma atividade registada para este utilizador.</p>';
             return;
         }
 
-        tableBody.innerHTML = '';
+        // Agrupa as ações por dia
+        const actionsByDay = new Map();
         querySnapshot.forEach(doc => {
             const data = doc.data();
-            const row = document.createElement('tr');
-            row.innerHTML = `<td>${formatMovementDate(data.movimentoData)}</td><td>${data.estado || 'N/A'}</td><td>${data.tipo || 'N/A'}</td><td>${data.preco || 0}</td><td>${data.valorreal || 0}</td><td>${data.descricao || ''}</td><td>${data.valorTotalAPagar || 0}</td>`;
-            tableBody.appendChild(row);
-            totalPreco += parseFloat(data.preco) || 0;
-            if (data.estado !== 'WhoWins Paid') totalValorReal += parseFloat(data.valorreal) || 0;
-            totalValorAPagar += parseFloat(data.valorTotalAPagar) || 0;
+            const actionDate = parseDateFromFirestore(data.dataacao);
+            if (!actionDate) return; // Pula registos com data inválida
+
+            const dayKey = actionDate.toLocaleDateString('pt-PT', { year: 'numeric', month: '2-digit', day: '2-digit' });
+
+            if (!actionsByDay.has(dayKey)) {
+                actionsByDay.set(dayKey, []);
+            }
+            actionsByDay.get(dayKey).push({
+                time: actionDate.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' }),
+                action: data.acao || 'Ação não especificada'
+            });
         });
 
-        const tfoot = document.createElement('tfoot');
-        tfoot.innerHTML = `<tr style="background-color: #f2f2f2; font-weight: bold; border-top: 2px solid #ccc;"><td colspan="3" style="text-align: right;">TOTAIS:</td><td>${totalPreco.toFixed(2)}</td><td>${totalValorReal.toFixed(2)}</td><td></td><td>${totalValorAPagar.toFixed(2)}</td></tr>`;
-        movementsTable.appendChild(tfoot);
+        if (actionsByDay.size === 0) {
+            container.innerHTML = '<p style="text-align:center;">Nenhuma atividade com data válida encontrada.</p>';
+            return;
+        }
+        
+        // Gera o HTML para a timeline
+        let timelineHTML = '';
+        for (const [dayKey, actions] of actionsByDay.entries()) {
+             // Precisamos de uma data real para o botão de apagar
+            const dateParts = dayKey.split('/');
+            const realDate = new Date(`${dateParts[2]}-${dateParts[1]}-${dateParts[0]}`);
+            const startOfDay = new Date(realDate.setHours(0, 0, 0, 0)).getTime();
+            const endOfDay = new Date(realDate.setHours(23, 59, 59, 999)).getTime();
+
+            timelineHTML += `
+                <div class="day-group">
+                    <div class="day-header">
+                        <span>${dayKey}</span>
+                        <i class="fas fa-trash-alt delete-day-btn" title="Eliminar todos os registos deste dia"
+                           data-userid="${userId}" data-day-key="${dayKey}"
+                           data-date-start="${startOfDay}" data-date-end="${endOfDay}"></i>
+                    </div>
+                    <div class="day-actions">
+                        ${actions.map(act => `<div class="action-entry">[${act.time}] ${act.action}</div>`).join('')}
+                    </div>
+                </div>
+            `;
+        }
+        container.innerHTML = timelineHTML;
+
+        // Adiciona event listeners para os novos elementos
+        container.querySelectorAll('.day-header').forEach(header => {
+            header.addEventListener('click', (event) => {
+                // Não ativa o toggle se o clique for no botão de eliminar
+                if (event.target.classList.contains('delete-day-btn')) return;
+                const actionsContainer = header.nextElementSibling;
+                actionsContainer.style.display = actionsContainer.style.display === 'block' ? 'none' : 'block';
+            });
+        });
+
+        container.querySelectorAll('.delete-day-btn').forEach(button => {
+            button.addEventListener('click', handleDeleteDayActions);
+        });
 
     } catch (error) {
-        console.error("Erro ao buscar movimentações:", error);
-        tableBody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: red;">Erro ao carregar.</td></tr>';
+        console.error("Erro ao buscar timeline:", error);
+        container.innerHTML = `<p style="text-align:center; color:red;">Ocorreu um erro ao carregar a timeline.</p>`;
     }
 }
 
