@@ -213,33 +213,49 @@ exports.simulateWeeklyMatches = functions.pubsub.schedule('every monday 01:00')
     .timeZone('Europe/Lisbon')
     .onRun(async (context) => {
         
-        console.log('v2: Iniciando simulação semanal de jogos...'); // Adicionei um v2 para forçar a atualização
+        console.log('v3: Iniciando simulação com configs divididas...');
 
-        const configRef = db.doc('paineis/configuracoes_gerais');
-        const configSnap = await configRef.get();
-        if (!configSnap.exists) {
-            console.error("Documento de configurações não encontrado!");
+        // MUDANÇA 1: Definir referências para AMBOS os documentos de configuração
+        const globalConfigRef = db.doc('paineis/configuracoes_gerais');
+        const endlessConfigRef = db.doc('paineis/endless_configuracoes');
+
+        const [globalConfigSnap, endlessConfigSnap] = await Promise.all([
+            globalConfigRef.get(),
+            endlessConfigRef.get()
+        ]);
+
+        if (!globalConfigSnap.exists || !endlessConfigSnap.exists) {
+            console.error("Documento de configurações global ou do Endless não encontrado!");
             return null;
         }
 
-        const configData = configSnap.data();
-        const seasonIdentifier = configData.temporadaAtual;
-        const JORNADAS_PER_SEASON = configData.jornadasPorTemporada || 28;
+        // MUDANÇA 2: Ler dados de cada documento separadamente
+        const globalConfigData = globalConfigSnap.data();
+        const endlessConfigData = endlessConfigSnap.data();
+
+        const seasonIdentifier = globalConfigData.temporadaAtual; // <-- Vem do global
+        const JORNADAS_PER_SEASON = endlessConfigData.jornadasPorTemporada || 28; // <-- Vem do Endless
+
+        if (!seasonIdentifier) {
+            console.error("'temporadaAtual' não encontrada em configuracoes_gerais.");
+            return null;
+        }
 
         const now = new Date();
         const dayOfMonth = now.getDate();
         const currentMonth = now.getMonth();
         const semanaAtual = Math.floor((dayOfMonth - 1) / 7) + 1;
 
-        // --- LÓGICA DE VERIFICAÇÃO MELHORADA ---
-        const isNewMonth = currentMonth !== configData.lastSimulationMonth;
-        const lastSimulatedWeekForThisMonth = isNewMonth ? 0 : configData.ultimaSemanaSimulada;
+        // Lógica de verificação usa os dados do painel Endless
+        const isNewMonth = currentMonth !== endlessConfigData.lastSimulationMonth;
+        const lastSimulatedWeekForThisMonth = isNewMonth ? 0 : endlessConfigData.ultimaSemanaSimulada;
 
         if (semanaAtual <= lastSimulatedWeekForThisMonth) {
-            console.log(`A semana ${semanaAtual} (ou uma posterior) já foi simulada este mês. A sair.`);
+            console.log(`A semana ${semanaAtual} já foi simulada este mês. A sair.`);
             return null;
         }
-        
+      
+
         if (isNewMonth) {
              console.log(`Novo mês detetado (${currentMonth}). A simular a semana ${semanaAtual}.`);
         }
@@ -342,15 +358,11 @@ exports.simulateWeeklyMatches = functions.pubsub.schedule('every monday 01:00')
             }
         }
         
-        await batch.commit();
-
-        // --- ATUALIZAÇÃO DE CONFIGURAÇÃO CORRIGIDA ---
-        // Atualiza a semana e o mês de uma só vez, no final da execução.
-        await configRef.update({
+      await endlessConfigRef.update({
             ultimaSemanaSimulada: semanaAtual,
             lastSimulationMonth: currentMonth
         });
 
-        console.log(`Simulação da semana ${semanaAtual} concluída com sucesso.`);
+        console.log(`Simulação da semana ${semanaAtual} para a temporada ${seasonIdentifier} concluída.`);
         return null;
     });
