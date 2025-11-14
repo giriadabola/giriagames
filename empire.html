@@ -891,7 +891,35 @@ async function getMenuSettings() {
 
 /** Checks if the user has access to this page */
 async function checkPageAccess(userStatus, menuSettings) {
-    console.log("checkPageAccess: Checking access for user:", userStatus, "with settings:", menuSettings); if (!menuSettings || menuSettings['empire'] !== 'on') { console.log("checkPageAccess: Empire page is OFF in settings or settings missing."); if (!userStatus || userStatus.estatuto !== 'ruler') { console.log("checkPageAccess: User is not ruler. Redirecting to 404."); window.location.href = '404.html'; return false; } else { console.log("checkPageAccess: User IS ruler, granting access despite page setting."); } } console.log("checkPageAccess: Access granted."); return true;
+    console.log("checkPageAccess: A verificar acesso para:", userStatus, "com as configurações:", menuSettings);
+
+    // REGRA 1 (PRIORIDADE MÁXIMA): Acesso de Administrador ('ruler')
+    // Se o estatuto do utilizador for 'ruler', o acesso é imediato, ignorando outras regras.
+    if (userStatus && userStatus.estatuto === 'ruler') {
+        console.log("Acesso Concedido: O utilizador é um 'ruler'.");
+        return true;
+    }
+
+    // A partir daqui, as regras aplicam-se a utilizadores que NÃO são 'ruler'.
+    // Ambas as condições seguintes devem ser verdadeiras.
+
+    // CONDIÇÃO A: O "interruptor" global no painel de controlo deve estar ligado.
+    const globalAccessOn = menuSettings && menuSettings['empire'] === 'on';
+
+    // CONDIÇÃO B (NOVA REGRA): O utilizador deve ter a permissão específica no seu perfil.
+    // O 'userStatus' contém { uid, ..., data: fullUserData }, por isso acedemos a userStatus.data
+    const hasIndividualPermission = userStatus?.data?.permissoes?.empire === 'yes';
+
+    // A função retorna 'true' apenas se a Condição A E a Condição B forem verdadeiras.
+    if (globalAccessOn && hasIndividualPermission) {
+        console.log("Acesso Concedido: Permissões globais e individuais satisfeitas.");
+        return true;
+    } else {
+        // Se uma ou ambas as condições falharem, o acesso é negado.
+        console.log(`Acesso Negado. Status: Global=${globalAccessOn}, Individual=${hasIndividualPermission}`);
+        window.location.href = '404.html';
+        return false;
+    }
 }
 
 /** Updates bottom menu item visibility based on settings */
