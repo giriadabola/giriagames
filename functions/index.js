@@ -213,14 +213,17 @@ exports.simulateWeeklyMatches = functions.pubsub.schedule('every monday 01:00')
     .timeZone('Europe/Lisbon')
     .onRun(async (context) => {
         
-        console.log('v6: Iniciando simulação com calendário Round-Robin para garantir jogos únicos por jornada.');
+        console.log('v7: Iniciando simulação semanal com reinício de temporada...');
 
+        // Referências para os documentos de configuração
         const globalConfigRef = db.doc('paineis/configuracoes_gerais');
         const endlessConfigRef = db.doc('paineis/endless_configuracoes');
+        
+        // Lê as configurações em paralelo para maior eficiência
         const [globalConfigSnap, endlessConfigSnap] = await Promise.all([globalConfigRef.get(), endlessConfigRef.get()]);
 
         if (!globalConfigSnap.exists || !endlessConfigSnap.exists) {
-            console.error("Documento de configurações não encontrado!");
+            console.error("Documento de configurações (gerais ou endless) não encontrado!");
             return null;
         }
 
@@ -229,53 +232,81 @@ exports.simulateWeeklyMatches = functions.pubsub.schedule('every monday 01:00')
         const now = new Date();
         const dayOfMonth = now.getDate();
         const semanaAtual = Math.floor((dayOfMonth - 1) / 7) + 1;
+        const lastSimulatedMonth = endlessConfigSnap.data().lastSimulationMonth;
+
+        // ============================================================
+        //      INÍCIO: LÓGICA DE REINÍCIO PARA NOVA TEMPORADA
+        // ============================================================
+        // Se o mês da última simulação for diferente do mês atual, é uma nova temporada!
+        if (lastSimulatedMonth !== now.getMonth()) {
+            console.log(`NOVA TEMPORADA DETETADA (${now.getMonth()})! A reiniciar estatísticas dos clubes...`);
+            
+            // Query para obter todos os clubes ativos para reiniciar
+            const clubsToResetQuery = db.collection('endlessclubes').where("ativo", "==", true);
+            const clubsToResetSnapshot = await clubsToResetQuery.get();
+            const resetBatch = db.batch();
+
+            clubsToResetSnapshot.forEach(doc => {
+                resetBatch.update(doc.ref, {
+                    // Reinicia todas as estatísticas da liga
+                    pontos: 0,
+                    vitorias: 0,
+                    empates: 0,
+                    derrotas: 0,
+                    jogosDisputados: 0,
+                    golosMarcados: 0,
+                    golosSofridos: 0,
+                    // Reinicia a flag de prémio para a nova temporada
+                    winningsClaimed: false, 
+                    // Apaga o campo de última semana vista para não mostrar resultados antigos
+                    lastWeekViewed: admin.firestore.FieldValue.delete()
+                });
+            });
+            await resetBatch.commit();
+            console.log("Estatísticas dos clubes reiniciadas para a nova temporada.");
+        }
+        // ============================================================
+        //      FIM: LÓGICA DE REINÍCIO PARA NOVA TEMPORADA
+        // ============================================================
         
-        const lastSimulatedWeekForThisMonth = endlessConfigSnap.data().lastSimulationMonth === now.getMonth() ? endlessConfigSnap.data().ultimaSemanaSimulada : 0;
+        // Verifica se a semana atual já foi simulada (idempotência)
+        const currentEndlessConfig = (await endlessConfigRef.get()).data(); // Relê a config caso tenha sido alterada
+        const lastSimulatedWeekForThisMonth = currentEndlessConfig.lastSimulationMonth === now.getMonth() ? currentEndlessConfig.ultimaSemanaSimulada : 0;
         if (semanaAtual <= lastSimulatedWeekForThisMonth) {
             console.log(`A semana ${semanaAtual} já foi simulada este mês. A sair.`);
             return null;
         }
 
-        const clubsQuery = db.collection('endlessclubes').where("temporada", "==", seasonIdentifier);
+        // Continua com a lógica normal de simulação
+        const clubsQuery = db.collection('endlessclubes').where("temporada", "==", seasonIdentifier).where("ativo", "==", true);
         const clubsSnapshot = await clubsQuery.get();
         let leagueClubs = clubsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
         if (leagueClubs.length < 2) {
-            console.log("Não há clubes suficientes para simular.");
+            console.log("Não há clubes ativos suficientes para simular.");
             return null;
         }
         
-        // --- INÍCIO DA CORREÇÃO LÓGICA ---
+        // --- LÓGICA DE GERAÇÃO DE CALENDÁRIO E SIMULAÇÃO ---
 
-        // Função Helper para gerar um calendário Round-Robin para uma volta completa
         function generateRoundRobinSchedule(clubs) {
             const schedule = [];
             const localClubs = [...clubs]; 
-
-            if (localClubs.length % 2 !== 0) {
-                localClubs.push({ id: 'BYE', nome: 'Folga' });
-            }
-
+            if (localClubs.length % 2 !== 0) localClubs.push({ id: 'BYE', nome: 'Folga' });
             const numRounds = localClubs.length - 1;
             const numMatchesPerRound = localClubs.length / 2;
             const teams = [...localClubs];
-
             for (let round = 0; round < numRounds; round++) {
                 const roundMatches = [];
                 for (let match = 0; match < numMatchesPerRound; match++) {
                     const home = teams[match];
                     const away = teams[teams.length - 1 - match];
-                    
                     if (home.id !== 'BYE' && away.id !== 'BYE') {
-                       if (round % 2 === 0) {
-                           roundMatches.push({ home, away });
-                       } else {
-                           roundMatches.push({ home: away, away: home });
-                       }
+                       if (round % 2 === 0) roundMatches.push({ home, away });
+                       else roundMatches.push({ home: away, away: home });
                     }
                 }
                 schedule.push(roundMatches);
-
                 const lastTeam = teams.pop();
                 teams.splice(1, 0, lastTeam);
             }
@@ -283,25 +314,17 @@ exports.simulateWeeklyMatches = functions.pubsub.schedule('every monday 01:00')
         }
 
         const firstHalfSchedule = generateRoundRobinSchedule(leagueClubs);
-        const secondHalfSchedule = firstHalfSchedule.map(round => 
-            round.map(match => ({ home: match.away, away: match.home }))
-        );
+        const secondHalfSchedule = firstHalfSchedule.map(round => round.map(match => ({ home: match.away, away: match.home })));
         const fullSeasonSchedule = [...firstHalfSchedule, ...secondHalfSchedule];
-
-        // --- FIM DA CORREÇÃO LÓGICA ---
         
         const calculateTeamOverall = (club) => {
             if (!club.plantel || !club.treinador) return 100;
             const plantelOverall = club.plantel.reduce((sum, p) => sum + p.overall, 0);
-            const treinadorOverall = club.treinador.overall;
-            const formacaoOverall = club.formacaoatualpontos || 5;
-            return plantelOverall + treinadorOverall + formacaoOverall;
+            return plantelOverall + (club.treinador.overall || 0) + (club.formacaoatualpontos || 5);
         };
         const calculateTeamChemistry = (club) => {
             if (!club.treinador || !club.estadio) return 50;
-            const treinadorQuimica = club.treinador.quimica;
-            const estadioAmbiente = club.estadio.ambiente || 15;
-            return treinadorQuimica + estadioAmbiente;
+            return (club.treinador.quimica || 0) + (club.estadio.ambiente || 15);
         };
         const generateScore = (winnerProbability) => {
             let homeScore = 0, awayScore = 0;
@@ -397,12 +420,92 @@ exports.simulateWeeklyMatches = functions.pubsub.schedule('every monday 01:00')
             }
         }
         
-        await endlessConfigRef.update({
+        // Atualiza a configuração para marcar a semana como simulada
+        batch.update(endlessConfigRef, {
             ultimaSemanaSimulada: semanaAtual,
             lastSimulationMonth: now.getMonth()
         });
+        
         await batch.commit();
 
-        console.log(`Simulação da semana ${semanaAtual} (v6) para a temporada ${seasonIdentifier} concluída.`);
+        console.log(`Simulação da semana ${semanaAtual} (v7) para a temporada ${seasonIdentifier} concluída.`);
         return null;
     });
+
+    // =====================================================================
+//          NOVA FUNÇÃO: claimEndlessSeasonWinnings
+// =====================================================================
+exports.claimEndlessSeasonWinnings = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "O utilizador deve estar autenticado.");
+    }
+
+    const userId = context.auth.uid;
+    const now = new Date();
+    const dayOfMonth = now.getDate();
+    const currentWeek = Math.floor((dayOfMonth - 1) / 7) + 1;
+
+    // Medida de segurança: Apenas permite o resgate na 4ª semana do mês.
+    if (currentWeek !== 4) {
+        throw new functions.https.HttpsError("failed-precondition", "Os prémios só podem ser resgatados na última semana da temporada.");
+    }
+
+    try {
+        const userClubRef = db.doc(`endlessclubes/${userId}`);
+        const userCofreRef = db.doc(`users/${userId}/cofre/geral`); // Caminho para o "cofre" do utilizador
+
+        return await db.runTransaction(async (transaction) => {
+            const [clubDoc, cofreDoc] = await transaction.getAll(userClubRef, userCofreRef);
+
+            if (!clubDoc.exists) {
+                throw new functions.https.HttpsError("not-found", "O seu clube não foi encontrado.");
+            }
+
+            const clubData = clubDoc.data();
+
+            // Verifica se o prémio desta temporada já foi reclamado.
+            if (clubData.winningsClaimed) {
+                throw new functions.https.HttpsError("failed-precondition", "Já resgatou o prémio desta temporada.");
+            }
+            
+            // Verifica se o utilizador simulou a última semana (condição para ser elegível)
+            const globalConfigSnap = await db.doc('paineis/configuracoes_gerais').get();
+            const seasonIdentifier = globalConfigSnap.data().temporadaAtual;
+            const lastViewed = clubData.lastWeekViewed;
+
+            const userHasSimulatedWeek4 = lastViewed && lastViewed.season === seasonIdentifier && lastViewed.week === 4;
+            if (!userHasSimulatedWeek4) {
+                 throw new functions.https.HttpsError("failed-precondition", "Deve primeiro simular os jogos da 4ª semana para se tornar elegível para o prémio.");
+            }
+
+            // Calcula a recompensa. Math.floor para garantir um número inteiro.
+            const totalPoints = clubData.pontos || 0;
+            const rewardAmount = Math.floor(totalPoints / 2);
+
+            if (rewardAmount <= 0) {
+                throw new functions.https.HttpsError("failed-precondition", "Não tem pontos suficientes para resgatar um prémio.");
+            }
+
+            // Lê o saldo atual de endlessgCoins, tratando o caso de não existir.
+            const cofreData = cofreDoc.exists() ? cofreDoc.data() : {};
+            const currentEndlessGCoins = cofreData.endlessgCoins || 0;
+            const newEndlessGCoins = currentEndlessGCoins + rewardAmount;
+
+            // Atualiza o cofre do utilizador.
+            transaction.set(userCofreRef, { endlessgCoins: newEndlessGCoins }, { merge: true });
+            
+            // Marca que o prémio foi reclamado para evitar duplicação.
+            transaction.update(userClubRef, { winningsClaimed: true });
+            
+            return { success: true, message: `Recebeu ${rewardAmount} mini-gcoins!` };
+        });
+
+    } catch (error) {
+        console.error("ERRO FINAL NA FUNÇÃO claimEndlessSeasonWinnings:", error);
+        if (error instanceof functions.https.HttpsError) {
+            throw error;
+        } else {
+            throw new functions.https.HttpsError("internal", "Ocorreu um erro interno ao processar o seu resgate.");
+        }
+    }
+});
