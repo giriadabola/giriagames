@@ -103,6 +103,41 @@
         #timeline-container .day-actions { padding: 10px 15px; border-top: 1px solid #ddd; display: none; }
         #timeline-container .action-entry { padding: 5px 0; border-bottom: 1px solid #eee; }
         #timeline-container .action-entry:last-child { border-bottom: none; }
+        #permissions-button { background-color: #28a745; }
+#permissions-button:hover { background-color: #218838; }
+
+.permission-toggle {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 5px;
+    border-bottom: 1px solid #eee;
+}
+.permission-toggle:last-child { border-bottom: none; }
+.permission-toggle label { font-size: 16px; font-weight: 500; color: #333; text-transform: capitalize; }
+
+/* Estilos para o Toggle Switch */
+.switch { position: relative; display: inline-block; width: 60px; height: 34px; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.slider {
+    position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+    background-color: #ccc; transition: .4s; border-radius: 34px;
+}
+.slider:before {
+    position: absolute; content: ""; height: 26px; width: 26px; left: 4px; bottom: 4px;
+    background-color: white; transition: .4s; border-radius: 50%;
+}
+input:checked + .slider { background-color: #28a745; }
+input:checked + .slider:before { transform: translateX(26px); }
+
+/* Reutiliza o estilo do botão de recalcular para o de guardar */
+.recalculate-button {
+    padding: 10px 20px; border: none; color: white; border-radius: 5px; cursor: pointer;
+    font-weight: bold; font-size: 15px; transition: background-color 0.3s ease;
+    background-color: #007bff;
+}
+.recalculate-button:hover { background-color: #0056b3; }
+.recalculate-button:disabled { background-color: #cccccc; cursor: not-allowed; }
     </style>
 </head>
 <body>
@@ -148,6 +183,7 @@
         <div class="popup-content">
             <span class="close-button">&times;</span>
             <div class="popup-header-buttons">
+                <button id="permissions-button" title="Gerir permissões de acesso do utilizador.">Permissões</button>
                 <button id="timeline-button" title="Ver o registo de atividade do utilizador.">Timeline</button>
                 <button id="recalculate-button" title="Recalcula o saldo GCoins do utilizador com base em todos os seus movimentos da temporada.">Recalcular</button>
             </div>
@@ -166,13 +202,28 @@
         </div>
     </div>
 
-    <!-- NOVO POPUP DA TIMELINE -->
+    <!-- POPUP DA TIMELINE -->
     <div id="timeline-popup" class="popup-overlay">
         <div class="popup-content">
             <span class="close-button">&times;</span>
             <h2 id="timeline-popup-title" style="margin-bottom: 20px;">Timeline de Atividade</h2>
             <div id="timeline-container" class="popup-table-container">
                 <!-- Conteúdo da timeline será gerado dinamicamente aqui -->
+            </div>
+        </div>
+    </div>
+
+    <!-- NOVO POPUP DE PERMISSÕES -->
+    <div id="permissions-popup" class="popup-overlay">
+        <div class="popup-content">
+            <span class="close-button">&times;</span>
+            <h2 id="permissions-popup-title" style="margin-bottom: 20px;">Permissões</h2>
+            <div id="permissions-form-container">
+                <!-- Os toggles de permissão serão gerados aqui pelo JavaScript -->
+            </div>
+            <div style="text-align: center; margin-top: 25px;">
+                <button id="save-permissions-btn" class="recalculate-button">Guardar Alterações</button>
+                <p id="permissions-status" style="margin-top: 10px; height: 1em; font-weight: bold;"></p>
             </div>
         </div>
     </div>
@@ -268,132 +319,151 @@
         return null;
     }
 
-    async function fetchAndShowMovements(userId, userName) {
-        const popup = document.getElementById('movements-popup');
-        const popupTitle = document.getElementById('popup-title');
-        const tableBody = document.getElementById('movements-table-body');
-        const recalculateBtn = document.getElementById('recalculate-button');
-        const timelineBtn = document.getElementById('timeline-button');
-        const movementsTable = document.getElementById('movements-detail-table');
+async function fetchAndShowMovements(userId, userName) {
+    const popup = document.getElementById('movements-popup');
+    const popupTitle = document.getElementById('popup-title');
+    const tableBody = document.getElementById('movements-table-body');
+    const recalculateBtn = document.getElementById('recalculate-button');
+    const timelineBtn = document.getElementById('timeline-button');
+    const permissionsBtn = document.getElementById('permissions-button'); // NOVO
+    const movementsTable = document.getElementById('movements-detail-table');
 
-        recalculateBtn.setAttribute('data-userid', userId);
-        timelineBtn.setAttribute('data-userid', userId);
-        timelineBtn.setAttribute('data-username', userName);
+    // Configura os 3 botões com os dados do utilizador selecionado
+    recalculateBtn.setAttribute('data-userid', userId);
+    timelineBtn.setAttribute('data-userid', userId);
+    timelineBtn.setAttribute('data-username', userName);
+    permissionsBtn.setAttribute('data-userid', userId); // NOVO
+    permissionsBtn.setAttribute('data-username', userName); // NOVO
 
-        popupTitle.textContent = `Movimentações de ${userName}`;
-        tableBody.innerHTML = '<tr><td colspan="7" style="text-align: center;">A carregar...</td></tr>';
-        
-        const oldTfoot = movementsTable.querySelector('tfoot');
-        if (oldTfoot) { oldTfoot.remove(); }
-        
-        popup.style.display = 'flex';
-
-        try {
-            let totalPreco = 0, totalValorReal = 0, totalValorAPagar = 0;
-            const season = await fetchCurrentSeason();
-            const q = query(collection(db, "movimentos"), where("userId", "==", userId), where("temporada", "==", season), orderBy("movimentoData", "desc"));
-            const querySnapshot = await getDocs(q);
-
-            if (querySnapshot.empty) {
-                tableBody.innerHTML = `<tr><td colspan="7" style="text-align: center;">Nenhuma movimentação para a temporada ${season}.</td></tr>`;
-                return;
-            }
-
-            tableBody.innerHTML = '';
-            querySnapshot.forEach(doc => {
-                const data = doc.data();
-                const row = document.createElement('tr');
-                row.innerHTML = `<td>${formatMovementDate(data.movimentoData)}</td><td>${data.estado || 'N/A'}</td><td>${data.tipo || 'N/A'}</td><td>${data.preco || 0}</td><td>${data.valorreal || 0}</td><td>${data.descricao || ''}</td><td>${data.valorTotalAPagar || 0}</td>`;
-                tableBody.appendChild(row);
-                totalPreco += parseFloat(data.preco) || 0;
-                if (data.estado !== 'WhoWins Paid') totalValorReal += parseFloat(data.valorreal) || 0;
-                totalValorAPagar += parseFloat(data.valorTotalAPagar) || 0;
-            });
-
-            const tfoot = document.createElement('tfoot');
-            tfoot.innerHTML = `<tr style="background-color: #f2f2f2; font-weight: bold; border-top: 2px solid #ccc;"><td colspan="3" style="text-align: right;">TOTAIS:</td><td>${totalPreco.toFixed(2)}</td><td>${totalValorReal.toFixed(2)}</td><td></td><td>${totalValorAPagar.toFixed(2)}</td></tr>`;
-            movementsTable.appendChild(tfoot);
-
-        } catch (error) {
-            console.error("Erro ao buscar movimentações:", error);
-            tableBody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: red;">Erro ao carregar.</td></tr>';
-        }
-    }
+    popupTitle.textContent = `Movimentações de ${userName}`;
+    tableBody.innerHTML = '<tr><td colspan="7" style="text-align: center;">A carregar...</td></tr>';
     
-    async function fetchAndShowTimeline(userId, userName) {
-        const popup = document.getElementById('timeline-popup');
-        const title = document.getElementById('timeline-popup-title');
-        const container = document.getElementById('timeline-container');
+    const oldTfoot = movementsTable.querySelector('tfoot');
+    if (oldTfoot) { oldTfoot.remove(); }
+    
+    popup.style.display = 'flex';
 
-        title.textContent = `Timeline de Atividade: ${userName}`;
-        container.innerHTML = '<p style="text-align: center;">A carregar timeline...</p>';
-        popup.style.display = 'flex';
+    try {
+        let totalPreco = 0, totalValorReal = 0, totalValorAPagar = 0;
+        const season = await fetchCurrentSeason();
+        const q = query(collection(db, "movimentos"), where("userId", "==", userId), where("temporada", "==", season), orderBy("movimentoData", "desc"));
+        const querySnapshot = await getDocs(q);
 
-        try {
-            const q = query(collection(db, "eye"), where("userId", "==", userId));
-            const querySnapshot = await getDocs(q);
-
-            if (querySnapshot.empty) {
-                container.innerHTML = '<p style="text-align: center;">Nenhuma atividade registada para este utilizador.</p>';
-                return;
-            }
-
-            const actions = [];
-            querySnapshot.forEach(doc => {
-                const data = doc.data();
-                const dateObj = parseDateFromFirestore(data.dataacao); // USA A NOVA FUNÇÃO CORRIGIDA
-                if (dateObj) { // Adiciona apenas se a data for válida
-                    actions.push({ id: doc.id, ...data, dateObj });
-                }
-            });
-            
-            actions.sort((a, b) => b.dateObj - a.dateObj);
-
-            const groupedByDay = actions.reduce((acc, action) => {
-                const dayKey = action.dateObj.toLocaleDateString('pt-PT', { year: 'numeric', month: '2-digit', day: '2-digit' });
-                if (!acc[dayKey]) acc[dayKey] = [];
-                acc[dayKey].push(action);
-                return acc;
-            }, {});
-
-            container.innerHTML = '';
-            for (const day in groupedByDay) {
-                const dayActions = groupedByDay[day];
-                const dateForId = dayActions[0].dateObj.toISOString().split('T')[0];
-                
-                const dayGroup = document.createElement('div');
-                dayGroup.className = 'day-group';
-                dayGroup.innerHTML = `
-                    <div class="day-header">
-                        <span>${day}</span>
-                        <i class="fas fa-trash delete-day-btn" title="Eliminar todos os registos deste dia" data-date-start="${new Date(`${dateForId}T00:00:00.000Z`).getTime()}" data-date-end="${new Date(`${dateForId}T23:59:59.999Z`).getTime()}" data-userid="${userId}" data-day-key="${day}"></i>
-                    </div>
-                    <div class="day-actions">
-                        ${dayActions.map(action => {
-                            const time = action.dateObj.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
-                            return `<div class="action-entry">${time} - ${action.acao}</div>`;
-                        }).join('')}
-                    </div>
-                `;
-                container.appendChild(dayGroup);
-            }
-            
-            container.querySelectorAll('.day-header').forEach(header => {
-                header.addEventListener('click', (e) => {
-                    if (e.target.classList.contains('delete-day-btn')) return;
-                    const content = header.nextElementSibling;
-                    content.style.display = content.style.display === 'block' ? 'none' : 'block';
-                });
-            });
-            container.querySelectorAll('.delete-day-btn').forEach(btn => {
-                btn.addEventListener('click', handleDeleteDayActions);
-            });
-
-        } catch (error) {
-            console.error("Erro ao buscar timeline:", error);
-            container.innerHTML = `<p style="text-align: center; color: red;">Ocorreu um erro ao carregar a timeline: ${error.message}</p>`;
+        if (querySnapshot.empty) {
+            tableBody.innerHTML = `<tr><td colspan="7" style="text-align: center;">Nenhuma movimentação para a temporada ${season}.</td></tr>`;
+            return;
         }
+
+        tableBody.innerHTML = '';
+        querySnapshot.forEach(doc => {
+            const data = doc.data();
+            const row = document.createElement('tr');
+            row.innerHTML = `<td>${formatMovementDate(data.movimentoData)}</td><td>${data.estado || 'N/A'}</td><td>${data.tipo || 'N/A'}</td><td>${data.preco || 0}</td><td>${data.valorreal || 0}</td><td>${data.descricao || ''}</td><td>${data.valorTotalAPagar || 0}</td>`;
+            tableBody.appendChild(row);
+            totalPreco += parseFloat(data.preco) || 0;
+            if (data.estado !== 'WhoWins Paid') totalValorReal += parseFloat(data.valorreal) || 0;
+            totalValorAPagar += parseFloat(data.valorTotalAPagar) || 0;
+        });
+
+        const tfoot = document.createElement('tfoot');
+        tfoot.innerHTML = `<tr style="background-color: #f2f2f2; font-weight: bold; border-top: 2px solid #ccc;"><td colspan="3" style="text-align: right;">TOTAIS:</td><td>${totalPreco.toFixed(2)}</td><td>${totalValorReal.toFixed(2)}</td><td></td><td>${totalValorAPagar.toFixed(2)}</td></tr>`;
+        movementsTable.appendChild(tfoot);
+
+    } catch (error) {
+        console.error("Erro ao buscar movimentações:", error);
+        tableBody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: red;">Erro ao carregar.</td></tr>';
     }
+}
+
+
+
+async function openPermissionsPopup(userId, userName) {
+    const popup = document.getElementById('permissions-popup');
+    const title = document.getElementById('permissions-popup-title');
+    const container = document.getElementById('permissions-form-container');
+    const saveBtn = document.getElementById('save-permissions-btn');
+    const statusEl = document.getElementById('permissions-status');
+
+    title.textContent = `Permissões: ${userName}`;
+    container.innerHTML = '<p style="text-align:center;">A carregar permissões atuais...</p>';
+    statusEl.textContent = '';
+    saveBtn.disabled = true;
+    saveBtn.setAttribute('data-userid', userId); // Guarda o ID do utilizador no botão
+    popup.style.display = 'flex';
+
+    try {
+        const userRef = doc(db, "users", userId);
+        const userSnap = await getDoc(userRef);
+
+        if (!userSnap.exists()) {
+            container.innerHTML = '<p style="text-align:center; color:red;">Utilizador não encontrado.</p>';
+            return;
+        }
+
+        const userData = userSnap.data();
+        const currentPermissions = userData.permissoes || {}; // Garante que é um objeto, mesmo que não exista
+        const permissionsList = ['empire', 'whowins', 'myths', 'endless', 'mundial'];
+
+        let formHTML = '';
+        permissionsList.forEach(perm => {
+            const isEnabled = currentPermissions[perm] === 'yes';
+            formHTML += `
+                <div class="permission-toggle">
+                    <label for="perm-${perm}">${perm}</label>
+                    <label class="switch">
+                        <input type="checkbox" id="perm-${perm}" data-permission-key="${perm}" ${isEnabled ? 'checked' : ''}>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            `;
+        });
+        
+        container.innerHTML = formHTML;
+        saveBtn.disabled = false;
+
+    } catch (error) {
+        console.error("Erro ao carregar permissões:", error);
+        container.innerHTML = `<p style="text-align:center; color:red;">Erro ao carregar: ${error.message}</p>`;
+    }
+}
+
+async function handleSavePermissions(event) {
+    const saveBtn = event.target;
+    const userId = saveBtn.dataset.userid;
+    const statusEl = document.getElementById('permissions-status');
+    
+    if (!userId) return;
+
+    saveBtn.disabled = true;
+    statusEl.textContent = 'A guardar...';
+    statusEl.style.color = '#007bff';
+
+    try {
+        const newPermissionsMap = {};
+        const container = document.getElementById('permissions-form-container');
+        container.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+            const key = checkbox.dataset.permissionKey;
+            newPermissionsMap[key] = checkbox.checked ? 'yes' : 'no';
+        });
+
+        const userRef = doc(db, "users", userId);
+        await updateDoc(userRef, {
+            permissoes: newPermissionsMap
+        });
+
+        statusEl.textContent = 'Permissões guardadas com sucesso!';
+        statusEl.style.color = '#28a745';
+
+    } catch (error) {
+        console.error("Erro ao guardar permissões:", error);
+        statusEl.textContent = 'Erro ao guardar. Tente novamente.';
+        statusEl.style.color = '#dc3545';
+    } finally {
+        setTimeout(() => {
+            saveBtn.disabled = false;
+        }, 1500);
+    }
+}
 
     async function handleDeleteDayActions(event) {
         const userId = event.target.dataset.userid;
@@ -479,8 +549,27 @@
     window.addEventListener('click', () => { if (!filterPopup.classList.contains('filter-hidden')) filterPopup.classList.add('filter-hidden'); });
     filterPopup.addEventListener('click', (event) => { event.stopPropagation(); });
     document.querySelectorAll('input[name="table_filter"]').forEach(radio => { radio.addEventListener('change', (event) => { currentFilter = event.target.value; applyFiltersAndSort(); filterPopup.classList.add('filter-hidden'); }); });
+document.getElementById('permissions-button').addEventListener('click', (event) => {
+    const userId = event.target.dataset.userid;
+    const userName = event.target.dataset.username;
+    if (userId) {
+        openPermissionsPopup(userId, userName);
+    }
+});
+
+// Listeners para o popup de permissões
+const permissionsPopup = document.getElementById('permissions-popup');
+permissionsPopup.querySelector('.close-button').addEventListener('click', () => permissionsPopup.style.display = 'none');
+permissionsPopup.addEventListener('click', (event) => { if (event.target === permissionsPopup) permissionsPopup.style.display = 'none'; });
+document.getElementById('save-permissions-btn').addEventListener('click', handleSavePermissions);
+
+
 
     onAuthStateChanged(auth, async (user) => { document.body.style.display = 'flex'; if (user) { const userDoc = await getDoc(doc(db, "users", user.uid)); if (userDoc.exists() && userDoc.data().estatuto === 'ruler') { initializeRealtimeListeners(); } else { window.location.replace('/acesso-negado.html'); } } else { statusMessage.textContent = 'É necessário fazer login para aceder a esta página.'; } });
+
+
+
+
 </script>
 </body>
 </html>
