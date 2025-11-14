@@ -568,9 +568,26 @@ async function loadAccessSettings() {
 async function loadMenuSettings() {
     return getDoc(doc(db, 'paineis', 'paineis menu')).then(d => d.exists() ? d.data() : {});
 }
-function checkPageAccess(userStatus, accessSettings) {
-    return (accessSettings['quemganha'] === 'on' || userStatus === 'ruler');
+function checkPageAccess(userInfo, accessSettings) {
+    // REGRA 1 (PRIORIDADE MÁXIMA): Acesso de Administrador ('ruler')
+    // Se o estatuto do utilizador for 'ruler', o acesso é imediato.
+    if (userInfo.estatuto === 'ruler') {
+        return true;
+    }
+
+    // A partir daqui, as regras aplicam-se apenas a utilizadores que NÃO são 'ruler'.
+    // Ambas as condições seguintes devem ser verdadeiras.
+
+    // Condição A: O "interruptor" global no painel de controlo deve estar ligado.
+    const globalAccessOn = accessSettings['quemganha'] === 'on';
+
+    // Condição B (NOVA REGRA): O utilizador deve ter a permissão específica no seu perfil.
+    const hasIndividualPermission = userInfo.whowins === 'yes';
+
+    // A função retorna 'true' apenas se a Condição A E a Condição B forem verdadeiras.
+    return globalAccessOn && hasIndividualPermission;
 }
+
 async function getUserStatus(userId) {
     const userDoc = await getDoc(doc(db, 'users', userId));
     if (userDoc.exists() && userDoc.data().aceite === "Yes") return userDoc.data();
@@ -593,7 +610,7 @@ onAuthStateChanged(auth, async (user) => {
             return;
         }
         const accessSettings = await loadAccessSettings();
-        if (!checkPageAccess(userInfo.estatuto, accessSettings)) {
+        if (!checkPageAccess(userInfo, accessSettings)) { 
             window.location.href = '404.html';
             return;
         }
