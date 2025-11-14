@@ -707,16 +707,16 @@ header h1 { font-size: 2.5em; color: var(--accent-color); text-align: center; ma
         </div>
     </div>
 
-    <div id="monthly-renewal-popup" class="popup-overlay">
-        <div class="popup-content" style="max-width: 500px; text-align: center;">
-            <h2 style="color: var(--accent-color);">Atualização Mensal do Plantel</h2>
-            <p style="margin: 20px 0;">Um novo mês começou! Pode manter o seu plantel atual para que os jogadores evoluam, ou pode recrutar um plantel completamente novo. O que deseja fazer?</p>
-            <div style="display: flex; justify-content: space-around; gap: 15px;">
-                <button id="keep-squad-btn" class="btn-create" style="flex: 1;">Manter e Evoluir</button>
-                <button id="renew-squad-btn" class="btn-simulate" style="flex: 1;">Recrutar Novo Plantel</button>
-            </div>
+   <div id="monthly-renewal-popup" class="popup-overlay">
+    <div class="popup-content" style="max-width: 550px; text-align: center;">
+        <h2 style="color: var(--accent-color);">Fim da Temporada</h2>
+        <p style="margin: 20px 0;">A temporada terminou! Deseja continuar com a sua equipa e evoluí-la, ou prefere fazer alterações estruturais para a nova época?</p>
+        <div style="display: flex; justify-content: space-around; gap: 15px;">
+            <button id="keep-squad-btn" class="btn-create" style="flex: 1;">Manter e Evoluir</button>
+            <button id="change-squad-btn" class="btn-simulate" style="flex: 1;">Fazer Alterações</button>
         </div>
     </div>
+</div>
 
     <div id="initial-squad-popup" class="popup-overlay">
         <div class="popup-content" style="max-width: 95%;">
@@ -1278,53 +1278,49 @@ if (notificationPopup) {
 
 // SUBSTITUA A SUA FUNÇÃO INTEIRA POR ESTA
 async function showDashboard(userId, clubData) {
-    // Guarda os dados do clube atual numa variável global para fácil acesso por outras funções
+    // Guarda os dados do clube numa variável global para acesso fácil por outras funções
     currentUserClubData = clubData;
 
-    // Se o clube não tiver plantel, significa que é um clube recém-criado.
-    if (!clubData.plantel || clubData.plantel.length === 0) {
-        showInitialSquadSelection(userId);
-        loadingScreen.style.display = 'none';
-        return;
+    // --- GESTÃO DE ESTADO DE RENOVAÇÃO (NOVA LÓGICA DE ALTA PRIORIDADE) ---
+    // VERIFICAÇÃO Nº 1: O jogador está obrigado a fazer alterações no clube?
+    // Se este estado estiver ativo, a função abre a loja forçada e pára aqui.
+    if (clubData.renewalState === 'pendingChoice') {
+        loadingScreen.style.display = 'none'; // Esconde o carregamento
+        await openRenewalShop(); // Abre a loja em modo forçado
+        return; // Interrompe a execução normal da função para não mostrar o dashboard
     }
 
+    // Se a verificação acima passar, o jogo continua a carregar o dashboard normal.
+    
     // Preenche os elementos básicos da UI com os dados do clube
     document.getElementById('club-name-header').textContent = clubData.nome;
     shopIcon.style.display = 'flex';
     
-    // Renderiza os widgets individuais com os dados do clube
+    // Renderiza os widgets individuais
     renderSquadWidget(clubData.plantel);
     renderCoachWidget(clubData.treinador);
     renderStadiumWidget(clubData.estadio);
     
-    // --- INÍCIO DA CORREÇÃO ---
-    // ESTAS LINHAS ESTAVAM EM FALTA
-    const lastViewed = clubData.lastWeekViewed;
-    const dayOfMonth = new Date().getDate();
-    const semanaAtual = Math.floor((dayOfMonth - 1) / 7) + 1;
-
-    // Lê a temporada do painel GLOBAL 'configuracoes_gerais'
+    // Obtém a temporada atual para carregar os dados corretos
     const globalConfigSnap = await getDoc(doc(db, 'paineis', 'configuracoes_gerais'));
     const temporada = globalConfigSnap.exists() ? globalConfigSnap.data().temporadaAtual : 'default_season';
     
-    const userHasAlreadyViewed = lastViewed && lastViewed.season === temporada && lastViewed.week === semanaAtual;
-
-    // Passa a temporada e a flag como argumento para as funções que delas precisam
+    // Configura os sistemas restantes do dashboard
     await setupWinningsSystem(userId, clubData, temporada);
-    await assembleLeague(userId, clubData, temporada, userHasAlreadyViewed); 
+    // Carrega a tabela da liga (a variável global 'leagueClubs' será preenchida aqui)
+    await assembleLeague(userId, clubData, temporada, true); 
     await setupGrandeJornadaWidget(temporada, 1, userId);
-    // --- FIM DA CORREÇÃO ---
-    
     setupInteractivity(userId, temporada);
     
-    // Lógica de renovação mensal (o resto da função permanece igual)
+    // --- LÓGICA DE DECISÃO DE FIM DE TEMPORADA ---
+    // VERIFICAÇÃO Nº 2: É o início de um novo mês? Se sim, mostra o pop-up de decisão.
     const now = new Date();
     const lastUpdate = clubData.plantelLastUpdated ? clubData.plantelLastUpdated.toDate() : new Date(0); 
     if (now.getMonth() > lastUpdate.getMonth() || now.getFullYear() > lastUpdate.getFullYear()) {
         const renewalPopup = document.getElementById('monthly-renewal-popup');
         renewalPopup.style.display = 'flex';
 
-        // Lógica do botão "Manter e Evoluir"
+        // LÓGICA DO BOTÃO "MANTER E EVOLUIR" (Com a condição de classificação)
         document.getElementById('keep-squad-btn').onclick = async () => {
             const btn = document.getElementById('keep-squad-btn');
             btn.disabled = true;
@@ -1333,40 +1329,51 @@ async function showDashboard(userId, clubData) {
             try {
                 let updatedSquad = JSON.parse(JSON.stringify(currentUserClubData.plantel));
                 let updatedCoach = JSON.parse(JSON.stringify(currentUserClubData.treinador));
-                updatedCoach.quimica += Math.floor(Math.random() * 3) + 2;
-                updatedSquad.sort(() => 0.5 - Math.random());
                 
-                updatedSquad.forEach((player, index) => {
-                    const change = Math.floor(Math.random() * 5) + 2;
-                    if (index < 4) {
-                        player.overall += change;
+                // Lógica de evolução do treinador baseada na classificação
+                const userRankIndex = leagueClubs.findIndex(club => club.id === userId);
+                const userPosition = userRankIndex !== -1 ? userRankIndex + 1 : 20;
+                const change = Math.floor(Math.random() * 3) + 2;
+                let coachEvolutionMessage = "";
+
+                if (userPosition <= 5) {
+                    updatedCoach.quimica += change;
+                    coachEvolutionMessage = `Parabéns pelo Top 5! A química do seu treinador aumentou em ${change} pontos!`;
+                } else {
+                    if (Math.random() < 0.5) {
+                        updatedCoach.quimica += change;
+                        coachEvolutionMessage = `Apesar de uma temporada difícil, o treinador conseguiu melhorar a sua química em ${change} pontos!`;
                     } else {
-                        if (Math.random() < 0.5) {
-                            player.overall -= change;
-                            player.overall = Math.max(10, player.overall);
-                        } else {
-                            player.overall += change;
-                        }
+                        updatedCoach.quimica -= change;
+                        updatedCoach.quimica = Math.max(10, updatedCoach.quimica); 
+                        coachEvolutionMessage = `Devido aos resultados, a química do treinador diminuiu em ${change} pontos.`;
+                    }
+                }
+                
+                // Lógica de evolução dos jogadores (inalterada)
+                updatedSquad.sort(() => 0.5 - Math.random());
+                updatedSquad.forEach((player, index) => {
+                    const playerChange = Math.floor(Math.random() * 5) + 2;
+                    if (index < 4) player.overall += playerChange;
+                    else {
+                        if (Math.random() < 0.5) player.overall = Math.max(10, player.overall - playerChange);
+                        else player.overall += playerChange;
                     }
                 });
                 
+                // Recalcula os totais e guarda no Firebase
                 const novoPlantelOverall = updatedSquad.reduce((sum, p) => sum + p.overall, 0);
                 const novoOverallTotal = novoPlantelOverall + updatedCoach.overall + currentUserClubData.formacaoatualpontos;
                 const novaQuimicaTotal = updatedCoach.quimica + currentUserClubData.estadio.ambiente;
                 const novaTemporadaReal = (currentUserClubData.numerorealtemporada || 1) + 1;
 
-              const clubRef = doc(db, 'endlessclubes', userId);
-await setDoc(clubRef, {
-    plantel: chosenSquad,
-    treinador: treinadorFinal,
-    estadio: estadioFinal,
-    plantelLastUpdated: Timestamp.now(),
-    overall: totalOverall,
-    quimica: totalQuimica,
-    numerorealtemporada: 1,
-    formacaoatualpontos: formacaoOverall
-}, { merge: true }); // A opção { merge: true } é a chave!
+                const clubRef = doc(db, 'endlessclubes', userId);
+                await setDoc(clubRef, {
+                    plantel: updatedSquad, treinador: updatedCoach, plantelLastUpdated: Timestamp.now(),
+                    overall: novoOverallTotal, quimica: novaQuimicaTotal, numerorealtemporada: novaTemporadaReal
+                }, { merge: true });
 
+                alert(coachEvolutionMessage);
                 alert("Equipa evoluída com sucesso para a nova temporada!");
                 location.reload();
 
@@ -1378,53 +1385,120 @@ await setDoc(clubRef, {
             }
         };
 
-        // Lógica do botão "Recrutar Novo Plantel"
-        document.getElementById('renew-squad-btn').onclick = async () => {
-            if (!confirm("Tem a certeza que deseja abandonar a sua equipa atual? Esta ação é irreversível e começará um clube do zero.")) {
+        // LÓGICA DO NOVO BOTÃO "FAZER ALTERAÇÕES"
+        document.getElementById('change-squad-btn').onclick = async () => {
+            const btn = document.getElementById('change-squad-btn');
+            btn.disabled = true;
+            btn.textContent = "A Preparar...";
+
+            if (!confirm("Esta opção irá levá-lo à loja, onde terá de adquirir um novo pack (jogadores, treinador ou estádio) para continuar. Tem a certeza?")) {
+                btn.disabled = false;
+                btn.textContent = "Fazer Alterações";
                 return;
             }
 
-            const btn = document.getElementById('renew-squad-btn');
-            btn.disabled = true;
-            btn.textContent = "A Arquivar...";
-
             try {
-                const userClubRef = doc(db, 'endlessclubes', userId);
-                const clubDataToArchive = (await getDoc(userClubRef)).data();
-                const backupRef = doc(db, 'box', userId);
-                await setDoc(backupRef, { ...clubDataToArchive, archivedAt: Timestamp.now() });
-                await deleteDoc(userClubRef);
+                // Define o estado de 'escolha pendente' no Firebase
+                const clubRef = doc(db, 'endlessclubes', userId);
+                await updateDoc(clubRef, { renewalState: 'pendingChoice' });
                 
-                alert("O seu clube antigo foi arquivado. Bem-vindo de volta, é hora de fundar um novo clube!");
+                // Recarrega a página. A verificação no início desta função irá apanhar o novo estado.
                 location.reload();
 
             } catch (error) {
-                console.error("Erro ao recrutar novo plantel:", error);
+                console.error("Erro ao definir o estado de renovação:", error);
                 alert("Ocorreu um erro. Tente novamente.");
                 btn.disabled = false;
-                btn.textContent = "Recrutar Novo Plantel";
+                btn.textContent = "Fazer Alterações";
             }
         };
+    } else {
+        // Se não for altura de renovação, simplesmente esconde o ecrã de carregamento e mostra o dashboard
+        loadingScreen.style.display = 'none';
+        dashboardContainer.style.display = 'block';
     }
+}
 
-    // Após toda a lógica, esconde o ecrã de carregamento e mostra o dashboard
-    loadingScreen.style.display = 'none';
-    dashboardContainer.style.display = 'block';
 
-    // Lógica para fazer scroll automático da tabela de classificação até à equipa do utilizador
-    requestAnimationFrame(() => {
-        const leagueWidgetContent = document.querySelector('.widget-card[data-widget="league"] .widget-content');
-        const userRowInWidget = leagueWidgetContent?.querySelector('.user-team-row');
-        if (leagueWidgetContent && userRowInWidget) {
-            const containerHeight = leagueWidgetContent.clientHeight;
-            const rowHeight = userRowInWidget.clientHeight;
-            const rowTopPosition = userRowInWidget.offsetTop;
-            const newScrollPosition = rowTopPosition - (containerHeight / 2) + (rowHeight / 2);
-            leagueWidgetContent.scrollTop = newScrollPosition;
-        }
+
+
+async function openRenewalShop() {
+    const shopPopup = document.getElementById('shop-popup');
+    
+    // Modifica o pop-up para o modo forçado
+    shopPopup.querySelector('.popup-close').style.display = 'none'; // Esconde o botão de fechar
+    shopPopup.onclick = null; // Remove o evento de fechar ao clicar fora
+    const title = shopPopup.querySelector('h2');
+    title.textContent = "Faça uma Alteração Estrutural";
+    title.insertAdjacentHTML('afterend', '<p style="text-align:center;">Para continuar na nova temporada, deve recrutar um novo pack de jogadores, um novo treinador ou um novo estádio.</p>');
+
+    shopPopup.style.display = 'flex';
+
+    // Substitui os eventos de clique dos packs
+    shopPopup.querySelectorAll('.pack-option').forEach(pack => {
+        pack.onclick = () => handleRenewalPurchase(pack.dataset.pack);
     });
 }
 
+// NOVA FUNÇÃO para processar a substituição e penalização
+async function handleRenewalPurchase(packType) {
+    if (!confirm(`Tem a certeza que deseja substituir os seus ${packType} atuais? Esta ação aplicará as alterações e penalizações imediatamente.`)) {
+        return;
+    }
+
+    const shopPopup = document.getElementById('shop-popup');
+    shopPopup.innerHTML = `<div class="popup-content" style="text-align: center;"><div class="loading-spinner"></div><h3 style="margin-top:20px;">A aplicar alterações...</h3></div>`;
+
+    try {
+        const userId = auth.currentUser.uid;
+        const clubRef = doc(db, 'endlessclubes', userId);
+        const clubData = currentUserClubData; // Usa os dados já carregados
+        let updates = {};
+        let finalMessage = "";
+
+        if (packType === 'players') {
+            const newPlayers = await generateUniquePlayers();
+            updates.plantel = newPlayers;
+            
+            // Recalcula o overall com os novos jogadores e aplica a penalização
+            const newPlantelOverall = newPlayers.reduce((sum, p) => sum + p.overall, 0);
+            const coachOverall = clubData.treinador.overall || 0;
+            const formationPoints = clubData.formacaoatualpontos || 0;
+            // Penalização de -6 no overall
+            updates.overall = newPlantelOverall + coachOverall + formationPoints - 6; 
+            finalMessage = "Novo plantel recrutado! Foi aplicada uma penalização de -6 ao overall total da equipa devido à reestruturação.";
+        } 
+        else if (packType === 'coach') {
+            const newCoach = await generateRandomCoach();
+            updates.treinador = newCoach;
+
+            // Recalcula a química com o novo treinador e aplica a penalização
+            const stadiumAmbience = clubData.estadio.ambiente || 0;
+             // Penalização de -5 na química
+            updates.quimica = newCoach.quimica + stadiumAmbience - 5;
+            finalMessage = "Novo treinador contratado! Foi aplicada uma penalização de -5 à química da equipa para refletir o período de adaptação.";
+        } 
+        else if (packType === 'stadium') {
+            const newStadiums = await generateUniqueStadiumOptions(1);
+            updates.estadio = { ...newStadiums[0], nivel: 1 }; // Reset para nível 1
+            finalMessage = "Novo estádio selecionado! Bem-vindo à sua nova casa.";
+        }
+
+        // Remove o estado de pendência e define a data de atualização
+        updates.renewalState = admin.firestore.FieldValue.delete();
+        updates.plantelLastUpdated = Timestamp.now();
+
+        await updateDoc(clubRef, updates);
+
+        alert(finalMessage);
+        location.reload();
+
+    } catch (error) {
+        console.error("Erro ao processar a compra de renovação:", error);
+        alert("Ocorreu um erro crítico. A página será recarregada.");
+        location.reload();
+    }
+}
 
 
 async function setupWinningsSystem(userId, clubData, seasonId) {
@@ -2309,21 +2383,10 @@ async function getFrozenLeagueTable(seasonId) {
         }
     });
 
-    shopIcon.addEventListener('click', () => shopPopup.style.display = 'flex');
-    shopPopup.querySelectorAll('.pack-option').forEach(pack => {
-        pack.addEventListener('click', () => {
-            if (pack.dataset.pack === 'players') {
-                if (currentUserClubData && currentUserClubData.plantel && currentUserClubData.plantel.length > 0) {
-                    alert("Não é permitido abrir novos packs de jogadores pois já tem um plantel ativo. Para recrutar uma nova equipa, aguarde pela renovação mensal no dia 1.");
-                } else {
-                    openPlayerPack();
-                }
-            } else {
-                alert(`Abrindo pack de ${pack.dataset.pack}... (a implementar)`);
-            }
-            shopPopup.style.display = 'none';
-        });
-    });
+shopIcon.addEventListener('click', () => {
+    // Em vez de abrir a loja, agora mostra uma notificação informativa.
+    showNotification("Mercado Fechado", "O mercado de alterações estruturais só abre no final da temporada, quando a opção 'Fazer Alterações' estiver disponível.");
+});
 
     document.getElementById('league-table-body').addEventListener('click', handleTeamRowClick);
 }
