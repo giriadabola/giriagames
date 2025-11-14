@@ -213,9 +213,8 @@ exports.simulateWeeklyMatches = functions.pubsub.schedule('every monday 01:00')
     .timeZone('Europe/Lisbon')
     .onRun(async (context) => {
         
-        console.log('v3: Iniciando simulação com configs divididas...');
+        console.log('v5: Iniciando simulação com estatísticas completas, incluindo jogos disputados...');
 
-        // MUDANÇA 1: Definir referências para AMBOS os documentos de configuração
         const globalConfigRef = db.doc('paineis/configuracoes_gerais');
         const endlessConfigRef = db.doc('paineis/endless_configuracoes');
 
@@ -229,12 +228,11 @@ exports.simulateWeeklyMatches = functions.pubsub.schedule('every monday 01:00')
             return null;
         }
 
-        // MUDANÇA 2: Ler dados de cada documento separadamente
         const globalConfigData = globalConfigSnap.data();
         const endlessConfigData = endlessConfigSnap.data();
 
-        const seasonIdentifier = globalConfigData.temporadaAtual; // <-- Vem do global
-        const JORNADAS_PER_SEASON = endlessConfigData.jornadasPorTemporada || 28; // <-- Vem do Endless
+        const seasonIdentifier = globalConfigData.temporadaAtual;
+        const JORNADAS_PER_SEASON = endlessConfigData.jornadasPorTemporada || 28;
 
         if (!seasonIdentifier) {
             console.error("'temporadaAtual' não encontrada em configuracoes_gerais.");
@@ -246,7 +244,6 @@ exports.simulateWeeklyMatches = functions.pubsub.schedule('every monday 01:00')
         const currentMonth = now.getMonth();
         const semanaAtual = Math.floor((dayOfMonth - 1) / 7) + 1;
 
-        // Lógica de verificação usa os dados do painel Endless
         const isNewMonth = currentMonth !== endlessConfigData.lastSimulationMonth;
         const lastSimulatedWeekForThisMonth = isNewMonth ? 0 : endlessConfigData.ultimaSemanaSimulada;
 
@@ -255,11 +252,9 @@ exports.simulateWeeklyMatches = functions.pubsub.schedule('every monday 01:00')
             return null;
         }
       
-
         if (isNewMonth) {
              console.log(`Novo mês detetado (${currentMonth}). A simular a semana ${semanaAtual}.`);
         }
-        // --- FIM DA LÓGICA DE VERIFICAÇÃO MELHORADA ---
 
         const clubsQuery = db.collection('endlessclubes').where("temporada", "==", seasonIdentifier);
         const clubsSnapshot = await clubsQuery.get();
@@ -319,7 +314,7 @@ exports.simulateWeeklyMatches = functions.pubsub.schedule('every monday 01:00')
 
         const currentJornadaInSeason = (semanaAtual - 1) * 7;
         const batch = db.batch();
-        const pointsUpdates = {};
+        const statsUpdates = {};
         
         for (let i = 0; i < 7; i++) {
             const jornadaNumber = currentJornadaInSeason + i + 1;
@@ -331,13 +326,33 @@ exports.simulateWeeklyMatches = functions.pubsub.schedule('every monday 01:00')
                 const awayTeam = teamsToSchedule.pop();
                 const result = simulateMatch(homeTeam, awayTeam);
 
+                if (!statsUpdates[homeTeam.id]) statsUpdates[homeTeam.id] = {};
+                if (!statsUpdates[awayTeam.id]) statsUpdates[awayTeam.id] = {};
+
+                // --- NOVO CAMPO ADICIONADO AQUI ---
+                // Incrementar jogos disputados para ambas as equipas, sempre.
+                statsUpdates[homeTeam.id].jogosDisputados = (statsUpdates[homeTeam.id].jogosDisputados || 0) + 1;
+                statsUpdates[awayTeam.id].jogosDisputados = (statsUpdates[awayTeam.id].jogosDisputados || 0) + 1;
+                // --- FIM DA ADIÇÃO ---
+
+                statsUpdates[homeTeam.id].golosMarcados = (statsUpdates[homeTeam.id].golosMarcados || 0) + result.homeScore;
+                statsUpdates[homeTeam.id].golosSofridos = (statsUpdates[homeTeam.id].golosSofridos || 0) + result.awayScore;
+                statsUpdates[awayTeam.id].golosMarcados = (statsUpdates[awayTeam.id].golosMarcados || 0) + result.awayScore;
+                statsUpdates[awayTeam.id].golosSofridos = (statsUpdates[awayTeam.id].golosSofridos || 0) + result.homeScore;
+
                 if (result.outcome === 'draw') {
-                    pointsUpdates[result.homeTeam.id] = (pointsUpdates[result.homeTeam.id] || 0) + 1;
-                    pointsUpdates[result.awayTeam.id] = (pointsUpdates[result.awayTeam.id] || 0) + 1;
+                    statsUpdates[homeTeam.id].pontos = (statsUpdates[homeTeam.id].pontos || 0) + 1;
+                    statsUpdates[homeTeam.id].empates = (statsUpdates[homeTeam.id].empates || 0) + 1;
+                    statsUpdates[awayTeam.id].pontos = (statsUpdates[awayTeam.id].pontos || 0) + 1;
+                    statsUpdates[awayTeam.id].empates = (statsUpdates[awayTeam.id].empates || 0) + 1;
                 } else if (result.outcome === 'home') {
-                    pointsUpdates[result.homeTeam.id] = (pointsUpdates[result.homeTeam.id] || 0) + 3;
-                } else {
-                    pointsUpdates[result.awayTeam.id] = (pointsUpdates[result.awayTeam.id] || 0) + 3;
+                    statsUpdates[homeTeam.id].pontos = (statsUpdates[homeTeam.id].pontos || 0) + 3;
+                    statsUpdates[homeTeam.id].vitorias = (statsUpdates[homeTeam.id].vitorias || 0) + 1;
+                    statsUpdates[awayTeam.id].derrotas = (statsUpdates[awayTeam.id].derrotas || 0) + 1;
+                } else { 
+                    statsUpdates[awayTeam.id].pontos = (statsUpdates[awayTeam.id].pontos || 0) + 3;
+                    statsUpdates[awayTeam.id].vitorias = (statsUpdates[awayTeam.id].vitorias || 0) + 1;
+                    statsUpdates[homeTeam.id].derrotas = (statsUpdates[homeTeam.id].derrotas || 0) + 1;
                 }
 
                 const gameLogRef = db.collection('endlessjogos').doc();
@@ -351,18 +366,28 @@ exports.simulateWeeklyMatches = functions.pubsub.schedule('every monday 01:00')
             }
         }
         
-        for (const clubId in pointsUpdates) {
-            if(pointsUpdates[clubId] > 0){
-                const clubRef = db.doc(`endlessclubes/${clubId}`);
-                batch.update(clubRef, { pontos: admin.firestore.FieldValue.increment(pointsUpdates[clubId]) });
+        for (const clubId in statsUpdates) {
+            const clubRef = db.doc(`endlessclubes/${clubId}`);
+            const updatesForThisClub = {};
+            
+            for (const stat in statsUpdates[clubId]) {
+                if (statsUpdates[clubId][stat] > 0) {
+                    updatesForThisClub[stat] = admin.firestore.FieldValue.increment(statsUpdates[clubId][stat]);
+                }
+            }
+            
+            if (Object.keys(updatesForThisClub).length > 0) {
+                batch.update(clubRef, updatesForThisClub);
             }
         }
         
-      await endlessConfigRef.update({
+        await endlessConfigRef.update({
             ultimaSemanaSimulada: semanaAtual,
             lastSimulationMonth: currentMonth
         });
 
-        console.log(`Simulação da semana ${semanaAtual} para a temporada ${seasonIdentifier} concluída.`);
+        await batch.commit();
+
+        console.log(`Simulação da semana ${semanaAtual} (v5) para a temporada ${seasonIdentifier} concluída.`);
         return null;
     });
