@@ -405,7 +405,63 @@ async function fetchAndShowTimeline(userId, userName) {
     }
 }
 
+async function fetchAndShowMovements(userId, userName) {
+    const popup = document.getElementById('movements-popup');
+    const popupTitle = document.getElementById('popup-title');
+    const tableBody = document.getElementById('movements-table-body');
+    const recalculateBtn = document.getElementById('recalculate-button');
+    const timelineBtn = document.getElementById('timeline-button');
+    const permissionsBtn = document.getElementById('permissions-button');
+    const movementsTable = document.getElementById('movements-detail-table');
 
+    // Configura os 3 botões com os dados do utilizador selecionado
+    recalculateBtn.setAttribute('data-userid', userId);
+    timelineBtn.setAttribute('data-userid', userId);
+    timelineBtn.setAttribute('data-username', userName);
+    permissionsBtn.setAttribute('data-userid', userId);
+    permissionsBtn.setAttribute('data-username', userName);
+
+    popupTitle.textContent = `Movimentações de ${userName}`;
+    tableBody.innerHTML = '<tr><td colspan="7" style="text-align: center;">A carregar...</td></tr>';
+    
+    // Remove o rodapé antigo se existir
+    const oldTfoot = movementsTable.querySelector('tfoot');
+    if (oldTfoot) { oldTfoot.remove(); }
+    
+    popup.style.display = 'flex';
+
+    try {
+        let totalPreco = 0, totalValorReal = 0, totalValorAPagar = 0;
+        const season = await fetchCurrentSeason();
+        const q = query(collection(db, "movimentos"), where("userId", "==", userId), where("temporada", "==", season), orderBy("movimentoData", "desc"));
+        const querySnapshot = await getDocs(q);
+
+        if (querySnapshot.empty) {
+            tableBody.innerHTML = `<tr><td colspan="7" style="text-align: center;">Nenhuma movimentação para a temporada ${season}.</td></tr>`;
+            return;
+        }
+
+        tableBody.innerHTML = '';
+        querySnapshot.forEach(doc => {
+            const data = doc.data();
+            const row = document.createElement('tr');
+            row.innerHTML = `<td>${formatMovementDate(data.movimentoData)}</td><td>${data.estado || 'N/A'}</td><td>${data.tipo || 'N/A'}</td><td>${data.preco || 0}</td><td>${data.valorreal || 0}</td><td>${data.descricao || ''}</td><td>${data.valorTotalAPagar || 0}</td>`;
+            tableBody.appendChild(row);
+            totalPreco += parseFloat(data.preco) || 0;
+            if (data.estado !== 'WhoWins Paid') totalValorReal += parseFloat(data.valorreal) || 0;
+            totalValorAPagar += parseFloat(data.valorTotalAPagar) || 0;
+        });
+
+        // Adiciona o novo rodapé com os totais
+        const tfoot = document.createElement('tfoot');
+        tfoot.innerHTML = `<tr style="background-color: #f2f2f2; font-weight: bold; border-top: 2px solid #ccc;"><td colspan="3" style="text-align: right;">TOTAIS:</td><td>${totalPreco.toFixed(2)}</td><td>${totalValorReal.toFixed(2)}</td><td></td><td>${totalValorAPagar.toFixed(2)}</td></tr>`;
+        movementsTable.appendChild(tfoot);
+
+    } catch (error) {
+        console.error("Erro ao buscar movimentações:", error);
+        tableBody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: red;">Erro ao carregar.</td></tr>';
+    }
+}
 
 async function openPermissionsPopup(userId, userName) {
     const popup = document.getElementById('permissions-popup');
