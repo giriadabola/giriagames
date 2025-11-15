@@ -252,9 +252,9 @@
     <!-- End Top Menu -->
 
     <div class="form-container">
-        <h1>Criar Novo Item do Império</h1>
+        <h1>Criar Novo Item do Manager</h1>
 
-        <form id="empire-item-form">
+        <form id="manager-item-form">
 
             <div class="form-group">
                 <label for="tipo">Tipo:</label>
@@ -481,17 +481,15 @@ async function loadAnexadoOptions() {
     anexadoSelect.innerHTML = anexadoSelect.options[0].outerHTML;
 
     try {
-        const itemsCol = collection(db, 'empireitens');
+        // ===== ALTERAÇÃO #1: Mudança do nome da coleção =====
+        const itemsCol = collection(db, 'manageritens');
         
-        // ALTERAÇÃO: Removemos os filtros 'where' para buscar TODOS os itens.
         const itemsSnapshot = await getDocs(itemsCol);
 
         const allItems = [];
         
-        // Processa TODOS os itens retornados
         itemsSnapshot.forEach((doc) => {
             const data = doc.data();
-            // Garante que o item tenha um nome e um tipo para exibição
             if (data.nome && data.tipo) { 
                 allItems.push({
                     id: doc.id,
@@ -501,18 +499,16 @@ async function loadAnexadoOptions() {
             }
         });
 
-        // Ordena a lista combinada por "Tipo: Nome"
         allItems.sort((a, b) => {
             const textA = `${a.tipo}: ${a.nome}`;
             const textB = `${b.tipo}: ${b.nome}`;
             return textA.localeCompare(textB);
         });
 
-        // Popula o menu suspenso com todos os itens
         allItems.forEach(item => {
             const option = document.createElement('option');
-            option.value = item.id; // O valor continua sendo o ID do documento
-            option.textContent = `${item.tipo}: ${item.nome}`; // O texto de exibição é "Tipo: Nome"
+            option.value = item.id;
+            option.textContent = `${item.tipo}: ${item.nome}`;
             anexadoSelect.appendChild(option);
         });
 
@@ -542,27 +538,22 @@ async function handleFormSubmit(event) {
     const tipo = form.tipo.value;
     const nome = form.nome.value;
     const imagem = form.imagem.value;
-    const anexadoItemId = form.anexadoItem.value; // Still gets the correct ID from option.value
+    const anexadoItemId = form.anexadoItem.value;
     const valorInput = form.valor.value;
     const nota = form.nota.value;
     const nivel = form.nivel.value;
     const noMercadoValue = form.noMercado.value;
     const ordemValue = form.ordem.value;
 
-    // Get selected competitions using Choices.js API
     const selectedCompeticoes = competicoesChoicesInstance ? competicoesChoicesInstance.getValue(true) : [];
-
-    // Get selected users using Choices.js API
     const selectedUsers = compradoPorChoicesInstance ? compradoPorChoicesInstance.getValue(true) : [];
 
-
-    // Prepare data object for Firestore
     const itemData = {
         tipo: tipo,
         nome: nome,
         noMercado: noMercadoValue === 'sim',
         ...(imagem && { imagem: imagem }),
-        ...(anexadoItemId && { anexadoItemId: anexadoItemId }), // Add anexadoItemId if selected (value is the ID)
+        ...(anexadoItemId && { anexadoItemId: anexadoItemId }),
         ...(valorInput && { valor: parseFloat(valorInput) || 0 }),
         ...(nota && { nota: nota }),
         ...(nivel && { nivel: nivel }),
@@ -573,23 +564,22 @@ async function handleFormSubmit(event) {
     };
 
     try {
-         const empireItensCol = collection(db, 'empireitens');
-         const docRef = await addDoc(empireItensCol, itemData);
+         // ===== ALTERAÇÃO #2: Mudança do nome da coleção para salvar =====
+         const managerItensCol = collection(db, 'manageritens');
+         const docRef = await addDoc(managerItensCol, itemData);
          console.log("Item criado com ID:", docRef.id);
-         alert('Item do Império criado com sucesso!');
+         alert('Item do Manager criado com sucesso!');
 
-         // Reset form
          form.reset();
 
-         // Reset Choices.js selections
          if (competicoesChoicesInstance) {
             competicoesChoicesInstance.setChoiceByValue([]);
          }
          if (compradoPorChoicesInstance) {
             compradoPorChoicesInstance.setChoiceByValue([]);
          }
-         // Explicitly reset single select fields to their placeholder state
-         if (form.anexadoItem) form.anexadoItem.value = ""; // Reset the 'anexado' dropdown
+         
+         if (form.anexadoItem) form.anexadoItem.value = "";
          if (form.nivel) form.nivel.value = "";
          if (form.noMercado) form.noMercado.value = "";
          if (form.ordem) form.ordem.value = "";
@@ -605,17 +595,16 @@ async function handleFormSubmit(event) {
 
 // --- DOMContentLoaded Listener (Unchanged) ---
 document.addEventListener('DOMContentLoaded', () => {
-    // Load dynamic data
     loadCompeticoes();
     loadUsers();
-    loadAnexadoOptions(); // Calls the modified function
+    loadAnexadoOptions();
 
-    // Add form submit listener
-    const empireItemForm = document.getElementById('empire-item-form');
-    if (empireItemForm) {
-        empireItemForm.addEventListener('submit', handleFormSubmit);
+    // Também mudei o ID do formulário para consistência
+    const managerItemForm = document.getElementById('manager-item-form');
+    if (managerItemForm) {
+        managerItemForm.addEventListener('submit', handleFormSubmit);
     } else {
-        console.error("Formulário #empire-item-form não encontrado!");
+        console.error("Formulário #manager-item-form não encontrado!");
     }
 });
     </script>
