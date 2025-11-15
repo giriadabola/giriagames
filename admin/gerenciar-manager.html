@@ -94,11 +94,11 @@
     <nav class="top-menu">
         <a href="engrenagem.html" class="menu-item"><i class="fas fa-home"></i>Home</a>
         <a href="criar-manager.html" class="menu-item"><i class="fas fa-plus"></i>Criar Item</a>
-        <a href="editar-empire.html" class="menu-item"><i class="fas fa-edit"></i>Editar Item</a>
+        <a href="editar-manager.html" class="menu-item"><i class="fas fa-edit"></i>Editar Item</a>
     </nav>
 
     <main class="content">
-        <h1>Gerenciar Itens do Empire</h1>
+        <h1>Gerenciar Itens do Manager</h1>
         <div class="search-container"><input type="text" id="searchInput" class="search-input" placeholder="Pesquisar itens (nome, tipo)..."><i class="fas fa-search search-icon"></i></div>
         <div class="filter-container" id="filterContainer"><button class="filter-button active" data-filter="all">Todos</button></div>
         <div class="action-button-bar"><button id="diaMercadoBtn" class="save-button">Configurar Dia Mercado</button><button id="saveChanges" class="save-button">Salvar Alterações</button></div>
@@ -133,8 +133,6 @@
         // Importa a variável 'db' do guardião e outras funções do Firestore
         import { db } from './js/auth-guard.js';
         import { collection, getDocs, doc, updateDoc, writeBatch, deleteField } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-
-        // A inicialização do Firebase foi completamente removida daqui
 
         console.log("Script module started.");
     
@@ -305,8 +303,9 @@
             if (loading) { itemsGrid.innerHTML = ''; loading.style.display = 'block'; }
     
             try {
-                const empireItensRef = collection(db, 'empireitens');
-                const snapshot = await getDocs(empireItensRef);
+                // ===== ALTERAÇÃO #1: Mudança do nome da coleção =====
+                const managerItensRef = collection(db, 'managerItens');
+                const snapshot = await getDocs(managerItensRef);
                 allItems = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 allItems.sort((a, b) => { const typeA = a.tipo || ''; const typeB = b.tipo || ''; const nameA = a.nome || ''; const nameB = b.nome || ''; if (typeA < typeB) return -1; if (typeA > typeB) return 1; if (nameA < nameB) return -1; if (nameA > nameB) return 1; return 0; });
                 addFilters(allItems);
@@ -324,7 +323,11 @@
             saveButton.textContent = 'Salvando...'; saveButton.disabled = true;
             try {
                 const batch = writeBatch(db); let count = 0;
-                changedItems.forEach((noMercado, itemId) => { const itemRef = doc(db, 'empireitens', itemId); batch.update(itemRef, { noMercado: noMercado }); count++; });
+                changedItems.forEach((noMercado, itemId) => {
+                    // ===== ALTERAÇÃO #2: Mudança do nome da coleção =====
+                    const itemRef = doc(db, 'managerItens', itemId);
+                    batch.update(itemRef, { noMercado: noMercado }); count++;
+                });
                 await batch.commit();
                 changedItems.forEach((noMercado, itemId) => { const index = allItems.findIndex(item => item.id === itemId); if (index !== -1) { allItems[index].noMercado = noMercado; } });
                 changedItems.clear();
@@ -373,7 +376,14 @@
                 const itemsToUpdateIds = useAllItems ? allItems.map(item => item.id) : Array.from(selectedItems);
                 if (!useAllItems && itemsToUpdateIds.length === 0) { alert('Selecione "Todos os Itens" ou marque itens na lista personalizada.'); throw new Error("No items selected for update."); }
                 const batch = writeBatch(db); let updateCount = 0;
-                itemsToUpdateIds.forEach(itemId => { if (itemId) { const itemRef = doc(db, 'empireitens', itemId); batch.update(itemRef, { dataMercado: dataMercadoValue }); updateCount++; } });
+                itemsToUpdateIds.forEach(itemId => {
+                    if (itemId) {
+                        // ===== ALTERAÇÃO #3: Mudança do nome da coleção =====
+                        const itemRef = doc(db, 'managerItens', itemId);
+                        batch.update(itemRef, { dataMercado: dataMercadoValue });
+                        updateCount++;
+                    }
+                });
                 if (updateCount > 0) {
                     await batch.commit();
                     const localUpdateValue = (dataMercadoValue === deleteField()) ? undefined : dataMercadoValue;
