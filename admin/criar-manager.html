@@ -372,7 +372,7 @@
     <script type="module">
         // Importa o 'db' do guardião central e outras funções do Firestore
      import { db } from './js/auth-guard.js';
-import { collection, getDocs, addDoc, serverTimestamp, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { collection, getDocs, addDoc, serverTimestamp, query, where, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 // Global variables for Choices.js instances
 let competicoesChoicesInstance = null;
@@ -416,6 +416,63 @@ async function loadCompeticoes() {
         competicoesSelect.innerHTML = '<option value="" disabled>Erro ao carregar</option>';
     }
 }
+
+// --- INÍCIO: Nova função para sugerir a ordem ---
+async function suggestNextOrdem() {
+    const tipoSelect = document.getElementById('tipo');
+    const ordemSelect = document.getElementById('ordem');
+    const selectedTipo = tipoSelect.value;
+
+    // Se nenhum tipo for selecionado, não faz nada
+    if (!selectedTipo) {
+        ordemSelect.value = ""; // Limpa a ordem se o tipo for desmarcado
+        return;
+    }
+
+    // Desativa o campo de ordem enquanto procura
+    ordemSelect.disabled = true;
+    const originalOrdemValue = ordemSelect.value; // Guarda o valor original
+    ordemSelect.options[0].textContent = 'A calcular...';
+    ordemSelect.value = "";
+
+    try {
+        const managerItensRef = collection(db, 'managerItens');
+        
+        // Cria uma consulta para encontrar o item com a maior ordem para o tipo selecionado
+        const q = query(
+            managerItensRef,
+            where("tipo", "==", selectedTipo),
+            orderBy("ordem", "desc"), // Ordena pela ordem, do maior para o menor
+            limit(1) // Pega apenas o primeiro (que é o maior)
+        );
+
+        const querySnapshot = await getDocs(q);
+
+        let nextOrdem = 1; // O padrão é 1 se não encontrar nenhum item
+
+        if (!querySnapshot.empty) {
+            // Se encontrou algum item, pega a ordem dele
+            const lastItem = querySnapshot.docs[0].data();
+            if (lastItem.ordem) {
+                nextOrdem = lastItem.ordem + 1;
+            }
+        }
+        
+        // Define o valor sugerido no campo de ordem
+        ordemSelect.value = nextOrdem;
+
+    } catch (error) {
+        console.error("Erro ao sugerir a ordem:", error);
+        alert("Não foi possível sugerir a ordem. Por favor, selecione manualmente.");
+        ordemSelect.value = originalOrdemValue; // Restaura o valor original em caso de erro
+    } finally {
+        // Reativa o campo de ordem e restaura o texto do placeholder
+        ordemSelect.disabled = false;
+        ordemSelect.options[0].textContent = '-- Selecione a Ordem --';
+    }
+}
+// --- FIM: Nova função para sugerir a ordem ---
+
 
 // --- Load Users (Modified for Choices.js) ---
 async function loadUsers() {
@@ -613,7 +670,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Load dynamic data
     loadCompeticoes();
     loadUsers();
-    loadAnexadoOptions(); // Calls the modified function
+    loadAnexadoOptions(); 
 
     // Add form submit listener
     const managerItemForm = document.getElementById('manager-item-form');
@@ -622,7 +679,15 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
         console.error("Formulário #manager-item-form não encontrado!");
     }
+
+    // --- INÍCIO DA ALTERAÇÃO: Adicionar o listener para o campo 'tipo' ---
+    const tipoSelect = document.getElementById('tipo');
+    if (tipoSelect) {
+        tipoSelect.addEventListener('change', suggestNextOrdem);
+    }
+    // --- FIM DA ALTERAÇÃO ---
 });
+
     </script>
 
 </body>
