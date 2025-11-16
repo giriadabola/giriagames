@@ -1057,16 +1057,27 @@ async function showPopup(mentalidade) {
             const itemCard = document.createElement('div');
             itemCard.className = 'item-card';
             const imageUrl = item.imagem || 'placeholder.png';
+            
+            // --- ALTERAÇÃO APLICADA AQUI ---
+            let priceHTML = '';
+            if (item.valor !== undefined && item.valor !== null) {
+                priceHTML = `<div class="item-nota" style="color: #c9a959; font-weight: bold; margin-top: 10px;">${item.valor} GCoins</div>`;
+            } else {
+                priceHTML = `<div style="min-height: 2.2em;"></div>`; // Espaço para manter o alinhamento
+            }
+
             itemCard.innerHTML = `
                 <img 
                     src="${imageUrl}" 
                     alt="${item.nome || ''}" 
                     class="item-image" 
-                    onerror="this.onerror=null; this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iMTAwIiB2aWV3Qm94PSIwIDAgMjQgMjQiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzZCNjA0MiIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiPjxyZWN0IHg9IjMiIHk9IjMiIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgcng9IjIiIHJ5PSIyIj48L3JlY3Q+PGNpcmNsZSBjeD0iOC41IiBjeT0iOC41IiByPSIxLjUiPjwvY2lyY2xlPjxwb2x5bGluZSBwb2ludHM9IjIxIDE1IDExIDUgMyAxMyI+PC9wb2x5bGluZT48L3N2Zz4=';"
+                    onerror="this.onerror=null; this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iMTAwIiB2aWV3Qm94PSIwIDAgMjQgMjQiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzZCNjA0MiIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm9unQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiPjxyZWN0IHg9IjMiIHk9IjMiIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgcng9IjIiIHJ5PSIyIj48L3JlY3Q+PGNpcmNsZSBjeD0iOC41IiBjeT0iOC41IiByPSIxLjUiPjwvY2lyY2xlPjxwb2x5bGluZSBwb2ludHM9IjIxIDE1IDExIDUgMyAxMyI+PC9wb2x5bGluZT48L3N2Zz4=';"
                 >
                 <div class="item-name">${item.nome || 'Item'}</div>
                 <div class="item-nota">${item.nota || 'N/A'}</div>
+                ${priceHTML}
             `;
+            // --- FIM DA ALTERAÇÃO ---
 
             if (managerParentItemIds.has(item.id)) {
                 itemCard.style.cursor = 'pointer';
@@ -1098,6 +1109,7 @@ function closeConfirmation() {
 async function confirmChoice(confirmed) {
     console.log(`confirmChoice: User action - confirmed: ${confirmed}`); closeConfirmation(); if (!confirmed) { console.log("confirmChoice: Choice cancelled."); return; } if (!selectedMentalidade || !currentUser) { console.error("confirmChoice: Missing mentalidade or user data."); showInfoPopup("Erro", "Dados em falta."); return; } showInfoPopup("Processando...", "A gravar..."); try { const userDocRef = doc(db, 'users', currentUser.uid); await updateDoc(userDocRef, { mentalidade: selectedMentalidade.id }); console.log('confirmChoice: User mentalidade updated.'); try { const latestSeason = await getLatestSeason(); if (latestSeason) { const precoMentalidade = selectedMentalidade.valor ?? 0; const valorRealMentalidade = -precoMentalidade; const movimentoData = { estado: "Escolhido", itemManager: selectedMentalidade.nome || "?", temporada: latestSeason, movimentoData: serverTimestamp(), preco: precoMentalidade, tipo: "Manager", userId: currentUser.uid, valorreal: valorRealMentalidade, managerTipo: selectedMentalidade.tipo || "Mentalidade", nivel: selectedMentalidade.nivel || 'Nível 1' }; console.log("confirmChoice: Creating movement data:", movimentoData); const movRef = await addDoc(collection(db, 'movimentos'), movimentoData); console.log("confirmChoice: Movement record created:", movRef.id); } else { console.warn("confirmChoice: No season. Skipping movement."); } } catch (movError) { console.error("confirmChoice: Error creating movement:", movError); showInfoPopup("Aviso", "Escolha salva, erro no registo."); await new Promise(resolve => setTimeout(resolve, 1500)); } console.log('confirmChoice: Refreshing page...'); closePopup(); closeInfoPopup(); location.reload(); } catch (error) { console.error('confirmChoice: Error updating user:', error); closeInfoPopup(); showInfoPopup('Erro', 'Falha ao salvar. Tente novamente.'); }
 }
+
 
 // --- Nested Item Popup Logic ---
 async function showNestedPopup(parentItem) {
@@ -1601,6 +1613,20 @@ async function confirmItemPurchase(confirmed) {
                 imagem: itemToPurchase.imagem || null
             };
             transaction.set(movimentoDocRef, movimentoData);
+
+            // <<< NOVO CÓDIGO INSERIDO AQUI >>>
+            const mercadoDocRef = doc(collection(db, 'managerMercado'));
+            const mercadoData = {
+                itemNome: itemToPurchase.nome,
+                itemPreco: itemToPurchase.valor,
+                compradorId: currentUser.uid,
+                compradorNome: userData.nomeDeUsuario || 'Nome Desconhecido',
+                dataCompra: serverTimestamp(),
+                tipoItem: itemToPurchase.tipo,
+                nivelItem: itemToPurchase.nivel || 'Nível 1'
+            };
+            transaction.set(mercadoDocRef, mercadoData);
+            // <<< FIM DO NOVO CÓDIGO >>>
             
             transaction.update(managerItemRef, { compradoPorUids: arrayUnion(currentUser.uid) });
             if (itemToPurchase.tipo === "Formações") {
@@ -1650,8 +1676,66 @@ async function confirmItemPurchase(confirmed) {
 
 // --- State Loading Functions ---
 async function loadMentalidadesParaEscolha() {
-    console.log("loadMentalidadesParaEscolha: Starting..."); let container, list, title; try { container = document.getElementById('mentalidades-container'); list = document.getElementById('mentalidades-list'); title = container.querySelector('h2'); if (!container || !list || !title) throw new Error("DOM elements missing"); list.innerHTML = '<p>A carregar mentalidades...</p>'; title.textContent = 'Escolhe uma Mentalidade'; container.style.display = 'block'; } catch (domError) { console.error("loadMentalidadesParaEscolha: DOM access ERROR:", domError); return; } if (!db) { console.error("loadMentalidadesParaEscolha: DB invalid!"); list.innerHTML = '<p style="color:red;">Erro DB.</p>'; return; } const mentalidadesQuery = query(collection(db, 'managerItens'), where('tipo', '==', 'Mentalidade'), where('noMercado', '==', true), orderBy('ordem', 'asc')); console.log("loadMentalidadesParaEscolha: Querying..."); try { const querySnapshot = await getDocs(mentalidadesQuery); console.log(`loadMentalidadesParaEscolha: Found ${querySnapshot.size} mentalidades.`); const mentalidades = []; querySnapshot.forEach((doc) => { mentalidades.push({ id: doc.id, ...doc.data() }); }); list.innerHTML = ''; if (mentalidades.length === 0) { list.innerHTML = '<p>Nenhuma mentalidade disponível.</p>'; return; } for (let i = 0; i < mentalidades.length; i++) { const mentalidade = mentalidades[i]; const card = document.createElement('div'); card.className = 'mentalidade-card'; card.style.opacity = 0; card.style.transform = 'translateY(10px)'; card.innerHTML = `<img src="${mentalidade.imagem || 'placeholder.png'}" alt="${mentalidade.nome || 'Mentalidade'}">`; card.addEventListener('click', () => showPopup(mentalidade)); list.appendChild(card); requestAnimationFrame(() => { setTimeout(() => { card.style.opacity = '1'; card.style.transform = 'translateY(0)'; }, (i + 1) * 200); }); } console.log("loadMentalidadesParaEscolha: Rendered choices."); } catch (error) { console.error("loadMentalidadesParaEscolha: ERROR:", error); list.innerHTML = `<p style="color:red;">Erro: ${error.message}</p>`; }
+    console.log("loadMentalidadesParaEscolha: Starting...");
+    let container, list, title;
+    try {
+        container = document.getElementById('mentalidades-container');
+        list = document.getElementById('mentalidades-list');
+        title = container.querySelector('h2');
+        if (!container || !list || !title) throw new Error("DOM elements missing");
+        list.innerHTML = '<p>A carregar mentalidades...</p>';
+        title.textContent = 'Escolhe uma Mentalidade';
+        container.style.display = 'block';
+    } catch (domError) {
+        console.error("loadMentalidadesParaEscolha: DOM access ERROR:", domError);
+        return;
+    }
+    if (!db) {
+        console.error("loadMentalidadesParaEscolha: DB invalid!");
+        list.innerHTML = '<p style="color:red;">Erro DB.</p>';
+        return;
+    }
+    const mentalidadesQuery = query(collection(db, 'managerItens'), where('tipo', '==', 'Mentalidade'), where('noMercado', '==', true), orderBy('ordem', 'asc'));
+    console.log("loadMentalidadesParaEscolha: Querying...");
+    try {
+        const querySnapshot = await getDocs(mentalidadesQuery);
+        console.log(`loadMentalidadesParaEscolha: Found ${querySnapshot.size} mentalidades.`);
+        const mentalidades = [];
+        querySnapshot.forEach((doc) => {
+            mentalidades.push({ id: doc.id, ...doc.data() });
+        });
+        list.innerHTML = '';
+        if (mentalidades.length === 0) {
+            list.innerHTML = '<p>Nenhuma mentalidade disponível.</p>';
+            return;
+        }
+        for (let i = 0; i < mentalidades.length; i++) {
+            const mentalidade = mentalidades[i];
+            const card = document.createElement('div');
+            card.className = 'mentalidade-card';
+            card.style.opacity = 0;
+            card.style.transform = 'translateY(10px)';
+            card.innerHTML = `<img src="${mentalidade.imagem || 'placeholder.png'}" alt="${mentalidade.nome || 'Mentalidade'}">`;
+
+            // --- CORREÇÃO APLICADA AQUI ---
+            // Voltamos a chamar a função showPopup para abrir o popup de detalhes.
+            card.addEventListener('click', () => showPopup(mentalidade));
+            
+            list.appendChild(card);
+            requestAnimationFrame(() => {
+                setTimeout(() => {
+                    card.style.opacity = '1';
+                    card.style.transform = 'translateY(0)';
+                }, (i + 1) * 200);
+            });
+        }
+        console.log("loadMentalidadesParaEscolha: Rendered choices.");
+    } catch (error) {
+        console.error("loadMentalidadesParaEscolha: ERROR:", error);
+        list.innerHTML = `<p style="color:red;">Erro: ${error.message}</p>`;
+    }
 }
+
 
 async function loadEstadios(mentalidadeId) {
     console.log(`loadEstadios: Starting for mentalidade: ${mentalidadeId}`);
@@ -1727,41 +1811,54 @@ async function loadEstadios(mentalidadeId) {
             card.style.opacity = 0;
             card.style.transform = 'translateY(20px)';
 
+            // --- ALTERAÇÃO APLICADA AQUI ---
+
+            // 1. Construir a base do card (Imagem, Nome, Nota)
             let cardContent = `
                  <img src="${estadio.imagem || 'placeholder.png'}" alt="${estadio.nome || ''}" class="item-image" style="width: 150px; height: 150px;">
                  <div class="item-name">${estadio.nome || 'Estádio'}</div>
                  <div class="item-nota">${estadio.nota || 'N/A'}</div>
              `;
 
+            // 2. Adicionar o preço (valor) se existir
+            if (estadio.valor !== undefined && estadio.valor !== null) {
+                cardContent += `<div class="item-nota" style="color: #c9a959; font-weight: bold; margin-top: 10px;">${estadio.valor} GCoins</div>`;
+            } else {
+                // Adiciona um espaço para manter o layout consistente
+                cardContent += `<div style="min-height: 2.2em;"></div>`;
+            }
+
+            // 3. Adicionar o status e a ação de clique
             const isOwnedByCurrentUser = currentUser && currentUser.estadio === estadio.nome;
             const isAlreadyBoughtByAnyone = boughtStadiumNamesSet.has(estadio.nome);
-
             let clickHandler = null;
 
             if (isOwnedByCurrentUser) {
-                cardContent += `<div style="color: lightgreen; font-weight: bold;">Possuído</div>`;
+                cardContent += `<div style="color: lightgreen; font-weight: bold; margin-top: 5px;">Possuído</div>`;
                 clickHandler = () => window.showStadiumDetailsPopup(estadio);
             } else if (isAlreadyBoughtByAnyone) {
-                cardContent += `<div style="color: grey; font-style: italic;">Indisponível (Já Adquirido)</div>`;
+                cardContent += `<div style="color: grey; font-style: italic; margin-top: 5px;">Indisponível (Já Adquirido)</div>`;
                 card.style.cursor = 'not-allowed';
                 card.style.filter = 'grayscale(80%)';
                 clickHandler = () => window.showStadiumDetailsPopup(estadio);
             } else if (userHasAnyStadium) {
-                cardContent += `<div>${estadio.valor !== undefined ? estadio.valor + ' GCoins' : ''}</div>`;
+                cardContent += `<div style="margin-top: 5px;">&nbsp;</div>`;
                 card.style.cursor = 'not-allowed';
                 card.style.filter = 'grayscale(80%)';
                 clickHandler = () => window.showStadiumDetailsPopup(estadio);
             } else if (estadio.valor !== undefined && estadio.valor !== null) {
-                cardContent += `<div style="color: #c9a959; font-weight: bold; cursor: pointer;">${estadio.valor} GCoins - Comprar</div>`;
+                cardContent += `<div style="font-weight: bold; cursor: pointer; margin-top: 5px;">Comprar</div>`;
                 clickHandler = () => {
                     selectedStadiumForPurchase = estadio;
                     window.showStadiumConfirmation();
                 };
                 card.style.cursor = 'pointer';
             } else {
-                cardContent += `<div style="color: grey;">Indisponível</div>`;
+                cardContent += `<div style="color: grey; margin-top: 5px;">Indisponível</div>`;
                 clickHandler = () => window.showStadiumDetailsPopup(estadio);
             }
+
+            // --- FIM DA ALTERAÇÃO ---
 
             card.innerHTML = cardContent;
             if (clickHandler) {
