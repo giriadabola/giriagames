@@ -428,10 +428,12 @@ header h1 { font-size: 2.5em; color: var(--accent-color); text-align: center; ma
 
 /* --- CORREÇÃO ESPECÍFICA PARA O WIDGET DA CLASSIFICAÇÃO --- */
 .widget-card[data-widget="league"] .widget-content {
-    display: block; /* Anula o 'display: flex' */
-    justify-content: initial; /* Anula o centramento vertical */
-    align-items: initial; /* Anula o centramento horizontal */
-    overflow-y: auto; /* Garante que a barra de scroll aparece aqui */
+    display: block !important;
+    justify-content: initial !important;
+    align-items: initial !important;
+    overflow-y: auto !important;
+    /* A linha mais importante: dá uma altura fixa para forçar o overflow */
+    height: 280px !important; 
 }
 
 .tactic-selection-container { margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px; }
@@ -1295,7 +1297,7 @@ async function showDashboard(userId, clubData) {
     // Guarda os dados do clube numa variável global para acesso fácil por outras funções
     currentUserClubData = clubData;
 
-    // --- GESTÃO DE ESTADO DE RENOVAÇÃO (NOVA LÓGICA DE ALTA PRIORIDADE) ---
+    // --- GESTÃO DE ESTADO DE RENOVAÇÃO (LÓGICA DE ALTA PRIORIDADE) ---
     // VERIFICAÇÃO Nº 1: O jogador está obrigado a fazer alterações no clube?
     // Se este estado estiver ativo, a função abre a loja forçada e pára aqui.
     if (clubData.renewalState === 'pendingChoice') {
@@ -1319,14 +1321,27 @@ async function showDashboard(userId, clubData) {
     const globalConfigSnap = await getDoc(doc(db, 'paineis', 'configuracoes_gerais'));
     const temporada = globalConfigSnap.exists() ? globalConfigSnap.data().temporadaAtual : 'default_season';
     
+    // <<< ALTERAÇÃO AQUI >>>
+    // Determina se o utilizador já viu os resultados da semana atual
+    const lastViewed = clubData?.lastWeekViewed;
+    const dayOfMonth = new Date().getDate();
+    const semanaAtual = Math.floor((dayOfMonth - 1) / 7) + 1;
+    const userHasAlreadyViewed = lastViewed && lastViewed.season === temporada && lastViewed.week === semanaAtual;
+    
     // Configura os sistemas restantes do dashboard
     await setupWinningsSystem(userId, clubData, temporada);
-    // Carrega a tabela da liga (a variável global 'leagueClubs' será preenchida aqui)
-    await assembleLeague(userId, clubData, temporada, true); 
-    await setupGrandeJornadaWidget(temporada, 1, userId);
+
+    // <<< ALTERAÇÃO AQUI >>>
+    // A chamada para a função da liga agora passa a variável que controla os "spoilers"
+    await assembleLeague(userId, clubData, temporada, userHasAlreadyViewed); 
+    
+    // <<< ALTERAÇÃO AQUI >>>
+    // A chamada para o widget de jogos também é informada sobre o estado de visualização
+    await setupGrandeJornadaWidget(temporada, semanaAtual, userId);
+
     setupInteractivity(userId, temporada);
     
-    // --- LÓGICA DE DECISÃO DE FIM DE TEMPORADA ---
+    // --- LÓGICA DE DECISÃO DE FIM DE TEMPORADA (Inalterada) ---
     // VERIFICAÇÃO Nº 2: É o início de um novo mês? Se sim, mostra o pop-up de decisão.
     const now = new Date();
     const lastUpdate = clubData.plantelLastUpdated ? clubData.plantelLastUpdated.toDate() : new Date(0); 
@@ -1399,7 +1414,7 @@ async function showDashboard(userId, clubData) {
             }
         };
 
-        // LÓGICA DO NOVO BOTÃO "FAZER ALTERAÇÕES"
+        // LÓGICA DO BOTÃO "FAZER ALTERAÇÕES"
         document.getElementById('change-squad-btn').onclick = async () => {
             const btn = document.getElementById('change-squad-btn');
             btn.disabled = true;
@@ -2027,7 +2042,7 @@ async function assembleLeague(userId, userClubData, temporada, userHasAlreadyVie
 
         // O listener em tempo real continua a ser anexado em ambos os casos.
         // Ele atualiza a tabela "escondida" (liveLeagueClubs) e só afeta a tabela visível
-        // se e quando `allowRealtimeLeagueRender` for verdadeiro (o que só acontecerá no próximo reload).
+        // se e quando `allowRealtimeLeagueRender` for verdadeiro.
         leagueListener = onSnapshot(q, (querySnapshot) => {
             liveLeagueClubs = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             if (allowRealtimeLeagueRender) {
@@ -2048,170 +2063,73 @@ async function assembleLeague(userId, userClubData, temporada, userHasAlreadyVie
 function renderLeagueTable(clubs, userId) {
     const tableBody = document.getElementById('league-table-body');
     const tableBodyPopup = document.getElementById('league-table-body-popup');
+    const leagueWidgetCard = document.querySelector('.widget-card[data-widget="league"]');
+    const leagueWidgetContent = leagueWidgetCard ? leagueWidgetCard.querySelector('.widget-content') : null;
     let tableHTML = '';
 
-    // Ordenar por pontos, depois por diferença de golos, depois por golos marcados
+    // Lógica da tabela (inalterada)
     clubs.sort((a, b) => {
         const pointsDiff = (b.pontos || 0) - (a.pontos || 0);
         if (pointsDiff !== 0) return pointsDiff;
-
         const goalDiffA = (a.golosMarcados || 0) - (a.golosSofridos || 0);
         const goalDiffB = (b.golosMarcados || 0) - (b.golosSofridos || 0);
         const goalDiff = goalDiffB - goalDiffA;
         if (goalDiff !== 0) return goalDiff;
-
         return (b.golosMarcados || 0) - (a.golosMarcados || 0);
     });
-
     clubs.forEach((club, index) => {
         const isUser = club.id === userId;
-        tableHTML += `
-            <tr ${isUser ? 'class="user-team-row"' : ''}>
-                <td>${index + 1}</td>
-                <td>${club.nome}</td>
-                <td><b>${club.pontos || 0}</b></td>
-                <td>${club.jogosDisputados || 0}</td>
-                <td>${club.vitorias || 0}</td>
-                <td>${club.empates || 0}</td>
-                <td>${club.derrotas || 0}</td>
-                <td>${club.golosMarcados || 0}</td>
-                <td>${club.golosSofridos || 0}</td>
-            </tr>`;
+        tableHTML += `<tr ${isUser ? 'class="user-team-row"' : ''}><td>${index + 1}</td><td>${club.nome}</td><td><b>${club.pontos || 0}</b></td><td>${club.jogosDisputados || 0}</td><td>${club.vitorias || 0}</td><td>${club.empates || 0}</td><td>${club.derrotas || 0}</td><td>${club.golosMarcados || 0}</td><td>${club.golosSofridos || 0}</td></tr>`;
     });
     
     tableBody.innerHTML = tableHTML;
     tableBodyPopup.innerHTML = tableHTML;
-    
-    // --- LÓGICA DE SCROLL CORRIGIDA COM setTimeout ---
-    // Adicionamos um pequeno atraso para garantir que o navegador já renderizou a tabela
-    // antes de tentarmos calcular as posições dos elementos.
+
+    // --- DIAGNÓSTICO AVANÇADO ---
+    // A abordagem do setTimeout é menos elegante, mas é a mais brutal e eficaz para contornar
+    // problemas de ciclo de renderização do browser. Damos 300ms, um tempo generoso.
     setTimeout(() => {
-        const scrollContainer = tableBody.closest('.widget-content');
+        console.group("--- DIAGNÓSTICO DE SCROLL AUTOMÁTICO ---");
+
+        if (!leagueWidgetCard || !leagueWidgetContent) {
+            console.error("FALHA CRÍTICA: Não foi possível encontrar '.widget-card' ou '.widget-content' da classificação.");
+            console.groupEnd();
+            return;
+        }
+
         const userRow = tableBody.querySelector('.user-team-row');
-
-        // A lógica de cálculo permanece a mesma, mas agora será executada no momento certo.
-        if (userRow && scrollContainer) {
-            const scrollTarget = userRow.offsetTop - (scrollContainer.clientHeight / 2) + (userRow.clientHeight / 2);
-            
-            scrollContainer.scrollTo({
-                top: scrollTarget,
-                behavior: 'smooth'
-            });
-        }
-    }, 100); // Um atraso de 100 milissegundos é suficiente para o navegador renderizar.
-}
-
-
-
-    async function renderMatchResults(containerElement, userId, seasonId) {
-    if (!containerElement) return;
-    
-    containerElement.innerHTML = '<div class="loading-spinner" style="width:40px; height:40px; border-width: 6px; margin-top: 20px;"></div>';
-
-    try {
-        // CORREÇÃO: Utiliza o 'seasonId' recebido como argumento.
-        const dayOfMonth = new Date().getDate();
-        const semanaAtual = Math.floor((dayOfMonth - 1) / 7) + 1;
-        const startJornada = (semanaAtual - 1) * 7 + 1;
-        const endJornada = startJornada + 6;
-
-        const weekGamesQuery = query(collection(db, "endlessjogos"),
-            where("seasonId", "==", seasonId),
-            where("jornada", ">=", startJornada),
-            where("jornada", "<=", endJornada));
         
-        const weekGamesSnapshot = await getDocs(weekGamesQuery);
+        // Medir tudo o que for possível
+        const cardHeight = leagueWidgetCard.offsetHeight;
+        const contentClientHeight = leagueWidgetContent.clientHeight;
+        const contentScrollHeight = leagueWidgetContent.scrollHeight;
+        const computedStyles = window.getComputedStyle(leagueWidgetContent);
 
-        // O resto da lógica da função permanece inalterada
-        const promises = weekGamesSnapshot.docs.map(async (gameDoc) => {
-            const gameData = gameDoc.data();
-            const homeDocRef = doc(db, 'endlessclubes', gameData.homeTeamId);
-            const awayDocRef = doc(db, 'endlessclubes', gameData.awayTeamId);
-            const [homeDoc, awayDoc] = await Promise.all([getDoc(homeDocRef), getDoc(awayDocRef)]);
-            const homeName = homeDoc.exists() ? homeDoc.data().nome : "Clube Desconhecido";
-            const awayName = awayDoc.exists() ? awayDoc.data().nome : "Clube Desconhecido";
-            return { ...gameData, homeTeam: homeName, awayTeam: awayName };
-        });
+        console.log("1. Medidas do Layout (no momento do scroll):");
+        console.log(`   - Altura do Widget Pai (.widget-card): %c${cardHeight}px`, "color: cyan;");
+        console.log(`   - Altura Visível do Contentor (.widget-content): %c${contentClientHeight}px`, "color: yellow;");
+        console.log(`   - Altura Total do Conteúdo (tabela): %c${contentScrollHeight}px`, "color: yellow;");
+        console.log(`   - CSS 'display' aplicado: %c${computedStyles.display}`, "color: violet;");
+        console.log(`   - CSS 'height' aplicado: %c${computedStyles.height}`, "color: violet;");
 
-        const gamesWithNames = await Promise.all(promises);
-        let resultsHTML = '';
-        if (gamesWithNames.length === 0) {
-            resultsHTML = '<p style="text-align:center; padding: 20px;">Ainda não há jogos simulados para esta semana.</p>';
+        console.log("2. Verificação da Condição de Scroll:");
+        if (contentScrollHeight > contentClientHeight) {
+            console.log(`   - RESULTADO: %cCONDIÇÃO SATISFEITA (${contentScrollHeight} > ${contentClientHeight}). O scroll é possível.`, "color: lightgreen;");
         } else {
-            const gamesByJornada = {};
-            gamesWithNames.forEach(game => {
-                if (!gamesByJornada[game.jornada]) gamesByJornada[game.jornada] = [];
-                gamesByJornada[game.jornada].push(game);
-            });
-
-            Object.keys(gamesByJornada).sort((a, b) => a - b).forEach(jornada => {
-                resultsHTML += `<h5 style="text-align:center; margin:10px 0; color:var(--accent-color);">Jornada ${jornada}</h5>`;
-                gamesByJornada[jornada].forEach(game => {
-                    const isUserMatch = (game.homeTeamId === userId || game.awayTeamId === userId);
-                    
-               const matchClass = isUserMatch ? 'match-result user-match' : 'match-result';
-                    resultsHTML += `<div class="${matchClass}"><span class="team-home">${game.homeTeam}</span><b>${game.homeScore} - ${game.awayScore}</b><span class="team-away">${game.awayTeam}</span></div>`;
-                });
-            });
+            console.error(`   - RESULTADO: CONDIÇÃO FALHOU (${contentScrollHeight} <= ${contentClientHeight}). O scroll é impossível.`);
         }
-        containerElement.innerHTML = resultsHTML;
 
-    } catch (error) {
-        console.error("[ERRO EM renderMatchResults] A consulta falhou.", error);
-        containerElement.innerHTML = `<p style="color: #ff6b6b; padding: 10px;">Ocorreu um erro ao carregar os resultados.</p>`;
-    }
-}
-
-
- async function setupGrandeJornadaWidget(seasonId, week, userId) {
-    const preSimContent = document.getElementById('pre-simulation-content');
-    const resultsContainerWidget = document.getElementById('grande-jornada-results');
-    const simulateBtnWidget = document.getElementById('simulate-week-btn-widget');
-    const weekTitle = document.getElementById('grande-jornada-week');
-
-    const dayOfMonth = new Date().getDate();
-    const semanaAtual = Math.floor((dayOfMonth - 1) / 7) + 1;
-    weekTitle.textContent = `Semana ${semanaAtual} de 4`;
-
-    // A variável global 'currentUserClubData' já está preenchida neste ponto
-    const lastViewed = currentUserClubData?.lastWeekViewed;
-    
-    // A condição para determinar se o utilizador já viu os resultados desta semana
-    const userHasAlreadyViewed = lastViewed && lastViewed.season === seasonId && lastViewed.week === semanaAtual;
-    
-    if (userHasAlreadyViewed) {
-        // Se já viu, esconde o botão de simulação e mostra os resultados diretamente
-        preSimContent.style.display = 'none';
-        resultsContainerWidget.style.display = 'block';
-        renderMatchResults(resultsContainerWidget, userId, seasonId);
-    } else {
-        // Se ainda não viu, verifica se os jogos já foram gerados para decidir o estado do botão
-        const jornadaInicialDaSemana = (semanaAtual - 1) * 7 + 1;
-        const q = query(collection(db, "endlessjogos"), where("seasonId", "==", seasonId), where("jornada", "==", jornadaInicialDaSemana));
-        const querySnapshot = await getDocs(q);
-
-        if (!querySnapshot.empty) {
-            preSimContent.style.display = 'flex';
-            resultsContainerWidget.style.display = 'none';
-            
-            const endlessConfigSnap = await getDoc(doc(db, 'paineis', 'endless_configuracoes'));
-            const ultimaSemanaSimulada = endlessConfigSnap.exists() ? endlessConfigSnap.data().ultimaSemanaSimulada || 0 : 0;
-
-            // Ativa ou desativa o botão com base no painel de controlo
-            if (ultimaSemanaSimulada >= semanaAtual) {
-                simulateBtnWidget.disabled = false;
-                simulateBtnWidget.innerHTML = '<i class="fas fa-play-circle"></i> Ver/Simular Semana';
-            } else {
-                simulateBtnWidget.disabled = true;
-                simulateBtnWidget.innerHTML = '<i class="fas fa-clock"></i> Aguardando Simulação';
-            }
+        console.log("3. Tentativa de Execução:");
+        if (userRow) {
+            console.log("   - Linha do utilizador encontrada:", userRow);
+            userRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            console.log("   - Comando scrollIntoView() foi executado.");
         } else {
-             preSimContent.style.display = 'flex';
-             resultsContainerWidget.style.display = 'none';
-             simulateBtnWidget.disabled = true;
-             simulateBtnWidget.innerHTML = '<i class="fas fa-clock"></i> Aguardando Simulação';
+            console.warn("   - AVISO: Linha do utilizador '.user-team-row' não foi encontrada.");
         }
-    }
+
+        console.groupEnd();
+    }, 300); // Usamos um setTimeout mais "forçado" para o diagnóstico.
 }
 
 
@@ -2281,7 +2199,109 @@ async function getFrozenLeagueTable(seasonId) {
         return []; // Retorna uma lista vazia em caso de erro
     }
 }
- 
+
+
+    async function renderMatchResults(containerElement, userId, seasonId) {
+    if (!containerElement) return;
+    
+    containerElement.innerHTML = '<div class="loading-spinner" style="width:40px; height:40px; border-width: 6px; margin-top: 20px;"></div>';
+
+    try {
+        // CORREÇÃO: Utiliza o 'seasonId' recebido como argumento.
+        const dayOfMonth = new Date().getDate();
+        const semanaAtual = Math.floor((dayOfMonth - 1) / 7) + 1;
+        const startJornada = (semanaAtual - 1) * 7 + 1;
+        const endJornada = startJornada + 6;
+
+        const weekGamesQuery = query(collection(db, "endlessjogos"),
+            where("seasonId", "==", seasonId),
+            where("jornada", ">=", startJornada),
+            where("jornada", "<=", endJornada));
+        
+        const weekGamesSnapshot = await getDocs(weekGamesQuery);
+
+        // O resto da lógica da função permanece inalterada
+        const promises = weekGamesSnapshot.docs.map(async (gameDoc) => {
+            const gameData = gameDoc.data();
+            const homeDocRef = doc(db, 'endlessclubes', gameData.homeTeamId);
+            const awayDocRef = doc(db, 'endlessclubes', gameData.awayTeamId);
+            const [homeDoc, awayDoc] = await Promise.all([getDoc(homeDocRef), getDoc(awayDocRef)]);
+            const homeName = homeDoc.exists() ? homeDoc.data().nome : "Clube Desconhecido";
+            const awayName = awayDoc.exists() ? awayDoc.data().nome : "Clube Desconhecido";
+            return { ...gameData, homeTeam: homeName, awayTeam: awayName };
+        });
+
+        const gamesWithNames = await Promise.all(promises);
+        let resultsHTML = '';
+        if (gamesWithNames.length === 0) {
+            resultsHTML = '<p style="text-align:center; padding: 20px;">Ainda não há jogos simulados para esta semana.</p>';
+        } else {
+            const gamesByJornada = {};
+            gamesWithNames.forEach(game => {
+                if (!gamesByJornada[game.jornada]) gamesByJornada[game.jornada] = [];
+                gamesByJornada[game.jornada].push(game);
+            });
+
+            Object.keys(gamesByJornada).sort((a, b) => a - b).forEach(jornada => {
+                resultsHTML += `<h5 style="text-align:center; margin:10px 0; color:var(--accent-color);">Jornada ${jornada}</h5>`;
+                gamesByJornada[jornada].forEach(game => {
+                    const isUserMatch = (game.homeTeamId === userId || game.awayTeamId === userId);
+                    
+               const matchClass = isUserMatch ? 'match-result user-match' : 'match-result';
+                    resultsHTML += `<div class="${matchClass}"><span class="team-home">${game.homeTeam}</span><b>${game.homeScore} - ${game.awayScore}</b><span class="team-away">${game.awayTeam}</span></div>`;
+                });
+            });
+        }
+        containerElement.innerHTML = resultsHTML;
+
+    } catch (error) {
+        console.error("[ERRO EM renderMatchResults] A consulta falhou.", error);
+        containerElement.innerHTML = `<p style="color: #ff6b6b; padding: 10px;">Ocorreu um erro ao carregar os resultados.</p>`;
+    }
+}
+
+
+  async function setupGrandeJornadaWidget(seasonId, week, userId) {
+    const preSimContent = document.getElementById('pre-simulation-content');
+    const resultsContainerWidget = document.getElementById('grande-jornada-results');
+    const simulateBtnWidget = document.getElementById('simulate-week-btn-widget');
+    const weekTitle = document.getElementById('grande-jornada-week');
+
+    const dayOfMonth = new Date().getDate();
+    const semanaAtual = Math.floor((dayOfMonth - 1) / 7) + 1;
+    weekTitle.textContent = `Semana ${semanaAtual} de 4`;
+
+    // A variável global 'currentUserClubData' já está preenchida neste ponto
+    const lastViewed = currentUserClubData?.lastWeekViewed;
+    
+    // A condição para determinar se o utilizador já viu os resultados desta semana
+    const userHasAlreadyViewed = lastViewed && lastViewed.season === seasonId && lastViewed.week === semanaAtual;
+    
+    if (userHasAlreadyViewed) {
+        // Se já viu, esconde o botão de simulação e mostra os resultados diretamente
+        preSimContent.style.display = 'none';
+        resultsContainerWidget.style.display = 'block';
+        renderMatchResults(resultsContainerWidget, userId, seasonId);
+    } else {
+        // Se ainda não viu, mostra o conteúdo de pré-simulação
+        preSimContent.style.display = 'flex';
+        resultsContainerWidget.style.display = 'none';
+        
+        const endlessConfigSnap = await getDoc(doc(db, 'paineis', 'endless_configuracoes'));
+        const ultimaSemanaSimulada = endlessConfigSnap.exists() ? endlessConfigSnap.data().ultimaSemanaSimulada || 0 : 0;
+
+        // Ativa ou desativa o botão com base no painel de controlo
+        if (ultimaSemanaSimulada >= semanaAtual) {
+            simulateBtnWidget.disabled = false;
+            simulateBtnWidget.innerHTML = '<i class="fas fa-play-circle"></i> Ver/Simular Semana';
+        } else {
+            simulateBtnWidget.disabled = true;
+            simulateBtnWidget.innerHTML = '<i class="fas fa-clock"></i> Aguardando Simulação';
+        }
+    }
+}
+
+
         
  function setupInteractivity(userId, seasonId) {
     document.getElementById('simulate-week-btn-widget')?.addEventListener('click', (event) => handleSimulationClick(event));
