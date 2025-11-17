@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Banca - Ggames</title>
+    <link rel="icon" type="image/png" href="https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhTl6Ljabwgx-VXdZz8FcAoygQprujSsCoXc32Y_iU0FjYVPu1B6MffWwp8gcCVuV8TWn39FRk9OIe1nc-esubVJYmdLsTptAoR9GyqNuw4R5MBaeaoWXTc3JaqH2YVNtEmfReQqohvQKvHiI0XwE5na2ty2B9Bt4oELxYv2BaZ7R3UmeylpiVEIbiLnCB/s320/soccer-ball-png.webp">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <style>
+        /* =========================================== */
+        /*          ESTILOS GERAIS E BASE              */
+        /* =========================================== */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            min-height: 100vh;
+            background-color: #f4f7f9;
+            color: #333;
+        }
+
+        .content {
+            padding: 20px;
+            margin-bottom: 80px;
+        }
+        
+        h1 {
+            text-align: center;
+            color: #0a2e5c;
+            font-size: 2.5rem;
+            margin-bottom: 30px; /* Aumentado o espaçamento */
+            font-weight: 700;
+        }
+
+        /* =========================================== */
+        /*          TELA DE CARREGAMENTO               */
+        /* =========================================== */
+        #loading-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #f4f7f9; display: flex; justify-content: center;
+            align-items: center; z-index: 9999;
+        }
+
+        .loading-spinner {
+            border: 12px solid #e3e3e3; border-top: 12px solid #0a2e5c;
+            border-radius: 50%; width: 80px; height: 80px;
+            animation: spin 1.5s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* =========================================== */
+        /*            CARDS DE AÇÃO                    */
+        /* =========================================== */
+        .action-cards-container {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 25px; max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .action-card {
+            background-color: #ffffff; border-radius: 15px; padding: 25px;
+            text-align: center; box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+            cursor: pointer; transition: transform 0.3s ease, box-shadow 0.3s ease;
+            text-decoration: none; color: #333; display: flex;
+            flex-direction: column; align-items: center; justify-content: center;
+            border: 1px solid #e0e0e0;
+        }
+
+        .action-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 12px 25px rgba(0, 0, 0, 0.12);
+        }
+
+        .action-card .card-icon { font-size: 3rem; margin-bottom: 15px; }
+        .action-card .card-label { font-size: 1.2rem; font-weight: 600; color: #0a2e5c; }
+        
+        .card-value {
+            font-size: 1.6rem;
+            font-weight: 700;
+            margin-top: 8px;
+            color: #e74c3c;
+        }
+        
+        .action-card .card-description { 
+            font-size: 0.9rem; 
+            color: #777; 
+            margin-top: 8px;
+        }
+
+        .icon-convert { color: #2ecc71; }
+        .icon-debt { color: #e74c3c; }
+        .icon-loan { color: #3498db; }
+        .icon-history { color: #f39c12; }
+        .icon-invest { color: #1abc9c; }
+
+        /* Card Específico para a Banca Total */
+        #bancaTotalCard {
+            background: linear-gradient(145deg, #0a2e5c, #1a4a8a);
+            border-color: rgba(10, 46, 92, 0.5);
+            cursor: default; /* Não é uma ação clicável */
+            box-shadow: 0 10px 25px rgba(10, 46, 92, 0.2);
+        }
+
+        #bancaTotalCard:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 18px 35px rgba(10, 46, 92, 0.25);
+        }
+
+        #bancaTotalCard .card-icon,
+        #bancaTotalCard .card-label {
+            color: #ffffff;
+            opacity: 0.9;
+        }
+
+        #bancaTotalCard #bancaTotalValue {
+            color: #ffffff;
+            font-size: 2.2rem; /* Tamanho ajustado para o card */
+            letter-spacing: 1px;
+        }
+
+
+        /* =========================================== */
+        /*              ESTILOS DOS POPUPS             */
+        /* =========================================== */
+        .popup-overlay {
+            display: none; position: fixed; top: 0; left: 0;
+            width: 100%; height: 100%;
+            background-color: rgba(10, 46, 92, 0.8);
+            backdrop-filter: blur(5px); z-index: 3000;
+            justify-content: center; align-items: center;
+        }
+
+        .popup-content {
+            background-color: white; padding: 2rem; border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            max-width: 450px; width: 90%; text-align: center;
+            position: relative;
+        }
+
+        .popup-content h2 { color: #0a2e5c; margin-bottom: 1.5rem; font-size: 1.8rem; }
+        .popup-content p { color: #666; margin-bottom: 1.5rem; line-height: 1.5; }
+        
+        .password-input {
+            width: 100%; padding: 12px 15px; margin-bottom: 1rem;
+            border: 1px solid #ddd; border-radius: 8px; font-size: 1rem;
+            transition: border-color 0.3s, box-shadow 0.3s;
+        }
+
+        .password-input:focus {
+            outline: none; border-color: #3498db;
+            box-shadow: 0 0 8px rgba(52, 152, 219, 0.3);
+        }
+
+        .popup-btn {
+            padding: 12px 25px; border: none; border-radius: 8px;
+            cursor: pointer; font-size: 1rem; font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        
+        .popup-buttons {
+            display: flex;
+            justify-content: center;
+        }
+        
+        .popup-btn-confirm { background-color: #0a2e5c; color: white; }
+        .popup-btn-confirm:hover { background-color: #1a4a8a; transform: translateY(-2px); }
+
+        .popup-btn-icon {
+            background: none; color: #aaa; border: none; font-size: 1.5rem;
+            cursor: pointer; position: absolute; top: 15px; right: 15px;
+            transition: color 0.3s;
+        }
+        .popup-btn-icon:hover { color: #333; }
+        
+        .conversion-info { text-align: left; margin-bottom: 1.5rem; }
+        .conversion-info p { margin-bottom: 0.5rem; font-size: 1.1em; }
+        .conversion-info strong { color: #3498db; }
+        .conversion-rate-note { font-size: 0.8em; color: #777; margin-top: 1rem; }
+        #conversionFeedback, #loanFeedback, #debtFeedback { margin-top: 1rem; font-weight: bold; min-height: 20px; }
+        
+        #exchangeHousePopup .popup-content { max-width: 600px; }
+
+        .currency-selection-container {
+            display: flex; justify-content: center;
+            gap: 20px; flex-wrap: wrap;
+        }
+        
+        .currency-card {
+            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+            border: 1px solid #dee2e6; border-radius: 12px; padding: 20px;
+            width: 200px; cursor: pointer; text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .currency-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+            border-color: #3498db;
+        }
+        
+        .currency-card.disabled {
+            cursor: not-allowed; opacity: 0.5; background: #f1f1f1;
+        }
+        .currency-card.disabled:hover {
+            transform: none; box-shadow: none; border-color: #dee2e6;
+        }
+
+        .currency-card img { width: 60px; height: 60px; margin-bottom: 10px; }
+        .currency-card .currency-name {
+            font-size: 1.1rem; font-weight: 600; color: #0a2e5c;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="loading-screen"><div class="loading-spinner"></div></div>
+
+    <div class="content" style="display: none;">
+        <h1>Banca Ggames</h1>
+
+        <div class="action-cards-container">
+            <!-- CARD DA BANCA TOTAL - NOVO -->
+            <div class="action-card" id="bancaTotalCard">
+                <i class="fas fa-university card-icon"></i>
+                <div class="card-label">Fundos da Banca</div>
+                <div class="card-value" id="bancaTotalValue">0 ₲₵</div>
+            </div>
+
+            <!-- RESTANTES CARDS -->
+            <div id="openExchangeHouseCard" class="action-card">
+                <i class="fas fa-exchange-alt card-icon icon-convert"></i>
+                <div class="card-label">Casa de Conversão</div>
+                <p class="card-description">Troque as suas moedas aqui.</p>
+            </div>
+
+            <div id="payDebtCard" class="action-card">
+                <i class="fas fa-file-invoice-dollar card-icon icon-debt"></i>
+                <div class="card-label">Pagar Dívidas</div>
+                <div class="card-value" id="debtValueOnCard">A carregar...</div>
+                <p class="card-description">Veja e pague os seus empréstimos pendentes.</p>
+            </div>
+
+            <div id="investmentsCard" class="action-card">
+                <i class="fas fa-chart-line card-icon icon-invest"></i>
+                <div class="card-label">Investimentos</div>
+                <p class="card-description">Explore oportunidades para crescer os seus GCoins.</p>
+            </div>
+
+            <div id="loanRequestCard" class="action-card">
+                <i class="fas fa-hand-holding-usd card-icon icon-loan"></i>
+                <div class="card-label">Solicitar Empréstimo</div>
+                <p class="card-description">Peça um adiantamento de GCoins à banca.</p>
+            </div>
+
+            <a href="historico_banca.html" class="action-card">
+                <i class="fas fa-history card-icon icon-history"></i>
+                <div class="card-label">Meu Histórico</div>
+                <p class="card-description">Veja as suas transações com a banca.</p>
+            </a>
+        </div>
+    </div>
+
+    <!-- POPUPS -->
+    <div class="popup-overlay" id="exchangeHousePopup">
+        <div class="popup-content">
+            <button class="popup-btn popup-btn-icon" id="closeExchangeHousePopupBtn"><i class="fas fa-times"></i></button>
+            <h2>Casa de Conversão</h2>
+            <p>Selecione a moeda que deseja converter para GCoins.</p>
+            <div class="currency-selection-container">
+             <div class="currency-card" id="selectMiniGcoinsCard">
+    <!-- LINK CORRIGIDO -->
+    <img src="https://i.ibb.co/wJk6k0q/mini-gcoin-icon.png" alt="Mini-gCoin">
+    <div class="currency-name">Mini-gCoins</div>
+</div>
+
+<div class="currency-card disabled">
+    <!-- LINK CORRIGIDO -->
+    <img src="https://i.ibb.co/Kz2XyvP/token-icon.png" alt="Token">
+    <div class="currency-name">Tokens (Brevemente)</div>
+</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="popup-overlay" id="conversionPopup">
+        <div class="popup-content">
+            <button class="popup-btn popup-btn-icon" id="closeConversionPopupBtn"><i class="fas fa-times"></i></button>
+            <h2>Converter mini-gCoins</h2>
+            <div class="conversion-info">
+                <p>Seus mini-gCoins: <strong id="currentMiniGCoins">0</strong></p>
+                <p>Seus gCoins: <strong id="currentGCoins">0</strong></p>
+            </div>
+            <input type="number" id="conversionAmountInput" class="password-input" placeholder="Valor a converter" min="1">
+            <div class="conversion-info">
+                <p>Receberá: <strong id="conversionResult">0.00</strong> gCoins</p>
+            </div>
+            <p id="conversionRateNote" class="conversion-rate-note"></p>
+            <p id="conversionRuleNote" class="conversion-rate-note" style="margin-top: 5px; font-weight: bold;"></p>
+            <button id="confirmConversionBtn" class="popup-btn popup-btn-confirm" style="background-color: #2ecc71;">Confirmar Conversão</button>
+            <p id="conversionFeedback"></p>
+        </div>
+    </div>
+    
+    <div class="popup-overlay" id="debtPaymentPopup">
+        <div class="popup-content">
+            <h2 style="color: #c0392b;">Pagar Dívida à Banca</h2>
+            <button class="popup-btn popup-btn-icon" id="closeDebtPopupBtn"><i class="fas fa-times"></i></button>
+            <p style="margin-bottom: 1rem;">Dívida Total: <strong id="popupDebtTotal">0 ₲₵</strong></p>
+            <p style="font-size: 0.9em; color: #555; margin-bottom: 1.5rem;">Pode pagar a totalidade ou uma parte da sua dívida, dependendo dos seus GCoins disponíveis.</p>
+            <div style="display: flex; gap: 10px; margin-bottom: 1.5rem;">
+                <input type="number" id="paymentAmountInput" class="password-input" placeholder="Valor a pagar" min="1" step="1">
+                <button id="maxPaymentBtn" class="popup-btn" style="background-color: #f39c12;">MAX</button>
+            </div>
+            <div class="popup-buttons">
+                <button id="confirmPaymentBtn" class="popup-btn popup-btn-confirm" style="background-color: #27ae60;">Confirmar Pagamento</button>
+            </div>
+            <p id="debtFeedback"></p>
+        </div>
+    </div>
+
+    <div class="popup-overlay" id="loanRequestPopup">
+         <div class="popup-content">
+            <button class="popup-btn popup-btn-icon" id="closeLoanPopupBtn"><i class="fas fa-times"></i></button>
+            <h2>Solicitar Empréstimo</h2>
+            <p>Insira o valor que deseja solicitar. A sua solicitação será revista por um administrador.</p>
+            <input type="number" id="loanAmountInput" class="password-input" placeholder="Valor do empréstimo" min="100" step="50">
+            <p id="loanFeeInfo" class="conversion-rate-note" style="margin-bottom: 1.5rem;"></p>
+            <button id="confirmLoanRequestBtn" class="popup-btn popup-btn-confirm">Confirmar Solicitação</button>
+            <p id="loanFeedback"></p>
+        </div>
+    </div>
+
+    <script src="config.js"></script>
+    <script type="module">
+        import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
+        import { getFirestore, doc, getDoc, collection, query, where, getDocs } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+        const functions = getFunctions(app, 'us-central1');
+
+        // --- Elementos do DOM ---
+        const loadingScreen = document.getElementById('loading-screen');
+        const content = document.querySelector('.content');
+        const bancaTotalValue = document.getElementById('bancaTotalValue');
+        const openExchangeHouseCard = document.getElementById('openExchangeHouseCard');
+        const payDebtCard = document.getElementById('payDebtCard');
+        const debtValueOnCard = document.getElementById('debtValueOnCard');
+        const investmentsCard = document.getElementById('investmentsCard'); // Novo
+        const loanRequestCard = document.getElementById('loanRequestCard');
+        const exchangeHousePopup = document.getElementById('exchangeHousePopup');
+        const closeExchangeHousePopupBtn = document.getElementById('closeExchangeHousePopupBtn');
+        const selectMiniGcoinsCard = document.getElementById('selectMiniGcoinsCard');
+        const conversionPopup = document.getElementById('conversionPopup');
+        const closeConversionPopupBtn = document.getElementById('closeConversionPopupBtn');
+        const conversionAmountInput = document.getElementById('conversionAmountInput');
+        const confirmConversionBtn = document.getElementById('confirmConversionBtn');
+        const conversionFeedback = document.getElementById('conversionFeedback');
+        const debtPaymentPopup = document.getElementById('debtPaymentPopup');
+        const closeDebtPopupBtn = document.getElementById('closeDebtPopupBtn');
+        const popupDebtTotal = document.getElementById('popupDebtTotal');
+        const paymentAmountInput = document.getElementById('paymentAmountInput');
+        const maxPaymentBtn = document.getElementById('maxPaymentBtn');
+        const confirmPaymentBtn = document.getElementById('confirmPaymentBtn');
+        const debtFeedback = document.getElementById('debtFeedback');
+        const loanRequestPopup = document.getElementById('loanRequestPopup');
+        const closeLoanPopupBtn = document.getElementById('closeLoanPopupBtn');
+        const confirmLoanRequestBtn = document.getElementById('confirmLoanRequestBtn');
+        const loanFeeInfo = document.getElementById('loanFeeInfo');
+
+        // --- Variáveis de Estado ---
+        let currentUserGCoins = 0;
+        let currentUserMiniGCoins = 0;
+        let conversionRate = 0;
+        let currentSeason = '';
+        let totalUserDebt = 0;
+
+        // --- LÓGICA DE AUTENTICAÇÃO E CARREGAMENTO ---
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                try {
+                    const userDocRef = doc(db, 'users', user.uid);
+                    const menuSettingsDocRef = doc(db, 'paineis', 'paineis menu');
+                    const [userDocSnap, menuSettingsSnap] = await Promise.all([
+                        getDoc(userDocRef),
+                        getDoc(menuSettingsDocRef)
+                    ]);
+
+                    if (!userDocSnap.exists() || userDocSnap.data().aceite !== "Yes") {
+                        window.location.href = 'index.html'; return;
+                    }
+                    const menuSettings = menuSettingsSnap.exists() ? menuSettingsSnap.data() : {};
+                    const userStatus = userDocSnap.data().estatuto || null;
+                    if (menuSettings.bank !== 'on' && userStatus !== 'ruler') {
+                        window.location.href = '404.html'; return;
+                    }
+                    
+                    const configRef = doc(db, 'paineis', 'configuracoes_gerais');
+                    const configSnap = await getDoc(configRef);
+                    currentSeason = configSnap.exists() ? configSnap.data().temporadaAtual.replace('/', '') : '';
+
+                    await Promise.all([
+                        loadBancaValue(),
+                        loadUserDebts(user.uid)
+                    ]);
+
+
+                    const urlParams = new URLSearchParams(window.location.search);
+if (urlParams.get('action') === 'paydebt') {
+    // Se a ação for 'paydebt' e o utilizador tiver dívidas, abre o popup.
+    if (totalUserDebt > 0) {
+        popupDebtTotal.textContent = totalUserDebt.toLocaleString('pt-PT') + ' ₲₵';
+        paymentAmountInput.value = '';
+        paymentAmountInput.max = Math.min(currentUserGCoins, totalUserDebt);
+        debtFeedback.textContent = '';
+        confirmPaymentBtn.disabled = false;
+        confirmPaymentBtn.innerHTML = 'Confirmar Pagamento';
+        debtPaymentPopup.style.display = 'flex';
+
+        // Limpa a URL para que o popup não reabra ao atualizar a página
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
+}
+
+                    loadingScreen.style.display = 'none';
+                    content.style.display = 'block';
+                } catch (error) {
+                    console.error("Erro de autenticação ou carregamento:", error);
+                    window.location.href = '404.html';
+                }
+            } else {
+                window.location.href = 'index.html';
+            }
+        });
+
+        async function loadBancaValue() {
+            try {
+                const bancaRef = doc(db, 'paineis', 'Banca');
+                const bancaSnap = await getDoc(bancaRef);
+                if (bancaSnap.exists()) {
+                    const valor = bancaSnap.data().valor || 0;
+                    bancaTotalValue.textContent = valor.toLocaleString('pt-PT', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' ₲₵';
+                    conversionRate = bancaSnap.data().taxaWhoWins || 0;
+                }
+            } catch (error) {
+                console.error("Erro ao carregar o valor da banca:", error);
+                bancaTotalValue.textContent = "Erro";
+            }
+        }
+
+        // --- LÓGICA DE DÍVIDAS ---
+        async function loadUserDebts(userId) {
+            const debtQuery = query(
+                collection(db, 'movimentos'),
+                where('userId', '==', userId),
+                where('estado', '==', 'Por Pagar'),
+                where('tipo', '==', 'Empréstimo')
+            );
+            try {
+                const querySnapshot = await getDocs(debtQuery);
+                let totalDebt = 0;
+                querySnapshot.forEach(doc => {
+                    totalDebt += doc.data().valorTotalAPagar || 0;
+                });
+                totalUserDebt = totalDebt;
+                debtValueOnCard.textContent = totalDebt.toLocaleString('pt-PT') + ' ₲₵';
+                const userRef = doc(db, 'users', userId);
+                const userSnap = await getDoc(userRef);
+                if (userSnap.exists()) {
+                    const gcoinsField = currentSeason + 'GCoins';
+                    currentUserGCoins = userSnap.data()[gcoinsField] || 0;
+                }
+            } catch (error) {
+                console.error("Erro ao carregar dívidas do utilizador:", error);
+                debtValueOnCard.textContent = 'Erro';
+            }
+        }
+
+        payDebtCard.addEventListener('click', () => {
+            if (totalUserDebt > 0) {
+                popupDebtTotal.textContent = totalUserDebt.toLocaleString('pt-PT') + ' ₲₵';
+                paymentAmountInput.value = '';
+                paymentAmountInput.max = Math.min(currentUserGCoins, totalUserDebt);
+                debtFeedback.textContent = '';
+                confirmPaymentBtn.disabled = false;
+                confirmPaymentBtn.innerHTML = 'Confirmar Pagamento';
+                debtPaymentPopup.style.display = 'flex';
+            } else {
+                alert("Você não tem dívidas pendentes.");
+            }
+        });
+
+        closeDebtPopupBtn.addEventListener('click', () => { debtPaymentPopup.style.display = 'none'; });
+        maxPaymentBtn.addEventListener('click', () => {
+            const maxPayable = Math.min(currentUserGCoins, totalUserDebt);
+            paymentAmountInput.value = Math.floor(maxPayable);
+        });
+        confirmPaymentBtn.addEventListener('click', handleDebtPayment);
+
+        async function handleDebtPayment() {
+            const paymentAmount = parseFloat(paymentAmountInput.value);
+            if (isNaN(paymentAmount) || paymentAmount <= 0) {
+                debtFeedback.textContent = 'Valor inválido.'; debtFeedback.style.color = 'red'; return;
+            }
+            confirmPaymentBtn.disabled = true;
+            confirmPaymentBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            debtFeedback.textContent = 'A processar...'; debtFeedback.style.color = 'black';
+            try {
+                const user = auth.currentUser;
+                if (!user) throw new Error("Utilizador não autenticado.");
+                await user.getIdToken(true);
+                if (paymentAmount > currentUserGCoins) throw new Error('Não tem GCoins suficientes.');
+                if (paymentAmount > totalUserDebt) throw new Error('O pagamento não pode exceder a dívida.');
+                const payDebt = httpsCallable(functions, 'payDebt');
+                const result = await payDebt({ amount: paymentAmount });
+                if (result.data.success) {
+                    debtFeedback.textContent = 'Pagamento bem-sucedido!'; debtFeedback.style.color = 'green';
+                    setTimeout(() => { location.reload(); }, 1500);
+                } else {
+                    throw new Error(result.data.error || 'Ocorreu um erro no servidor.');
+                }
+            } catch (error) {
+                console.error("Erro no pagamento da dívida:", error);
+                debtFeedback.textContent = error.message; debtFeedback.style.color = 'red';
+                confirmPaymentBtn.disabled = false;
+                confirmPaymentBtn.innerHTML = 'Confirmar Pagamento';
+            }
+        }
+
+        // --- FLUXO DE EVENTOS PARA CONVERSÃO ---
+        openExchangeHouseCard.addEventListener('click', () => { exchangeHousePopup.style.display = 'flex'; });
+        closeExchangeHousePopupBtn.addEventListener('click', () => { exchangeHousePopup.style.display = 'none'; });
+        selectMiniGcoinsCard.addEventListener('click', async () => {
+            exchangeHousePopup.style.display = 'none';
+            await prepareAndShowConversionPopup();
+        });
+        async function prepareAndShowConversionPopup() {
+            const user = auth.currentUser;
+            if (!user) return;
+            const userRef = doc(db, 'users', user.uid);
+            const userSnap = await getDoc(userRef);
+            if (userSnap.exists()) {
+                const userData = userSnap.data();
+                const gcoinsField = currentSeason + 'GCoins';
+                currentUserMiniGCoins = userData.whowinsgCoins || 0;
+                currentUserGCoins = userData[gcoinsField] || 0;
+                document.getElementById('currentMiniGCoins').textContent = currentUserMiniGCoins.toFixed(0);
+                document.getElementById('currentGCoins').textContent = currentUserGCoins.toFixed(0);
+                document.getElementById('conversionRateNote').textContent = `Taxa: ${conversionRate} mini-gCoins para 1 gCoin.`;
+                document.getElementById('conversionAmountInput').value = '';
+                document.getElementById('conversionResult').textContent = '0.00';
+                conversionFeedback.textContent = '';
+                conversionPopup.style.display = 'flex';
+            }
+        }
+        closeConversionPopupBtn.addEventListener('click', () => { conversionPopup.style.display = 'none'; });
+        conversionAmountInput.addEventListener('input', updateConversionSimulation);
+        function updateConversionSimulation() {
+            const amount = parseFloat(conversionAmountInput.value);
+            const resultElement = document.getElementById('conversionResult');
+            if (!isNaN(amount) && amount > 0 && conversionRate > 0) {
+                resultElement.textContent = (amount / conversionRate).toFixed(2);
+            } else {
+                resultElement.textContent = '0.00';
+            }
+        }
+        confirmConversionBtn.addEventListener('click', handleConversion);
+        async function handleConversion() {
+            const amountToConvert = parseFloat(conversionAmountInput.value);
+            if (isNaN(amountToConvert) || amountToConvert <= 0) {
+                conversionFeedback.textContent = "Insira um valor válido."; conversionFeedback.style.color = 'red'; return;
+            }
+            if (amountToConvert > currentUserMiniGCoins) {
+                conversionFeedback.textContent = "Não tem mini-gCoins suficientes."; conversionFeedback.style.color = 'red'; return;
+            }
+            if (conversionRate > 0 && Math.abs((amountToConvert / conversionRate) - Math.round(amountToConvert / conversionRate)) > 1e-9) {
+                conversionFeedback.textContent = `O valor deve ser um múltiplo de ${conversionRate}.`; conversionFeedback.style.color = 'red'; return;
+            }
+            confirmConversionBtn.disabled = true;
+            confirmConversionBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            conversionFeedback.textContent = 'A processar...'; conversionFeedback.style.color = 'black';
+            try {
+                await auth.currentUser.getIdToken(true);
+                const convertCoins = httpsCallable(functions, 'convertCoins');
+                const result = await convertCoins({ amount: amountToConvert });
+                if (result.data.success) {
+                    conversionFeedback.textContent = "Conversão bem-sucedida!"; conversionFeedback.style.color = 'green';
+                    setTimeout(() => { location.reload(); }, 2000);
+                } else {
+                    throw new Error(result.data.error || 'Ocorreu um erro no servidor.');
+                }
+            } catch (error) {
+                conversionFeedback.textContent = error.message; conversionFeedback.style.color = 'red';
+                confirmConversionBtn.disabled = false;
+                confirmConversionBtn.innerHTML = 'Confirmar Conversão';
+            }
+        }
+
+        // --- LÓGICA PARA PLACEHOLDERS ---
+        loanRequestCard.addEventListener('click', () => {
+            loanFeeInfo.textContent = "Será aplicada uma taxa de juro de 10% sobre o valor solicitado.";
+            loanRequestPopup.style.display = 'flex';
+        });
+        closeLoanPopupBtn.addEventListener('click', () => { loanRequestPopup.style.display = 'none'; });
+        confirmLoanRequestBtn.addEventListener('click', () => {
+            alert("Funcionalidade em desenvolvimento! A sua solicitação seria enviada para um administrador.");
+        });
+        
+        investmentsCard.addEventListener('click', () => {
+            alert("Funcionalidade em desenvolvimento! Em breve, poderá investir os seus GCoins aqui.");
+        });
+
+    </script>
+    <script src="menu-component.js"></script> 
+</body>
+</html>
