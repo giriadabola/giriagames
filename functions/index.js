@@ -1,18 +1,14 @@
 // =================================================================
-//          CÓDIGO COMPLETO E FINAL PARA index.js (v2)
+//          CÓDIGO COMPLETO E FINAL PARA index.js (v2 + CORS)
 // =================================================================
 
-// V2 Imports: Importações específicas para a nova sintaxe
 const {onCall, HttpsError} = require("firebase-functions/v2/https");
 const {onSchedule} = require("firebase-functions/v2/scheduler");
-
-// Firebase Admin SDK
 const admin = require("firebase-admin");
 
 admin.initializeApp();
 const db = admin.firestore();
 
-// Função Helper para encontrar o campo GCoins mais recente de um utilizador (sem alterações)
 function findLatestGcoinsField(userData) {
     let latestSeason = 0;
     let latestGcoinsField = null;
@@ -29,10 +25,10 @@ function findLatestGcoinsField(userData) {
 }
 
 // =================================================================
-//          FUNÇÃO ATUALIZADA: payDebt (v2)
+//          FUNÇÃO ATUALIZADA: payDebt (v2 com CORS)
 // =================================================================
-exports.payDebt = onCall(async (request) => {
-    // Acesso aos dados através de 'request.auth' e 'request.data'
+// Adicionada a opção { cors: ["https://giriagames.com"] }
+exports.payDebt = onCall({ cors: ["https://giriagames.com"] }, async (request) => {
     if (!request.auth) {
         throw new HttpsError("unauthenticated", "O utilizador deve estar autenticado.");
     }
@@ -118,9 +114,10 @@ exports.payDebt = onCall(async (request) => {
 });
 
 // =====================================================================
-//          FUNÇÃO ATUALIZADA: convertCoins (v2)
+//          FUNÇÃO ATUALIZADA: convertCoins (v2 com CORS)
 // =====================================================================
-exports.convertCoins = onCall(async (request) => {
+// Adicionada a opção { cors: ["https://giriagames.com"] }
+exports.convertCoins = onCall({ cors: ["https://giriagames.com"] }, async (request) => {
     if (!request.auth) {
         throw new HttpsError("unauthenticated", "O utilizador deve estar autenticado para converter moedas.");
     }
@@ -146,12 +143,10 @@ exports.convertCoins = onCall(async (request) => {
             if (conversionRate <= 0) {
                 throw new HttpsError("failed-precondition", "A taxa de conversão não está ativa.");
             }
-            
             const gCoinsResult = amountToConvert / conversionRate;
             if (Math.abs(gCoinsResult - Math.round(gCoinsResult)) > 1e-9) {
                 throw new HttpsError("invalid-argument", `O valor a converter deve ser um múltiplo de ${conversionRate} para não gerar gCoins decimais.`);
             }
-
             const currentSeason = (configData.temporadaAtual || "").replace("/", "");
             if (!currentSeason) {
                 throw new HttpsError("failed-precondition", "A temporada atual não está configurada.");
@@ -161,7 +156,6 @@ exports.convertCoins = onCall(async (request) => {
             if (amountToConvert > currentUserMiniGCoins) {
                 throw new HttpsError("failed-precondition", "Não tem mini-gCoins suficientes para esta conversão.");
             }
-            
             const gCoinsGained = Math.round(gCoinsResult);
             const newMiniGCoins = currentUserMiniGCoins - amountToConvert;
             const newGCoins = currentUserGCoins + gCoinsGained;
@@ -169,7 +163,6 @@ exports.convertCoins = onCall(async (request) => {
                 whowinsgCoins: newMiniGCoins,
                 [gcoinsField]: newGCoins,
             });
-
             const timestamp = admin.firestore.FieldValue.serverTimestamp();
             const debitMovRef = db.collection("movimentos").doc();
             transaction.set(debitMovRef, {
@@ -200,32 +193,25 @@ exports.simulateWeeklyMatches = onSchedule({
     schedule: 'every monday 01:00',
     timeZone: 'Europe/Lisbon',
 }, async (event) => {
-    
     console.log('v7: Iniciando simulação semanal com reinício de temporada...');
-
     const globalConfigRef = db.doc('paineis/configuracoes_gerais');
     const endlessConfigRef = db.doc('paineis/endless_configuracoes');
-    
     const [globalConfigSnap, endlessConfigSnap] = await Promise.all([globalConfigRef.get(), endlessConfigRef.get()]);
-
     if (!globalConfigSnap.exists || !endlessConfigSnap.exists) {
         console.error("Documento de configurações (gerais ou endless) não encontrado!");
         return null;
     }
-
     const seasonIdentifier = globalConfigSnap.data().temporadaAtual;
     const JORNADAS_PER_SEASON = endlessConfigSnap.data().jornadasPorTemporada || 28;
     const now = new Date();
     const dayOfMonth = now.getDate();
     const semanaAtual = Math.floor((dayOfMonth - 1) / 7) + 1;
     const lastSimulatedMonth = endlessConfigSnap.data().lastSimulationMonth;
-
     if (lastSimulatedMonth !== now.getMonth()) {
         console.log(`NOVA TEMPORADA DETETADA (${now.getMonth()})! A reiniciar estatísticas dos clubes...`);
         const clubsToResetQuery = db.collection('endlessclubes').where("ativo", "==", true);
         const clubsToResetSnapshot = await clubsToResetQuery.get();
         const resetBatch = db.batch();
-
         clubsToResetSnapshot.forEach(doc => {
             resetBatch.update(doc.ref, {
                 pontos: 0, vitorias: 0, empates: 0, derrotas: 0, jogosDisputados: 0,
@@ -236,23 +222,19 @@ exports.simulateWeeklyMatches = onSchedule({
         await resetBatch.commit();
         console.log("Estatísticas dos clubes reiniciadas para a nova temporada.");
     }
-    
     const currentEndlessConfig = (await endlessConfigRef.get()).data();
     const lastSimulatedWeekForThisMonth = currentEndlessConfig.lastSimulationMonth === now.getMonth() ? currentEndlessConfig.ultimaSemanaSimulada : 0;
     if (semanaAtual <= lastSimulatedWeekForThisMonth) {
         console.log(`A semana ${semanaAtual} já foi simulada este mês. A sair.`);
         return null;
     }
-
     const clubsQuery = db.collection('endlessclubes').where("temporada", "==", seasonIdentifier).where("ativo", "==", true);
     const clubsSnapshot = await clubsQuery.get();
     let leagueClubs = clubsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
     if (leagueClubs.length < 2) {
         console.log("Não há clubes ativos suficientes para simular.");
         return null;
     }
-    
     function generateRoundRobinSchedule(clubs) {
         const schedule = [];
         const localClubs = [...clubs]; 
@@ -276,11 +258,9 @@ exports.simulateWeeklyMatches = onSchedule({
         }
         return schedule;
     }
-
     const firstHalfSchedule = generateRoundRobinSchedule(leagueClubs);
     const secondHalfSchedule = firstHalfSchedule.map(round => round.map(match => ({ home: match.away, away: match.home })));
     const fullSeasonSchedule = [...firstHalfSchedule, ...secondHalfSchedule];
-    
     const calculateTeamOverall = (club) => {
         if (!club.plantel || !club.treinador) return 100;
         const plantelOverall = club.plantel.reduce((sum, p) => sum + p.overall, 0);
@@ -316,11 +296,9 @@ exports.simulateWeeklyMatches = onSchedule({
         let outcome = homeScore > awayScore ? 'home' : (awayScore > homeScore ? 'away' : 'draw');
         return { homeTeam, awayTeam, homeScore, awayScore, outcome };
     };
-
     const jornadaInicialDaSemana = (semanaAtual - 1) * 7;
     const batch = db.batch();
     const statsUpdates = {};
-
     for (let i = 0; i < 7; i++) {
         const jornadaIndex = jornadaInicialDaSemana + i;
         if (jornadaIndex >= fullSeasonSchedule.length || (jornadaIndex + 1) > JORNADAS_PER_SEASON) break;
@@ -356,7 +334,6 @@ exports.simulateWeeklyMatches = onSchedule({
             });
         }
     }
-    
     for (const clubId in statsUpdates) {
         const clubRef = db.doc(`endlessclubes/${clubId}`);
         const updatesForThisClub = {};
@@ -369,22 +346,20 @@ exports.simulateWeeklyMatches = onSchedule({
             batch.update(clubRef, updatesForThisClub);
         }
     }
-    
     batch.update(endlessConfigRef, {
         ultimaSemanaSimulada: semanaAtual,
         lastSimulationMonth: now.getMonth()
     });
-    
     await batch.commit();
-
     console.log(`Simulação da semana ${semanaAtual} (v7) para a temporada ${seasonIdentifier} concluída.`);
     return null;
 });
 
 // =====================================================================
-//          FUNÇÃO ATUALIZADA: claimEndlessSeasonWinnings (v2)
+//          FUNÇÃO ATUALIZADA: claimEndlessSeasonWinnings (v2 com CORS)
 // =====================================================================
-exports.claimEndlessSeasonWinnings = onCall(async (request) => {
+// Adicionada a opção { cors: ["https://giriagames.com"] }
+exports.claimEndlessSeasonWinnings = onCall({ cors: ["https://giriagames.com"] }, async (request) => {
     if (!request.auth) {
         throw new HttpsError("unauthenticated", "O utilizador deve estar autenticado.");
     }
@@ -392,55 +367,40 @@ exports.claimEndlessSeasonWinnings = onCall(async (request) => {
     const now = new Date();
     const dayOfMonth = now.getDate();
     const currentWeek = Math.floor((dayOfMonth - 1) / 7) + 1;
-
     if (currentWeek !== 4) {
         throw new HttpsError("failed-precondition", "Os prémios só podem ser resgatados na última semana da temporada.");
     }
-
     try {
         const userClubRef = db.doc(`endlessclubes/${userId}`);
         const userCofreRef = db.doc(`users/${userId}/cofre/geral`);
-
         return await db.runTransaction(async (transaction) => {
             const [clubDoc, cofreDoc] = await transaction.getAll(userClubRef, userCofreRef);
-
             if (!clubDoc.exists) {
                 throw new HttpsError("not-found", "O seu clube não foi encontrado.");
             }
-
             const clubData = clubDoc.data();
-
             if (clubData.winningsClaimed) {
                 throw new HttpsError("failed-precondition", "Já resgatou o prémio desta temporada.");
             }
-            
             const globalConfigSnap = await db.doc('paineis/configuracoes_gerais').get();
             const seasonIdentifier = globalConfigSnap.data().temporadaAtual;
             const lastViewed = clubData.lastWeekViewed;
-
             const userHasSimulatedWeek4 = lastViewed && lastViewed.season === seasonIdentifier && lastViewed.week === 4;
             if (!userHasSimulatedWeek4) {
                  throw new HttpsError("failed-precondition", "Deve primeiro simular os jogos da 4ª semana para se tornar elegível para o prémio.");
             }
-
             const totalPoints = clubData.pontos || 0;
             const rewardAmount = Math.floor(totalPoints / 2);
-
             if (rewardAmount <= 0) {
                 throw new HttpsError("failed-precondition", "Não tem pontos suficientes para resgatar um prémio.");
             }
-
             const cofreData = cofreDoc.exists() ? cofreDoc.data() : {};
             const currentEndlessGCoins = cofreData.endlessgCoins || 0;
             const newEndlessGCoins = currentEndlessGCoins + rewardAmount;
-
             transaction.set(userCofreRef, { endlessgCoins: newEndlessGCoins }, { merge: true });
-            
             transaction.update(userClubRef, { winningsClaimed: true });
-            
             return { success: true, message: `Recebeu ${rewardAmount} mini-gcoins!` };
         });
-
     } catch (error) {
         console.error("ERRO FINAL NA FUNÇÃO claimEndlessSeasonWinnings:", error);
         if (error instanceof HttpsError) {
