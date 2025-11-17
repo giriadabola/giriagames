@@ -394,73 +394,70 @@
 
     // VERSÃO ATUALIZADA DA FUNÇÃO
     async function suggestNextOrdem() {
-        console.log("--- Função suggestNextOrdem iniciada ---");
+    console.log("--- Função suggestNextOrdem (baseada apenas no anexo) iniciada ---");
 
-        const tipoSelect = document.getElementById('tipo');
-        const anexadoSelect = document.getElementById('anexadoItem');
-        const ordemSelect = document.getElementById('ordem');
+    const anexadoSelect = document.getElementById('anexadoItem');
+    const ordemSelect = document.getElementById('ordem');
 
-        const selectedTipo = tipoSelect.value;
-        const selectedAnexadoId = anexadoSelect.value;
+    const selectedAnexadoId = anexadoSelect.value;
+    console.log(`ID do Item Anexado selecionado: "${selectedAnexadoId}"`);
 
-        console.log(`Tipo selecionado: "${selectedTipo}"`);
-        console.log(`ID do Item Anexado: "${selectedAnexadoId}"`);
+    // A função só executa se um item anexado for selecionado
+    if (!selectedAnexadoId) {
+        ordemSelect.value = ""; // Limpa a ordem se nenhum estádio estiver selecionado
+        console.log("Nenhum item anexado selecionado. Aguardando seleção.");
+        return;
+    }
 
-        if (!selectedTipo || !selectedAnexadoId) {
-            ordemSelect.value = "";
-            console.log("Aguardando a seleção do Tipo E do Item Anexado para calcular a ordem.");
-            return;
-        }
+    ordemSelect.disabled = true;
+    ordemSelect.options[0].textContent = 'A calcular...';
+    ordemSelect.value = "";
 
-        ordemSelect.disabled = true;
-        ordemSelect.options[0].textContent = 'A calcular...';
-        ordemSelect.value = "";
+    try {
+        console.log("A executar a consulta com base APENAS no Item Anexado...");
+        const managerItensRef = collection(db, 'managerItens');
+        
+        // ALTERADO: A consulta agora só tem UMA condição 'where'
+        const q = query(
+            managerItensRef,
+            where("anexadoItemId", "==", selectedAnexadoId), // <-- ÚNICO FILTRO
+            orderBy("ordem", "desc"),
+            limit(1)
+        );
 
-        try {
-            console.log("A executar a consulta com base no Tipo E no Item Anexado...");
-            const managerItensRef = collection(db, 'managerItens');
-            
-            const q = query(
-                managerItensRef,
-                where("tipo", "==", selectedTipo),
-                where("anexadoItemId", "==", selectedAnexadoId),
-                orderBy("ordem", "desc"),
-                limit(1)
-            );
+        const querySnapshot = await getDocs(q);
+        console.log("Consulta executada.");
 
-            const querySnapshot = await getDocs(q);
-            console.log("Consulta executada.");
+        let nextOrdem = 1;
 
-            let nextOrdem = 1;
+        if (!querySnapshot.empty) {
+            console.log("Encontrado item correspondente para este Anexo.");
+            const lastItem = querySnapshot.docs[0].data();
+            console.log("Dados do último item encontrado:", lastItem);
 
-            if (!querySnapshot.empty) {
-                console.log("Encontrado item correspondente para este Tipo e Anexo.");
-                const lastItem = querySnapshot.docs[0].data();
-                console.log("Dados do último item encontrado:", lastItem);
-
-                if (lastItem.ordem && typeof lastItem.ordem === 'number') {
-                    nextOrdem = lastItem.ordem + 1;
-                    console.log(`Última ordem é ${lastItem.ordem}. Próxima ordem calculada: ${nextOrdem}`);
-                } else {
-                    console.warn("O último item não possui um campo 'ordem' válido. A ordem será 1.");
-                    nextOrdem = 1;
-                }
+            if (lastItem.ordem && typeof lastItem.ordem === 'number') {
+                nextOrdem = lastItem.ordem + 1;
+                console.log(`Última ordem é ${lastItem.ordem}. Próxima ordem calculada: ${nextOrdem}`);
             } else {
-                console.log("Nenhum item encontrado para esta combinação de Tipo e Anexo. A ordem será 1.");
+                console.warn("O último item não possui um campo 'ordem' válido. A ordem será 1.");
                 nextOrdem = 1;
             }
-
-            ordemSelect.value = nextOrdem;
-
-        } catch (error) {
-            console.error("ERRO ao tentar sugerir a ordem:", error);
-            alert("Não foi possível sugerir a ordem. Por favor, selecione manualmente.");
-        } finally {
-            ordemSelect.disabled = false;
-            ordemSelect.options[0].textContent = '-- Selecione a Ordem --';
-            console.log("--- Função suggestNextOrdem finalizada ---");
+        } else {
+            console.log("Nenhum item encontrado para este Anexo. A ordem será 1.");
+            nextOrdem = 1;
         }
+
+        ordemSelect.value = nextOrdem;
+
+    } catch (error) {
+        console.error("ERRO ao tentar sugerir a ordem:", error);
+        alert("Não foi possível sugerir a ordem. Por favor, selecione manualmente.");
+    } finally {
+        ordemSelect.disabled = false;
+        ordemSelect.options[0].textContent = '-- Selecione a Ordem --';
+        console.log("--- Função suggestNextOrdem finalizada ---");
     }
+}
 
     async function loadUsers() {
         const compradoPorSelect = document.getElementById('compradoPor');
@@ -635,15 +632,11 @@
         }
 
         // BLOCO ATUALIZADO DE LISTENERS
-        const tipoSelect = document.getElementById('tipo');
-        const anexadoSelect = document.getElementById('anexadoItem');
+     const anexadoSelect = document.getElementById('anexadoItem');
 
-        if (tipoSelect) {
-            tipoSelect.addEventListener('change', suggestNextOrdem);
-        }
-        if (anexadoSelect) {
-            anexadoSelect.addEventListener('change', suggestNextOrdem);
-        }
+if (anexadoSelect) {
+    anexadoSelect.addEventListener('change', suggestNextOrdem);
+}
     });
 </script>
     
