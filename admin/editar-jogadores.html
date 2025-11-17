@@ -426,20 +426,31 @@
                     const paisSnapshot = await getDocs(query(collection(db, 'paises'), where('nome', '==', countryName)));
                     if (!paisSnapshot.empty) paisId = paisSnapshot.docs[0].id;
 
-                    const miniGames = Array.from(document.querySelectorAll('input[name="mini-games"]:checked')).map(cb => cb.value);
-                    const miniGamesPrices = {};
-                    miniGames.forEach(game => {
-                        const priceInput = document.querySelector(`input[name="${game}-preco"]`);
-                        if (priceInput?.value) miniGamesPrices[`${game}preco`] = priceInput.value;
-                    });
+                     let clubeId = null; 
+        if (newClubName) {
+            const clubeSnapshot = await getDocs(query(collection(db, 'clubes'), where('nome', '==', newClubName)));
+            if (!clubeSnapshot.empty) {
+                clubeId = clubeSnapshot.docs[0].id;
+            }
+        }
+
+                         const miniGames = Array.from(document.querySelectorAll('input[name="mini-games"]:checked')).map(cb => cb.value);
+        const miniGamesPrices = {};
+        miniGames.forEach(game => {
+            const priceInput = document.querySelector(`input[name="${game}-preco"]`);
+            if (priceInput?.value) miniGamesPrices[`${game}preco`] = priceInput.value;
+        });
+
 
                     const playerData = {
                         nome: document.getElementById('playerName').value,
                         imagem: document.getElementById('playerImage').value,
-                        pais: countryName, paisId: paisId, clube: newClubName,
+                        pais: countryName, paisId: paisId, 
+                        clube: newClubName,
+                        clubeId: clubeId, 
                         posicao: document.getElementById('playerPosition').value,
                          dataNascimento: document.getElementById('playerBirthDate').value,
-        altura: parseFloat(document.getElementById('playerHeight').value) || null,
+                         altura: parseFloat(document.getElementById('playerHeight').value) || null,
                         overall: parseFloat(document.getElementById('playerOverall').value) || 0,
                         casta: document.getElementById('playerTier').value,
                         noMercado: document.getElementById('playerMarket').value === 'Sim',
@@ -451,28 +462,31 @@
                     };
                     await updateDoc(playerRef, playerData);
 
-                    if (originalClubName !== newClubName) {
-                        if (oldClubName) {
-                            const oldClubSnapshot = await getDocs(query(collection(db, 'clubes'), where('nome', '==', oldClubName)));
-                            if (!oldClubSnapshot.empty) await deleteDoc(doc(db, 'clubes', oldClubSnapshot.docs[0].id, 'jogadores', selectedPlayerId));
-                        }
-                        if (newClubName) {
-                            const newClubSnapshot = await getDocs(query(collection(db, 'clubes'), where('nome', '==', newClubName)));
-                            if (!newClubSnapshot.empty) await setDoc(doc(db, 'clubes', newClubSnapshot.docs[0].id, 'jogadores', selectedPlayerId), playerData);
-                        }
-                    } else if (newClubName) {
-                        const clubSnapshot = await getDocs(query(collection(db, 'clubes'), where('nome', '==', newClubName)));
-                        if (!clubSnapshot.empty) await setDoc(doc(db, 'clubes', clubSnapshot.docs[0].id, 'jogadores', selectedPlayerId), playerData, { merge: true });
-                    }
-                    alert('Jogador atualizado com sucesso!');
-                    document.getElementById('editPlayerForm').reset();
-                    document.getElementById('imagePreview').src = "";
-                    selectedPlayerId = null;
-                    playerSearch.value = "";
-                    document.getElementById('searchResults').style.display = 'none';
-                    document.getElementById('coeficientes-section').style.display = 'none';
-                } catch (error) { console.error('Erro ao atualizar jogador:', error); alert('Erro ao atualizar jogador'); }
-            });
+                 if (originalClubName !== newClubName) {
+            if (originalClubName) {
+                const oldClubSnapshot = await getDocs(query(collection(db, 'clubes'), where('nome', '==', originalClubName)));
+                if (!oldClubSnapshot.empty) await deleteDoc(doc(db, 'clubes', oldClubSnapshot.docs[0].id, 'jogadores', selectedPlayerId));
+            }
+            if (newClubName && clubeId) { // Garante que o clubeId foi encontrado
+                await setDoc(doc(db, 'clubes', clubeId, 'jogadores', selectedPlayerId), playerData);
+            }
+        } else if (newClubName && clubeId) {
+             await setDoc(doc(db, 'clubes', clubeId, 'jogadores', selectedPlayerId), playerData, { merge: true });
+        }
+        
+        alert('Jogador atualizado com sucesso!');
+        document.getElementById('editPlayerForm').reset();
+        document.getElementById('imagePreview').src = "";
+        selectedPlayerId = null;
+        playerSearch.value = "";
+        document.getElementById('searchResults').style.display = 'none';
+        document.getElementById('coeficientes-section').style.display = 'none';
+        
+    } catch (error) {
+        console.error('Erro ao atualizar jogador:', error);
+        alert('Erro ao atualizar jogador');
+    }
+});
 
             document.addEventListener('click', (e) => {
                 if (!e.target.closest('.search-container')) document.getElementById('searchResults').style.display = 'none';
