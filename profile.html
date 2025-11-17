@@ -1899,7 +1899,7 @@ async function handleConversion() {
         conversionFeedback.style.color = 'red';
         return;
     }
-     if (amountToConvert > currentUserMiniGCoins) {
+    if (amountToConvert > currentUserMiniGCoins) {
         conversionFeedback.textContent = "Não tem mini-gCoins suficientes.";
         conversionFeedback.style.color = 'red';
         return;
@@ -1914,7 +1914,6 @@ async function handleConversion() {
         }
     }
     
-    // --- ATIVAR O ESTADO DE CARREGAMENTO (e manter assim) ---
     confirmConversionBtn.disabled = true;
     confirmConversionBtn.classList.add('loading');
     confirmConversionBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
@@ -1924,12 +1923,15 @@ async function handleConversion() {
     try {
         const user = auth.currentUser;
         if (!user) {
-            throw new Error("Utilizador não autenticado. Por favor, faça login novamente.");
+            // Esta verificação é redundante com a de cima, mas é uma boa prática
+            throw new Error("Sessão de utilizador inválida. Por favor, faça login novamente.");
         }
 
-        // <-- ADIÇÃO CRÍTICA PARA ROBUSTEZ -->
-        // Força a renovação do token para garantir que a chamada é autenticada.
+        // =========================================================================
+        //          A LINHA MAIS IMPORTANTE PARA RESOLVER O ERRO 401
+        // =========================================================================
         await user.getIdToken(true); 
+        // =========================================================================
 
         const convertCoins = httpsCallable(functions, 'convertCoins');
         const result = await convertCoins({ amount: amountToConvert });
@@ -1938,23 +1940,25 @@ async function handleConversion() {
             conversionFeedback.textContent = result.data.message || "Conversão bem-sucedida!";
             conversionFeedback.style.color = 'green';
             
-            // Em caso de sucesso, a página recarrega após 2 segundos.
             setTimeout(() => {
                 conversionPopup.style.display = 'none';
                 location.reload(); 
             }, 2000);
         } else {
-            // Em caso de falha controlada, lança um erro para o bloco catch.
             throw new Error(result.data.error || 'Ocorreu um erro no servidor.');
         }
 
     } catch (error) {
-        // Em caso de erro, apenas mostra a mensagem. O botão permanece desativado.
         console.error("Erro ao chamar a função de conversão:", error);
+        // A mensagem de erro agora virá diretamente do Firebase, que é mais precisa
         conversionFeedback.textContent = error.message; 
         conversionFeedback.style.color = 'red';
+
+        // Reativa o botão em caso de erro para que o utilizador possa tentar novamente
+        confirmConversionBtn.disabled = false;
+        confirmConversionBtn.classList.remove('loading');
+        confirmConversionBtn.innerHTML = 'Confirmar Conversão';
     }
-    // O bloco 'finally' foi removido para que o botão não seja reativado.
 }
 
    
