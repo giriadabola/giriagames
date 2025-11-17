@@ -269,26 +269,32 @@
     </div>
 
     <!-- POPUPS -->
-    <div class="popup-overlay" id="exchangeHousePopup">
-        <div class="popup-content">
-            <button class="popup-btn popup-btn-icon" id="closeExchangeHousePopupBtn"><i class="fas fa-times"></i></button>
-            <h2>Casa de Conversão</h2>
-            <p>Selecione a moeda que deseja converter para GCoins.</p>
-            <div class="currency-selection-container">
-             <div class="currency-card" id="selectMiniGcoinsCard">
-    <!-- LINK CORRIGIDO -->
-    <img src="https://i.ibb.co/wJk6k0q/mini-gcoin-icon.png" alt="Mini-gCoin">
-    <div class="currency-name">Mini-gCoins</div>
-</div>
+   <div class="popup-overlay" id="exchangeHousePopup">
+    <div class="popup-content">
+        <button class="popup-btn popup-btn-icon" id="closeExchangeHousePopupBtn"><i class="fas fa-times"></i></button>
+        <h2>Casa de Conversão</h2>
+        <p>Selecione a moeda que deseja converter para GCoins.</p>
 
-<div class="currency-card disabled">
-    <!-- LINK CORRIGIDO -->
-    <img src="https://i.ibb.co/Kz2XyvP/token-icon.png" alt="Token">
-    <div class="currency-name">Tokens (Brevemente)</div>
-</div>
+        <!-- Este é o container com os cards -->
+        <div class="currency-selection-container">
+            <div class="currency-card" id="selectMiniGcoinsCard">
+                <img src="https://i.ibb.co/wJk6k0q/mini-gcoin-icon.png" alt="Mini-gCoin">
+                <div class="currency-name">Mini-gCoins</div>
+            </div>
+            <div class="currency-card disabled">
+                <img src="https://i.ibb.co/Kz2XyvP/token-icon.png" alt="Token">
+                <div class="currency-name">Tokens (Brevemente)</div>
             </div>
         </div>
+
+        <!-- CORREÇÃO: Mova o loader para aqui, a seguir ao container -->
+        <div id="exchangeHouseLoader" style="display: none; text-align: center; margin-top: 20px;">
+            <div class="loading-spinner" style="width: 50px; height: 50px; border-width: 6px; margin: auto;"></div>
+            <p style="margin-top: 10px; color: #555;">A carregar dados...</p>
+        </div>
+
     </div>
+</div>
 
     <div class="popup-overlay" id="conversionPopup">
         <div class="popup-content">
@@ -542,9 +548,37 @@ if (urlParams.get('action') === 'paydebt') {
         openExchangeHouseCard.addEventListener('click', () => { exchangeHousePopup.style.display = 'flex'; });
         closeExchangeHousePopupBtn.addEventListener('click', () => { exchangeHousePopup.style.display = 'none'; });
         selectMiniGcoinsCard.addEventListener('click', async () => {
-            exchangeHousePopup.style.display = 'none';
-            await prepareAndShowConversionPopup();
-        });
+    // Seleciona os elementos que vamos manipular
+    const loader = document.getElementById('exchangeHouseLoader');
+    const currencyContainer = document.querySelector('#exchangeHousePopup .currency-selection-container');
+    const popupTitle = document.querySelector('#exchangeHousePopup h2');
+    const popupDescription = document.querySelector('#exchangeHousePopup p');
+
+    // 1. Esconde os cards e o texto, e mostra a animação de carregamento
+    currencyContainer.style.display = 'none';
+    popupTitle.style.display = 'none';
+    popupDescription.style.display = 'none';
+    loader.style.display = 'block';
+
+    try {
+        // 2. Espera que os dados sejam carregados e o segundo popup preparado
+        await prepareAndShowConversionPopup();
+        
+        // 3. A função acima já irá mostrar o segundo popup, então só precisamos esconder o primeiro.
+        exchangeHousePopup.style.display = 'none';
+
+    } catch (error) {
+        // Em caso de erro, avisa o utilizador
+        console.error("Erro ao preparar a conversão:", error);
+        alert("Ocorreu um erro ao carregar os seus dados. Por favor, tente novamente.");
+    } finally {
+        // 4. Garante que o primeiro popup volta ao seu estado original para a próxima vez que for aberto
+        currencyContainer.style.display = 'flex';
+        popupTitle.style.display = 'block';
+        popupDescription.style.display = 'block';
+        loader.style.display = 'none';
+    }
+});
         async function prepareAndShowConversionPopup() {
             const user = auth.currentUser;
             if (!user) return;
