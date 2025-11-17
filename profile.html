@@ -1558,18 +1558,8 @@ async function handleDebtPayment() {
         debtFeedback.style.color = 'red';
         return;
     }
-    if (paymentAmount > currentUserGCoins) {
-        debtFeedback.textContent = 'Não tem GCoins suficientes.';
-        debtFeedback.style.color = 'red';
-        return;
-    }
-    if (paymentAmount > totalUserDebt) {
-        debtFeedback.textContent = 'O pagamento não pode exceder a dívida.';
-        debtFeedback.style.color = 'red';
-        return;
-    }
 
-    // --- ATIVAR O ESTADO DE CARREGAMENTO (e manter assim) ---
+    // --- ATIVAR O ESTADO DE CARREGAMENTO ---
     confirmPaymentBtn.disabled = true;
     confirmPaymentBtn.classList.add('loading');
     confirmPaymentBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
@@ -1582,7 +1572,16 @@ async function handleDebtPayment() {
             throw new Error("Utilizador não autenticado. Por favor, faça login novamente.");
         }
         
+        // Renova o token
         await user.getIdToken(true); 
+
+        // Validações que dependem do estado do utilizador
+        if (paymentAmount > currentUserGCoins) {
+            throw new Error('Não tem GCoins suficientes.');
+        }
+        if (paymentAmount > totalUserDebt) {
+            throw new Error('O pagamento não pode exceder a dívida.');
+        }
         
         const payDebt = httpsCallable(functions, 'payDebt');
         const result = await payDebt({ amount: paymentAmount });
@@ -1591,23 +1590,24 @@ async function handleDebtPayment() {
             debtFeedback.textContent = 'Pagamento bem-sucedido!';
             debtFeedback.style.color = 'green';
             
-            // Em caso de sucesso, a página recarrega após 1.5 segundos.
             setTimeout(() => {
                 debtPaymentPopup.style.display = 'none';
                 location.reload();
             }, 1500);
         } else {
-            // Em caso de falha controlada, lança um erro para o bloco catch.
             throw new Error(result.data.error || 'Ocorreu um erro no servidor.');
         }
 
     } catch (error) {
-        // Em caso de erro, apenas mostra a mensagem. O botão permanece desativado.
-        console.error("Erro no pagamento da dívida:", error);
+       console.error("Erro no pagamento da dívida:", error);
         debtFeedback.textContent = error.message; 
         debtFeedback.style.color = 'red';
+
+        // Reativa o botão em caso de erro
+        confirmPaymentBtn.disabled = false;
+        confirmPaymentBtn.classList.remove('loading');
+        confirmPaymentBtn.innerHTML = 'Confirmar Pagamento';
     }
-    // O bloco 'finally' foi removido para que o botão não seja reativado.
 }
 
 
