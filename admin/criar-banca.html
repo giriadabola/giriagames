@@ -99,6 +99,65 @@
         .fab-button:hover {
             background-color: #e0a800;
         }
+
+        .simulation-box {
+    background-color: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    padding: 15px;
+    margin-bottom: 20px;
+    margin-top: 10px;
+}
+
+.simulation-box h3 {
+    font-size: 16px;
+    margin-bottom: 10px;
+    color: #444;
+    border-bottom: 2px solid #2176ff;
+    display: inline-block;
+}
+
+.sim-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.sim-result {
+    font-weight: bold;
+    font-size: 18px;
+    text-align: center;
+    padding: 10px;
+    border-radius: 4px;
+    background: #fff;
+    border: 1px solid #ddd;
+}
+
+.sim-result.valid {
+    color: #28a745;
+    border-color: #28a745;
+    background-color: rgba(40, 167, 69, 0.1);
+}
+
+.sim-result.invalid {
+    color: #dc3545;
+    border-color: #dc3545;
+    background-color: rgba(220, 53, 69, 0.1);
+}
+
+.sim-advice {
+    font-size: 13px;
+    color: #666;
+    margin-top: 8px;
+    font-style: italic;
+    background: #fff3cd;
+    padding: 8px;
+    border-radius: 4px;
+    border-left: 4px solid #ffc107;
+}
+
     </style>
 </head>
 <body>
@@ -192,24 +251,50 @@
     </div>
     
     <!-- POPUP PARA GERIR TAXA WHOWINS -->
-    <div class="popup-overlay" id="taxa-popup">
-        <div class="popup-content">
-            <h2>Gerir Taxa Câmbio WhoWins</h2>
+ <div class="popup-overlay" id="taxa-popup">
+    <div class="popup-content">
+        <h2>Gerir Taxa Câmbio WhoWins</h2>
+        
+        <!-- Área de Simulação -->
+        <div class="simulation-box">
+            <h3><i class="fas fa-calculator"></i> Simulador</h3>
+            
+            <!-- Linha de Input da Taxa (O input principal foi movido para aqui para interagir) -->
             <form id="taxa-form">
                 <div class="form-group">
-                    <label for="taxa-whowins-input">Valor da Taxa</label>
+                    <label for="taxa-whowins-input">Taxa de Câmbio (Ex: 1.5)</label>
                     <input type="number" step="any" id="taxa-whowins-input" placeholder="Ex: 1.5" required>
                 </div>
-                <div class="popup-buttons">
+
+                <div class="sim-row">
+                    <div style="flex: 1;">
+                        <label style="font-size: 12px;">Se o utilizador converter:</label>
+                        <input type="number" id="sim-amount-input" value="100" placeholder="Valor">
+                    </div>
+                    <div style="display: flex; align-items: flex-end; padding-bottom: 10px;">
+                        <i class="fas fa-arrow-right" style="color: #666;"></i>
+                    </div>
+                    <div style="flex: 1;">
+                        <label style="font-size: 12px;">Receberá:</label>
+                        <div id="sim-result-display" class="sim-result">0</div>
+                    </div>
+                </div>
+
+                <div id="sim-advice-text" class="sim-advice" style="display: none;">
+                    <!-- Texto dinâmico aparecerá aqui -->
+                </div>
+
+                <div class="popup-buttons" style="margin-top: 20px;">
                     <button type="submit" class="popup-button confirm">Guardar Taxa</button>
                     <button type="button" class="popup-button cancel" id="cancel-taxa-btn">Cancelar</button>
                 </div>
             </form>
-            <p id="taxa-feedback" class="feedback-message"></p>
         </div>
+        <p id="taxa-feedback" class="feedback-message"></p>
     </div>
+</div>
 
-          <script type="module">
+        <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
         import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
         import { getFirestore, doc, getDoc, setDoc, collection, query, where, getDocs, addDoc, Timestamp, writeBatch, orderBy } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
@@ -236,6 +321,7 @@
         const totalInput = document.getElementById('total-input');
         const feedbackMessage = document.getElementById('feedback-message');
         
+        // Empréstimos
         const openLoanPopupBtn = document.getElementById('open-loan-popup-btn');
         const loanPopup = document.getElementById('loan-popup');
         const loanForm = document.getElementById('loan-form');
@@ -246,24 +332,91 @@
         const loanFeedback = document.getElementById('loan-feedback');
         const loanInterestInput = document.getElementById('loan-interest');
 
+        // Consultas
         const openQueryPopupBtn = document.getElementById('open-query-popup-btn');
         const queryPopup = document.getElementById('query-popup');
         const queryUserSelect = document.getElementById('query-user-select');
         const queryResultContainer = document.getElementById('query-result-container');
         const closeQueryBtn = document.getElementById('close-query-btn');
         
-        // Elementos do novo popup da Taxa WhoWins
+        // Taxa WhoWins & Simulador
         const openTaxaPopupBtn = document.getElementById('open-taxa-popup-btn');
         const taxaPopup = document.getElementById('taxa-popup');
         const taxaForm = document.getElementById('taxa-form');
         const taxaInput = document.getElementById('taxa-whowins-input');
         const cancelTaxaBtn = document.getElementById('cancel-taxa-btn');
         const taxaFeedback = document.getElementById('taxa-feedback');
+        
+        // Elementos do Simulador
+        const simAmountInput = document.getElementById('sim-amount-input');
+        const simResultDisplay = document.getElementById('sim-result-display');
+        const simAdviceText = document.getElementById('sim-advice-text');
 
         let movimentosSum = 0;
         let currentSeason = null;
 
-        // --- Funções ---
+        // --- Funções Auxiliares ---
+
+        // Algoritmo para encontrar a fração (o denominador diz-nos o múltiplo necessário)
+        function getDecimalFraction(val) {
+            const tolerance = 1.0E-6;
+            let h1 = 1; let h2 = 0;
+            let k1 = 0; let k2 = 1;
+            let b = val;
+            do {
+                let a = Math.floor(b);
+                let aux = h1; h1 = a * h1 + h2; h2 = aux;
+                aux = k1; k1 = a * k1 + k2; k2 = aux;
+                b = 1 / (b - a);
+            } while (Math.abs(val - h1 / k1) > val * tolerance);
+            
+            return k1; // Retorna o denominador
+        }
+
+        // Função de atualização do Simulador
+        function updateSimulation() {
+            const rate = parseFloat(taxaInput.value);
+            const amount = parseFloat(simAmountInput.value);
+
+            if (isNaN(rate) || isNaN(amount)) {
+                simResultDisplay.textContent = "-";
+                simResultDisplay.className = "sim-result";
+                simAdviceText.style.display = 'none';
+                return;
+            }
+
+            // Calcular resultado e arredondar para evitar erros de float (ex: 3.00000004)
+            const rawResult = rate * amount;
+            const cleanResult = Number(rawResult.toFixed(4));
+            
+            const isInteger = Number.isInteger(cleanResult);
+
+            if (isInteger) {
+                simResultDisplay.className = "sim-result valid";
+                simResultDisplay.innerHTML = `${cleanResult} <i class="fas fa-check-circle"></i>`;
+            } else {
+                simResultDisplay.className = "sim-result invalid";
+                simResultDisplay.innerHTML = `${cleanResult} <i class="fas fa-times-circle"></i>`;
+            }
+
+            // Lógica de Aconselhamento Matemático
+            if (rate > 0) {
+                simAdviceText.style.display = 'block';
+                
+                if (Number.isInteger(rate)) {
+                    simAdviceText.innerHTML = `<i class="fas fa-info-circle"></i> Como a taxa é inteira, <strong>qualquer valor</strong> inteiro gerará um resultado válido.`;
+                    simAdviceText.style.backgroundColor = "#d4edda";
+                    simAdviceText.style.borderLeftColor = "#28a745";
+                } else {
+                    const multiplier = getDecimalFraction(rate);
+                    simAdviceText.innerHTML = `<i class="fas fa-exclamation-triangle"></i> Para evitar casas decimais com a taxa <strong>${rate}</strong>, os utilizadores devem converter valores múltiplos de <strong>${multiplier}</strong> (ex: ${multiplier}, ${multiplier*2}, ${multiplier*10}).`;
+                    simAdviceText.style.backgroundColor = "#fff3cd";
+                    simAdviceText.style.borderLeftColor = "#ffc107";
+                }
+            }
+        }
+
+        // --- Funções Principais ---
 
         async function fetchCurrentSeason() {
             const configRef = doc(db, "paineis", "configuracoes_gerais");
@@ -340,86 +493,84 @@
             }
         }
 
-     async function handleLoanSubmit(event) {
-    event.preventDefault();
-    loanFeedback.textContent = 'A processar empréstimo...';
-    loanFeedback.className = 'feedback-message';
+        async function handleLoanSubmit(event) {
+            event.preventDefault();
+            loanFeedback.textContent = 'A processar empréstimo...';
+            loanFeedback.className = 'feedback-message';
 
-    const userId = userSelect.value;
-    const amount = parseFloat(loanAmountInput.value);
-    if (!userId || isNaN(amount) || amount <= 0) {
-        loanFeedback.textContent = 'Por favor, selecione um utilizador e insira um valor válido.';
-        loanFeedback.className = 'feedback-message error';
-        return;
-    }
-
-    try {
-        const movimentosRef = collection(db, "movimentos");
-        const q = query(movimentosRef, where("userId", "==", userId), where("temporada", "==", currentSeason));
-        const querySnapshot = await getDocs(q);
-        
-        let saldoExistente = 0;
-        
-        // --- CORREÇÃO APLICADA AQUI ---
-        // A lógica de cálculo do saldo agora ignora a transação 'WhoWins Paid'.
-        querySnapshot.forEach((doc) => {
-            const data = doc.data();
-            if (data.estado !== 'WhoWins Paid') {
-                const valor = parseFloat(data.valorreal);
-                if (!isNaN(valor)) {
-                    saldoExistente += valor;
-                }
+            const userId = userSelect.value;
+            const amount = parseFloat(loanAmountInput.value);
+            if (!userId || isNaN(amount) || amount <= 0) {
+                loanFeedback.textContent = 'Por favor, selecione um utilizador e insira um valor válido.';
+                loanFeedback.className = 'feedback-message error';
+                return;
             }
-        });
-        // --- FIM DA CORREÇÃO ---
 
-        const novoSaldoTotal = saldoExistente + amount;
-        const batch = writeBatch(db);
-        const description = loanDescriptionInput.value || "Empréstimo da Banca";
-        const selectedUserName = userSelect.options[userSelect.selectedIndex].text;
+            try {
+                const movimentosRef = collection(db, "movimentos");
+                const q = query(movimentosRef, where("userId", "==", userId), where("temporada", "==", currentSeason));
+                const querySnapshot = await getDocs(q);
+                
+                let saldoExistente = 0;
+                
+                // CORREÇÃO: Ignora transações 'WhoWins Paid' para não distorcer o saldo
+                querySnapshot.forEach((doc) => {
+                    const data = doc.data();
+                    if (data.estado !== 'WhoWins Paid') {
+                        const valor = parseFloat(data.valorreal);
+                        if (!isNaN(valor)) {
+                            saldoExistente += valor;
+                        }
+                    }
+                });
+
+                const novoSaldoTotal = saldoExistente + amount;
+                const batch = writeBatch(db);
+                const description = loanDescriptionInput.value || "Empréstimo da Banca";
+                const selectedUserName = userSelect.options[userSelect.selectedIndex].text;
+                
+                const jurosValorFixo = parseFloat(loanInterestInput.value) || 0;
+                const interestAmount = jurosValorFixo;
+                const totalDebt = amount + interestAmount;
+
+                // Débito na Banca
+                batch.set(doc(collection(db, 'movimentos')), {
+                    tipo: "Banca", preco: -amount, movimentoData: Timestamp.now(), temporada: currentSeason,
+                    descricao: `Empréstimo a ${selectedUserName} (Juros: ${interestAmount} GCoins)`, 
+                    para_userId: userId
+                });
+
+                // Crédito no Utilizador (Registo de dívida)
+                batch.set(doc(collection(db, 'movimentos')), {
+                    userId: userId, valorreal: amount, tipo: "Empréstimo", movimentoData: Timestamp.now(), temporada: currentSeason,
+                    de: "Banca", descricao: description, 
+                    valorJuros: interestAmount, 
+                    valorTotalAPagar: totalDebt, estado: "Por Pagar"
+                });
+
+                // Atualizar Saldo do User
+                const userRef = doc(db, 'users', userId);
+                const gCoinsField = `${currentSeason}GCoins`;
+                batch.update(userRef, { [gCoinsField]: novoSaldoTotal }); 
+
+                // Atualizar Total Banca
+                const newBankTotal = movimentosSum - amount;
+                batch.set(doc(db, "paineis", "Banca"), { valor: newBankTotal }, { merge: true });
+                await batch.commit();
+
+                movimentosSum = newBankTotal;
+                updateCalculatedTotal();
+                loanForm.reset();
+                loanFeedback.textContent = 'Empréstimo registado e saldo atualizado com sucesso!';
+                loanFeedback.className = 'feedback-message success';
+                setTimeout(() => { loanPopup.style.display = 'none'; }, 2000);
+            } catch (error) {
+                console.error("Erro ao conceder empréstimo:", error);
+                loanFeedback.textContent = `Erro: ${error.message}`;
+                loanFeedback.className = 'feedback-message error';
+            }
+        }
         
-        const jurosValorFixo = parseFloat(loanInterestInput.value) || 0;
-        const interestAmount = jurosValorFixo;
-        const totalDebt = amount + interestAmount;
-
-        batch.set(doc(collection(db, 'movimentos')), {
-            tipo: "Banca", preco: -amount, movimentoData: Timestamp.now(), temporada: currentSeason,
-            descricao: `Empréstimo a ${selectedUserName} (Juros: ${interestAmount} GCoins)`, 
-            para_userId: userId
-        });
-
-        batch.set(doc(collection(db, 'movimentos')), {
-            userId: userId, valorreal: amount, tipo: "Empréstimo", movimentoData: Timestamp.now(), temporada: currentSeason,
-            de: "Banca", descricao: description, 
-            valorJuros: interestAmount, 
-            valorTotalAPagar: totalDebt, estado: "Por Pagar"
-        });
-
-        const userRef = doc(db, 'users', userId);
-        const gCoinsField = `${currentSeason}GCoins`;
-        batch.update(userRef, { [gCoinsField]: novoSaldoTotal }); // Agora atualiza com o saldo correto
-
-        const newBankTotal = movimentosSum - amount;
-        batch.set(doc(db, "paineis", "Banca"), { valor: newBankTotal }, { merge: true });
-        await batch.commit();
-
-        movimentosSum = newBankTotal;
-        updateCalculatedTotal();
-        loanForm.reset();
-        loanFeedback.textContent = 'Empréstimo registado e saldo atualizado com sucesso!';
-        loanFeedback.className = 'feedback-message success';
-        setTimeout(() => { loanPopup.style.display = 'none'; }, 2000);
-    } catch (error) {
-        console.error("Erro ao conceder empréstimo:", error);
-        loanFeedback.textContent = `Erro: ${error.message}`;
-        loanFeedback.className = 'feedback-message error';
-    }
-}
-        
-        /**
-         * Lida com a submissão do formulário da taxa WhoWins.
-         * Grava o novo valor no Firestore.
-         */
         async function handleTaxaSubmit(event) {
             event.preventDefault();
             const newValue = taxaInput.value;
@@ -434,7 +585,6 @@
 
             try {
                 const bancaRef = doc(db, "paineis", "Banca");
-                // Usamos setDoc com merge:true para atualizar ou criar o campo sem apagar outros.
                 await setDoc(bancaRef, { taxaWhoWins: parseFloat(newValue) }, { merge: true });
 
                 taxaFeedback.textContent = 'Taxa atualizada com sucesso!';
@@ -460,6 +610,7 @@
                 statusMessage.style.display = 'none';
                 formContainer.style.display = 'block';
                 
+                // Lógica de Consulta
                 async function handleUserQuery(userId) {
                     if (!userId) {
                         queryResultContainer.innerHTML = '<p style="text-align: center;">Selecione um utilizador para consultar.</p>';
@@ -491,6 +642,8 @@
                         queryResultContainer.innerHTML = '<p style="text-align: center; color: red;">Erro ao realizar a consulta.</p>';
                     }
                 }
+
+                // Event Listeners de Consulta
                 openQueryPopupBtn.addEventListener('click', () => {
                     queryResultContainer.innerHTML = '<p style="text-align: center;">Selecione um utilizador para consultar.</p>';
                     queryUserSelect.value = '';
@@ -500,6 +653,7 @@
                 queryPopup.addEventListener('click', (e) => { if (e.target === queryPopup) queryPopup.style.display = 'none'; });
                 queryUserSelect.addEventListener('change', (event) => handleUserQuery(event.target.value));
 
+                // Event Listeners de Banca e Empréstimos
                 baseValueInput.addEventListener('input', updateCalculatedTotal);
                 bancaForm.addEventListener('submit', handleFormSubmit);
                 openLoanPopupBtn.addEventListener('click', () => {
@@ -511,25 +665,34 @@
                 loanPopup.addEventListener('click', (e) => { if (e.target === loanPopup) loanPopup.style.display = 'none'; });
                 loanForm.addEventListener('submit', handleLoanSubmit);
                 
-                // Eventos para o novo popup da taxa
+                // Event Listeners da Taxa WhoWins e Simulador
                 openTaxaPopupBtn.addEventListener('click', async () => {
                     taxaFeedback.textContent = '';
-                    taxaInput.value = 'A carregar...';
+                    taxaInput.value = '';
+                    simAdviceText.style.display = 'none';
                     taxaPopup.style.display = 'flex';
+                    
                     try {
                         const bancaRef = doc(db, "paineis", "Banca");
                         const docSnap = await getDoc(bancaRef);
                         if (docSnap.exists() && docSnap.data().taxaWhoWins) {
                             taxaInput.value = docSnap.data().taxaWhoWins;
-                        } else {
-                            taxaInput.value = ''; // Deixar em branco se não existir
                         }
+                        
+                        // Atualizar simulador assim que abrir
+                        updateSimulation();
+
                     } catch (error) {
                         taxaFeedback.textContent = 'Erro ao carregar a taxa atual.';
                         taxaFeedback.className = 'feedback-message error';
                         console.error("Erro ao carregar taxa WhoWins:", error);
                     }
                 });
+
+                // Ouvintes para atualização em tempo real do simulador
+                taxaInput.addEventListener('input', updateSimulation);
+                simAmountInput.addEventListener('input', updateSimulation);
+
                 cancelTaxaBtn.addEventListener('click', () => taxaPopup.style.display = 'none');
                 taxaPopup.addEventListener('click', (e) => { if (e.target === taxaPopup) taxaPopup.style.display = 'none'; });
                 taxaForm.addEventListener('submit', handleTaxaSubmit);
