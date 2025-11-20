@@ -217,6 +217,38 @@
         .currency-card .currency-name {
             font-size: 1.1rem; font-weight: 600; color: #0a2e5c;
         }
+
+.valor-valido {
+    color: #27ae60 !important;
+    font-weight: 800 !important;
+}
+
+.valor-invalido {
+    color: #c0392b !important;
+    font-weight: 800 !important;
+}
+
+.aviso-multiplo {
+    background-color: #fff3cd;
+    color: #856404;
+    padding: 10px;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    margin-top: 10px;
+    border-left: 4px solid #ffeeba;
+    display: none; /* Escondido por defeito */
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+.aviso-multiplo strong {
+    color: #533f03;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+        
     </style>
 </head>
 <body>
@@ -391,6 +423,7 @@
     let conversionRate = 0;
     let currentSeason = '';
     let totalUserDebt = 0;
+let bankFeePercentage = 0;
 
     // --- INÍCIO DA LÓGICA ADICIONADA ---
     
@@ -474,20 +507,21 @@
     });
 
 
-        async function loadBancaValue() {
-            try {
-                const bancaRef = doc(db, 'paineis', 'Banca');
-                const bancaSnap = await getDoc(bancaRef);
-                if (bancaSnap.exists()) {
-                    const valor = bancaSnap.data().valor || 0;
-                    bancaTotalValue.textContent = valor.toLocaleString('pt-PT', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' ₲₵';
-                    conversionRate = bancaSnap.data().taxaWhoWins || 0;
-                }
-            } catch (error) {
-                console.error("Erro ao carregar o valor da banca:", error);
-                bancaTotalValue.textContent = "Erro";
-            }
+      async function loadBancaValue() {
+    try {
+        const bancaRef = doc(db, 'paineis', 'Banca');
+        const bancaSnap = await getDoc(bancaRef);
+        if (bancaSnap.exists()) {
+            const valor = bancaSnap.data().valor || 0;
+            bancaTotalValue.textContent = valor.toLocaleString('pt-PT', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' ₲₵';
+            
+            conversionRate = bancaSnap.data().taxaWhoWins || 0;
+            bankFeePercentage = bancaSnap.data().taxaBanca || 0; // LER A COMISSÃO
         }
+    } catch (error) {
+        console.error("Erro ao carregar o valor da banca:", error);
+    }
+}
 
         // --- LÓGICA DE DÍVIDAS ---
         async function loadUserDebts(userId) {
@@ -606,6 +640,13 @@
         async function prepareAndShowConversionPopup() {
             const user = auth.currentUser;
             if (!user) return;
+             let noteText = `Custo: ${conversionRate} mini-gCoins geram 1 gCoin bruto.`;
+              if (bankFeePercentage > 0) {
+            noteText += `<br><span style="color: #e74c3c;">Nota: A Banca retém ${bankFeePercentage}% do valor convertido.</span>`;
+        } else {
+            noteText += `<br><span style="color: #27ae60;">Isento de taxas: Recebe 100% do valor.</span>`;
+        }
+         document.getElementById('conversionRateNote').innerHTML = noteText;
             const userRef = doc(db, 'users', user.uid);
             const userSnap = await getDoc(userRef);
             if (userSnap.exists()) {
@@ -624,15 +665,72 @@
         }
         closeConversionPopupBtn.addEventListener('click', () => { conversionPopup.style.display = 'none'; });
         conversionAmountInput.addEventListener('input', updateConversionSimulation);
-        function updateConversionSimulation() {
-            const amount = parseFloat(conversionAmountInput.value);
-            const resultElement = document.getElementById('conversionResult');
-            if (!isNaN(amount) && amount > 0 && conversionRate > 0) {
-                resultElement.textContent = (amount / conversionRate).toFixed(2);
+
+ function updateConversionSimulation() {
+    const amount = parseFloat(conversionAmountInput.value);
+    const resultElement = document.getElementById('conversionResult');
+    const ruleNoteElement = document.getElementById('conversionRuleNote'); 
+    const confirmBtn = document.getElementById('confirmConversionBtn');
+
+    // Resetar estilos
+    resultElement.className = ''; 
+    
+    if (!isNaN(amount) && amount > 0 && conversionRate > 0) {
+        // 1. Cálculo Bruto (Total Gerado)
+        const rawGCoins = amount / conversionRate;
+        
+        // 2. Cálculo da Parte da Banca (VALOR BRUTO - FATOR)
+        // Ex: Se fee = 0.5, banca fica com 0.5 * rawGCoins
+        const bankAmount = rawGCoins * bankFeePercentage; // Nota: a variável ainda se chama 'Percentage' mas contém o valor decimal (ex: 0.5)
+        
+        // 3. User recebe o restante
+        const userAmount = rawGCoins - bankAmount;
+        
+        // Correção de precisão flutuante
+        const cleanUserAmount = Number(userAmount.toFixed(4));
+        const cleanBankAmount = Number(bankAmount.toFixed(4));
+        
+        // Verifica se AMBOS são inteiros
+        const isUserInteger = Number.isInteger(cleanUserAmount);
+        const isBankInteger = Number.isInteger(cleanBankAmount);
+
+        if (isUserInteger && isBankInteger) {
+            // CASO VÁLIDO (VERDE)
+            resultElement.classList.add('valor-valido');
+            
+            if (bankFeePercentage > 0) {
+                resultElement.innerHTML = `${cleanUserAmount} <i class="fas fa-check-circle"></i> <span style="font-size:0.6em; color:#777;">(Banca retém: ${cleanBankAmount})</span>`;
             } else {
-                resultElement.textContent = '0.00';
+                resultElement.innerHTML = `${cleanUserAmount} <i class="fas fa-check-circle"></i>`;
             }
+            
+            if (ruleNoteElement) ruleNoteElement.style.display = 'none';
+            confirmBtn.disabled = false;
+            confirmBtn.style.opacity = "1";
+            confirmBtn.style.cursor = "pointer";
+
+        } else {
+            // CASO INVÁLIDO (VERMELHO)
+            resultElement.classList.add('valor-invalido');
+            resultElement.innerHTML = `${cleanUserAmount} <i class="fas fa-times-circle"></i>`;
+            
+            if (ruleNoteElement) {
+                ruleNoteElement.innerHTML = `<i class="fas fa-exclamation-triangle"></i> O valor deve resultar em GCoins inteiros (sem vírgulas) para si e para a banca.`;
+                ruleNoteElement.className = 'aviso-multiplo';
+                ruleNoteElement.style.display = 'block';
+            }
+            
+            confirmBtn.disabled = true;
+            confirmBtn.style.opacity = "0.6";
+            confirmBtn.style.cursor = "not-allowed";
         }
+
+    } else {
+        resultElement.textContent = '0.00';
+        if (ruleNoteElement) ruleNoteElement.style.display = 'none';
+    }
+}
+
         confirmConversionBtn.addEventListener('click', handleConversion);
         async function handleConversion() {
             const amountToConvert = parseFloat(conversionAmountInput.value);
