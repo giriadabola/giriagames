@@ -1,10 +1,8 @@
 (() => {
   const APP_URL = 'https://giriagames.com/mundial2026_extra/index.html';
-  const DISMISS_KEY = 'ggames-pwa-install-dismissed-v1';
-  const banner = () => document.getElementById('pwaInstallBanner');
-  const installBtn = () => document.getElementById('pwaInstallBtn');
-  const dismissBtn = () => document.getElementById('pwaInstallDismissBtn');
-  const text = () => document.getElementById('pwaInstallText');
+  const DISMISS_UNTIL_KEY = 'ggames-pwa-install-dismiss-until-v2';
+  const INSTALLED_KEY = 'ggames-pwa-installed-v2';
+  const SNOOZE_DAYS = 30;
   let deferredPrompt = null;
 
   function isStandalone() {
@@ -15,42 +13,108 @@
     return /iphone|ipad|ipod/i.test(window.navigator.userAgent || '');
   }
 
-  function isDismissed() {
-    return localStorage.getItem(DISMISS_KEY) === '1';
+  function dismissedNow() {
+    const until = Number(localStorage.getItem(DISMISS_UNTIL_KEY) || 0);
+    return until && Date.now() < until;
+  }
+
+  function markDismissed(days = SNOOZE_DAYS) {
+    localStorage.setItem(DISMISS_UNTIL_KEY, String(Date.now() + days * 24 * 60 * 60 * 1000));
+  }
+
+  function shouldNotShow() {
+    return isStandalone() || localStorage.getItem(INSTALLED_KEY) === '1' || dismissedNow();
+  }
+
+  function ensureBanner() {
+    let el = document.getElementById('pwaInstallBanner');
+    if (el) return el;
+
+    el = document.createElement('div');
+    el.id = 'pwaInstallBanner';
+    el.className = 'pwa-install-banner pwa-install-banner--compact';
+    el.hidden = true;
+    el.setAttribute('role', 'region');
+    el.setAttribute('aria-label', 'Instalar web app Ggames Mundial 2026');
+    el.innerHTML = `
+      <div class="pwa-install-banner__mini-icon" aria-hidden="true">
+        <img src="favicon-48x48.png" alt="">
+      </div>
+      <div class="pwa-install-banner__copy">
+        <strong>Ggames Mundial 2026</strong>
+        <span id="pwaInstallText">Instala a web app no teu ecrã inicial.</span>
+      </div>
+      <button id="pwaInstallBtn" type="button" class="pwa-install-btn">Instalar</button>
+      <button id="pwaInstallDismissBtn" type="button" class="pwa-dismiss-btn" aria-label="Não mostrar agora">×</button>
+    `;
+    document.body.appendChild(el);
+
+    el.querySelector('#pwaInstallDismissBtn')?.addEventListener('click', () => hideBanner(true));
+    el.querySelector('#pwaInstallBtn')?.addEventListener('click', onInstallClick);
+    return el;
   }
 
   function showBanner(mode = 'default') {
-    const el = banner();
-    if (!el || isStandalone() || isDismissed()) return;
+    if (shouldNotShow()) return;
+    const el = ensureBanner();
+    const text = el.querySelector('#pwaInstallText');
+    const btn = el.querySelector('#pwaInstallBtn');
 
     if (mode === 'ios') {
-      if (text()) text().textContent = 'No iPhone/iPad: toca em Partilhar e escolhe “Adicionar ao Ecrã principal”.';
-      if (installBtn()) installBtn().textContent = 'Como instalar';
+      text.textContent = 'No iPhone: Partilhar → Adicionar ao Ecrã principal.';
+      btn.textContent = 'Ver passos';
     } else {
-      if (text()) text().textContent = 'Adiciona esta web app ao ecrã inicial para entrares mais rápido.';
-      if (installBtn()) installBtn().textContent = 'Descarregar';
+      text.textContent = 'Instala a web app no teu ecrã inicial.';
+      btn.textContent = 'Instalar';
     }
 
     el.hidden = false;
     document.body.classList.add('has-pwa-banner');
   }
 
-  function hideBanner(permanent = false) {
-    const el = banner();
+  function hideBanner(snooze = false) {
+    const el = document.getElementById('pwaInstallBanner');
     if (el) el.hidden = true;
     document.body.classList.remove('has-pwa-banner');
-    if (permanent) localStorage.setItem(DISMISS_KEY, '1');
+    if (snooze) markDismissed();
+  }
+
+  async function onInstallClick() {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const choice = await deferredPrompt.userChoice.catch(() => null);
+      deferredPrompt = null;
+      if (choice?.outcome === 'accepted') {
+        localStorage.setItem(INSTALLED_KEY, '1');
+      } else {
+        markDismissed(7);
+      }
+      hideBanner(false);
+      return;
+    }
+
+    if (isIos()) {
+      alert('Para instalar no iPhone/iPad:\n\n1. Toca no botão Partilhar do Safari\n2. Escolhe “Adicionar ao Ecrã principal”\n3. Confirma em “Adicionar”');
+      markDismissed(7);
+      hideBanner(false);
+      return;
+    }
+
+    alert('Abre o menu do browser e escolhe “Instalar app” ou “Adicionar ao ecrã principal”.\n\nLink: ' + APP_URL);
+    markDismissed(7);
+    hideBanner(false);
   }
 
   window.addEventListener('beforeinstallprompt', (event) => {
     event.preventDefault();
     deferredPrompt = event;
-    setTimeout(() => showBanner('default'), 900);
+    setTimeout(() => showBanner('default'), 1200);
   });
 
   window.addEventListener('appinstalled', () => {
     deferredPrompt = null;
-    hideBanner(true);
+    localStorage.setItem(INSTALLED_KEY, '1');
+    hideBanner(false);
   });
 
   document.addEventListener('DOMContentLoaded', () => {
@@ -58,28 +122,14 @@
       navigator.serviceWorker.register('./sw.js').catch(() => {});
     }
 
-    dismissBtn()?.addEventListener('click', () => hideBanner(true));
+    if (isStandalone()) {
+      localStorage.setItem(INSTALLED_KEY, '1');
+      return;
+    }
 
-    installBtn()?.addEventListener('click', async () => {
-      if (deferredPrompt) {
-        deferredPrompt.prompt();
-        await deferredPrompt.userChoice.catch(() => null);
-        deferredPrompt = null;
-        hideBanner(true);
-        return;
-      }
-
-      if (isIos()) {
-        alert('Para instalar no iPhone/iPad:\n\n1. Toca no botão Partilhar do Safari\n2. Escolhe “Adicionar ao Ecrã principal”\n3. Confirma em “Adicionar”');
-        return;
-      }
-
-      alert('Se o botão automático não aparecer, abre o menu do browser e escolhe “Instalar app” ou “Adicionar ao ecrã principal”.\n\nLink: ' + APP_URL);
-    });
-
-    // iOS não tem evento beforeinstallprompt. Mostramos uma sugestão própria.
-    if (isIos() && !isStandalone() && !isDismissed()) {
-      setTimeout(() => showBanner('ios'), 1600);
+    // iOS/Safari não tem beforeinstallprompt. Mostramos uma sugestão discreta.
+    if (isIos() && !shouldNotShow()) {
+      setTimeout(() => showBanner('ios'), 1800);
     }
   });
 })();
