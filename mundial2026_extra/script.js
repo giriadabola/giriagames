@@ -35,6 +35,49 @@ let liveRightTab = 'battles';
 let liveSyncTimer = null;
 let ggamesTableSort = { key: 'default', direction: 'desc' };
 
+const DEFAULT_SCORING_RULES = {
+  groupExact: 3,
+  groupOutcome: 1,
+  knockoutInitialExact: 6,
+  knockoutInitialWinner: 2,
+  finalInitialExact: 8,
+  finalInitialWinner: 4,
+  finalInitialMethod: 2,
+  knockoutReformExact: 2,
+  finalReformExact: 3
+};
+let scoringRules = { ...DEFAULT_SCORING_RULES };
+
+function numericRule(name) {
+  const value = Number(scoringRules?.[name]);
+  return Number.isFinite(value) ? value : DEFAULT_SCORING_RULES[name];
+}
+
+function normalizeScoringRules(raw = {}) {
+  const normalized = { ...DEFAULT_SCORING_RULES };
+  Object.keys(DEFAULT_SCORING_RULES).forEach(key => {
+    const value = Number(raw?.[key]);
+    if (Number.isFinite(value) && value >= 0) normalized[key] = value;
+  });
+  return normalized;
+}
+
+async function loadScoringRules() {
+  if (!firestoreDb || !firebaseTools) {
+    scoringRules = { ...DEFAULT_SCORING_RULES };
+    return scoringRules;
+  }
+  try {
+    const ref = firebaseTools.doc(firestoreDb, 'settings', 'worldcupScoringRules');
+    const snap = await firebaseTools.getDoc(ref);
+    scoringRules = snap.exists() ? normalizeScoringRules(snap.data()) : { ...DEFAULT_SCORING_RULES };
+  } catch (error) {
+    console.warn('Não foi possível carregar as regras de pontuação. A usar valores padrão.', error);
+    scoringRules = { ...DEFAULT_SCORING_RULES };
+  }
+  return scoringRules;
+}
+
 let data = null;
 let squadsData = null;
 let publicPredictions = [];
@@ -835,7 +878,7 @@ async function renderClosedPublicView() {
     dashboard.innerHTML = '<div class="live-loading-card">A carregar a Central Ggames...</div>';
   }
 
-  await Promise.allSettled([loadApiWorldCupData({ sync: true }), loadPublicPredictions()]);
+  await Promise.allSettled([loadScoringRules(), loadApiWorldCupData({ sync: true }), loadPublicPredictions()]);
 
   if (dashboard) {
     dashboard.innerHTML = renderLiveDashboard();
@@ -1397,6 +1440,7 @@ async function initFirebase() {
       writeBatch: firestoreModule.writeBatch
     };
     updateSaveButton();
+    await loadScoringRules();
     await loadVotingDeadline();
   } catch (error) {
     console.error('Erro ao iniciar Firebase:', error);
@@ -1640,11 +1684,11 @@ function scoreOnePrediction(pred, official) {
 
   let points = 0;
   if (stage === 'groups') {
-    points = exact ? 3 : outcomeHit ? 1 : 0;
+    points = exact ? numericRule('groupExact') : outcomeHit ? numericRule('groupOutcome') : 0;
   } else if (stage === 'final') {
-    points = exact ? 8 : winnerHit ? 4 : outcomeHit ? 2 : 0;
+    points = exact ? numericRule('finalInitialExact') : winnerHit ? numericRule('finalInitialWinner') : outcomeHit ? numericRule('finalInitialMethod') : 0;
   } else {
-    points = exact ? 6 : outcomeHit ? 2 : 0;
+    points = exact ? numericRule('knockoutInitialExact') : outcomeHit ? numericRule('knockoutInitialWinner') : 0;
   }
 
   const goalsHit = (ph === oh ? oh : 0) + (pa === oa ? oa : 0);
@@ -1877,15 +1921,15 @@ function openGgamesRulesModal() {
     <section class="rules-modal-content">
       <h3>Secção 1 — prognóstico inicial</h3>
       <ul>
-        <li><strong>Fase de grupos:</strong> resultado exato = 3 pontos; acertar vencedor/empate = 1 ponto.</li>
-        <li><strong>16 avos até meias/3.º lugar:</strong> resultado exato = 6 pontos; acertar vencedor/empate = 2 pontos.</li>
-        <li><strong>Final:</strong> resultado exato = 8 pontos; acertar o campeão/vencedor = 4 pontos; acertar apenas o desfecho = 2 pontos.</li>
+        <li><strong>Fase de grupos:</strong> resultado exato = ${numericRule('groupExact')} pontos; acertar vencedor/empate = ${numericRule('groupOutcome')} ponto(s).</li>
+        <li><strong>16 avos até meias/3.º lugar:</strong> resultado exato = ${numericRule('knockoutInitialExact')} pontos; acertar vencedor/apurado = ${numericRule('knockoutInitialWinner')} ponto(s).</li>
+        <li><strong>Final:</strong> resultado exato = ${numericRule('finalInitialExact')} pontos; acertar o campeão/vencedor = ${numericRule('finalInitialWinner')} pontos; acertar apenas o desfecho = ${numericRule('finalInitialMethod')} ponto(s).</li>
       </ul>
       <h3>Secção 2 — reformulações nas eliminatórias</h3>
       <ul>
-        <li>Se o jogador reformular um jogo dos 16 avos em diante, o resultado reformulado vale 2 pontos se estiver exato.</li>
-        <li>Na final, uma reformulação certa vale 3 pontos.</li>
-        <li>Se o jogador tinha acertado as seleções do jogo na Secção 1, mantém esse mérito; o novo resultado conta pela regra da Secção 2.</li>
+        <li>Se o jogador reformular um jogo dos 16 avos em diante, o resultado reformulado vale ${numericRule('knockoutReformExact')} ponto(s) se estiver exato.</li>
+        <li>Na final, uma reformulação certa vale ${numericRule('finalReformExact')} ponto(s).</li>
+        <li>As regras são lidas do Firebase em <strong>settings/worldcupScoringRules</strong>. Se o documento não existir, o site usa os valores padrão.</li>
       </ul>
       <h3>Estatísticas da tabela</h3>
       <ul>

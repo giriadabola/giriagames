@@ -183,10 +183,10 @@
     const final = stage === 'final';
 
     let points = 0;
-    if (exact) points = group ? 3 : final ? 8 : 6;
-    else if (final && winnerHit) points = 4;
-    else if (group) points = sidesOk && predictionOutcome(pred) === actualOutcome(official) ? 1 : 0;
-    else points = winnerHit ? 2 : 0;
+    if (exact) points = group ? numericRule('groupExact') : final ? numericRule('finalInitialExact') : numericRule('knockoutInitialExact');
+    else if (final && winnerHit) points = numericRule('finalInitialWinner');
+    else if (group) points = sidesOk && predictionOutcome(pred) === actualOutcome(official) ? numericRule('groupOutcome') : 0;
+    else points = winnerHit ? numericRule('knockoutInitialWinner') : 0;
 
     const goalsHit = (sidesOk && ph === oh ? oh : 0) + (sidesOk && pa === oa ? oa : 0);
     const goalsMissed = sidesOk ? Math.abs(ph - oh) + Math.abs(pa - oa) : oh + oa;
@@ -213,8 +213,8 @@
     const ph = Number(override.homeGoals);
     const pa = Number(override.awayGoals);
     const exact = ph === oh && pa === oa;
-    const matchupBonus = sameMatchupAnySide(initialPred, official) ? (final ? 4 : 2) : 0;
-    const resultPoints = exact ? (final ? 3 : 2) : 0;
+    const matchupBonus = sameMatchupAnySide(initialPred, official) ? (final ? numericRule('finalInitialWinner') : numericRule('knockoutInitialWinner')) : 0;
+    const resultPoints = exact ? (final ? numericRule('finalReformExact') : numericRule('knockoutReformExact')) : 0;
     const points = matchupBonus + resultPoints;
     const goalsHit = (ph === oh ? oh : 0) + (pa === oa ? oa : 0);
     const goalsMissed = Math.abs(ph - oh) + Math.abs(pa - oa);

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ggames-mundial-2026-v1';
+const CACHE_NAME = 'ggames-mundial-2026-v6';
 const APP_SHELL = [
   './',
   './index.html',
@@ -25,7 +25,8 @@ self.addEventListener('install', (event) => {
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) => Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))))
+    caches.keys()
+      .then((keys) => Promise.all(keys.map((key) => key === CACHE_NAME ? null : caches.delete(key))))
       .then(() => self.clients.claim())
   );
 });
@@ -35,7 +36,7 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET') return;
   const url = new URL(request.url);
 
-  // Dados dinâmicos/API/Firebase: tenta sempre rede primeiro.
+  // Dados dinâmicos/API/Firebase: rede primeiro.
   if (url.pathname.endsWith('.json') || url.hostname.includes('worldcup26.ir') || url.hostname.includes('googleapis.com')) {
     event.respondWith(
       fetch(request).then((response) => {
@@ -47,12 +48,17 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // App shell: cache primeiro, com fallback à rede.
-  event.respondWith(
-    caches.match(request).then((cached) => cached || fetch(request).then((response) => {
-      const clone = response.clone();
-      caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
-      return response;
-    }))
-  );
+  // HTML/CSS/JS: rede primeiro para Safari não ficar preso na versão antiga.
+  if (url.pathname.endsWith('.html') || url.pathname.endsWith('.css') || url.pathname.endsWith('.js') || url.pathname.endsWith('/')) {
+    event.respondWith(
+      fetch(request, { cache: 'no-store' }).then((response) => {
+        const clone = response.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+        return response;
+      }).catch(() => caches.match(request))
+    );
+    return;
+  }
+
+  event.respondWith(caches.match(request).then((cached) => cached || fetch(request)));
 });
