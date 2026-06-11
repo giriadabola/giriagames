@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Editar fotos dos jogadores · Mundial 2026</title>
+  <style>
+    :root{--bg:#071226;--card:#0d1b31;--card2:#13243d;--line:#263a57;--text:#eef5ff;--muted:#9fb0c6;--accent:#60d394;--warn:#ffbf36;--bad:#ef4444;--blue:#60a5fa}
+    *{box-sizing:border-box} body{margin:0;background:radial-gradient(circle at top left,#153255,transparent 35%),var(--bg);color:var(--text);font-family:Inter,Segoe UI,Arial,sans-serif;min-height:100vh} 
+    header{position:sticky;top:0;z-index:5;background:rgba(7,18,38,.95);backdrop-filter:blur(12px);border-bottom:1px solid var(--line);padding:18px clamp(14px,3vw,34px)}
+    h1{margin:0 0 6px;font-size:clamp(1.35rem,3vw,2.2rem)} p{color:var(--muted);margin:.3rem 0;line-height:1.45}.wrap{padding:22px clamp(14px,3vw,34px) 50px;max-width:1600px;margin:auto}
+    .top-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}.toolbar{display:grid;grid-template-columns:minmax(180px,260px) 1fr auto auto;gap:12px;align-items:end;margin:18px 0}.field label{display:block;color:var(--muted);font-size:.82rem;font-weight:800;letter-spacing:.04em;text-transform:uppercase;margin:0 0 6px}
+    select,input{width:100%;border:1px solid var(--line);background:#09172b;color:var(--text);border-radius:14px;padding:12px 13px;font:inherit;outline:none} input:focus,select:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(96,165,250,.14)}
+    button,.file-btn{border:0;border-radius:14px;padding:12px 16px;font-weight:900;cursor:pointer;color:#06111f;background:var(--warn);display:inline-flex;align-items:center;justify-content:center;gap:8px;text-decoration:none}button.secondary,.file-btn.secondary{background:#1b2b46;color:var(--text);border:1px solid var(--line)}button.save{background:var(--accent)}button:disabled{opacity:.45;cursor:not-allowed}.hidden-file{display:none}
+    .status{margin:10px 0 0;padding:10px 12px;border-radius:14px;background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--muted)}.status.ok{color:#bbf7d0;border-color:rgba(96,211,148,.35)}.status.bad{color:#fecaca;border-color:rgba(239,68,68,.4)}
+    .help{margin-top:14px;border:1px solid rgba(96,165,250,.25);background:rgba(96,165,250,.08);border-radius:18px;padding:14px;color:#cfe4ff}.help strong{color:#fff}.help code{background:rgba(0,0,0,.25);padding:2px 6px;border-radius:8px;color:#fff}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:14px}.card{background:linear-gradient(180deg,rgba(19,36,61,.95),rgba(10,23,43,.95));border:1px solid var(--line);border-radius:22px;padding:14px;display:grid;grid-template-columns:92px 1fr;gap:14px;min-width:0}.card.dirty{box-shadow:0 0 0 2px rgba(255,191,54,.38) inset}.photo{width:92px;height:122px;border-radius:16px;background:#182842;display:grid;place-items:center;overflow:hidden;border:1px solid rgba(255,255,255,.12)}.photo img{width:100%;height:100%;object-fit:cover}.initials{font-size:2.2rem;font-weight:1000;color:#64d899}.meta{min-width:0}.name{font-size:1.05rem;font-weight:1000;line-height:1.15;margin:2px 0 4px}.sub{color:var(--muted);font-size:.88rem;margin-bottom:9px}.row{display:flex;gap:8px;margin-top:9px}.row button{padding:9px 10px;font-size:.86rem}.small{font-size:.78rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.badge{display:inline-flex;border:1px solid var(--line);padding:4px 8px;border-radius:999px;color:#bcd0ea;font-size:.77rem;margin-right:5px}.empty{padding:34px;border:1px dashed var(--line);border-radius:22px;color:var(--muted);text-align:center;grid-column:1/-1}
+    @media(max-width:800px){.toolbar{grid-template-columns:1fr}.card{grid-template-columns:76px 1fr}.photo{width:76px;height:104px}.top-actions{display:grid}}
+  </style>
+</head>
+<body>
+<header>
+  <h1>Editar fotos dos jogadores</h1>
+  <p>Esta página é <strong>apenas HTML</strong>. Abre o ficheiro <code>squads.json</code>, cola os links das fotos e guarda/descarrega o JSON atualizado.</p>
+  <div class="top-actions">
+    <button id="openFileBtn" type="button">Abrir squads.json</button>
+    <label class="file-btn secondary" for="fileInput">Abrir por ficheiro</label>
+    <input id="fileInput" class="hidden-file" type="file" accept=".json,application/json" />
+    <button id="tryLoadBtn" class="secondary" type="button">Tentar carregar squads.json da pasta</button>
+  </div>
+  <div id="status" class="status">Abre o squads.json para começar.</div>
+</header>
+<main class="wrap">
+  <div class="help">
+    <strong>Como usar:</strong> carrega em <strong>Abrir squads.json</strong>, escolhe o ficheiro do projeto, edita os links e depois usa <strong>Guardar no mesmo ficheiro</strong>. Se o browser não permitir guardar diretamente, usa <strong>Descarregar squads.json</strong> e substitui manualmente o ficheiro antigo.
+  </div>
+
+  <section class="toolbar">
+    <div class="field"><label>Seleção</label><select id="teamSelect" disabled></select></div>
+    <div class="field"><label>Pesquisar jogador</label><input id="searchInput" placeholder="Ex.: Ochoa, Ronaldo, Gimenez..." disabled /></div>
+    <button id="saveSameBtn" class="save" disabled>Guardar no mesmo ficheiro</button>
+    <button id="downloadBtn" class="secondary" disabled>Descarregar squads.json</button>
+  </section>
+  <section id="playersGrid" class="grid"><div class="empty">Ainda não carregaste o squads.json.</div></section>
+</main>
+<script>
+const $ = s => document.querySelector(s);
+let squads = null;
+let dirty = false;
+let currentTeam = '';
+let fileHandle = null;
+const statusEl = $('#status');
+function setStatus(msg, type='') { statusEl.className = 'status ' + type; statusEl.textContent = msg; }
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));}
+function initials(name){return String(name||'?').trim().split(/\s+/).map(x=>x[0]).join('').slice(0,2).toUpperCase() || '?'}
+function getTeams(){ return Object.keys(squads?.teams || {}).sort((a,b)=>a.localeCompare(b,'pt')); }
+function getPlayers(team){ return squads?.teams?.[team]?.players || []; }
+function markDirty(){ dirty = true; $('#saveSameBtn').disabled = !fileHandle; $('#downloadBtn').disabled = false; setStatus('Alterações por guardar.', ''); }
+function cleanForSave(obj){
+  const copy = JSON.parse(JSON.stringify(obj));
+  for (const team of Object.values(copy.teams || {})) for (const p of team.players || []) delete p.__dirty;
+  return copy;
+}
+function enableUi(){
+  $('#teamSelect').disabled = false;
+  $('#searchInput').disabled = false;
+  $('#downloadBtn').disabled = false;
+  $('#saveSameBtn').disabled = !fileHandle || !dirty;
+}
+function loadData(data, source=''){
+  squads = data;
+  const teams = getTeams();
+  $('#teamSelect').innerHTML = teams.map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join('');
+  currentTeam = teams[0] || '';
+  $('#teamSelect').value = currentTeam;
+  dirty = false;
+  enableUi();
+  setStatus(`squads.json carregado${source ? ' de ' + source : ''}.`, 'ok');
+  render();
+}
+async function openWithPicker(){
+  if (!window.showOpenFilePicker) {
+    setStatus('Este browser não suporta guardar direto. Usa “Abrir por ficheiro”.', 'bad');
+    $('#fileInput').click();
+    return;
+  }
+  try {
+    [fileHandle] = await window.showOpenFilePicker({
+      types: [{ description: 'JSON', accept: { 'application/json': ['.json'] } }],
+      excludeAcceptAllOption: false,
+      multiple: false
+    });
+    const file = await fileHandle.getFile();
+    const data = JSON.parse(await file.text());
+    loadData(data, file.name);
+  } catch (err) {
+    if (err.name !== 'AbortError') setStatus('Não consegui abrir o ficheiro: ' + err.message, 'bad');
+  }
+}
+async function loadFromInput(file){
+  if (!file) return;
+  try {
+    fileHandle = null;
+    const data = JSON.parse(await file.text());
+    loadData(data, file.name);
+    setStatus('Ficheiro carregado. Como foi aberto pelo seletor simples, guarda usando “Descarregar squads.json”.', 'ok');
+  } catch(err) { setStatus('JSON inválido ou erro a ler ficheiro: ' + err.message, 'bad'); }
+}
+async function tryLoadLocal(){
+  try {
+    fileHandle = null;
+    const res = await fetch('squads.json', { cache: 'no-store' });
+    if (!res.ok) throw new Error('Não encontrei squads.json ao lado desta página.');
+    const data = await res.json();
+    loadData(data, 'squads.json');
+    setStatus('Carregado da pasta. Para gravar, usa “Descarregar squads.json” e substitui o ficheiro.', 'ok');
+  } catch(err) {
+    setStatus('Não consegui carregar automaticamente. Usa “Abrir squads.json”. Erro: ' + err.message, 'bad');
+  }
+}
+function render(){
+  const q = $('#searchInput').value.trim().toLowerCase();
+  const players = getPlayers(currentTeam).filter(p => !q || [p.name,p.shirtName,p.officialPlayerName,p.club,p.positionLabel,p.position].join(' ').toLowerCase().includes(q));
+  if (!players.length) { $('#playersGrid').innerHTML = '<div class="empty">Nenhum jogador encontrado.</div>'; return; }
+  $('#playersGrid').innerHTML = players.map(p=>{
+    const realIndex = getPlayers(currentTeam).indexOf(p);
+    const img = p.image ? `<img src="${esc(p.image)}" alt="${esc(p.name)}" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'initials',textContent:'${esc(initials(p.name))}'}))">` : `<div class="initials">${esc(initials(p.name))}</div>`;
+    return `<article class="card ${p.__dirty?'dirty':''}" data-player-index="${realIndex}">
+      <div class="photo">${img}</div>
+      <div class="meta">
+        <div class="name">${esc(p.name)}</div>
+        <div class="sub"><span class="badge">${esc(p.positionLabel || p.position || '')}</span><span class="badge">#${esc(p.number || '—')}</span></div>
+        <div class="small">${esc(p.club || '')}</div>
+        <input class="imageInput" value="${esc(p.image || '')}" placeholder="Cola aqui o link da imagem" />
+        <div class="row">
+          <button class="secondary testBtn" type="button">Ver foto</button>
+          <button class="secondary pasteBtn" type="button">Colar</button>
+          <button class="secondary clearBtn" type="button">Limpar</button>
+        </div>
+      </div>
+    </article>`;
+  }).join('');
+}
+$('#openFileBtn').addEventListener('click', openWithPicker);
+$('#fileInput').addEventListener('change', e => loadFromInput(e.target.files?.[0]));
+$('#tryLoadBtn').addEventListener('click', tryLoadLocal);
+$('#teamSelect').addEventListener('change', e => { currentTeam = e.target.value; render(); });
+$('#searchInput').addEventListener('input', render);
+$('#playersGrid').addEventListener('input', e => {
+  if (!e.target.classList.contains('imageInput')) return;
+  const card = e.target.closest('.card');
+  const p = getPlayers(currentTeam)[Number(card.dataset.playerIndex)];
+  p.image = e.target.value.trim();
+  if (p.image) p.imageSource = 'Manual';
+  p.__dirty = true; card.classList.add('dirty'); markDirty();
+});
+$('#playersGrid').addEventListener('click', async e => {
+  const card = e.target.closest('.card'); if (!card) return;
+  const p = getPlayers(currentTeam)[Number(card.dataset.playerIndex)];
+  const input = card.querySelector('.imageInput');
+  if (e.target.classList.contains('testBtn')) {
+    const url = input.value.trim();
+    if (url) window.open(url, '_blank');
+  }
+  if (e.target.classList.contains('pasteBtn')) {
+    try {
+      const txt = await navigator.clipboard.readText();
+      input.value = txt.trim();
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    } catch { setStatus('Não consegui ler a área de transferência. Cola manualmente com Ctrl+V.', 'bad'); }
+  }
+  if (e.target.classList.contains('clearBtn')) {
+    p.image = ''; p.imageSource = ''; p.__dirty = true; markDirty(); render();
+  }
+});
+$('#downloadBtn').addEventListener('click', () => {
+  if (!squads) return;
+  const blob = new Blob([JSON.stringify(cleanForSave(squads), null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'squads.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  setStatus('squads.json descarregado. Substitui o ficheiro antigo por este.', 'ok');
+});
+$('#saveSameBtn').addEventListener('click', async () => {
+  if (!squads || !fileHandle) return;
+  try {
+    const writable = await fileHandle.createWritable();
+    await writable.write(JSON.stringify(cleanForSave(squads), null, 2));
+    await writable.close();
+    dirty = false;
+    $('#saveSameBtn').disabled = true;
+    setStatus('Guardado diretamente no mesmo squads.json.', 'ok');
+  } catch(err) {
+    setStatus('Não consegui guardar direto. Usa “Descarregar squads.json”. Erro: ' + err.message, 'bad');
+  }
+});
+window.addEventListener('beforeunload', e => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
+</script>
+</body>
+</html>

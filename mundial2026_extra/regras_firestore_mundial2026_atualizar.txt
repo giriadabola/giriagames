@@ -1,0 +1,122 @@
+BLOCOS ATUALIZADOS PARA AS REGRAS DO FIRESTORE
+
+1) Nas funções helper, garante que existem estas funções:
+
+function isRuler() {
+  return request.auth != null &&
+  exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+  get(/databases/$(database)/documents/users/$(request.auth.uid)).data.estatuto == 'ruler';
+}
+
+function votingIsOpen() {
+  return exists(/databases/$(database)/documents/settings/endateworld) &&
+  request.time < get(/databases/$(database)/documents/settings/endateworld).data.end;
+}
+
+2) Garante que o documento settings/endateworld pode ser lido pelo site público:
+
+match /settings/endateworld {
+  allow read: if true;
+  allow write: if isAdmin();
+}
+
+3) Substitui os blocos worldcupextra e worldcupextraVisitors por estes:
+
+match /worldcupextra/{docId} {
+  allow read: if true;
+
+  // SECÇÃO 1 — prognóstico inicial, antes da data limite.
+  allow create: if
+    (
+      votingIsOpen() &&
+      request.resource.data.status != 'official' &&
+      request.resource.data.status != 'section2' &&
+      request.resource.data.participantKey == docId &&
+      request.resource.data.participantName is string &&
+      request.resource.data.participantName.size() >= 2 &&
+      request.resource.data.visitorKey is string &&
+      !exists(/databases/$(database)/documents/worldcupextra/$(docId)) &&
+      !exists(/databases/$(database)/documents/worldcupextraVisitors/$(request.resource.data.visitorKey)) &&
+      existsAfter(/databases/$(database)/documents/worldcupextraVisitors/$(request.resource.data.visitorKey))
+    )
+    ||
+    // RESULTADOS OFICIAIS MANUAIS — só ruler.
+    (
+      isRuler() &&
+      request.resource.data.status == 'official' &&
+      request.resource.data.type == 'officialResult' &&
+      request.resource.data.matchId is int
+    )
+    ||
+    // RESULTADOS OFICIAIS AUTOMÁTICOS DA API — opção simples para o index.html conseguir sincronizar.
+    // Nota: para máxima segurança, o ideal é trocar isto por uma Cloud Function agendada.
+    (
+      request.resource.data.status == 'official' &&
+      request.resource.data.type == 'officialResult' &&
+      request.resource.data.source == 'api' &&
+      request.resource.data.matchId is int &&
+      request.resource.data.homeTeam is string &&
+      request.resource.data.awayTeam is string &&
+      request.resource.data.homeGoals is int &&
+      request.resource.data.awayGoals is int &&
+      request.resource.data.finished == true
+    )
+    ||
+    // SECÇÃO 2 — reformulação das eliminatórias.
+    (
+      request.resource.data.status == 'section2' &&
+      request.resource.data.type == 'knockoutRevision' &&
+      request.resource.data.participantKey is string &&
+      request.resource.data.participantName is string &&
+      request.resource.data.participantName.size() >= 2 &&
+      request.resource.data.matchId is int &&
+      request.resource.data.stage in ['round32', 'round16', 'quarterfinals', 'semifinals', 'third_place', 'final']
+    );
+
+  allow update: if
+    (
+      isRuler() &&
+      request.resource.data.status == 'official' &&
+      request.resource.data.type == 'officialResult' &&
+      request.resource.data.matchId is int
+    )
+    ||
+    // Permite que a API atualize um resultado oficial automático já existente.
+    // Nota: para máxima segurança, usar Cloud Function.
+    (
+      request.resource.data.status == 'official' &&
+      request.resource.data.type == 'officialResult' &&
+      request.resource.data.source == 'api' &&
+      request.resource.data.matchId is int &&
+      request.resource.data.homeTeam is string &&
+      request.resource.data.awayTeam is string &&
+      request.resource.data.homeGoals is int &&
+      request.resource.data.awayGoals is int &&
+      request.resource.data.finished == true
+    )
+    ||
+    (
+      request.resource.data.status == 'section2' &&
+      request.resource.data.type == 'knockoutRevision' &&
+      request.resource.data.participantKey is string &&
+      request.resource.data.participantName is string &&
+      request.resource.data.participantName.size() >= 2 &&
+      request.resource.data.matchId is int &&
+      request.resource.data.stage in ['round32', 'round16', 'quarterfinals', 'semifinals', 'third_place', 'final']
+    );
+
+  allow delete: if isRuler();
+}
+
+match /worldcupextraVisitors/{visitorKey} {
+  allow read: if isAdmin();
+
+  allow create: if
+    votingIsOpen() &&
+    request.resource.data.participantKey is string &&
+    request.resource.data.participantName is string &&
+    !exists(/databases/$(database)/documents/worldcupextraVisitors/$(visitorKey)) &&
+    existsAfter(/databases/$(database)/documents/worldcupextra/$(request.resource.data.participantKey));
+
+  allow update, delete: if isAdmin();
+}
