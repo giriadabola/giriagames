@@ -1,0 +1,27 @@
+// =====================================================================
+// WORLD CUP EXTRA — PINHASH PARA ESCOLHAS DE MARCADOR DAS BATTLES
+// =====================================================================
+
+// Troca o bloco antigo de worldcupextraBattleScorers por este.
+// Este bloco permite gravar a escolha do marcador sem guardar o PIN real no documento.
+
+match /worldcupextraBattleScorers/{pickId} {
+  allow read: if true;
+
+  allow create: if
+    request.resource.data.matchDocId is string
+    && exists(/databases/$(database)/documents/worldcupextraMatches/$(request.resource.data.matchDocId))
+    && request.time < get(/databases/$(database)/documents/worldcupextraMatches/$(request.resource.data.matchDocId)).data.kickoff
+    && request.resource.data.participantKey is string
+    && exists(/databases/$(database)/documents/worldcupextra/$(request.resource.data.participantKey))
+    && request.resource.data.pinHash is string
+    && request.resource.data.pinHash == get(/databases/$(database)/documents/worldcupextra/$(request.resource.data.participantKey)).data.pinHash
+    && request.resource.data.battleId is string
+    && request.resource.data.pickedPlayerName is string
+    && request.resource.data.pickedPlayerName.size() >= 2
+    && request.resource.data.pickedPlayerTeam is string
+    && !('pin' in request.resource.data)
+    && !exists(/databases/$(database)/documents/worldcupextraBattleScorers/$(pickId));
+
+  allow update, delete: if isAdmin();
+}

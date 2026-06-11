@@ -154,3 +154,47 @@ match /settings/worldcupScoringRules {
   allow read: if true;
   allow create, update, delete: if isAdmin();
 }
+
+
+// Horários oficiais dos jogos usados para bloquear escolhas de marcadores/battles.
+// Colocar dentro de match /databases/{database}/documents { ... }
+match /worldcupextraMatches/{matchDocId} {
+  allow read: if true;
+  allow create, update, delete: if isAdmin();
+}
+
+// Escolhas de marcador nas Battles.
+// Esta regra é uma base. A versão final pode apertar mais quando a estrutura das battles estiver fechada.
+match /worldcupextraBattleScorers/{pickId} {
+  allow read: if true;
+
+  // O jogador pode criar a sua escolha antes do jogo começar, usando PIN convertido em pinHash.
+  // O PIN real NÃO deve ser gravado neste documento.
+  //
+  // Documento esperado:
+  // matchDocId: "match_001"
+  // matchId: 1
+  // battleId: "match_001_battle_01"
+  // participantKey: "andre-henriques"
+  // participantName: "André Henriques"
+  // pinHash: "..."
+  // pickedPlayerName: "Cristiano Ronaldo"
+  // pickedPlayerTeam: "Portugal"
+  // stage: "round32"
+  allow create: if
+    request.resource.data.matchDocId is string
+    && exists(/databases/$(database)/documents/worldcupextraMatches/$(request.resource.data.matchDocId))
+    && request.time < get(/databases/$(database)/documents/worldcupextraMatches/$(request.resource.data.matchDocId)).data.kickoff
+    && request.resource.data.participantKey is string
+    && exists(/databases/$(database)/documents/worldcupextra/$(request.resource.data.participantKey))
+    && request.resource.data.pinHash is string
+    && request.resource.data.pinHash == get(/databases/$(database)/documents/worldcupextra/$(request.resource.data.participantKey)).data.pinHash
+    && request.resource.data.battleId is string
+    && request.resource.data.pickedPlayerName is string
+    && request.resource.data.pickedPlayerName.size() >= 2
+    && request.resource.data.pickedPlayerTeam is string
+    && !('pin' in request.resource.data)
+    && !exists(/databases/$(database)/documents/worldcupextraBattleScorers/$(pickId));
+
+  allow update, delete: if isAdmin();
+}

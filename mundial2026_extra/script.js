@@ -1465,6 +1465,23 @@ function resolvedWinner(match, pred, q) {
 }
 
 
+
+async function hashPinForParticipant(participantKey, pin) {
+  const text = `${participantKey}:${pin}`;
+  if (window.crypto?.subtle) {
+    const data = new TextEncoder().encode(text);
+    const digest = await window.crypto.subtle.digest('SHA-256', data);
+    return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('');
+  }
+  // fallback simples caso crypto.subtle não esteja disponível
+  let hash = 2166136261;
+  for (let i = 0; i < text.length; i++) {
+    hash ^= text.charCodeAt(i);
+    hash += (hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24);
+  }
+  return `fnv-${(hash >>> 0).toString(16)}`;
+}
+
 function getOrCreateParticipantPin(participantKey) {
   const key = `worldcup2026_pin_${participantKey || 'participante'}`;
   let pin = localStorage.getItem(key);
@@ -2078,6 +2095,7 @@ async function saveToFirebase() {
 
     status.textContent = 'A gravar o teu prognóstico...';
     const payload = buildSubmissionPayload(participantKey, visitorKey);
+    payload.pinHash = await hashPinForParticipant(participantKey, payload.pin);
     const docId = participantKey;
     const batch = firebaseTools.writeBatch(firestoreDb);
     const predictionRef = firebaseTools.doc(firestoreDb, FIREBASE_COLLECTION, docId);

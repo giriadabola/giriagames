@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gerir Ggames Battles — Mundial 2026</title>
+  <style>
+    :root{color-scheme:dark;--bg:#061120;--panel:#0b1b31;--line:rgba(148,163,184,.25);--text:#ecfdf5;--muted:#a9b9cf;--accent:#61d394;--gold:#f8c14a;--danger:#fb7185}
+    *{box-sizing:border-box} body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;background:radial-gradient(circle at 0 0,rgba(97,211,148,.18),transparent 32%),var(--bg);color:var(--text)}
+    main{width:min(1220px,calc(100% - 28px));margin:auto;padding:26px 0 50px}
+    h1{font-size:clamp(1.8rem,4vw,3rem);margin:0 0 8px} h2{margin:0 0 10px} p{color:var(--muted);line-height:1.5}
+    .card{background:linear-gradient(180deg,rgba(16,35,61,.94),rgba(8,20,39,.94));border:1px solid var(--line);border-radius:24px;padding:18px;margin:16px 0;box-shadow:0 24px 70px rgba(0,0,0,.25)}
+    .actions{display:flex;gap:10px;flex-wrap:wrap} button{border:0;border-radius:14px;padding:11px 14px;font-weight:900;cursor:pointer;background:linear-gradient(135deg,var(--accent),var(--gold));color:#062015}
+    button.secondary{background:#122642;color:var(--text);border:1px solid var(--line)} button:disabled{opacity:.5;cursor:not-allowed}
+    .status{white-space:pre-wrap;background:#061528;border:1px solid var(--line);border-radius:18px;padding:14px;max-height:260px;overflow:auto;color:var(--muted)}
+    code{background:rgba(255,255,255,.08);padding:2px 6px;border-radius:8px}.hidden{display:none!important}
+    .grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.stat{padding:14px;border:1px solid var(--line);border-radius:18px;background:rgba(255,255,255,.04)}.stat b{font-size:1.8rem;display:block}
+    .table-wrap{overflow:auto;max-height:520px;border:1px solid var(--line);border-radius:18px}table{width:100%;border-collapse:collapse;min-width:920px}th,td{padding:10px;border-bottom:1px solid rgba(148,163,184,.16);text-align:left;font-size:.92rem}th{position:sticky;top:0;background:#0b1b31;color:#d8fbe7}
+    @media(max-width:800px){.grid{grid-template-columns:1fr 1fr}.actions button{width:100%}}
+  </style>
+</head>
+<body>
+<main>
+  <h1>Gerir Ggames Battles</h1>
+  <p>Esta página gera as battles equilibradas e calcula automaticamente os vencedores quando já houver resultados oficiais/API.</p>
+
+  <section class="card">
+    <h2>Login</h2>
+    <p>Só uma conta com <code>users/{uid}.estatuto = ruler</code> ou <code>estafeta</code> deve conseguir gravar.</p>
+    <div class="actions">
+      <button id="loginBtn" type="button">Entrar com Google</button>
+      <button id="logoutBtn" class="secondary hidden" type="button">Sair</button>
+      <button id="loadBtn" class="secondary" type="button">Carregar dados</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Ações</h2>
+    <div class="actions">
+      <button id="generateBtn" type="button" disabled>Gerar/atualizar Battles</button>
+      <button id="scoreBtn" type="button" disabled>Calcular resultados das Battles</button>
+      <button id="bothBtn" type="button" disabled>Fazer tudo</button>
+      <button id="migratePinBtn" class="secondary" type="button" disabled>Criar pinHash dos PINs</button>
+    </div>
+    <p><strong>Gerar:</strong> cria pares por jogo, sem repetir jogador no mesmo jogo, equilibrando aparições ao longo do torneio.</p>
+    <p><strong>Calcular:</strong> usa resultados oficiais/API e escolhas de marcadores para decidir o vencedor da Battle.</p>
+  </section>
+
+  <section class="card">
+    <h2>Resumo</h2>
+    <div class="grid">
+      <div class="stat"><span>Jogadores</span><b id="statPlayers">0</b></div>
+      <div class="stat"><span>Jogos</span><b id="statMatches">0</b></div>
+      <div class="stat"><span>Battles existentes</span><b id="statBattles">0</b></div>
+      <div class="stat"><span>Escolhas marcador</span><b id="statPicks">0</b></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Estado</h2>
+    <div id="status" class="status">A iniciar...</div>
+  </section>
+
+  <section class="card">
+    <h2>Pré-visualização</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Jogo</th><th>Battle</th><th>Jogador A</th><th>Jogador B</th><th>Estado</th><th>Resultado</th></tr></thead>
+        <tbody id="previewBody"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<script type="module">
+const FIREBASE_CONFIG = {
+  apiKey: 'AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0',
+  authDomain: 'g-games-8a8fc.firebaseapp.com',
+  projectId: 'g-games-8a8fc',
+  storageBucket: 'g-games-8a8fc.firebasestorage.app',
+  messagingSenderId: '689897349449',
+  appId: '1:689897349449:web:536599794579901beb7a98',
+  measurementId: 'G-GTTPJ6G5MD'
+};
+const SDK='10.14.1';
+const API='https://worldcup26.ir';
+const COLLECTION='worldcupextra';
+const BATTLES='worldcupextraBattles';
+const PICKS='worldcupextraBattleScorers';
+let app, db, auth, tools, user=null, isAdmin=false;
+let matches=[], predictions=[], officialResults={}, battles=[], picks=[], apiGames=[];
+
+const $=s=>document.querySelector(s);
+const log=(m,t='')=>{ $('#status').textContent += `\n${t==='good'?'✅ ':t==='bad'?'❌ ':t==='warn'?'⚠️ ':'• '}${m}`; $('#status').scrollTop=$('#status').scrollHeight; };
+const setStatus=m=>$('#status').textContent=m;
+const norm=s=>String(s||'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+async function hashPin(participantKey,pin){
+  const text=`${participantKey}:${pin}`;
+  if(crypto?.subtle){
+    const data=new TextEncoder().encode(text);
+    const digest=await crypto.subtle.digest('SHA-256',data);
+    return [...new Uint8Array(digest)].map(b=>b.toString(16).padStart(2,'0')).join('');
+  }
+  let hash=2166136261;
+  for(let i=0;i<text.length;i++){hash^=text.charCodeAt(i);hash+=(hash<<1)+(hash<<4)+(hash<<7)+(hash<<8)+(hash<<24);}
+  return `fnv-${(hash>>>0).toString(16)}`;
+}
+const docId=(matchId,n)=>`match_${String(matchId).padStart(3,'0')}_battle_${String(n).padStart(2,'0')}`;
+const keyOf=p=>p.participantKey || norm(p.participantName || p.name || p.id);
+const stageLabel=s=>({groups:'Fase de grupos',round32:'16 avos',round16:'Oitavos',quarterfinals:'Quartos',semifinals:'Meias',third_place:'3.º/4.º lugar',final:'Final'}[s]||s||'');
+
+function updateBtns(){
+  $('#loginBtn').classList.toggle('hidden',!!user); $('#logoutBtn').classList.toggle('hidden',!user);
+  $('#generateBtn').disabled=!isAdmin || !predictions.length || !matches.length;
+  $('#scoreBtn').disabled=!isAdmin || !battles.length;
+  $('#bothBtn').disabled=!isAdmin || !predictions.length || !matches.length;
+  $('#migratePinBtn').disabled=!isAdmin || !predictions.length;
+}
+function updateStats(){
+  $('#statPlayers').textContent=predictions.length; $('#statMatches').textContent=matches.length; $('#statBattles').textContent=battles.length; $('#statPicks').textContent=picks.length;
+}
+function renderPreview(){
+  const rows=(battles.length?battles:generateBattles()).slice(0,80);
+  $('#previewBody').innerHTML=rows.map(b=>{
+    const r=calculateBattle(b);
+    return `<tr><td>${b.matchId} · ${b.homeTeam||''} vs ${b.awayTeam||''}</td><td><code>${b.id}</code></td><td>${b.playerAName}</td><td>${b.playerBName}</td><td>${r.status}</td><td>${r.status==='finished'?`${r.playerAFactors}-${r.playerBFactors} ${r.draw?'empate':r.winnerName?'vence '+r.winnerName:''}`:'—'}</td></tr>`;
+  }).join('');
+}
+async function init(){
+  const appM=await import(`https://www.gstatic.com/firebasejs/${SDK}/firebase-app.js`);
+  const fs=await import(`https://www.gstatic.com/firebasejs/${SDK}/firebase-firestore.js`);
+  const au=await import(`https://www.gstatic.com/firebasejs/${SDK}/firebase-auth.js`);
+  app=appM.initializeApp(FIREBASE_CONFIG); db=fs.getFirestore(app); auth=au.getAuth(app);
+  tools={collection:fs.collection,getDocs:fs.getDocs,doc:fs.doc,getDoc:fs.getDoc,setDoc:fs.setDoc,writeBatch:fs.writeBatch,serverTimestamp:fs.serverTimestamp,GoogleAuthProvider:au.GoogleAuthProvider,signInWithPopup:au.signInWithPopup,signOut:au.signOut,onAuthStateChanged:au.onAuthStateChanged};
+  tools.onAuthStateChanged(auth, async u=>{
+    user=u; isAdmin=false;
+    if(!u){setStatus('Não autenticado. Entra com Google.'); updateBtns(); return;}
+    setStatus(`Autenticado: ${u.email||u.uid}. A verificar estatuto...`);
+    const snap=await tools.getDoc(tools.doc(db,'users',u.uid));
+    const estatuto=snap.exists()?snap.data().estatuto:'';
+    isAdmin=['ruler','estafeta'].includes(estatuto);
+    log(isAdmin?`Estatuto confirmado: ${estatuto}`:`Sem permissão ruler/estafeta.`, isAdmin?'good':'bad');
+    updateBtns();
+  });
+}
+async function loadAll(){
+  setStatus('A carregar dados...');
+  const mRes=await fetch('matches.json',{cache:'no-store'}); const mData=await mRes.json(); matches=Array.isArray(mData.matches)?mData.matches:mData;
+  try{ const apiRes=await fetch(`${API}/get/games`,{cache:'no-store'}); const api=await apiRes.json(); apiGames=Array.isArray(api)?api:(api.data||api.games||[]); }catch(e){ apiGames=[]; log('API não carregou. Usarei só resultados Firebase, se existirem.','warn');}
+  const predSnap=await tools.getDocs(tools.collection(db,COLLECTION));
+  const all=predSnap.docs.map(d=>({id:d.id,...d.data()}));
+  predictions=all.filter(d=>d.status!=='official'&&d.type!=='officialResult'&&Array.isArray(d.matches));
+  officialResults=Object.fromEntries(all.filter(d=>(d.status==='official'||d.type==='officialResult')&&(d.matchId!=null||String(d.id||'').startsWith('official-match-'))).map(d=>[String(d.matchId??String(d.id).replace('official-match-','')),d]));
+  const bSnap=await tools.getDocs(tools.collection(db,BATTLES)); battles=bSnap.docs.map(d=>({id:d.id,...d.data()}));
+  const pSnap=await tools.getDocs(tools.collection(db,PICKS)); picks=pSnap.docs.map(d=>({id:d.id,...d.data()}));
+  updateStats(); renderPreview(); updateBtns();
+  log(`Dados carregados: ${predictions.length} jogadores, ${matches.length} jogos, ${battles.length} battles.`, 'good');
+}
+function generateBattles(){
+  const players=predictions.map((p,i)=>({key:keyOf(p),name:p.participantName||`Jogador ${i+1}`,id:p.id,appearances:0}));
+  const generated=[];
+  const sortedMatches=matches.slice().sort((a,b)=>Number(a.id)-Number(b.id));
+  sortedMatches.forEach(match=>{
+    const order=players.slice().sort((a,b)=>(a.appearances-b.appearances)||((norm(a.name+match.id)>norm(b.name+match.id))?1:-1));
+    let battleNo=1;
+    for(let i=0;i<order.length-1;i+=2){
+      const a=order[i], b=order[i+1];
+      a.appearances++; b.appearances++;
+      generated.push({
+        id:docId(match.id,battleNo++),
+        matchId:Number(match.id), matchDocId:`match_${String(match.id).padStart(3,'0')}`,
+        stage:match.stage||'', stageLabel:stageLabel(match.stage), group:match.group||'',
+        homeTeam:match.home||match.homeTeam||'', awayTeam:match.away||match.awayTeam||'',
+        playerAKey:a.key, playerAName:a.name, playerBKey:b.key, playerBName:b.name,
+        status:'pending', createdBy:'gerenciar-battles.html'
+      });
+    }
+  });
+  return generated;
+}
+function apiGame(matchId){
+  return apiGames.find(g=>String(g.id||g.match_id||g.game_id)===String(matchId))||null;
+}
+function apiScore(v){ const n=Number(v); return Number.isFinite(n)?n:null; }
+function official(matchId){
+  const f=officialResults[String(matchId)]||null; const a=apiGame(matchId);
+  const ag=a?{homeGoals:apiScore(a.home_score??a.homeGoals),awayGoals:apiScore(a.away_score??a.awayGoals),homeScorers:a.home_scorers??a.homeScorers,awayScorers:a.away_scorers??a.awayScorers,finished:Boolean(a.finished)}:null;
+  if(ag && ag.homeGoals!=null && ag.awayGoals!=null) return {...f,...ag};
+  return f;
+}
+function outcome(h,a){return h>a?'home':a>h?'away':'draw';}
+function predFor(key,matchId){ const p=predictions.find(x=>keyOf(x)===key); return (p?.matches||[]).find(m=>Number(m.id)===Number(matchId));}
+function scorerArray(v){ if(!v)return[]; if(Array.isArray(v))return v.map(x=>typeof x==='string'?x:(x.name||x.player||x.scorer||'')); return String(v).split(/[,;|]/).map(x=>x.trim()).filter(Boolean);}
+function ns(s){return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim();}
+function pickFor(battleId,key){return picks.find(p=>p.battleId===battleId&&p.participantKey===key);}
+function scorerHit(pick,o){ if(!pick||!o)return false; const target=ns(pick.pickedPlayerName); const list=[...scorerArray(o.homeScorers||o.home_scorers),...scorerArray(o.awayScorers||o.away_scorers)].map(ns); return list.some(x=>x===target||x.includes(target)||target.includes(x));}
+function factors(key,b,o){
+  const p=predFor(key,b.matchId); if(!p||!o||o.homeGoals==null||o.awayGoals==null)return{total:0};
+  const ph=Number(p.homeGoals),pa=Number(p.awayGoals),oh=Number(o.homeGoals),oa=Number(o.awayGoals);
+  const f={winner:outcome(ph,pa)===outcome(oh,oa)?1:0,homeGoals:ph===oh?1:0,awayGoals:pa===oa?1:0,exact:ph===oh&&pa===oa?1:0,scorer:scorerHit(pickFor(b.id,key),o)?1:0};
+  f.total=f.winner+f.homeGoals+f.awayGoals+f.exact+f.scorer; return f;
+}
+function calculateBattle(b){
+  const o=official(b.matchId); if(!o||o.homeGoals==null||o.awayGoals==null||!(o.finished||b.status==='finished')) return {status:b.status||'pending'};
+  const af=factors(b.playerAKey,b,o), bf=factors(b.playerBKey,b,o); const winnerKey=af.total>bf.total?b.playerAKey:bf.total>af.total?b.playerBKey:''; const winnerName=winnerKey===b.playerAKey?b.playerAName:winnerKey===b.playerBKey?b.playerBName:'';
+  return {status:'finished',playerAFactors:af.total,playerBFactors:bf.total,winnerKey,winnerName,draw:!winnerKey,officialHomeGoals:o.homeGoals,officialAwayGoals:o.awayGoals};
+}
+async function saveBattles(){
+  const generated=generateBattles(); if(!generated.length){log('Nada para gerar.','warn');return;}
+  let batch=tools.writeBatch(db), n=0, chunk=0;
+  for(const b of generated){
+    batch.set(tools.doc(db,BATTLES,b.id), {...b,updatedAt:tools.serverTimestamp()}, {merge:true}); n++; chunk++;
+    if(chunk>=400){ await batch.commit(); batch=tools.writeBatch(db); chunk=0; log(`Gravadas ${n} battles...`);}
+  }
+  if(chunk) await batch.commit();
+  log(`${n} battles geradas/atualizadas.`, 'good');
+  await loadAll();
+}
+async function scoreBattles(){
+  const source=battles.length?battles:generateBattles(); let updated=0; let batch=tools.writeBatch(db), chunk=0;
+  for(const b of source){
+    const r=calculateBattle(b); if(r.status!=='finished') continue;
+    batch.set(tools.doc(db,BATTLES,b.id), {...b,...r,status:'finished',updatedAt:tools.serverTimestamp()}, {merge:true}); updated++; chunk++;
+    if(chunk>=400){ await batch.commit(); batch=tools.writeBatch(db); chunk=0; log(`Calculadas ${updated} battles...`);}
+  }
+  if(chunk) await batch.commit();
+  log(`${updated} resultados de battles atualizados.`, updated?'good':'warn');
+  await loadAll();
+}
+
+async function migratePins(){
+  if(!isAdmin){log('Sem permissão.','bad');return;}
+  if(!predictions.length) await loadAll();
+  let count=0, skipped=0;
+  let batch=tools.writeBatch(db), chunk=0;
+  for(const p of predictions){
+    const key=keyOf(p);
+    if(!p.pin || p.pinHash){skipped++; continue;}
+    const pinHash=await hashPin(key,p.pin);
+    batch.set(tools.doc(db,COLLECTION,key),{pinHash,updatedAt:tools.serverTimestamp()},{merge:true});
+    count++; chunk++;
+    if(chunk>=400){await batch.commit(); batch=tools.writeBatch(db); chunk=0; log(`Criados ${count} pinHash...`);}
+  }
+  if(chunk) await batch.commit();
+  log(`Migração concluída: ${count} pinHash criados; ${skipped} ignorados.`, 'good');
+  await loadAll();
+}
+
+$('#loginBtn').onclick=async()=>{try{await tools.signInWithPopup(auth,new tools.GoogleAuthProvider())}catch(e){log(e.message,'bad')}};
+$('#logoutBtn').onclick=async()=>tools.signOut(auth);
+$('#loadBtn').onclick=loadAll; $('#generateBtn').onclick=saveBattles; $('#scoreBtn').onclick=scoreBattles; $('#bothBtn').onclick=async()=>{await saveBattles(); await scoreBattles();}; $('#migratePinBtn').onclick=migratePins;
+setStatus('A iniciar Firebase...');
+await init();
+</script>
+</body>
+</html>

@@ -1,0 +1,402 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gerir horários Mundial 2026 — Ggames</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg:#061120;
+      --panel:#0b1b31;
+      --panel2:#10233d;
+      --line:rgba(148,163,184,.25);
+      --text:#ecfdf5;
+      --muted:#9fb2ca;
+      --accent:#61d394;
+      --danger:#fb7185;
+      --warn:#fbbf24;
+    }
+    * { box-sizing:border-box; }
+    body {
+      margin:0;
+      font-family: Inter, system-ui, -apple-system, Segoe UI, sans-serif;
+      background: radial-gradient(circle at 0 0, rgba(97,211,148,.18), transparent 30%), var(--bg);
+      color:var(--text);
+      min-height:100vh;
+    }
+    main { width:min(1180px, calc(100% - 28px)); margin:0 auto; padding:28px 0 50px; }
+    .top {
+      display:flex;
+      justify-content:space-between;
+      gap:18px;
+      align-items:flex-start;
+      margin-bottom:18px;
+    }
+    h1 { margin:0 0 8px; font-size:clamp(1.8rem, 5vw, 3rem); }
+    p { color:var(--muted); line-height:1.55; }
+    .card {
+      background:linear-gradient(180deg, rgba(16,35,61,.92), rgba(8,20,39,.92));
+      border:1px solid var(--line);
+      border-radius:24px;
+      padding:18px;
+      box-shadow:0 25px 70px rgba(0,0,0,.26);
+      margin:16px 0;
+    }
+    .actions { display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+    button, input, select {
+      font:inherit;
+      border-radius:14px;
+      border:1px solid var(--line);
+      background:#0b1b31;
+      color:var(--text);
+      padding:11px 14px;
+    }
+    button {
+      cursor:pointer;
+      font-weight:800;
+      background:linear-gradient(135deg, #61d394, #f8c14a);
+      color:#052015;
+      border:0;
+    }
+    button.secondary { background:#122642; color:var(--text); border:1px solid var(--line); }
+    button.danger { background:linear-gradient(135deg, #fb7185, #f97316); color:#fff; }
+    button:disabled { opacity:.5; cursor:not-allowed; }
+    .status {
+      white-space:pre-wrap;
+      background:#071529;
+      border:1px solid var(--line);
+      border-radius:18px;
+      padding:14px;
+      color:var(--muted);
+      max-height:260px;
+      overflow:auto;
+    }
+    .good { color:var(--accent); }
+    .bad { color:var(--danger); }
+    .warn { color:var(--warn); }
+    table { width:100%; border-collapse:collapse; min-width:900px; }
+    th, td { padding:10px; border-bottom:1px solid rgba(148,163,184,.16); text-align:left; font-size:.92rem; }
+    th { color:#d8fbe7; position:sticky; top:0; background:#0b1b31; z-index:1; }
+    .table-wrap { overflow:auto; max-height:520px; border:1px solid var(--line); border-radius:18px; }
+    .pill {
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      padding:4px 9px;
+      border-radius:999px;
+      background:rgba(97,211,148,.13);
+      color:#b8ffd6;
+      font-weight:800;
+      font-size:.8rem;
+    }
+    .hidden { display:none !important; }
+    .small { font-size:.86rem; }
+    code { background:rgba(255,255,255,.08); padding:2px 6px; border-radius:8px; }
+    @media (max-width: 720px) {
+      .top { display:block; }
+      .actions button { width:100%; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <div class="top">
+    <div>
+      <h1>Gerir horários dos jogos</h1>
+      <p>Esta página lê o <code>matches.json</code> do projeto e cria/atualiza automaticamente a coleção <code>worldcupextraMatches</code> no Firebase.</p>
+    </div>
+    <div class="actions">
+      <button id="loadBtn" type="button">Carregar matches.json</button>
+      <button id="loginBtn" class="secondary" type="button">Entrar com Google</button>
+      <button id="logoutBtn" class="secondary hidden" type="button">Sair</button>
+    </div>
+  </div>
+
+  <section class="card">
+    <h2>Estado</h2>
+    <p class="small">Só <strong>ruler/estafeta</strong> deve conseguir gravar. A página verifica o teu documento em <code>users/{uid}</code>.</p>
+    <div id="status" class="status">A preparar...</div>
+  </section>
+
+  <section class="card">
+    <h2>Enviar para Firebase</h2>
+    <p>Os documentos serão gravados em:</p>
+    <p><code>worldcupextraMatches/match_001</code>, <code>worldcupextraMatches/match_002</code>, etc.</p>
+    <div class="actions">
+      <button id="syncBtn" type="button" disabled>Gravar/atualizar horários no Firebase</button>
+      <button id="checkBtn" class="secondary" type="button" disabled>Verificar documentos existentes</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Pré-visualização</h2>
+    <p id="countLine">Ainda não carregado.</p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Fase</th>
+            <th>Jogo</th>
+            <th>Data</th>
+            <th>Hora</th>
+            <th>Documento</th>
+          </tr>
+        </thead>
+        <tbody id="matchesTable"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<script type="module">
+  const FIREBASE_CONFIG = {
+    apiKey: 'AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0',
+    authDomain: 'g-games-8a8fc.firebaseapp.com',
+    projectId: 'g-games-8a8fc',
+    storageBucket: 'g-games-8a8fc.firebasestorage.app',
+    messagingSenderId: '689897349449',
+    appId: '1:689897349449:web:536599794579901beb7a98',
+    measurementId: 'G-GTTPJ6G5MD'
+  };
+
+  const FIREBASE_SDK_VERSION = '10.14.1';
+  const statusEl = document.querySelector('#status');
+  const tableEl = document.querySelector('#matchesTable');
+  const countLine = document.querySelector('#countLine');
+  const loadBtn = document.querySelector('#loadBtn');
+  const syncBtn = document.querySelector('#syncBtn');
+  const checkBtn = document.querySelector('#checkBtn');
+  const loginBtn = document.querySelector('#loginBtn');
+  const logoutBtn = document.querySelector('#logoutBtn');
+
+  let app, db, auth, tools;
+  let matches = [];
+  let currentUser = null;
+  let isAdmin = false;
+
+  const stageLabels = {
+    groups: 'Fase de grupos',
+    round32: '16 avos',
+    round16: 'Oitavos',
+    quarterfinals: 'Quartos',
+    semifinals: 'Meias',
+    third_place: '3.º/4.º lugar',
+    final: 'Final'
+  };
+
+  function log(message, type = '') {
+    const prefix = type === 'bad' ? '❌ ' : type === 'good' ? '✅ ' : type === 'warn' ? '⚠️ ' : '• ';
+    statusEl.textContent += `\n${prefix}${message}`;
+    statusEl.scrollTop = statusEl.scrollHeight;
+  }
+
+  function setStatus(message) {
+    statusEl.textContent = message;
+  }
+
+  function padId(id) {
+    return `match_${String(id).padStart(3, '0')}`;
+  }
+
+  function kickoffDate(match) {
+    // matches.json já está em hora Portugal/Reino Unido.
+    // Guardamos como Timestamp local do browser/admin.
+    return new Date(`${match.date}T${match.time || '12:00'}:00`);
+  }
+
+  function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>'"]/g, ch => ({
+      '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#039;', '"':'&quot;'
+    }[ch]));
+  }
+
+  function updateButtons() {
+    syncBtn.disabled = !matches.length || !isAdmin;
+    checkBtn.disabled = !matches.length || !currentUser;
+    loginBtn.classList.toggle('hidden', !!currentUser);
+    logoutBtn.classList.toggle('hidden', !currentUser);
+  }
+
+  async function initFirebase() {
+    const appModule = await import(`https://www.gstatic.com/firebasejs/${FIREBASE_SDK_VERSION}/firebase-app.js`);
+    const firestoreModule = await import(`https://www.gstatic.com/firebasejs/${FIREBASE_SDK_VERSION}/firebase-firestore.js`);
+    const authModule = await import(`https://www.gstatic.com/firebasejs/${FIREBASE_SDK_VERSION}/firebase-auth.js`);
+
+    app = appModule.initializeApp(FIREBASE_CONFIG);
+    db = firestoreModule.getFirestore(app);
+    auth = authModule.getAuth(app);
+
+    tools = {
+      doc: firestoreModule.doc,
+      getDoc: firestoreModule.getDoc,
+      setDoc: firestoreModule.setDoc,
+      writeBatch: firestoreModule.writeBatch,
+      serverTimestamp: firestoreModule.serverTimestamp,
+      Timestamp: firestoreModule.Timestamp,
+      GoogleAuthProvider: authModule.GoogleAuthProvider,
+      signInWithPopup: authModule.signInWithPopup,
+      signOut: authModule.signOut,
+      onAuthStateChanged: authModule.onAuthStateChanged
+    };
+
+    tools.onAuthStateChanged(auth, async user => {
+      currentUser = user;
+      isAdmin = false;
+      if (!user) {
+        setStatus('Não estás autenticado. Entra com Google para gravar os horários.');
+        updateButtons();
+        return;
+      }
+
+      setStatus(`Autenticado como ${user.email || user.uid}. A verificar estatuto...`);
+      try {
+        const userRef = tools.doc(db, 'users', user.uid);
+        const snap = await tools.getDoc(userRef);
+        const estatuto = snap.exists() ? snap.data()?.estatuto : '';
+        isAdmin = ['ruler', 'estafeta'].includes(estatuto);
+        if (isAdmin) log(`Estatuto confirmado: ${estatuto}. Podes gravar.`, 'good');
+        else log(`Este utilizador não tem estatuto ruler/estafeta. Só pode visualizar.`, 'bad');
+      } catch (error) {
+        log(`Não foi possível verificar o estatuto: ${error.message}`, 'bad');
+      }
+      updateButtons();
+    });
+  }
+
+  async function loadMatches() {
+    try {
+      const response = await fetch('matches.json', { cache: 'no-store' });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      matches = Array.isArray(data.matches) ? data.matches : Array.isArray(data) ? data : [];
+      renderMatches();
+      log(`${matches.length} jogos carregados de matches.json.`, 'good');
+    } catch (error) {
+      log(`Erro ao carregar matches.json: ${error.message}`, 'bad');
+    }
+    updateButtons();
+  }
+
+  function renderMatches() {
+    countLine.innerHTML = matches.length
+      ? `<span class="pill">${matches.length} jogos prontos para sincronizar</span>`
+      : 'Ainda não carregado.';
+
+    tableEl.innerHTML = matches.map(match => {
+      const kickoff = kickoffDate(match);
+      return `
+        <tr>
+          <td>${escapeHtml(match.id)}</td>
+          <td>${escapeHtml(stageLabels[match.stage] || match.stage)}</td>
+          <td>${escapeHtml(match.home || match.homeTeam)} vs ${escapeHtml(match.away || match.awayTeam)}</td>
+          <td>${escapeHtml(match.date)}</td>
+          <td>${escapeHtml(match.time || '')}</td>
+          <td><code>${padId(match.id)}</code><br><span class="small">${kickoff.toLocaleString('pt-PT')}</span></td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  function matchPayload(match) {
+    const kickoff = kickoffDate(match);
+    return {
+      matchId: Number(match.id),
+      documentId: padId(match.id),
+      stage: match.stage || '',
+      stageLabel: stageLabels[match.stage] || match.stage || '',
+      group: match.group || '',
+      homeTeam: match.home || match.homeTeam || '',
+      awayTeam: match.away || match.awayTeam || '',
+      date: match.date || '',
+      time: match.time || '',
+      kickoff: tools.Timestamp.fromDate(kickoff),
+      kickoffIso: kickoff.toISOString(),
+      source: 'matches.json',
+      timezone: 'Europe/Lisbon',
+      updatedAt: tools.serverTimestamp()
+    };
+  }
+
+  async function syncMatches() {
+    if (!isAdmin) {
+      log('Não tens permissão para gravar.', 'bad');
+      return;
+    }
+    if (!matches.length) {
+      log('Carrega primeiro o matches.json.', 'warn');
+      return;
+    }
+
+    syncBtn.disabled = true;
+    try {
+      let batch = tools.writeBatch(db);
+      let count = 0;
+      let batchCount = 0;
+
+      for (const match of matches) {
+        const ref = tools.doc(db, 'worldcupextraMatches', padId(match.id));
+        batch.set(ref, matchPayload(match), { merge: true });
+        count++;
+        batchCount++;
+
+        if (batchCount >= 450) {
+          await batch.commit();
+          log(`Gravados ${count} jogos...`);
+          batch = tools.writeBatch(db);
+          batchCount = 0;
+        }
+      }
+
+      if (batchCount > 0) await batch.commit();
+      log(`${count} horários gravados/atualizados em worldcupextraMatches.`, 'good');
+    } catch (error) {
+      log(`Erro ao gravar horários: ${error.message}`, 'bad');
+    } finally {
+      updateButtons();
+    }
+  }
+
+  async function checkExisting() {
+    if (!matches.length) return;
+    let existing = 0;
+    let missing = 0;
+    for (const match of matches) {
+      try {
+        const snap = await tools.getDoc(tools.doc(db, 'worldcupextraMatches', padId(match.id)));
+        if (snap.exists()) existing++;
+        else missing++;
+      } catch (error) {
+        log(`Erro a verificar jogo ${match.id}: ${error.message}`, 'bad');
+      }
+    }
+    log(`Verificação: ${existing} documentos existem; ${missing} em falta.`, existing === matches.length ? 'good' : 'warn');
+  }
+
+  loginBtn.addEventListener('click', async () => {
+    try {
+      await tools.signInWithPopup(auth, new tools.GoogleAuthProvider());
+    } catch (error) {
+      log(`Erro no login: ${error.message}`, 'bad');
+    }
+  });
+
+  logoutBtn.addEventListener('click', async () => {
+    await tools.signOut(auth);
+  });
+
+  loadBtn.addEventListener('click', loadMatches);
+  syncBtn.addEventListener('click', syncMatches);
+  checkBtn.addEventListener('click', checkExisting);
+
+  setStatus('A iniciar Firebase...');
+  try {
+    await initFirebase();
+    await loadMatches();
+  } catch (error) {
+    setStatus(`Erro inicial: ${error.message}`);
+  }
+</script>
+</body>
+</html>
