@@ -1,13 +1,13 @@
 
-/* Ggames Battles completas:
-   - lê worldcupextraBattles e worldcupextraBattleScorers
+/* Ggames Battles Live:
+   - lê/grava battles live em worldcupextraLiveBattles
    - permite escolha de marcador por PIN a partir dos 16 avos
    - calcula BW e pontos extra na Tabela Ggames
 */
 (() => {
-  const BATTLES_COLLECTION = 'worldcupextraBattles';
+  const LIVE_BATTLES_COLLECTION = 'worldcupextraLiveBattles';
   const BATTLE_SCORERS_COLLECTION = 'worldcupextraBattleScorers';
-  const BATTLE_MATCHES_COLLECTION = 'worldcupextraMatches';
+  const LIVE_BATTLE_MATCHES_COLLECTION = 'worldcupextraLiveBattleMatches';
   const BATTLE_KO_STAGES = ['round32', 'round16', 'quarterfinals', 'semifinals', 'third_place', 'final'];
 
   let ggamesBattleDocs = [];
@@ -32,7 +32,7 @@
   }
 
   function battleDocId(matchId, battleNo) {
-    return `match_${String(matchId).padStart(3, '0')}_battle_${String(battleNo).padStart(2, '0')}`;
+    return `live_match_${String(matchId).padStart(3, '0')}_battle_${String(battleNo).padStart(2, '0')}`;
   }
 
   function matchDocId(matchId) {
@@ -93,6 +93,7 @@
   function officialWithApi(matchId) {
     const id = String(matchId);
     const official = getOfficialResult(id);
+    if (typeof isOfficialResultFinished === 'function' && isOfficialResultFinished(official)) return official;
     const api = worldCupApi?.games?.find(g => String(g.id) === id);
     return official || api || null;
   }
@@ -174,7 +175,7 @@
     const b = battleFactors(playerB, battle, official);
     const winnerKey = a.total > b.total ? battle.playerAKey : b.total > a.total ? battle.playerBKey : '';
     return {
-      status: official.finished || official._finished || battle.status === 'finished' ? 'finished' : (battle.status || 'pending'),
+      status: (typeof isOfficialResultFinished === 'function' ? isOfficialResultFinished(official) : (official.finished || official._finished)) || battle.status === 'finished' ? 'finished' : (battle.status || 'pending'),
       playerAFactors: a.total,
       playerBFactors: b.total,
       playerADetails: a,
@@ -221,7 +222,7 @@
   async function loadGgamesBattlesData() {
     if (!firestoreDb || !firebaseTools) return;
     try {
-      const battleSnap = await firebaseTools.getDocs(firebaseTools.collection(firestoreDb, BATTLES_COLLECTION));
+      const battleSnap = await firebaseTools.getDocs(firebaseTools.collection(firestoreDb, LIVE_BATTLES_COLLECTION));
       ggamesBattleDocs = battleSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       window.ggamesBattleDocs = ggamesBattleDocs;
     } catch (error) {
@@ -369,17 +370,14 @@
   };
 
   function currentLiveMatchIds() {
-    const ids = new Set((worldCupApi?.games || []).filter(game => game.live && !game.finished).map(game => String(game.id)));
-    const fallback = firstLiveMatchForBattles();
-    if (fallback?.id) ids.add(String(fallback.id));
+    const ids = new Set(liveMatchesForBattles().map(game => String(game.id)));
     return ids;
   }
 
   function apiMatchForBattle(matchId) {
     const api = (worldCupApi?.games || []).find(game => String(game.id) === String(matchId)) || null;
     if (api) return api;
-    const fallback = firstLiveMatchForBattles();
-    return fallback && String(fallback.id) === String(matchId) ? fallback : null;
+    return liveMatchesForBattles().find(game => String(game.id) === String(matchId)) || null;
   }
 
   function battleLiveContext(battle) {
@@ -392,7 +390,54 @@
   }
 
 
+  function liveMatchesForBattles() {
+    const seen = new Set();
+    const matches = [];
+
+    const addMatch = (match) => {
+      if (!match?.id) return;
+      const key = String(match.id);
+      if (seen.has(key)) return;
+      seen.add(key);
+      matches.push(match);
+    };
+
+    if (typeof getCurrentLiveGameForDashboard === 'function') {
+      addMatch(getCurrentLiveGameForDashboard());
+    }
+
+    (worldCupApi?.games || [])
+      .filter(game => game.live && !game.finished && game.id)
+      .sort((a, b) => Number(a.id) - Number(b.id))
+      .forEach(addMatch);
+
+    (data?.matches || [])
+      .filter(match => isMatchInLiveWindow(match))
+      .sort((a, b) => Number(a.id) - Number(b.id))
+      .forEach(localLive => {
+        addMatch({
+          id: String(localLive.id),
+          matchId: String(localLive.id),
+          stage: localLive.stage,
+          group: localLive.group || null,
+          date: localLive.date,
+          time: localLive.time,
+          homeTeam: localLive.home,
+          awayTeam: localLive.away,
+          live: true,
+          finished: false,
+          timeElapsed: `~${elapsedMinuteFromSchedule(localLive)}`,
+          source: 'matches.json'
+        });
+      });
+
+    return matches.sort((a, b) => Number(a.id) - Number(b.id));
+  }
+
   function firstLiveMatchForBattles() {
+    const liveMatches = liveMatchesForBattles();
+    if (liveMatches.length) return liveMatches[0];
+
     if (typeof getCurrentLiveGameForDashboard === 'function') return getCurrentLiveGameForDashboard();
 
     const apiLive = (worldCupApi?.games || [])
@@ -497,8 +542,7 @@
     return selected;
   }
 
-  function liveBattleCandidates(rows, limit = 10) {
-    const liveMatch = firstLiveMatchForBattles();
+  function liveBattleCandidates(rows, limit = 10, liveMatch = firstLiveMatchForBattles()) {
     if (!liveMatch) return [];
 
     const existing = ggamesBattleDocs
@@ -563,7 +607,7 @@
     // Procura primeiro pelos IDs determinísticos que o sistema usa para este jogo.
     const reads = [];
     for (let i = 1; i <= limit; i++) {
-      reads.push(firebaseTools.getDoc(firebaseTools.doc(firestoreDb, BATTLES_COLLECTION, battleDocId(matchId, i))));
+      reads.push(firebaseTools.getDoc(firebaseTools.doc(firestoreDb, LIVE_BATTLES_COLLECTION, battleDocId(matchId, i))));
     }
 
     try {
@@ -591,7 +635,7 @@
   async function battleMatchMarker(matchId) {
     if (!firestoreDb || !firebaseTools || !matchId) return null;
     try {
-      const ref = firebaseTools.doc(firestoreDb, BATTLE_MATCHES_COLLECTION, matchDocId(matchId));
+      const ref = firebaseTools.doc(firestoreDb, LIVE_BATTLE_MATCHES_COLLECTION, matchDocId(matchId));
       const snap = await firebaseTools.getDoc(ref);
       return snap.exists() ? { id: snap.id, ...snap.data() } : null;
     } catch {
@@ -603,13 +647,14 @@
     if (!firestoreDb || !firebaseTools || !liveMatch?.id) return;
     try {
       await firebaseTools.setDoc(
-        firebaseTools.doc(firestoreDb, BATTLE_MATCHES_COLLECTION, matchDocId(liveMatch.id)),
+        firebaseTools.doc(firestoreDb, LIVE_BATTLE_MATCHES_COLLECTION, matchDocId(liveMatch.id)),
         {
           matchId: Number(liveMatch.id),
           matchDocId: matchDocId(liveMatch.id),
           status: liveMatch.finished ? 'finished' : 'live',
           battlesCreated: true,
           battlesCount: count,
+          sourceCollection: LIVE_BATTLES_COLLECTION,
           stage: liveMatch.stage || localMatch(liveMatch.id)?.stage || '',
           group: liveMatch.group || localMatch(liveMatch.id)?.group || null,
           homeTeam: liveMatch.homeTeam || localMatch(liveMatch.id)?.home || '',
@@ -690,7 +735,7 @@
       await Promise.all(created.map(battleDoc => {
         const { id, ...payload } = battleDoc;
         return firebaseTools.setDoc(
-          firebaseTools.doc(firestoreDb, BATTLES_COLLECTION, id),
+          firebaseTools.doc(firestoreDb, LIVE_BATTLES_COLLECTION, id),
           payload,
           { merge: true }
         );
@@ -722,7 +767,7 @@
           finishedAt: firebaseTools.serverTimestamp()
         });
         return firebaseTools.setDoc(
-          firebaseTools.doc(firestoreDb, BATTLES_COLLECTION, battle.id),
+          firebaseTools.doc(firestoreDb, LIVE_BATTLES_COLLECTION, battle.id),
           payload,
           { merge: true }
         );
@@ -739,15 +784,17 @@
           officialAwayGoals: result.officialAwayGoals ?? null
         });
       });
+      await markBattleMatchCreated({ ...match, finished: true }, battles?.length || finishedBattles.length);
     } catch (error) {
       console.warn('Não foi possível finalizar battles no Firebase.', error);
     }
   }
 
   async function ensurePersistedBattlesForCurrentLiveMatch(rows, limit = 8) {
-    const liveMatch = firstLiveMatchForBattles();
-    if (!liveMatch) return [];
-    return persistLiveBattlesForMatch(liveMatch, rows, limit);
+    const liveMatches = liveMatchesForBattles();
+    if (!liveMatches.length) return [];
+    const persisted = await Promise.all(liveMatches.map(liveMatch => persistLiveBattlesForMatch(liveMatch, rows, limit)));
+    return persisted.flat();
   }
 
 
@@ -764,12 +811,12 @@
 
   function savedBattlesForMainView() {
     const now = new Date();
-    const liveMatch = firstLiveMatchForBattles();
+    const liveIds = currentLiveMatchIds();
 
-    if (liveMatch) {
+    if (liveIds.size) {
       return ggamesBattleDocs
-        .filter(b => String(b.matchId) === String(liveMatch.id))
-        .sort((a, b) => Number(a.matchId) - Number(b.matchId))
+        .filter(b => liveIds.has(String(b.matchId)))
+        .sort((a, b) => (Number(a.matchId) - Number(b.matchId)) || (Number(a.createdOrder || 0) - Number(b.createdOrder || 0)))
         .slice(0, 12);
     }
 
@@ -864,16 +911,19 @@
     const rows = calculateGgamesTable();
     if (rows.length < 2) return '<p class="modal-muted">Ainda não há jogadores suficientes para criar battles.</p>';
 
-    const liveMatch = firstLiveMatchForBattles();
-    if (liveMatch) {
+    const liveMatches = liveMatchesForBattles();
+    if (liveMatches.length) {
       const saved = savedBattlesForMainView();
       if (saved.length) {
-        finalizeBattlesIfMatchFinished(liveMatch, saved);
+        liveMatches.forEach(liveMatch => {
+          const matchBattles = saved.filter(b => String(b.matchId) === String(liveMatch.id));
+          if (matchBattles.length) finalizeBattlesIfMatchFinished(liveMatch, matchBattles);
+        });
         return saved.slice(0, 10).map(b => renderBattleCard(b, true)).join('');
       }
-      const temp = liveBattleCandidates(rows, 10);
-      persistLiveBattlesOnce(liveMatch, rows, 10).then(created => {
-        if (created?.length) loadGgamesBattlesData().then(() => refreshLiveDashboardView());
+      const temp = liveMatches.flatMap(liveMatch => liveBattleCandidates(rows, 10, liveMatch)).slice(0, 10);
+      Promise.all(liveMatches.map(liveMatch => persistLiveBattlesOnce(liveMatch, rows, 10))).then(createdSets => {
+        if (createdSets.some(created => created?.length)) loadGgamesBattlesData().then(() => refreshLiveDashboardView());
       });
       return temp.length
         ? temp.slice(0, 10).map(b => renderBattleCard(b, true)).join('')
@@ -888,20 +938,23 @@
   };
 
   renderGiriaBattles = function(rows) {
-    const liveMatch = firstLiveMatchForBattles();
+    const liveMatches = liveMatchesForBattles();
     const saved = savedBattlesForMainView();
 
-    if (liveMatch) {
+    if (liveMatches.length) {
       if (saved.length) {
-        finalizeBattlesIfMatchFinished(liveMatch, saved);
+        liveMatches.forEach(liveMatch => {
+          const matchBattles = saved.filter(b => String(b.matchId) === String(liveMatch.id));
+          if (matchBattles.length) finalizeBattlesIfMatchFinished(liveMatch, matchBattles);
+        });
         return saved.slice(0, 8).map(b => renderBattleCard(b, true)).join('');
       }
 
       // Primeira entrada do jogo live: cria e grava no Firebase.
       // Até a gravação terminar, mostra os mesmos pares que serão gravados.
-      const temp = liveBattleCandidates(rows, 8);
-      persistLiveBattlesOnce(liveMatch, rows, 8).then(created => {
-        if (created?.length) {
+      const temp = liveMatches.flatMap(liveMatch => liveBattleCandidates(rows, 8, liveMatch)).slice(0, 8);
+      Promise.all(liveMatches.map(liveMatch => persistLiveBattlesOnce(liveMatch, rows, 8))).then(createdSets => {
+        if (createdSets.some(created => created?.length)) {
           loadGgamesBattlesData().then(() => refreshLiveDashboardView());
         }
       });

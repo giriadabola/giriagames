@@ -512,7 +512,7 @@
     const stageMatches = data.matches.filter(match => match.stage === stage).filter(match => {
       const official = getOfficialResult(match.id);
       const matchDate = getMatchDateObj(match);
-      if (filter === 'played') return !!official;
+      if (filter === 'played') return typeof isOfficialResultFinished === 'function' ? isOfficialResultFinished(official) : !!official;
       if (filter === 'today') return sameLocalDay(matchDate, now);
       if (filter === 'future') return !official && matchDate > now;
       return true;

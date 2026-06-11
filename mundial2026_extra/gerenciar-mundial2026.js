@@ -20,6 +20,7 @@ const FIREBASE_CONFIG = {
 
 const FIREBASE_SDK_VERSION = '10.14.1';
 const COLLECTION = 'worldcupextra';
+const MATCHES_COLLECTION = 'worldcupextraMatches';
 const $ = (selector) => document.querySelector(selector);
 const escapeHtml = (text) => String(text ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#039;','"':'&quot;'}[c]));
 
@@ -32,8 +33,13 @@ let currentUser = null;
 let officialResults = {};
 let activeStage = 'groups';
 
-function resultDocId(matchId) {
-  return `official-match-${matchId}`;
+function matchDocId(matchId) {
+  return `match_${String(matchId).padStart(3, '0')}`;
+}
+
+function isTrackedMatchDoc(row) {
+  if (!row) return false;
+  return row.status === 'live' || row.status === 'finished' || row.live === true || row.finished === true || (row.homeGoals != null && row.awayGoals != null);
 }
 
 function getOfficial(matchId) {
@@ -117,12 +123,18 @@ async function handleAuthState(user) {
 }
 
 async function loadOfficialResults() {
-  const ref = tools.collection(db, COLLECTION);
-  const snap = await tools.getDocs(tools.query(ref, tools.where('status', '==', 'official')));
-  officialResults = Object.fromEntries(snap.docs.map(doc => {
-    const row = { id: doc.id, ...doc.data() };
-    return [String(row.matchId ?? row.id.replace('official-match-', '')), row];
-  }));
+  const [matchSnap, legacySnap] = await Promise.all([
+    tools.getDocs(tools.collection(db, MATCHES_COLLECTION)),
+    tools.getDocs(tools.query(tools.collection(db, COLLECTION), tools.where('status', '==', 'official')))
+  ]);
+  const fromMatches = matchSnap.docs
+    .map(doc => ({ id: doc.id, ...doc.data() }))
+    .filter(isTrackedMatchDoc)
+    .map(row => [String(row.matchId ?? String(row.id).replace('match_', '')), row]);
+  const legacy = legacySnap.docs
+    .map(doc => ({ id: doc.id, ...doc.data() }))
+    .map(row => [String(row.matchId ?? row.id.replace('official-match-', '')), row]);
+  officialResults = Object.fromEntries([...legacy, ...fromMatches]);
 }
 
 function renderAdminMatch(match) {
@@ -200,9 +212,12 @@ function buildOfficialPayload(match, card) {
   const winnerTeam = winnerSide === 'home' ? home : winnerSide === 'away' ? away : 'Empate';
 
   return {
-    status: 'official',
-    type: 'officialResult',
+    documentId: matchDocId(match.id),
+    matchDocId: matchDocId(match.id),
     matchId: Number(match.id),
+    status: 'finished',
+    live: false,
+    finished: true,
     stage: match.stage,
     stageLabel: STAGE_LABELS[match.stage],
     group: match.group || null,
@@ -220,6 +235,7 @@ function buildOfficialPayload(match, card) {
     method,
     winnerSide,
     winnerTeam,
+    source: 'admin',
     updatedAt: tools.serverTimestamp(),
     updatedBy: currentUser.uid,
     updatedByEmail: currentUser.email || null
@@ -250,9 +266,9 @@ async function saveOfficialMatch(card) {
   msg.className = 'admin-message';
   try {
     const payload = buildOfficialPayload(match, card);
-    const ref = tools.doc(db, COLLECTION, resultDocId(id));
+    const ref = tools.doc(db, MATCHES_COLLECTION, matchDocId(id));
     await tools.setDoc(ref, payload, { merge: true });
-    officialResults[String(id)] = { id: resultDocId(id), ...payload };
+    officialResults[String(id)] = { id: matchDocId(id), ...payload };
     msg.textContent = 'Resultado oficial gravado.';
     msg.className = 'admin-message ok';
     setTimeout(renderAdminMatches, 250);

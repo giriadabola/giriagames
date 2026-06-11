@@ -22,6 +22,7 @@ const FIREBASE_CONFIG = {
   measurementId: 'G-GTTPJ6G5MD'
 };
 const FIREBASE_COLLECTION = 'worldcupextra';
+const FIREBASE_MATCHES_COLLECTION = 'worldcupextraMatches';
 const WORLD_CUP_API_BASE = 'https://worldcup26.ir';
 const SPORTSDB_API_BASE = 'https://www.thesportsdb.com/api/v1/json/123';
 const API_FOOTBALL_BASE = 'https://v3.football.api-sports.io';
@@ -105,6 +106,77 @@ let mobilePublicViewerHtml = '';
 let mobilePublicViewerLoading = false;
 let apiLoadingRequests = 0;
 let state = { name: '', predictions: {}, activeStage: 'groups', lastSaved: '' };
+
+function firebaseMatchDocId(matchId) {
+  return `match_${String(matchId).padStart(3, '0')}`;
+}
+
+function resultHasScore(result) {
+  return !!result && result.homeGoals != null && result.awayGoals != null;
+}
+
+function isOfficialResultLive(result) {
+  if (!result) return false;
+  if (result.finished === true || result._finished === true || result.status === 'finished') return false;
+  return !!(result.live === true || result._live === true || result.status === 'live');
+}
+
+function isOfficialResultFinished(result) {
+  if (!result) return false;
+  if (result.finished === true || result._finished === true || result.status === 'finished') return true;
+  return !!(
+    resultHasScore(result) &&
+    !isOfficialResultLive(result) &&
+    (result.status === 'official' || result.type === 'officialResult')
+  );
+}
+
+function shouldTrackMatchDocAsOfficial(doc) {
+  if (!doc) return false;
+  return isOfficialResultLive(doc) || isOfficialResultFinished(doc) || resultHasScore(doc);
+}
+
+function normalizeMatchStateDoc(docId, raw = {}) {
+  const matchId = Number(raw.matchId ?? String(docId || '').replace(/^match_/, ''));
+  return {
+    id: docId,
+    ...raw,
+    matchId: Number.isFinite(matchId) ? matchId : null,
+    documentId: raw.documentId || raw.matchDocId || docId
+  };
+}
+
+async function loadOfficialMatchStateDocs() {
+  if (!firestoreDb || !firebaseTools) return {};
+  const collectionRef = firebaseTools.collection(firestoreDb, FIREBASE_COLLECTION);
+  const matchesCollectionRef = firebaseTools.collection(firestoreDb, FIREBASE_MATCHES_COLLECTION);
+  let legacySnapshot;
+  let matchesSnapshot = null;
+  try {
+    legacySnapshot = await firebaseTools.getDocs(firebaseTools.query(collectionRef, firebaseTools.orderBy('clientTimestamp', 'desc')));
+  } catch {
+    legacySnapshot = await firebaseTools.getDocs(collectionRef);
+  }
+  try {
+    matchesSnapshot = await firebaseTools.getDocs(matchesCollectionRef);
+  } catch (error) {
+    console.warn('Nao foi possivel carregar worldcupextraMatches. A usar fallback legacy.', error);
+  }
+
+  const allDocs = legacySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  const legacyOfficialDocs = allDocs
+    .filter(doc => doc.status === 'official' || doc.type === 'officialResult')
+    .filter(doc => doc.matchId != null || doc.id?.startsWith?.('official-match-'))
+    .map(doc => [String(doc.matchId ?? String(doc.id).replace('official-match-', '')), doc]);
+  const matchStateDocs = (matchesSnapshot?.docs || [])
+    .map(doc => normalizeMatchStateDoc(doc.id, doc.data()))
+    .filter(shouldTrackMatchDocAsOfficial)
+    .map(doc => [String(doc.matchId), doc]);
+  return {
+    allDocs,
+    officialByMatchId: Object.fromEntries([...legacyOfficialDocs, ...matchStateDocs])
+  };
+}
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -1394,7 +1466,7 @@ function buildGroupsTableFromGames(games) {
     });
 
     const official = getOfficialResult(match.id) || games.find(g => String(g.id) === String(match.id));
-    if (!official || official.homeGoals == null || official.awayGoals == null || !official.finished) return;
+    if (!official || official.homeGoals == null || official.awayGoals == null || !isOfficialResultFinished(official)) return;
 
     const home = groups[match.group][match.home];
     const away = groups[match.group][match.away];
@@ -1442,7 +1514,11 @@ async function loadApiWorldCupData({ sync = false } = {}) {
         finalizeBattlesIfMatchFinished(g, battles);
       });
     }
-    if (sync) await syncFinishedApiResultsToFirebase();
+    if (sync) {
+      await syncFinishedApiResultsToFirebase();
+      const loaded = await loadOfficialMatchStateDocs();
+      officialResults = loaded.officialByMatchId;
+    }
     return worldCupApi;
   } catch (error) {
     worldCupApi.error = error;
@@ -1460,14 +1536,15 @@ function mergeApiResultsIntoOfficialResults() {
   worldCupApi.games.forEach(game => {
     const hasScore = game.homeGoals !== null && game.awayGoals !== null;
     if (!hasScore) return;
+    if (game.finished) return;
     const existing = officialResults[String(game.id)];
-    if (!existing || game.finished || game.live) {
+    if (!existing || game.live) {
       officialResults[String(game.id)] = {
         ...existing,
         ...game,
         status: 'official',
         type: 'officialResult',
-        source: game.finished ? 'api-finished' : 'api-live',
+        source: 'api-live',
         _live: game.live,
         _finished: game.finished
       };
@@ -1477,33 +1554,58 @@ function mergeApiResultsIntoOfficialResults() {
 
 async function syncFinishedApiResultsToFirebase() {
   if (!firestoreDb || !firebaseTools || !worldCupApi.games.length) return;
-  const trustedFinalSources = new Set(['API-Football', 'football-data', 'Highlightly', 'AllSportsAPI', 'SofaScore', 'ESPN', 'worldcup26.ir', 'TheSportsDB v1 free', 'lineups', 'worldcup']);
-  const finishedGames = worldCupApi.games.filter(g =>
-    g.finished &&
-    g.homeGoals !== null &&
-    g.awayGoals !== null &&
-    trustedFinalSources.has(g.source) &&
-    !String(g.timeElapsed || '').startsWith('~')
+  const trustedSources = new Set(['API-Football', 'football-data', 'Highlightly', 'AllSportsAPI', 'SofaScore', 'ESPN', 'worldcup26.ir', 'TheSportsDB v1 free', 'lineups', 'worldcup']);
+  const relevantGames = worldCupApi.games.filter(g =>
+    (g.live || g.finished) &&
+    trustedSources.has(g.source) &&
+    (g.finished ? !String(g.timeElapsed || '').startsWith('~') : true)
   );
-  if (!finishedGames.length) return;
+  if (!relevantGames.length) return;
   try {
+    const existingDocs = await Promise.all(relevantGames.map(async game => {
+      const ref = firebaseTools.doc(firestoreDb, FIREBASE_MATCHES_COLLECTION, firebaseMatchDocId(game.id));
+      const snap = await firebaseTools.getDoc(ref);
+      return [String(game.id), snap.exists() ? snap.data() : null];
+    }));
+    const existingByMatchId = Object.fromEntries(existingDocs);
     const batch = firebaseTools.writeBatch(firestoreDb);
-    finishedGames.forEach(game => {
-      const ref = firebaseTools.doc(firestoreDb, FIREBASE_COLLECTION, `official-api-match-${game.id}`);
+    relevantGames.forEach(game => {
+      const existing = existingByMatchId[String(game.id)] || null;
+      const nextStatus = game.finished ? 'finished' : 'live';
+      const nextLive = !!(game.live && !game.finished);
+      const nextFinished = !!game.finished;
+      const sameCoreState =
+        existing &&
+        existing.status === nextStatus &&
+        !!existing.live === nextLive &&
+        !!existing.finished === nextFinished &&
+        (existing.homeGoals ?? null) === (game.homeGoals ?? null) &&
+        (existing.awayGoals ?? null) === (game.awayGoals ?? null) &&
+        String(existing.timeElapsed || '') === String(game.timeElapsed || '');
+      if (sameCoreState) return;
+      const ref = firebaseTools.doc(firestoreDb, FIREBASE_MATCHES_COLLECTION, firebaseMatchDocId(game.id));
       batch.set(ref, {
-        status: 'official',
-        type: 'officialResult',
-        source: 'api',
+        documentId: firebaseMatchDocId(game.id),
+        matchDocId: firebaseMatchDocId(game.id),
         matchId: Number(game.id),
+        status: nextStatus,
+        live: nextLive,
+        finished: nextFinished,
         stage: game.stage,
         group: game.group || null,
+        date: game.date || null,
+        time: game.time || null,
+        venue: game.venue || null,
+        city: game.city || null,
+        country: game.country || null,
         homeTeam: game.homeTeam,
         awayTeam: game.awayTeam,
-        homeGoals: game.homeGoals,
-        awayGoals: game.awayGoals,
-        winnerTeam: getWinnerTeamFromScore(game),
-        finished: true,
-        timeElapsed: game.timeElapsed,
+        homeGoals: game.homeGoals ?? null,
+        awayGoals: game.awayGoals ?? null,
+        winnerTeam: game.finished && resultHasScore(game) ? getWinnerTeamFromScore(game) : null,
+        timeElapsed: game.timeElapsed || null,
+        source: game.source || 'api',
+        syncOrigin: 'api',
         apiUpdatedAt: new Date().toISOString(),
         updatedAt: firebaseTools.serverTimestamp()
       }, { merge: true });
@@ -1955,7 +2057,7 @@ function openLiveMatchModal(matchId) {
 }
 
 function renderLiveApiGames() {
-  let games = worldCupApi.games.filter(g => g.live).sort((a,b) => Number(a.id)-Number(b.id));
+  let games = worldCupApi.games.filter(g => g.live && !g.finished).sort((a,b) => Number(a.id)-Number(b.id));
 
   // Salvaguarda: se a API ainda não marcar o jogo como "live" mas o horário local já estiver dentro da janela do jogo,
   // mostramos o jogo em direto na mesma. Isto evita o ecrã "não há jogos em direto" durante jogos 0-0 ou quando a API atrasa o estado.
@@ -2009,7 +2111,12 @@ function getCurrentLiveGameForDashboard() {
   if (apiLive) return apiLive;
 
   const localLive = (data?.matches || [])
-    .filter(match => isMatchInLiveWindow(match))
+    .filter(match => {
+      if (!isMatchInLiveWindow(match)) return false;
+      const existing = (worldCupApi?.games || []).find(game => String(game.id) === String(match.id));
+      const official = officialResults[String(match.id)];
+      return !(isOfficialResultFinished(existing) || isOfficialResultFinished(official));
+    })
     .sort((a, b) => Number(a.id) - Number(b.id))[0];
 
   if (!localLive) return null;
@@ -2587,22 +2694,37 @@ async function findExistingSubmission(participantKey, visitorKey) {
 }
 
 async function loadPublicPredictions() {
+  if (!firestoreDb || !firebaseTools) throw new Error('A ligaÃ§Ã£o ainda nÃ£o estÃ¡ pronta.');
+  const loaded = await loadOfficialMatchStateDocs();
+  publicPredictions = loaded.allDocs.filter(doc => doc.status !== 'official' && doc.type !== 'officialResult' && Array.isArray(doc.matches));
+  officialResults = loaded.officialByMatchId;
+  return publicPredictions;
   if (!firestoreDb || !firebaseTools) throw new Error('A ligação ainda não está pronta.');
   const collectionRef = firebaseTools.collection(firestoreDb, FIREBASE_COLLECTION);
+  const matchesCollectionRef = firebaseTools.collection(firestoreDb, FIREBASE_MATCHES_COLLECTION);
   let snapshot;
+  let matchesSnapshot = null;
   try {
     snapshot = await firebaseTools.getDocs(firebaseTools.query(collectionRef, firebaseTools.orderBy('clientTimestamp', 'desc')));
   } catch {
     snapshot = await firebaseTools.getDocs(collectionRef);
   }
+  try {
+    matchesSnapshot = await firebaseTools.getDocs(matchesCollectionRef);
+  } catch (error) {
+    console.warn('NÃ£o foi possÃ­vel carregar worldcupextraMatches. A usar fallback legacy.', error);
+  }
   const allDocs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   publicPredictions = allDocs.filter(doc => doc.status !== 'official' && doc.type !== 'officialResult' && Array.isArray(doc.matches));
-  officialResults = Object.fromEntries(
-    allDocs
-      .filter(doc => doc.status === 'official' || doc.type === 'officialResult')
-      .filter(doc => doc.matchId != null || doc.id?.startsWith?.('official-match-'))
-      .map(doc => [String(doc.matchId ?? String(doc.id).replace('official-match-', '')), doc])
-  );
+  const legacyOfficialDocs = allDocs
+    .filter(doc => doc.status === 'official' || doc.type === 'officialResult')
+    .filter(doc => doc.matchId != null || doc.id?.startsWith?.('official-match-'))
+    .map(doc => [String(doc.matchId ?? String(doc.id).replace('official-match-', '')), doc]);
+  const matchStateDocs = (matchesSnapshot?.docs || [])
+    .map(doc => normalizeMatchStateDoc(doc.id, doc.data()))
+    .filter(shouldTrackMatchDocAsOfficial)
+    .map(doc => [String(doc.matchId), doc]);
+  officialResults = Object.fromEntries([...legacyOfficialDocs, ...matchStateDocs]);
   return publicPredictions;
 }
 
@@ -2778,7 +2900,7 @@ function renderPublicByGame(stage = publicViewerStage, filter = publicGameFilter
   const stageMatches = data.matches.filter(match => match.stage === stage).filter(match => {
     const official = getOfficialResult(match.id);
     const matchDate = getMatchDateObj(match);
-    if (filter === 'played') return !!official;
+    if (filter === 'played') return isOfficialResultFinished(official);
     if (filter === 'today') return sameLocalDay(matchDate, now);
     if (filter === 'future') return !official && matchDate > now;
     return true;
@@ -3868,6 +3990,13 @@ function ggamesMergeOneLocalMatch(match, externalGames) {
   const best = candidates.sort((a, b) => ggamesGameQuality(b) - ggamesGameQuality(a))[0] || null;
   const localGame = ggamesBuildLocalScheduledGame(match);
   if (!best) return localGame;
+  const finished = !!best.finished;
+  const live = !finished && !!(best.live || localGame.live);
+  const timeElapsed = finished
+    ? (best.timeElapsed || 'FT')
+    : (best.live && !String(best.timeElapsed || '').startsWith('~')
+        ? best.timeElapsed
+        : (localGame.live ? localGame.timeElapsed : best.timeElapsed));
 
   // Se uma API tem marcador/estado melhor, entra; senão fica o fallback local.
   return {
@@ -3884,8 +4013,9 @@ function ggamesMergeOneLocalMatch(match, externalGames) {
     venue: best.venue || match.venue || '',
     city: match.city || '',
     country: match.country || '',
-    live: !!(best.live || localGame.live),
-    timeElapsed: best.live && !String(best.timeElapsed || '').startsWith('~') ? best.timeElapsed : (localGame.live ? localGame.timeElapsed : best.timeElapsed),
+    finished,
+    live,
+    timeElapsed,
     _apiSources: candidates.map(c => c.source).filter(Boolean)
   };
 }
@@ -4424,7 +4554,7 @@ function ggamesBuildGroupsFromCurrentGames(games) {
     });
     const game = games.find(g => String(g.id) === String(match.id));
     const official = getOfficialResult(match.id) || game;
-    if (!official || !official.finished || !ggamesHasUsefulScore(official)) return;
+    if (!official || !isOfficialResultFinished(official) || !ggamesHasUsefulScore(official)) return;
 
     const home = groups[match.group][match.home];
     const away = groups[match.group][match.away];
@@ -4512,7 +4642,11 @@ async function loadApiWorldCupData({ sync = false } = {}) {
         finalizeBattlesIfMatchFinished(g, battles);
       });
     }
-    if (sync) await syncFinishedApiResultsToFirebase();
+    if (sync) {
+      await syncFinishedApiResultsToFirebase();
+      const loaded = await loadOfficialMatchStateDocs();
+      officialResults = loaded.officialByMatchId;
+    }
     if (shouldShowLoadingNotice) {
       apiLoadingRequests = Math.max(0, apiLoadingRequests - 1);
       if (!apiLoadingRequests) setApiLoadingNotice(false);
