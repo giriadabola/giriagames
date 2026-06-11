@@ -243,31 +243,48 @@
   };
 
   const baseCalculateGgamesTableForBattles = calculateGgamesTable;
-  calculateGgamesTable = function() {
-    const stats = battleStatsByPlayer();
-    const rows = baseCalculateGgamesTableForBattles().map(row => {
-      const key = row.participantKey || participantKeyOf(row);
-      const p = playerByKey(key) || publicPredictions.find(item => String(item.id) === String(row.id)) || null;
-      const b = stats[key] || { battleWins: 0, battleDraws: 0, battleLosses: 0, battleBonusPoints: 0 };
-      return {
-        ...row,
-        participantKey: key,
-        icon: row.icon || p?.icon || p?.participantIcon || p?.playerIcon || '',
-        battleWins: b.battleWins || 0,
-        battleDraws: b.battleDraws || 0,
-        battleLosses: b.battleLosses || 0,
-        battleBonusPoints: b.battleBonusPoints || 0,
-        points: (row.points || 0) + (b.battleBonusPoints || 0)
-      };
-    });
 
-    return rows.sort((a, b) =>
-      (b.points - a.points) ||
-      (b.correctPredictions - a.correctPredictions) ||
-      (b.goalsHit - a.goalsHit) ||
-      (a.goalsMissed - b.goalsMissed) ||
-      a.name.localeCompare(b.name, 'pt-PT')
-    ).map((row, index) => ({ ...row, rank: index + 1 }));
+  function calculateBattleEnhancedRows(options = {}) {
+    const includeLive = options.includeLive !== false;
+    const originalOfficialResults = officialResults;
+    if (!includeLive) {
+      officialResults = Object.fromEntries(
+        Object.entries(originalOfficialResults || {}).filter(([, value]) => !value?._live)
+      );
+    }
+
+    try {
+      const stats = battleStatsByPlayer();
+      const rows = baseCalculateGgamesTableForBattles().map(row => {
+        const key = row.participantKey || participantKeyOf(row);
+        const p = playerByKey(key) || publicPredictions.find(item => String(item.id) === String(row.id)) || null;
+        const b = stats[key] || { battleWins: 0, battleDraws: 0, battleLosses: 0, battleBonusPoints: 0 };
+        return {
+          ...row,
+          participantKey: key,
+          icon: row.icon || p?.icon || p?.participantIcon || p?.playerIcon || '',
+          battleWins: b.battleWins || 0,
+          battleDraws: b.battleDraws || 0,
+          battleLosses: b.battleLosses || 0,
+          battleBonusPoints: b.battleBonusPoints || 0,
+          points: (row.points || 0) + (b.battleBonusPoints || 0)
+        };
+      });
+
+      return rows.sort((a, b) =>
+        (b.points - a.points) ||
+        (b.correctPredictions - a.correctPredictions) ||
+        (b.goalsHit - a.goalsHit) ||
+        (a.goalsMissed - b.goalsMissed) ||
+        a.name.localeCompare(b.name, 'pt-PT')
+      ).map((row, index) => ({ ...row, rank: index + 1 }));
+    } finally {
+      officialResults = originalOfficialResults;
+    }
+  }
+
+  calculateGgamesTable = function() {
+    return calculateBattleEnhancedRows({ includeLive: true });
   };
 
   function ggamesSortHeaderSafe(key, label, title = '') {
@@ -276,14 +293,25 @@
       : `<th title="${escapeHtml(title || label)}">${escapeHtml(label)}</th>`;
   }
 
+  function movementIndicator(previousRank, currentRank) {
+    if (!previousRank || previousRank === currentRank) return '<span class="ggames-rank-move same">•</span>';
+    if (currentRank < previousRank) return `<span class="ggames-rank-move up" title="Subiu ${previousRank - currentRank} lugar(es)">▲ ${previousRank - currentRank}</span>`;
+    return `<span class="ggames-rank-move down" title="Desceu ${currentRank - previousRank} lugar(es)">▼ ${currentRank - previousRank}</span>`;
+  }
+
   renderGgamesTable = function(options = {}) {
     const showBattles = options.battles !== false;
-    const rows = sortedGgamesRows(calculateGgamesTable());
+    const liveIds = currentLiveMatchIds();
+    const liveMode = liveIds.size > 0;
+    const rows = sortedGgamesRows(calculateBattleEnhancedRows({ includeLive: true }));
+    const baseRows = calculateBattleEnhancedRows({ includeLive: false });
+    const baseRankById = Object.fromEntries(baseRows.map(row => [String(row.id), row.rank]));
+    const basePointsById = Object.fromEntries(baseRows.map(row => [String(row.id), row.points]));
     if (!rows.length) return '<div class="empty-state">Ainda não há jogadores para mostrar.</div>';
     return `
       <div class="leaderboard-layout">
-        <section class="leaderboard-card">
-          <h3>Tabela Ggames</h3>
+        <section class="leaderboard-card ${liveMode ? 'leaderboard-card-live' : ''}">
+          <h3>Tabela Ggames ${liveMode ? '<span class="table-live-badge">AO VIVO</span>' : ''}</h3>
           <div class="table-scroll">
             <table class="ggames-table">
               <thead>
@@ -302,37 +330,224 @@
                 </tr>
               </thead>
               <tbody>
-                ${rows.map(row => `<tr class="ggames-player-row" data-live-player="${escapeHtml(row.id)}" title="Ver histórico de ${escapeHtml(row.name)}">
-                  <td>${row.rank}</td>
-                  <td><button type="button" class="ggames-player-link" data-live-player="${escapeHtml(row.id)}"><strong>${renderParticipantIdentity(row.name, row.icon, 'participant-ident--compact')}</strong></button></td>
-                  <td><strong>${row.points}</strong>${row.battleBonusPoints ? `<small class="battle-bonus-note">+${row.battleBonusPoints} BW</small>` : ''}</td>
-                  <td title="Battle Wins">${row.battleWins || 0}</td>
-                  <td>${row.correctPredictions}</td>
-                  <td>${row.failedPredictions}</td>
-                  <td title="Golos marcados">${row.goalsHit}</td>
-                  <td title="Golos falhados">${row.goalsMissed}</td>
-                  <td title="Vitórias/desfechos certos">${row.winsHit}</td>
-                  <td title="Empates certos">${row.drawsHit}</td>
-                  <td title="Derrotas/desfechos certos">${row.lossesHit}</td>
-                </tr>`).join('')}
+                ${rows.map(row => {
+                  const previousRank = baseRankById[String(row.id)] || row.rank;
+                  const previousPoints = basePointsById[String(row.id)] || 0;
+                  const liveDelta = liveMode ? (row.points - previousPoints) : 0;
+                  return `<tr class="ggames-player-row ${liveMode ? 'ggames-player-row-live' : ''}" data-live-player="${escapeHtml(row.id)}" title="Ver histórico de ${escapeHtml(row.name)}">
+                    <td><div class="ggames-rank-cell"><strong>${row.rank}</strong>${liveMode ? movementIndicator(previousRank, row.rank) : ''}</div></td>
+                    <td><button type="button" class="ggames-player-link" data-live-player="${escapeHtml(row.id)}"><strong>${renderParticipantIdentity(row.name, row.icon, 'participant-ident--compact')}</strong></button></td>
+                    <td><strong>${row.points}</strong>${row.battleBonusPoints ? `<small class="battle-bonus-note">+${row.battleBonusPoints} BW</small>` : ''}${liveMode && liveDelta > 0 ? `<small class="live-points-note">+${liveDelta} live</small>` : ''}</td>
+                    <td title="Battle Wins">${row.battleWins || 0}</td>
+                    <td>${row.correctPredictions}</td>
+                    <td>${row.failedPredictions}</td>
+                    <td title="Golos marcados">${row.goalsHit}</td>
+                    <td title="Golos falhados">${row.goalsMissed}</td>
+                    <td title="Vitórias/desfechos certos">${row.winsHit}</td>
+                    <td title="Empates certos">${row.drawsHit}</td>
+                    <td title="Derrotas/desfechos certos">${row.lossesHit}</td>
+                  </tr>`;
+                }).join('')}
               </tbody>
             </table>
           </div>
           <div class="ggames-info-row">
             <button type="button" class="ggames-info-btn" data-ggames-info aria-label="Ver regras de pontuação e desempate">i</button>
-            <span>Regras de pontuação, BW e desempate</span>
+            <span>${liveMode ? 'Classificação em atualização ao vivo, com subidas e descidas automáticas.' : 'Regras de pontuação, BW e desempate'}</span>
           </div>
         </section>
-        ${showBattles ? `<aside class="battles-card">
-          <h3>Ggames Battles</h3>
+        ${showBattles ? `<aside class="battles-card ${liveMode ? 'battles-card-live' : ''}">
+          <h3>Ggames Battles Live ${liveMode ? '<span class="table-live-badge">AO VIVO</span>' : ''}</h3>
           ${renderGiriaBattles(rows)}
         </aside>` : ''}
       </div>
     `;
   };
 
+  function currentLiveMatchIds() {
+    const ids = new Set((worldCupApi?.games || []).filter(game => game.live && !game.finished).map(game => String(game.id)));
+    const fallback = firstLiveMatchForBattles();
+    if (fallback?.id) ids.add(String(fallback.id));
+    return ids;
+  }
+
+  function apiMatchForBattle(matchId) {
+    const api = (worldCupApi?.games || []).find(game => String(game.id) === String(matchId)) || null;
+    if (api) return api;
+    const fallback = firstLiveMatchForBattles();
+    return fallback && String(fallback.id) === String(matchId) ? fallback : null;
+  }
+
+  function battleLiveContext(battle) {
+    const api = apiMatchForBattle(battle.matchId);
+    const official = officialWithApi(battle.matchId);
+    const live = !!(api?.live && !api?.finished);
+    const elapsed = official?.timeElapsed ?? api?.timeElapsed ?? null;
+    const statusText = live ? (typeof liveStatusLabel === 'function' ? liveStatusLabel(elapsed) : `${elapsed || 0}'`) : '';
+    return { api, official, live, statusText };
+  }
+
+
+  function firstLiveMatchForBattles() {
+    const apiLive = (worldCupApi?.games || []).find(game => game.live && !game.finished && game.id);
+    if (apiLive) return apiLive;
+
+    const now = new Date();
+    const fallback = (data?.matches || []).find(match => {
+      const matchId = String(match.id);
+      if (officialResults[matchId]?._finished || officialResults[matchId]?.finished) return false;
+
+      const kickoff = getMatchDateObj(match);
+      const elapsed = Math.floor((now - kickoff) / 60000);
+      return elapsed >= 0 && elapsed <= 130;
+    });
+
+    if (!fallback) return null;
+
+    const official = officialResults[String(fallback.id)] || {};
+    const kickoff = getMatchDateObj(fallback);
+    const elapsed = Math.max(0, Math.floor((now - kickoff) / 60000));
+
+    return {
+      id: String(fallback.id),
+      stage: fallback.stage,
+      group: fallback.group,
+      homeTeam: fallback.home,
+      awayTeam: fallback.away,
+      homeGoals: official.homeGoals ?? official.homeScore ?? 0,
+      awayGoals: official.awayGoals ?? official.awayScore ?? 0,
+      date: fallback.date,
+      time: fallback.time,
+      live: true,
+      finished: false,
+      timeElapsed: official.timeElapsed ?? `~${elapsed}`
+    };
+  }
+
+  function battlePredictionOutcomeForSavedPair(pred) {
+    return predictionOutcome(pred);
+  }
+
+  function battlePredictionScoreKeyForSavedPair(pred) {
+    if (!pred) return '';
+    return `${Number(pred.homeGoals)}-${Number(pred.awayGoals)}-${pred.winnerTeam || ''}`;
+  }
+
+  function savedLiveBattlePairScore(a, b, liveMatch, indexA, indexB) {
+    const differentOutcome = battlePredictionOutcomeForSavedPair(a.pred) !== battlePredictionOutcomeForSavedPair(b.pred);
+    const differentScore = battlePredictionScoreKeyForSavedPair(a.pred) !== battlePredictionScoreKeyForSavedPair(b.pred);
+    const differentWinner = String(a.pred?.winnerTeam || '') !== String(b.pred?.winnerTeam || '');
+    const rankGap = Math.abs(Number(a.row.rank || indexA) - Number(b.row.rank || indexB));
+    const seed = Number(liveMatch?.id || 0);
+    const rotation = ((indexA + 1) * 19 + (indexB + 1) * 29 + seed * 11) % 23;
+
+    let score = 0;
+    if (differentOutcome) score += 120;
+    if (differentWinner) score += 80;
+    if (differentScore) score += 45;
+    score += Math.max(0, 35 - rankGap);
+    score += rotation / 10;
+    return score;
+  }
+
+  function buildSavedDiverseLiveBattlePairs(rows, liveMatch, limit = 10) {
+    const candidates = rows
+      .slice()
+      .sort((a, b) => a.rank - b.rank)
+      .map((row, index) => {
+        const player = playerByKey(row.participantKey || row.id);
+        const pred = predictionFor(player, liveMatch.id);
+        return player && pred ? { row, player, pred, index } : null;
+      })
+      .filter(Boolean);
+
+    const allPairs = [];
+    for (let i = 0; i < candidates.length; i++) {
+      for (let j = i + 1; j < candidates.length; j++) {
+        const a = candidates[i];
+        const b = candidates[j];
+        allPairs.push({ a, b, score: savedLiveBattlePairScore(a, b, liveMatch, i, j) });
+      }
+    }
+
+    allPairs.sort((x, y) => y.score - x.score);
+    const selected = [];
+    const usedPlayers = new Set();
+
+    for (const pair of allPairs) {
+      const keyA = String(pair.a.row.id);
+      const keyB = String(pair.b.row.id);
+      if (usedPlayers.has(keyA) || usedPlayers.has(keyB)) continue;
+      selected.push(pair);
+      usedPlayers.add(keyA);
+      usedPlayers.add(keyB);
+      if (selected.length >= limit) break;
+    }
+
+    if (selected.length < limit) {
+      const usedPairKeys = new Set(selected.map(pair => [pair.a.row.id, pair.b.row.id].sort().join('|')));
+      for (const pair of allPairs) {
+        const pairKey = [pair.a.row.id, pair.b.row.id].sort().join('|');
+        if (usedPairKeys.has(pairKey)) continue;
+        selected.push(pair);
+        usedPairKeys.add(pairKey);
+        if (selected.length >= limit) break;
+      }
+    }
+
+    return selected;
+  }
+
+  function liveBattleCandidates(rows, limit = 10) {
+    const liveMatch = firstLiveMatchForBattles();
+    if (!liveMatch) return [];
+
+    const existing = ggamesBattleDocs
+      .filter(b => String(b.matchId) === String(liveMatch.id))
+      .sort((a, b) => Number(a.matchId) - Number(b.matchId));
+
+    if (existing.length) return existing.slice(0, limit);
+
+    const pairs = buildSavedDiverseLiveBattlePairs(rows, liveMatch, limit);
+    return pairs.map((pair, index) => {
+      const a = pair.a.row;
+      const b = pair.b.row;
+      const pA = pair.a.player;
+      const pB = pair.b.player;
+      return {
+        id: `live_${String(liveMatch.id).padStart(3, '0')}_${index + 1}`,
+        matchId: liveMatch.id,
+        stage: liveMatch.stage,
+        homeTeam: liveMatch.homeTeam,
+        awayTeam: liveMatch.awayTeam,
+        playerAKey: participantKeyOf(pA),
+        playerAName: pA.participantName,
+        playerARank: a.rank,
+        playerBKey: participantKeyOf(pB),
+        playerBName: pB.participantName,
+        playerBRank: b.rank,
+        status: 'live-preview',
+        _contrast: battlePredictionOutcomeForSavedPair(pair.a.pred) !== battlePredictionOutcomeForSavedPair(pair.b.pred)
+          ? 'Vencedores diferentes'
+          : battlePredictionScoreKeyForSavedPair(pair.a.pred) !== battlePredictionScoreKeyForSavedPair(pair.b.pred)
+            ? 'Resultados diferentes'
+            : 'Duelo equilibrado'
+      };
+    });
+  }
+
   function savedBattlesForMainView() {
     const now = new Date();
+    const liveMatch = firstLiveMatchForBattles();
+
+    // Quando há live, nunca mostramos battles de outro jogo.
+    if (liveMatch) {
+      return ggamesBattleDocs
+        .filter(b => String(b.matchId) === String(liveMatch.id))
+        .sort((a, b) => Number(a.matchId) - Number(b.matchId))
+        .slice(0, 12);
+    }
+
     const playable = ggamesBattleDocs.filter(b => {
       const m = localMatch(b.matchId);
       if (!m) return false;
@@ -358,24 +573,31 @@
     const canPick = isKnockoutStage(stage) && isBeforeKickoff(battle.matchId);
     const pickA = pickFor(battle.id, battle.playerAKey);
     const pickB = pickFor(battle.id, battle.playerBKey);
+    const liveCtx = battleLiveContext(battle);
+    const leadA = liveCtx.live && result.playerAFactors > result.playerBFactors;
+    const leadB = liveCtx.live && result.playerBFactors > result.playerAFactors;
     const status = result.status === 'finished'
       ? `Resultado Battle: ${result.playerAFactors}-${result.playerBFactors}${result.draw ? ' · empate' : result.winnerKey === battle.playerAKey ? ` · vence ${escapeHtml(battle.playerAName)}` : ` · vence ${escapeHtml(battle.playerBName)}`}`
-      : canPick ? 'Clica para escolher marcador da Battle' : 'Battle pendente';
+      : liveCtx.live
+        ? `Battle live · fatores agora: ${result.playerAFactors}-${result.playerBFactors}${result.draw ? ' · empate' : result.playerAFactors > result.playerBFactors ? ` · na frente ${escapeHtml(battle.playerAName)}` : result.playerBFactors > result.playerAFactors ? ` · na frente ${escapeHtml(battle.playerBName)}` : ''}`
+        : canPick ? 'Clica para escolher marcador da Battle' : 'Battle pendente';
 
     return `
-      <div class="battle-card live-battle battle-card-horizontal battle-card-clickable" data-battle-id="${escapeHtml(battle.id)}">
-        <span class="battle-match">Jogo ${escapeHtml(battle.matchId)} · ${escapeHtml(match?.home || battle.homeTeam || '')} vs ${escapeHtml(match?.away || battle.awayTeam || '')}</span>
+      <div class="battle-card live-battle battle-card-horizontal battle-card-clickable ${liveCtx.live ? 'battle-card-is-live' : ''}" data-battle-id="${escapeHtml(battle.id)}">
+        <span class="battle-match">Jogo ${escapeHtml(battle.matchId)} · ${escapeHtml(match?.home || battle.homeTeam || '')} vs ${escapeHtml(match?.away || battle.awayTeam || '')}${battle._contrast ? ` <em class="battle-contrast-chip">${escapeHtml(battle._contrast)}</em>` : ''}</span>
         <div class="battle-duel-row">
-          <div class="battle-player battle-player-a">
+          <div class="battle-player battle-player-a ${leadA ? 'battle-player-leading' : ''}">
             <strong>${renderParticipantIdentity(`#${escapeHtml(battle.playerARank || '')} ${battle.playerAName || pA.participantName}`, pA.icon || pA.participantIcon || pA.playerIcon || '', 'participant-ident--compact')}</strong>
             <span>${predictionResultText(predA)}</span>
             ${pickA ? `<small>Marcador: ${escapeHtml(pickA.pickedPlayerName)}</small>` : ''}
+            ${leadA ? '<div class="battle-fans" aria-hidden="true"><span>🙌</span><span>⚑</span><span>🙌</span><span>⚑</span><span>🙌</span></div>' : ''}
           </div>
           <b class="battle-versus">VS</b>
-          <div class="battle-player battle-player-b">
+          <div class="battle-player battle-player-b ${leadB ? 'battle-player-leading' : ''}">
             <strong>${renderParticipantIdentity(`#${escapeHtml(battle.playerBRank || '')} ${battle.playerBName || pB.participantName}`, pB.icon || pB.participantIcon || pB.playerIcon || '', 'participant-ident--compact')}</strong>
             <span>${predictionResultText(predB)}</span>
             ${pickB ? `<small>Marcador: ${escapeHtml(pickB.pickedPlayerName)}</small>` : ''}
+            ${leadB ? '<div class="battle-fans" aria-hidden="true"><span>🙌</span><span>⚑</span><span>🙌</span><span>⚑</span><span>🙌</span></div>' : ''}
           </div>
         </div>
         <p class="${result.status === 'finished' ? 'battle-result-line' : 'battle-state'}">${status}</p>
@@ -384,9 +606,10 @@
   }
 
   function generatedFallbackBattles(rows) {
+    const liveMatch = (worldCupApi?.games || []).find(game => game.live && !game.finished && game.id);
     const futureMatches = data?.matches?.filter(match => !getOfficialResult(match.id) && getMatchDateObj(match) >= new Date()) || [];
-    if (!futureMatches.length) return [];
-    const match = futureMatches[0];
+    if (!liveMatch && !futureMatches.length) return [];
+    const match = liveMatch ? { id: liveMatch.id, stage: liveMatch.stage, home: liveMatch.homeTeam, away: liveMatch.awayTeam } : futureMatches[0];
     const sorted = rows.slice().sort((a, b) => a.rank - b.rank);
     const battles = [];
     for (let i = 0; i < sorted.length - 1; i += 2) {
@@ -415,18 +638,30 @@
   renderLiveGiriaBattles = function() {
     const rows = calculateGgamesTable();
     if (rows.length < 2) return '<p class="modal-muted">Ainda não há jogadores suficientes para criar battles.</p>';
-    const battles = savedBattlesForMainView();
-    const display = battles.length ? battles : generatedFallbackBattles(rows);
+
+    const liveMatch = firstLiveMatchForBattles();
+    const display = liveMatch
+      ? liveBattleCandidates(rows, 10)
+      : (savedBattlesForMainView().length ? savedBattlesForMainView() : generatedFallbackBattles(rows));
+
     return display.length
       ? display.slice(0, 10).map(b => renderBattleCard(b, true)).join('')
-      : '<p class="modal-muted">Ainda não há battles geradas. Usa a página gerenciar-battles.html para criar.</p>';
+      : liveMatch
+        ? `<p class="modal-muted">O jogo ${escapeHtml(liveMatch.id)} está em direto, mas ainda não há prognósticos suficientes para criar battles live deste jogo.</p>`
+        : '<p class="modal-muted">Ainda não há battles geradas. Usa a página gerenciar-battles.html para criar.</p>';
   };
 
   renderGiriaBattles = function(rows) {
-    const battles = ggamesBattleDocs.length ? savedBattlesForMainView() : generatedFallbackBattles(rows);
-    return battles.length
-      ? battles.slice(0, 8).map(b => renderBattleCard(b, true)).join('')
-      : '<p class="modal-muted">Ainda não há battles geradas.</p>';
+    const liveMatch = firstLiveMatchForBattles();
+    const display = liveMatch
+      ? liveBattleCandidates(rows, 8)
+      : (savedBattlesForMainView().length ? savedBattlesForMainView() : generatedFallbackBattles(rows));
+
+    return display.length
+      ? display.slice(0, 8).map(b => renderBattleCard(b, true)).join('')
+      : liveMatch
+        ? `<p class="modal-muted">O jogo ${escapeHtml(liveMatch.id)} está em direto, mas ainda não há prognósticos suficientes para criar battles live deste jogo.</p>`
+        : '<p class="modal-muted">Ainda não há battles geradas.</p>';
   };
 
   function teamSquad(teamName) {

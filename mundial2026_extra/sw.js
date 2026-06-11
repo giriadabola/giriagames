@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ggames-mundial-2026-v6';
+const CACHE_NAME = 'ggames-mundial-2026-v18-no-estimated-time-text';
 const APP_SHELL = [
   './',
   './index.html',
@@ -37,7 +37,7 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
 
   // Dados dinâmicos/API/Firebase: rede primeiro.
-  if (url.pathname.endsWith('.json') || url.hostname.includes('worldcup26.ir') || url.hostname.includes('googleapis.com')) {
+  if (url.pathname.endsWith('.json') || url.hostname.includes('worldcup26.ir') || url.hostname.includes('thesportsdb.com') || url.hostname.includes('api-sports.io') || url.hostname.includes('thesportsdb.com') || url.hostname.includes('googleapis.com')) {
     event.respondWith(
       fetch(request).then((response) => {
         const clone = response.clone();
