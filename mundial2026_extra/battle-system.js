@@ -11,7 +11,9 @@
   const BATTLE_KO_STAGES = ['round32', 'round16', 'quarterfinals', 'semifinals', 'third_place', 'final'];
 
   let ggamesBattleDocs = [];
+      window.ggamesBattleDocs = ggamesBattleDocs;
   let ggamesBattleScorerPicks = [];
+  const liveBattlePersistInFlight = new Set();
 
 
   async function hashPinForBattle(participantKey, pin) {
@@ -221,9 +223,11 @@
     try {
       const battleSnap = await firebaseTools.getDocs(firebaseTools.collection(firestoreDb, BATTLES_COLLECTION));
       ggamesBattleDocs = battleSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      window.ggamesBattleDocs = ggamesBattleDocs;
     } catch (error) {
       console.warn('Não foi possível carregar as Battles.', error);
       ggamesBattleDocs = [];
+      window.ggamesBattleDocs = ggamesBattleDocs;
     }
 
     try {
@@ -389,43 +393,37 @@
 
 
   function firstLiveMatchForBattles() {
-    const apiLive = (worldCupApi?.games || []).find(game => game.live && !game.finished && game.id);
+    if (typeof getCurrentLiveGameForDashboard === 'function') return getCurrentLiveGameForDashboard();
+
+    const apiLive = (worldCupApi?.games || [])
+      .filter(game => game.live && !game.finished && game.id)
+      .sort((a, b) => Number(a.id) - Number(b.id))[0];
     if (apiLive) return apiLive;
 
-    const now = new Date();
-    const fallback = (data?.matches || []).find(match => {
-      const matchId = String(match.id);
-      if (officialResults[matchId]?._finished || officialResults[matchId]?.finished) return false;
-
-      const kickoff = getMatchDateObj(match);
-      const elapsed = Math.floor((now - kickoff) / 60000);
-      return elapsed >= 0 && elapsed <= 130;
-    });
-
-    if (!fallback) return null;
-
-    const official = officialResults[String(fallback.id)] || {};
-    const kickoff = getMatchDateObj(fallback);
-    const elapsed = Math.max(0, Math.floor((now - kickoff) / 60000));
+    const localLive = (data?.matches || [])
+      .filter(match => isMatchInLiveWindow(match))
+      .sort((a, b) => Number(a.id) - Number(b.id))[0];
+    if (!localLive) return null;
 
     return {
-      id: String(fallback.id),
-      stage: fallback.stage,
-      group: fallback.group,
-      homeTeam: fallback.home,
-      awayTeam: fallback.away,
-      homeGoals: official.homeGoals ?? official.homeScore ?? 0,
-      awayGoals: official.awayGoals ?? official.awayScore ?? 0,
-      date: fallback.date,
-      time: fallback.time,
+      id: String(localLive.id),
+      matchId: String(localLive.id),
+      stage: localLive.stage,
+      group: localLive.group || null,
+      date: localLive.date,
+      time: localLive.time,
+      homeTeam: localLive.home,
+      awayTeam: localLive.away,
       live: true,
       finished: false,
-      timeElapsed: official.timeElapsed ?? `~${elapsed}`
+      timeElapsed: `~${elapsedMinuteFromSchedule(localLive)}`,
+      source: 'matches.json'
     };
   }
 
+
   function battlePredictionOutcomeForSavedPair(pred) {
-    return predictionOutcome(pred);
+    return typeof predictionOutcome === 'function' ? predictionOutcome(pred) : '';
   }
 
   function battlePredictionScoreKeyForSavedPair(pred) {
@@ -471,6 +469,7 @@
     }
 
     allPairs.sort((x, y) => y.score - x.score);
+
     const selected = [];
     const usedPlayers = new Set();
 
@@ -536,11 +535,237 @@
     });
   }
 
+
+  function battleSnapshotPayload(battle, extra = {}) {
+    const result = calculateBattleResult(battle);
+    return {
+      ...extra,
+      status: result.status === 'finished' ? 'finished' : (extra.status || battle.status || 'live'),
+      playerAFactors: result.playerAFactors ?? battle.playerAFactors ?? 0,
+      playerBFactors: result.playerBFactors ?? battle.playerBFactors ?? 0,
+      winnerKey: result.winnerKey || '',
+      draw: !!result.draw,
+      officialHomeGoals: result.officialHomeGoals ?? null,
+      officialAwayGoals: result.officialAwayGoals ?? null,
+      updatedAt: firebaseTools?.serverTimestamp ? firebaseTools.serverTimestamp() : new Date().toISOString()
+    };
+  }
+
+
+  async function firestoreBattlesForMatch(matchId, limit = 12) {
+    if (!firestoreDb || !firebaseTools || !matchId) return [];
+    const existingLocal = ggamesBattleDocs
+      .filter(b => String(b.matchId) === String(matchId))
+      .sort((a, b) => Number(a.createdOrder || 0) - Number(b.createdOrder || 0));
+
+    if (existingLocal.length) return existingLocal;
+
+    // Procura primeiro pelos IDs determinísticos que o sistema usa para este jogo.
+    const reads = [];
+    for (let i = 1; i <= limit; i++) {
+      reads.push(firebaseTools.getDoc(firebaseTools.doc(firestoreDb, BATTLES_COLLECTION, battleDocId(matchId, i))));
+    }
+
+    try {
+      const snaps = await Promise.all(reads);
+      const docs = snaps
+        .filter(snap => snap.exists())
+        .map(snap => ({ id: snap.id, ...snap.data() }))
+        .filter(doc => String(doc.matchId) === String(matchId))
+        .sort((a, b) => Number(a.createdOrder || 0) - Number(b.createdOrder || 0));
+
+      if (docs.length) {
+        ggamesBattleDocs = [
+          ...ggamesBattleDocs.filter(b => String(b.matchId) !== String(matchId)),
+          ...docs
+        ];
+        window.ggamesBattleDocs = ggamesBattleDocs;
+      }
+      return docs;
+    } catch (error) {
+      console.warn('Não foi possível confirmar battles existentes no Firebase.', error);
+      return existingLocal;
+    }
+  }
+
+  async function battleMatchMarker(matchId) {
+    if (!firestoreDb || !firebaseTools || !matchId) return null;
+    try {
+      const ref = firebaseTools.doc(firestoreDb, BATTLE_MATCHES_COLLECTION, matchDocId(matchId));
+      const snap = await firebaseTools.getDoc(ref);
+      return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+    } catch {
+      return null;
+    }
+  }
+
+  async function markBattleMatchCreated(liveMatch, count = 0) {
+    if (!firestoreDb || !firebaseTools || !liveMatch?.id) return;
+    try {
+      await firebaseTools.setDoc(
+        firebaseTools.doc(firestoreDb, BATTLE_MATCHES_COLLECTION, matchDocId(liveMatch.id)),
+        {
+          matchId: Number(liveMatch.id),
+          matchDocId: matchDocId(liveMatch.id),
+          status: liveMatch.finished ? 'finished' : 'live',
+          battlesCreated: true,
+          battlesCount: count,
+          stage: liveMatch.stage || localMatch(liveMatch.id)?.stage || '',
+          group: liveMatch.group || localMatch(liveMatch.id)?.group || null,
+          homeTeam: liveMatch.homeTeam || localMatch(liveMatch.id)?.home || '',
+          awayTeam: liveMatch.awayTeam || localMatch(liveMatch.id)?.away || '',
+          createdAt: firebaseTools.serverTimestamp(),
+          updatedAt: firebaseTools.serverTimestamp()
+        },
+        { merge: true }
+      );
+    } catch (error) {
+      console.warn('Não foi possível marcar o jogo como tendo battles criadas.', error);
+    }
+  }
+
+  async function persistLiveBattlesForMatch(liveMatch, rows, limit = 8) {
+    if (!firestoreDb || !firebaseTools || !liveMatch?.id) return [];
+
+    // 1) Verificação local + Firestore por matchId/IDs determinísticos.
+    // Se já existirem battles deste jogo, nunca cria novas.
+    const existing = await firestoreBattlesForMatch(liveMatch.id, Math.max(limit, 12));
+    if (existing.length) {
+      await markBattleMatchCreated(liveMatch, existing.length);
+      await finalizeBattlesIfMatchFinished(liveMatch, existing);
+      return existing;
+    }
+
+    // 2) Verifica também o marcador do jogo. Se o jogo já foi marcado como criado
+    // mas os docs ainda não carregaram, tenta recarregar uma vez e não duplica.
+    const marker = await battleMatchMarker(liveMatch.id);
+    if (marker?.battlesCreated) {
+      await loadGgamesBattlesData();
+      const afterReload = ggamesBattleDocs
+        .filter(b => String(b.matchId) === String(liveMatch.id))
+        .sort((a, b) => Number(a.createdOrder || 0) - Number(b.createdOrder || 0));
+      if (afterReload.length) return afterReload;
+      // Se o marcador existe mas não há docs, continua para autocorrigir criando os docs determinísticos.
+    }
+
+    const pairs = buildSavedDiverseLiveBattlePairs(rows, liveMatch, limit);
+    if (!pairs.length) return [];
+
+    const created = pairs.map((pair, index) => {
+      const a = pair.a.row;
+      const b = pair.b.row;
+      const pA = pair.a.player;
+      const pB = pair.b.player;
+      const id = battleDocId(liveMatch.id, index + 1);
+      return {
+        id,
+        matchDocId: matchDocId(liveMatch.id),
+        matchId: Number(liveMatch.id),
+        stage: liveMatch.stage || localMatch(liveMatch.id)?.stage || 'groups',
+        group: liveMatch.group || localMatch(liveMatch.id)?.group || null,
+        homeTeam: liveMatch.homeTeam || localMatch(liveMatch.id)?.home || '',
+        awayTeam: liveMatch.awayTeam || localMatch(liveMatch.id)?.away || '',
+        playerAKey: participantKeyOf(pA),
+        playerAName: pA.participantName || pA.name || a.name || '',
+        playerARank: a.rank || index + 1,
+        playerBKey: participantKeyOf(pB),
+        playerBName: pB.participantName || pB.name || b.name || '',
+        playerBRank: b.rank || index + 2,
+        status: 'live',
+        createdOrder: index + 1,
+        lockedAtKickoff: true,
+        _contrast: battlePredictionOutcomeForSavedPair(pair.a.pred) !== battlePredictionOutcomeForSavedPair(pair.b.pred)
+          ? 'Vencedores diferentes'
+          : battlePredictionScoreKeyForSavedPair(pair.a.pred) !== battlePredictionScoreKeyForSavedPair(pair.b.pred)
+            ? 'Resultados diferentes'
+            : 'Duelo equilibrado',
+        createdAt: firebaseTools.serverTimestamp(),
+        updatedAt: firebaseTools.serverTimestamp()
+      };
+    });
+
+    try {
+      // IDs determinísticos + setDoc merge = mesmo que duas pessoas abram a app ao mesmo tempo,
+      // ambas gravam nos mesmos documentos, sem criar duplicados.
+      await Promise.all(created.map(battleDoc => {
+        const { id, ...payload } = battleDoc;
+        return firebaseTools.setDoc(
+          firebaseTools.doc(firestoreDb, BATTLES_COLLECTION, id),
+          payload,
+          { merge: true }
+        );
+      }));
+
+      await markBattleMatchCreated(liveMatch, created.length);
+
+      ggamesBattleDocs = [
+        ...ggamesBattleDocs.filter(b => String(b.matchId) !== String(liveMatch.id)),
+        ...created
+      ];
+      window.ggamesBattleDocs = ggamesBattleDocs;
+      return created;
+    } catch (error) {
+      console.warn('Não foi possível gravar as battles live. A usar apenas nesta sessão.', error);
+      return created;
+    }
+  }
+
+  async function finalizeBattlesIfMatchFinished(match, battles) {
+    if (!firestoreDb || !firebaseTools || !match?.finished) return;
+    const finishedBattles = (battles || []).filter(b => b.status !== 'finished');
+    if (!finishedBattles.length) return;
+
+    try {
+      await Promise.all(finishedBattles.map(battle => {
+        const payload = battleSnapshotPayload(battle, {
+          status: 'finished',
+          finishedAt: firebaseTools.serverTimestamp()
+        });
+        return firebaseTools.setDoc(
+          firebaseTools.doc(firestoreDb, BATTLES_COLLECTION, battle.id),
+          payload,
+          { merge: true }
+        );
+      }));
+      finishedBattles.forEach(b => {
+        const result = calculateBattleResult(b);
+        Object.assign(b, {
+          status: 'finished',
+          playerAFactors: result.playerAFactors,
+          playerBFactors: result.playerBFactors,
+          winnerKey: result.winnerKey || '',
+          draw: !!result.draw,
+          officialHomeGoals: result.officialHomeGoals ?? null,
+          officialAwayGoals: result.officialAwayGoals ?? null
+        });
+      });
+    } catch (error) {
+      console.warn('Não foi possível finalizar battles no Firebase.', error);
+    }
+  }
+
+  async function ensurePersistedBattlesForCurrentLiveMatch(rows, limit = 8) {
+    const liveMatch = firstLiveMatchForBattles();
+    if (!liveMatch) return [];
+    return persistLiveBattlesForMatch(liveMatch, rows, limit);
+  }
+
+
+  function persistLiveBattlesOnce(liveMatch, rows, limit = 8) {
+    if (!liveMatch?.id) return Promise.resolve([]);
+    const key = String(liveMatch.id);
+    if (liveBattlePersistInFlight.has(key)) return Promise.resolve([]);
+    liveBattlePersistInFlight.add(key);
+
+    return persistLiveBattlesForMatch(liveMatch, rows, limit)
+      .finally(() => liveBattlePersistInFlight.delete(key));
+  }
+
+
   function savedBattlesForMainView() {
     const now = new Date();
     const liveMatch = firstLiveMatchForBattles();
 
-    // Quando há live, nunca mostramos battles de outro jogo.
     if (liveMatch) {
       return ggamesBattleDocs
         .filter(b => String(b.matchId) === String(liveMatch.id))
@@ -640,28 +865,55 @@
     if (rows.length < 2) return '<p class="modal-muted">Ainda não há jogadores suficientes para criar battles.</p>';
 
     const liveMatch = firstLiveMatchForBattles();
-    const display = liveMatch
-      ? liveBattleCandidates(rows, 10)
-      : (savedBattlesForMainView().length ? savedBattlesForMainView() : generatedFallbackBattles(rows));
+    if (liveMatch) {
+      const saved = savedBattlesForMainView();
+      if (saved.length) {
+        finalizeBattlesIfMatchFinished(liveMatch, saved);
+        return saved.slice(0, 10).map(b => renderBattleCard(b, true)).join('');
+      }
+      const temp = liveBattleCandidates(rows, 10);
+      persistLiveBattlesOnce(liveMatch, rows, 10).then(created => {
+        if (created?.length) loadGgamesBattlesData().then(() => refreshLiveDashboardView());
+      });
+      return temp.length
+        ? temp.slice(0, 10).map(b => renderBattleCard(b, true)).join('')
+        : '<p class="modal-muted">Este jogo está em direto, mas ainda não há prognósticos suficientes para criar battles live.</p>';
+    }
 
+    const battles = savedBattlesForMainView();
+    const display = battles.length ? battles : generatedFallbackBattles(rows);
     return display.length
       ? display.slice(0, 10).map(b => renderBattleCard(b, true)).join('')
-      : liveMatch
-        ? `<p class="modal-muted">O jogo ${escapeHtml(liveMatch.id)} está em direto, mas ainda não há prognósticos suficientes para criar battles live deste jogo.</p>`
-        : '<p class="modal-muted">Ainda não há battles geradas. Usa a página gerenciar-battles.html para criar.</p>';
+      : '<p class="modal-muted">Ainda não há battles geradas.</p>';
   };
 
   renderGiriaBattles = function(rows) {
     const liveMatch = firstLiveMatchForBattles();
-    const display = liveMatch
-      ? liveBattleCandidates(rows, 8)
-      : (savedBattlesForMainView().length ? savedBattlesForMainView() : generatedFallbackBattles(rows));
+    const saved = savedBattlesForMainView();
 
+    if (liveMatch) {
+      if (saved.length) {
+        finalizeBattlesIfMatchFinished(liveMatch, saved);
+        return saved.slice(0, 8).map(b => renderBattleCard(b, true)).join('');
+      }
+
+      // Primeira entrada do jogo live: cria e grava no Firebase.
+      // Até a gravação terminar, mostra os mesmos pares que serão gravados.
+      const temp = liveBattleCandidates(rows, 8);
+      persistLiveBattlesOnce(liveMatch, rows, 8).then(created => {
+        if (created?.length) {
+          loadGgamesBattlesData().then(() => refreshLiveDashboardView());
+        }
+      });
+      return temp.length
+        ? temp.slice(0, 8).map(b => renderBattleCard(b, true)).join('')
+        : '<p class="modal-muted">Este jogo está em direto, mas ainda não há prognósticos suficientes para criar battles live.</p>';
+    }
+
+    const display = saved.length ? saved : generatedFallbackBattles(rows);
     return display.length
       ? display.slice(0, 8).map(b => renderBattleCard(b, true)).join('')
-      : liveMatch
-        ? `<p class="modal-muted">O jogo ${escapeHtml(liveMatch.id)} está em direto, mas ainda não há prognósticos suficientes para criar battles live deste jogo.</p>`
-        : '<p class="modal-muted">Ainda não há battles geradas.</p>';
+      : '<p class="modal-muted">Ainda não há battles geradas.</p>';
   };
 
   function teamSquad(teamName) {
@@ -812,6 +1064,10 @@
       `);
     }
   };
+
+
+  window.ensurePersistedBattlesForCurrentLiveMatch = ensurePersistedBattlesForCurrentLiveMatch;
+  window.finalizeBattlesIfMatchFinished = finalizeBattlesIfMatchFinished;
 
   document.body.addEventListener('click', event => {
     const battleCard = event.target.closest('[data-battle-id]');
