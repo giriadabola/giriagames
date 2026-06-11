@@ -222,7 +222,7 @@
       const battleSnap = await firebaseTools.getDocs(firebaseTools.collection(firestoreDb, BATTLES_COLLECTION));
       ggamesBattleDocs = battleSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     } catch (error) {
-      console.warn('Não foi possível carregar worldcupextraBattles.', error);
+      console.warn('Não foi possível carregar as Battles.', error);
       ggamesBattleDocs = [];
     }
 
@@ -230,7 +230,7 @@
       const pickSnap = await firebaseTools.getDocs(firebaseTools.collection(firestoreDb, BATTLE_SCORERS_COLLECTION));
       ggamesBattleScorerPicks = pickSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     } catch (error) {
-      console.warn('Não foi possível carregar worldcupextraBattleScorers.', error);
+      console.warn('Não foi possível carregar as escolhas de marcador.', error);
       ggamesBattleScorerPicks = [];
     }
   }
@@ -462,7 +462,7 @@
   function openBattleScorerModal(battleId) {
     const battle = ggamesBattleDocs.find(b => String(b.id) === String(battleId)) || null;
     if (!battle) {
-      openModal('<h2>Battle</h2><p class="modal-muted">Esta battle ainda não está gravada no Firebase.</p>');
+      openModal('<h2>Battle</h2><p class="modal-muted">Esta Battle ainda não está pronta. Tenta novamente mais tarde.</p>');
       return;
     }
     const stage = battleStage(battle);
@@ -517,7 +517,7 @@
         return;
       }
       if (!data?.pinHash) {
-        body.innerHTML = '<p class="error-text">Este participante ainda não tem pinHash. Abre gerenciar-battles.html como admin e clica em “Criar pinHash dos PINs”.</p>';
+        body.innerHTML = '<p class="error-text">Este participante ainda não está preparado para escolher marcador. Fala com o organizador.</p>';
         return;
       }
 

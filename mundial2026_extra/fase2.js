@@ -256,7 +256,7 @@
       const reformSnapshot = await firebaseTools.getDocs(reformRef);
       reformDocs = reformSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     } catch (error) {
-      console.warn('Não foi possível carregar worldcupextraReforms.', error);
+      console.warn('Não foi possível carregar as reformulações.', error);
     }
 
     section2Docs = [...legacyDocs, ...reformDocs]
@@ -1159,7 +1159,7 @@
       return;
     }
     if (!String(item.pin || '').trim()) {
-      openModal(renderReformLogin('Este participante ainda não tem PIN no documento do Firebase.'));
+      openModal(renderReformLogin('Este participante ainda não tem PIN associado. Fala com o organizador.'));
       return;
     }
     if (String(item.pin || '').trim() !== pin) {
@@ -1249,8 +1249,8 @@
       openModal(renderReformStage());
     } catch (error) {
       console.error(error);
-      if (msg) msg.textContent = 'Não foi possível gravar. Confirma as regras do Firebase.';
-      alert('Não foi possível gravar a reformulação. Confirma as regras do Firebase.');
+      if (msg) msg.textContent = 'Não foi possível gravar. Tenta novamente mais tarde ou fala com o organizador.';
+      alert('Não foi possível gravar a reformulação. Tenta novamente mais tarde ou fala com o organizador.');
     }
   }
 

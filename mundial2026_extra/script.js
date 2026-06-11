@@ -1061,7 +1061,7 @@ async function syncFinishedApiResultsToFirebase() {
     await batch.commit();
   } catch (error) {
     // Em produção, o ideal é uma Cloud Function. Se as regras não permitirem escrita pública, o site apenas mostra os dados da API.
-    console.warn('Não foi possível guardar resultados da API no Firebase pelo browser.', error);
+    console.warn('Não foi possível atualizar os resultados automaticamente neste momento.', error);
   }
 }
 
@@ -1443,7 +1443,7 @@ async function initFirebase() {
     await loadScoringRules();
     await loadVotingDeadline();
   } catch (error) {
-    console.error('Erro ao iniciar Firebase:', error);
+    console.error('Erro ao preparar ligação:', error);
     const status = $('#firebaseStatus');
     if (status) status.textContent = 'Não foi possível preparar a gravação. Confirma a internet.';
     updateSaveButton();
