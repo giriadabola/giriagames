@@ -85,6 +85,9 @@ let officialResults = {};
 let publicViewerStage = 'groups';
 let publicGameFilter = 'played';
 let closedMainTab = 'games';
+let mobileAppSection = 'games';
+let mobilePublicViewerHtml = '';
+let mobilePublicViewerLoading = false;
 let state = { name: '', predictions: {}, activeStage: 'groups', lastSaved: '' };
 
 const $ = (selector) => document.querySelector(selector);
@@ -867,6 +870,7 @@ function applyVotingDeadlineUi() {
   } else if (status && dateText) {
     status.textContent = `Podes gravar o teu prognóstico até ${dateText}.`;
   }
+  updateMobileAppNav();
 }
 
 async function renderClosedPublicView() {
@@ -909,6 +913,7 @@ async function openLiveResultsModal() {
 function refreshLiveDashboardView() {
   const body = $('#liveViewerBody') || $('#closedLiveDashboard') || $('#closedViewerBody');
   if (body) body.innerHTML = renderLiveDashboard();
+  updateMobileAppNav();
 }
 
 
@@ -1088,7 +1093,7 @@ function apiMatchForLocal(match) {
 function renderLiveDashboard() {
   return `
     <div class="live-two-columns">
-      <section class="live-column">
+      <section class="live-column" data-mobile-live-section="games">
         <div class="live-column-head"><h3>Jogos</h3></div>
         <div class="viewer-tabs compact">
           <button type="button" class="viewer-tab ${liveLeftTab === 'live' ? 'active' : ''}" data-live-left="live">Jogos em Direto</button>
@@ -1097,13 +1102,16 @@ function renderLiveDashboard() {
         </div>
         <div class="live-panel-body">${renderLiveLeftPanel()}</div>
       </section>
-      <section class="live-column">
+      <section class="live-column" data-mobile-live-section="results">
         <div class="live-column-head"><h3>Resultados</h3></div>
         <div class="viewer-tabs compact">
           <button type="button" class="viewer-tab ${liveRightTab === 'battles' ? 'active' : ''}" data-live-right="battles">Ggames Battles Live</button>
           <button type="button" class="viewer-tab ${liveRightTab === 'table' ? 'active' : ''}" data-live-right="table">Tabela Ggames Live</button>
         </div>
         <div class="live-panel-body">${renderLiveRightPanel()}</div>
+      </section>
+      <section class="live-column mobile-public-page" data-mobile-live-section="prognostics">
+        ${mobilePublicViewerHtml || '<div class="live-loading-card">Toca no símbolo central para ver os prognósticos dos jogadores.</div>'}
       </section>
     </div>
   `;
@@ -2020,6 +2028,61 @@ function renderPublicViewer(active = 'players') {
 }
 
 
+
+function isMobileClosedView() {
+  return isVotingClosed() && window.matchMedia && window.matchMedia('(max-width: 760px)').matches;
+}
+
+function updateMobileAppNav() {
+  const nav = $('#mobileAppNav');
+  if (!nav) return;
+  const show = isVotingClosed();
+  nav.hidden = !show;
+  nav.querySelectorAll('[data-mobile-section]').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.mobileSection === mobileAppSection);
+  });
+  document.body.classList.toggle('mobile-section-games', mobileAppSection === 'games');
+  document.body.classList.toggle('mobile-section-results', mobileAppSection === 'results');
+  document.body.classList.toggle('mobile-section-prognostics', mobileAppSection === 'prognostics');
+}
+
+function setMobileAppSection(section) {
+  mobileAppSection = section || 'games';
+  updateMobileAppNav();
+  refreshLiveDashboardView();
+  requestAnimationFrame(() => {
+    const target = $('#closedLiveDashboard');
+    target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+}
+
+async function openMobilePublicPredictionsPage(active = 'games') {
+  mobileAppSection = 'prognostics';
+  mobilePublicViewerLoading = true;
+  mobilePublicViewerHtml = '<div class="live-loading-card">A carregar prognósticos dos jogadores...</div>';
+  updateMobileAppNav();
+  refreshLiveDashboardView();
+  try {
+    await Promise.allSettled([loadApiWorldCupData({ sync: false }), loadPublicPredictions()]);
+    mobilePublicViewerHtml = renderPublicViewer(active);
+  } catch (error) {
+    console.error(error);
+    mobilePublicViewerHtml = '<div class="live-loading-card">Não foi possível carregar os prognósticos. Tenta novamente mais tarde.</div>';
+  } finally {
+    mobilePublicViewerLoading = false;
+    updateMobileAppNav();
+    refreshLiveDashboardView();
+  }
+}
+
+async function openPublicPredictionsEntry() {
+  if (isMobileClosedView()) {
+    await openMobilePublicPredictionsPage('games');
+    return;
+  }
+  await openPublicPredictionsModal();
+}
+
 async function openPublicPredictionsModal() {
   openModal('<h2>Outros jogadores</h2><p class="modal-muted">A carregar prognósticos...</p>');
   try {
@@ -2241,6 +2304,18 @@ function bindEvents() {
       return;
     }
 
+    const mobileNavBtn = event.target.closest('[data-mobile-section]');
+    if (mobileNavBtn) {
+      event.stopPropagation();
+      const section = mobileNavBtn.dataset.mobileSection;
+      if (section === 'prognostics') {
+        openMobilePublicPredictionsPage('games');
+      } else {
+        setMobileAppSection(section);
+      }
+      return;
+    }
+
     const liveMatchBtn = event.target.closest('[data-live-match]');
     if (liveMatchBtn) {
       event.stopPropagation();
@@ -2308,8 +2383,8 @@ function bindEvents() {
     renderMatches();
   });
 
-  $('#viewOthersBtn').addEventListener('click', openPublicPredictionsModal);
-  $('#viewOthersBtnClosed')?.addEventListener('click', openPublicPredictionsModal);
+  $('#viewOthersBtn').addEventListener('click', openPublicPredictionsEntry);
+  $('#viewOthersBtnClosed')?.addEventListener('click', openPublicPredictionsEntry);
 
   $('#exportPdfBtn').addEventListener('click', exportPdf);
 }
@@ -2365,6 +2440,8 @@ async function init() {
     squadsData = await squadsResponse.json();
     loadState();
     bindEvents();
+    window.addEventListener('resize', updateMobileAppNav);
+    updateMobileAppNav();
     updateSummary();
     renderMatches();
     await initFirebase();
