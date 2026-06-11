@@ -240,13 +240,29 @@
     return scoreSection2Changed(pred, override, official);
   };
 
+  const SECTION2_COLLECTION = 'worldcupextraReforms';
   const baseLoadPublicPredictions = loadPublicPredictions;
   loadPublicPredictions = async function() {
     await baseLoadPublicPredictions();
-    const collectionRef = firebaseTools.collection(firestoreDb, FIREBASE_COLLECTION);
-    const snapshot = await firebaseTools.getDocs(collectionRef);
-    const allDocs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    section2Docs = allDocs.filter(doc => doc.status === SECTION2_STATUS || doc.type === SECTION2_TYPE);
+
+    const legacyRef = firebaseTools.collection(firestoreDb, FIREBASE_COLLECTION);
+    const legacySnapshot = await firebaseTools.getDocs(legacyRef);
+    const legacyDocs = legacySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+      .filter(doc => doc.status === SECTION2_STATUS || doc.type === SECTION2_TYPE);
+
+    let reformDocs = [];
+    try {
+      const reformRef = firebaseTools.collection(firestoreDb, SECTION2_COLLECTION);
+      const reformSnapshot = await firebaseTools.getDocs(reformRef);
+      reformDocs = reformSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    } catch (error) {
+      console.warn('Não foi possível carregar worldcupextraReforms.', error);
+    }
+
+    section2Docs = [...legacyDocs, ...reformDocs]
+      .filter(doc => doc.status === SECTION2_STATUS || doc.type === SECTION2_TYPE)
+      .filter(doc => doc.matchId != null);
+
     return publicPredictions;
   };
 
@@ -711,4 +727,578 @@
       }
     };
   }
+})();
+
+/* Secção 2 aprovada — janelas Firebase + dropdown de participante + PIN + gravação em worldcupextraReforms */
+(function approvedReformWindowsWithPin() {
+  const REFORM_COLLECTION = 'worldcupextraReforms';
+  const REFORM_SETTINGS_COLLECTION = 'settings';
+  const REFORM_SETTINGS_DOC = 'worldcupReformWindows';
+  const REFORM_STAGES = ['round32', 'round16', 'quarterfinals', 'semifinals', 'third_place', 'final'];
+  const REFORM_STAGE_FIELDS = {
+    round32: [
+      ['dezasseisAvosOpen', 'dezasseisAvosClose'],
+      ['dezasseisavosOpen', 'dezasseisavosClose'],
+      ['16avosOpen', '16avosClose'],
+      ['round32Open', 'round32Close']
+    ],
+    round16: [
+      ['oitavosOpen', 'oitavosClose'],
+      ['round16Open', 'round16Close']
+    ],
+    quarterfinals: [
+      ['quartosOpen', 'quartosClose'],
+      ['quarterfinalsOpen', 'quarterfinalsClose']
+    ],
+    semifinals: [
+      ['meiasOpen', 'meiasClose'],
+      ['semifinalsOpen', 'semifinalsClose']
+    ],
+    third_place: [
+      ['terceiroLugarOpen', 'terceiroLugarClose'],
+      ['thirdPlaceOpen', 'thirdPlaceClose']
+    ],
+    final: [
+      ['finalOpen', 'finalClose']
+    ]
+  };
+
+  let reformWindows = { loaded: false, data: {}, activeStages: [] };
+  let reformSession = { participantKey: '', participantName: '', pinOk: false, activeStage: '' };
+
+  function valueToDate(value) {
+    if (!value) return null;
+    if (typeof value?.toDate === 'function') return value.toDate();
+    if (value instanceof Date) return value;
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+
+  function formatDateTime(value) {
+    const date = valueToDate(value);
+    if (!date) return '—';
+    return new Intl.DateTimeFormat('pt-PT', {
+      day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+    }).format(date);
+  }
+
+  function normalizeKeyLocal(name) {
+    return typeof normalizeParticipantName === 'function'
+      ? normalizeParticipantName(name || '')
+      : String(name || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  }
+
+  function teamKeyLocal(name) {
+    return String(name || '')
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '');
+  }
+
+  function matchKickoffLocal(match) {
+    return new Date(`${match.date}T${match.time || '12:00'}:00`);
+  }
+
+  function sameMatchupAnySideLocal(pred, official) {
+    const a = [teamKeyLocal(pred?.homeTeam), teamKeyLocal(pred?.awayTeam)].sort().join('|');
+    const b = [teamKeyLocal(official?.homeTeam), teamKeyLocal(official?.awayTeam)].sort().join('|');
+    return a && a === b;
+  }
+
+  function findWindowPair(stage) {
+    const source = reformWindows.data || {};
+    const pairs = REFORM_STAGE_FIELDS[stage] || [];
+    for (const [openField, closeField] of pairs) {
+      const open = valueToDate(source[openField]);
+      const close = valueToDate(source[closeField]);
+      if (open || close) return { open, close, openField, closeField };
+    }
+    return { open: null, close: null, openField: '', closeField: '' };
+  }
+
+  function isStageWindowOpen(stage) {
+    const { open, close } = findWindowPair(stage);
+    const now = new Date();
+    return !!open && !!close && now >= open && now <= close;
+  }
+
+  function openStagesNow() {
+    return REFORM_STAGES.filter(isStageWindowOpen);
+  }
+
+  async function loadReformWindows(force = false) {
+    if (reformWindows.loaded && !force) return reformWindows;
+    reformWindows.loaded = true;
+    reformWindows.data = {};
+    try {
+      if (!firestoreDb || !firebaseTools) return reformWindows;
+      const ref = firebaseTools.doc(firestoreDb, REFORM_SETTINGS_COLLECTION, REFORM_SETTINGS_DOC);
+      const snap = await firebaseTools.getDoc(ref);
+      reformWindows.data = snap.exists() ? snap.data() : {};
+    } catch (error) {
+      console.warn('Não foi possível carregar settings/worldcupReformWindows.', error);
+    }
+    reformWindows.activeStages = openStagesNow();
+    updateReformButton();
+    return reformWindows;
+  }
+
+  function getOfficialGroupTablesLocal() {
+    if (!data) return {};
+    const tables = {};
+    GROUPS.forEach(group => {
+      const teams = new Set();
+      data.matches.filter(m => m.stage === 'groups' && m.group === group).forEach(m => {
+        teams.add(m.home); teams.add(m.away);
+      });
+      const stats = Object.fromEntries([...teams].map(team => [team, blankTeam(team, group)]));
+      data.matches.filter(m => m.stage === 'groups' && m.group === group).forEach(m => {
+        const r = getOfficialResult(m.id);
+        if (!r) return;
+        const hg = Number(r.homeGoals);
+        const ag = Number(r.awayGoals);
+        const home = stats[m.home];
+        const away = stats[m.away];
+        if (!home || !away || Number.isNaN(hg) || Number.isNaN(ag)) return;
+        home.played++; away.played++;
+        home.gf += hg; home.ga += ag;
+        away.gf += ag; away.ga += hg;
+        if (hg > ag) { home.wins++; away.losses++; home.points += 3; }
+        else if (ag > hg) { away.wins++; home.losses++; away.points += 3; }
+        else { home.draws++; away.draws++; home.points++; away.points++; }
+      });
+      Object.values(stats).forEach(t => { t.gd = t.gf - t.ga; });
+      tables[group] = sortGroupTable(Object.values(stats), group).map((t, i) => ({ ...t, position: i + 1 }));
+    });
+    return tables;
+  }
+
+  function getOfficialQualifiedLocal() {
+    const tables = getOfficialGroupTablesLocal();
+    const first = {}, second = {}, third = {};
+    GROUPS.forEach(group => {
+      first[group] = tables[group]?.[0] || null;
+      second[group] = tables[group]?.[1] || null;
+      third[group] = tables[group]?.[2] || null;
+    });
+    const bestThirds = getBestThirds(tables).filter(row => row.qualifiedThird);
+    return { first, second, third, bestThirds, tables };
+  }
+
+  function buildThirdAssignmentsLocal() {
+    const qualified = getOfficialQualifiedLocal();
+    const used = new Set();
+    const assignments = {};
+    const bestThirds = qualified.bestThirds || [];
+    (data?.matches || [])
+      .filter(m => m.stage === 'round32')
+      .sort((a, b) => Number(a.id) - Number(b.id))
+      .forEach(match => {
+        ['home', 'away'].forEach(side => {
+          const raw = String(match[side] || '');
+          const m = raw.match(/^3\.º Grupo ([A-L](?:\/[A-L])*)$/);
+          if (!m) return;
+          const candidates = m[1].split('/');
+          const chosen = bestThirds.find(row => candidates.includes(row.group) && !used.has(row.group));
+          if (chosen) {
+            used.add(chosen.group);
+            assignments[`${match.id}:${side}`] = chosen.team;
+          }
+        });
+      });
+    return assignments;
+  }
+
+  function resolveOfficialPreviousLocal(label) {
+    const text = String(label || '');
+    const win = text.match(/^Vencedor Jogo (\d+)$/);
+    if (win) return getOfficialResult(win[1])?.winnerTeam || text;
+    const loss = text.match(/^Perdedor Jogo (\d+)$/);
+    if (loss) {
+      const result = getOfficialResult(loss[1]);
+      if (!result) return text;
+      return result.winnerTeam === result.homeTeam ? result.awayTeam : result.homeTeam;
+    }
+    return text;
+  }
+
+  function resolveOfficialTeamLocal(match, side) {
+    const raw = String(match?.[side] || '');
+    if (!match || match.stage === 'groups') return raw;
+    const q = getOfficialQualifiedLocal();
+    const pos = raw.match(/^(1|2)\.º Grupo ([A-L])$/);
+    if (pos) {
+      const source = pos[1] === '1' ? q.first[pos[2]] : q.second[pos[2]];
+      return source?.team || raw;
+    }
+    if (/^3\.º Grupo/.test(raw)) {
+      return buildThirdAssignmentsLocal()[`${match.id}:${side}`] || raw;
+    }
+    return resolveOfficialPreviousLocal(raw);
+  }
+
+  function getParticipantKey(item) {
+    return item?.participantKey || normalizeKeyLocal(item?.participantName || item?.name || '');
+  }
+
+  function getParticipantByKey(key) {
+    return publicPredictions.find(item => getParticipantKey(item) === key) || null;
+  }
+
+  function existingReformFor(participantKey, matchId) {
+    if (typeof section2Docs !== 'undefined') {
+      // section2Docs é privada no primeiro módulo, por isso este caminho normalmente não existe.
+      return null;
+    }
+    return null;
+  }
+
+  function updateReformButton() {
+    const btn = document.querySelector('#reformPredictionsBtnClosed');
+    if (!btn) return;
+    const active = reformWindows.activeStages || openStagesNow();
+    if (!active.length) {
+      btn.hidden = true;
+      btn.textContent = 'Reformular prognósticos';
+      return;
+    }
+    const label = STAGE_LABELS[active[0]] || 'eliminatórias';
+    btn.hidden = false;
+    btn.textContent = `Reformular prognósticos dos ${label.toLowerCase()}`;
+  }
+
+  function renderReformLogin(message = '') {
+    const activeStages = reformWindows.activeStages || openStagesNow();
+    const currentStage = activeStages[0] || '';
+    const windowInfo = currentStage ? findWindowPair(currentStage) : null;
+    const players = [...publicPredictions]
+      .filter(item => item.status !== 'official' && item.type !== 'officialResult' && Array.isArray(item.matches))
+      .sort((a, b) => String(a.participantName || '').localeCompare(String(b.participantName || ''), 'pt-PT'));
+
+    if (!activeStages.length) {
+      return `
+        <div class="modal-head">
+          <div>
+            <p class="eyebrow small">Secção 2</p>
+            <h2>Reformular prognósticos</h2>
+            <p class="modal-muted">Neste momento não há nenhuma fase aberta para reformulação.</p>
+          </div>
+        </div>
+        <section class="reform-box">
+          <p>Cria/atualiza o documento <strong>settings/worldcupReformWindows</strong> com a janela da fase que queres abrir.</p>
+        </section>
+      `;
+    }
+
+    return `
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow small">Secção 2</p>
+          <h2>Reformular prognósticos — ${escapeHtml(STAGE_LABELS[currentStage])}</h2>
+          <p class="modal-muted">Escolhe o teu nome e escreve o PIN que está associado ao teu prognóstico inicial.</p>
+        </div>
+      </div>
+      <section class="reform-box">
+        <div class="reform-window-note">
+          <strong>Janela aberta:</strong>
+          <span>${formatDateTime(windowInfo?.open)} até ${formatDateTime(windowInfo?.close)}</span>
+        </div>
+        <div class="reform-login-grid">
+          <label>Participante
+            <select id="reformParticipant">
+              <option value="">Escolhe o participante</option>
+              ${players.map(item => {
+                const key = getParticipantKey(item);
+                return `<option value="${escapeHtml(key)}" ${reformSession.participantKey === key ? 'selected' : ''}>${escapeHtml(item.participantName || key)}</option>`;
+              }).join('')}
+            </select>
+          </label>
+          <label>PIN
+            <input id="reformPin" type="password" inputmode="numeric" autocomplete="one-time-code" placeholder="Ex.: 482917">
+          </label>
+          <button type="button" class="primary" data-reform-login>Entrar</button>
+        </div>
+        ${message ? `<p class="admin-message error">${escapeHtml(message)}</p>` : ''}
+      </section>
+    `;
+  }
+
+  function renderReformStage() {
+    const item = getParticipantByKey(reformSession.participantKey);
+    const activeStages = reformWindows.activeStages || openStagesNow();
+    if (!item || !reformSession.pinOk) return renderReformLogin();
+    if (!activeStages.includes(reformSession.activeStage)) reformSession.activeStage = activeStages[0] || 'round32';
+    const stage = reformSession.activeStage;
+    const windowInfo = findWindowPair(stage);
+    const matches = (data?.matches || []).filter(match => match.stage === stage);
+
+    return `
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow small">Secção 2 — PIN validado</p>
+          <h2>${escapeHtml(item.participantName || 'Participante')}</h2>
+          <p class="modal-muted">Reformula apenas os jogos da fase aberta. A Secção 1 fica guardada intacta.</p>
+        </div>
+      </div>
+      <section class="reform-box">
+        <div class="reform-window-note">
+          <strong>${escapeHtml(STAGE_LABELS[stage])}</strong>
+          <span>Fecha em ${formatDateTime(windowInfo?.close)}</span>
+        </div>
+        <div class="section2-stage-tabs">
+          ${activeStages.map(s => `<button type="button" class="section2-stage-tab ${s === stage ? 'active' : ''}" data-reform-stage="${escapeHtml(s)}">${escapeHtml(STAGE_LABELS[s])}</button>`).join('')}
+        </div>
+        <div class="section2-games">
+          ${matches.map(match => renderReformMatch(match, item)).join('') || '<p class="modal-muted">Não há jogos nesta fase.</p>'}
+        </div>
+      </section>
+    `;
+  }
+
+  function findSavedReform(item, matchId) {
+    const key = getParticipantKey(item);
+    return window.__worldcupReformsCache?.find?.(doc => String(doc.participantKey) === String(key) && Number(doc.matchId) === Number(matchId)) || null;
+  }
+
+  async function loadReformsCache() {
+    window.__worldcupReformsCache = [];
+    try {
+      const ref = firebaseTools.collection(firestoreDb, REFORM_COLLECTION);
+      const snap = await firebaseTools.getDocs(ref);
+      window.__worldcupReformsCache = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    } catch (error) {
+      console.warn('Não foi possível carregar reformulações.', error);
+    }
+  }
+
+  function renderReformMatch(match, item) {
+    const home = resolveOfficialTeamLocal(match, 'home');
+    const away = resolveOfficialTeamLocal(match, 'away');
+    const unresolved = /Grupo|Vencedor Jogo|Perdedor Jogo/.test(`${home} ${away}`);
+    const open = isStageWindowOpen(match.stage) && !unresolved && new Date() < matchKickoffLocal(match);
+    const initialPred = (item.matches || []).find(row => Number(row.id) === Number(match.id));
+    const initialMatchupOk = initialPred && sameMatchupAnySideLocal(initialPred, { homeTeam: home, awayTeam: away });
+    const saved = findSavedReform(item, match.id);
+    const mode = saved?.mode || (initialMatchupOk ? 'replicate' : 'changed');
+    const homeGoals = saved?.homeGoals ?? '';
+    const awayGoals = saved?.awayGoals ?? '';
+    const method = saved?.method || '90';
+    const winnerTeam = saved?.winnerTeam || '';
+
+    return `
+      <article class="section2-card" data-reform-match="${escapeHtml(match.id)}">
+        <div class="section2-card-head">
+          <div>
+            <span class="badge">Jogo ${escapeHtml(match.id)} · ${escapeHtml(STAGE_LABELS[match.stage])}</span>
+            <h3>${escapeHtml(home)} vs ${escapeHtml(away)}</h3>
+            <p class="modal-muted">${escapeHtml(match.date)} ${escapeHtml(match.time || '')} · ${escapeHtml(match.venue || '')}</p>
+          </div>
+          ${saved ? '<strong class="saved-chip">Gravado</strong>' : open ? '<span class="future-chip">Aberto</span>' : '<span class="official-chip">Fechado</span>'}
+        </div>
+        ${unresolved ? '<p class="modal-muted">Ainda falta definir oficialmente as seleções deste jogo.</p>' : `
+          <div class="section2-initial">
+            <strong>O teu prognóstico inicial:</strong>
+            <span>${initialPred ? predictionResultText(initialPred) : 'Não existia para este jogo.'}</span>
+            <em>${initialMatchupOk ? 'Tinhas acertado nas seleções deste confronto.' : 'Este confronto real não existia no teu prognóstico inicial.'}</em>
+          </div>
+          ${initialMatchupOk ? `
+            <div class="section2-mode">
+              <label><input type="radio" name="reform-mode-${match.id}" value="replicate" ${mode === 'replicate' ? 'checked' : ''} ${!open ? 'disabled' : ''}> Manter prognóstico inicial</label>
+              <label><input type="radio" name="reform-mode-${match.id}" value="changed" ${mode === 'changed' ? 'checked' : ''} ${!open ? 'disabled' : ''}> Alterar resultado</label>
+            </div>
+          ` : '<p class="modal-muted">Como não acertaste este confronto, tens de fazer um novo prognóstico.</p>'}
+          <div class="section2-form ${mode === 'replicate' && initialMatchupOk ? 'is-hidden' : ''}">
+            <div class="score-row compact">
+              <span>${escapeHtml(home)}</span>
+              <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" data-reform-field="homeGoals" value="${escapeHtml(homeGoals)}" ${!open ? 'disabled' : ''}>
+              <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" data-reform-field="awayGoals" value="${escapeHtml(awayGoals)}" ${!open ? 'disabled' : ''}>
+              <span>${escapeHtml(away)}</span>
+            </div>
+            <div class="ko-row">
+              <select data-reform-field="method" ${!open ? 'disabled' : ''}>
+                <option value="90" ${method === '90' ? 'selected' : ''}>90 minutos</option>
+                <option value="et" ${method === 'et' ? 'selected' : ''}>Prolongamento</option>
+                <option value="pens" ${method === 'pens' ? 'selected' : ''}>Penáltis</option>
+              </select>
+              <select data-reform-field="winnerTeam" ${!open ? 'disabled' : ''}>
+                <option value="" ${!winnerTeam ? 'selected' : ''}>Vencedor se houver empate</option>
+                <option value="${escapeHtml(home)}" ${winnerTeam === home ? 'selected' : ''}>${escapeHtml(home)}</option>
+                <option value="${escapeHtml(away)}" ${winnerTeam === away ? 'selected' : ''}>${escapeHtml(away)}</option>
+              </select>
+            </div>
+          </div>
+          <button type="button" class="primary" data-reform-save ${!open ? 'disabled' : ''}>Gravar reformulação</button>
+          <p class="admin-message" data-reform-message>${open ? 'Podes gravar enquanto a janela desta fase estiver aberta.' : 'Este jogo já não aceita alterações.'}</p>
+        `}
+      </article>
+    `;
+  }
+
+  async function openReformModal() {
+    openModal('<h2>Reformular prognósticos</h2><p class="modal-muted">A carregar jogadores, PIN e janelas...</p>');
+    await Promise.allSettled([
+      loadApiWorldCupData({ sync: false }),
+      loadPublicPredictions(),
+      loadReformWindows(true),
+      loadReformsCache()
+    ]);
+    const active = reformWindows.activeStages || openStagesNow();
+    reformSession.activeStage = active[0] || '';
+    reformSession.pinOk = false;
+    openModal(renderReformLogin());
+  }
+
+  async function handleReformLogin() {
+    const key = document.querySelector('#reformParticipant')?.value || '';
+    const pin = String(document.querySelector('#reformPin')?.value || '').trim();
+    const item = getParticipantByKey(key);
+    if (!item) {
+      openModal(renderReformLogin('Escolhe um participante.'));
+      return;
+    }
+    if (!String(item.pin || '').trim()) {
+      openModal(renderReformLogin('Este participante ainda não tem PIN no documento do Firebase.'));
+      return;
+    }
+    if (String(item.pin || '').trim() !== pin) {
+      openModal(renderReformLogin('PIN incorreto. Confirma o PIN desse participante.'));
+      return;
+    }
+    reformSession.participantKey = key;
+    reformSession.participantName = item.participantName || key;
+    reformSession.pinOk = true;
+    localStorage.setItem('worldcup2026_reform_participant', key);
+    openModal(renderReformStage());
+  }
+
+  async function saveReformMatch(card) {
+    const item = getParticipantByKey(reformSession.participantKey);
+    if (!item || !reformSession.pinOk) {
+      alert('Tens de validar o PIN antes de gravar.');
+      return;
+    }
+    const match = data.matches.find(m => Number(m.id) === Number(card.dataset.reformMatch));
+    if (!match || !isStageWindowOpen(match.stage) || new Date() >= matchKickoffLocal(match)) {
+      alert('A janela deste jogo/fase já não está aberta.');
+      return;
+    }
+    const homeTeam = resolveOfficialTeamLocal(match, 'home');
+    const awayTeam = resolveOfficialTeamLocal(match, 'away');
+    if (/Grupo|Vencedor Jogo|Perdedor Jogo/.test(`${homeTeam} ${awayTeam}`)) {
+      alert('Ainda falta definir oficialmente as seleções deste jogo.');
+      return;
+    }
+
+    const participantKey = getParticipantKey(item);
+    const initialPred = (item.matches || []).find(row => Number(row.id) === Number(match.id));
+    const initialMatchupOk = initialPred && sameMatchupAnySideLocal(initialPred, { homeTeam, awayTeam });
+    const selectedMode = card.querySelector(`input[name="reform-mode-${match.id}"]:checked`)?.value || (initialMatchupOk ? 'replicate' : 'changed');
+    const mode = initialMatchupOk ? selectedMode : 'changed';
+    let homeGoals = null, awayGoals = null, method = '90', winnerTeam = '';
+
+    if (mode === 'changed') {
+      homeGoals = Number(card.querySelector('[data-reform-field="homeGoals"]')?.value);
+      awayGoals = Number(card.querySelector('[data-reform-field="awayGoals"]')?.value);
+      method = card.querySelector('[data-reform-field="method"]')?.value || '90';
+      winnerTeam = card.querySelector('[data-reform-field="winnerTeam"]')?.value || '';
+      if (Number.isNaN(homeGoals) || Number.isNaN(awayGoals)) {
+        alert('Preenche o resultado antes de gravares.');
+        return;
+      }
+      if (homeGoals === awayGoals && !winnerTeam) {
+        alert('Em caso de empate, escolhe quem passa.');
+        return;
+      }
+      if (homeGoals > awayGoals) winnerTeam = homeTeam;
+      if (awayGoals > homeGoals) winnerTeam = awayTeam;
+    }
+
+    const docId = `${participantKey}_${match.stage}_${match.id}`;
+    const payload = {
+      status: 'section2',
+      type: 'knockoutRevision',
+      participantName: item.participantName || reformSession.participantName,
+      participantKey,
+      stage: match.stage,
+      stageLabel: STAGE_LABELS[match.stage],
+      matchId: Number(match.id),
+      matchDate: match.date,
+      matchTime: match.time || null,
+      matchStartsAt: matchKickoffLocal(match).toISOString(),
+      homeTeam,
+      awayTeam,
+      mode,
+      initialMatchupOk: !!initialMatchupOk,
+      initialPrediction: initialPred || null,
+      homeGoals,
+      awayGoals,
+      method,
+      winnerTeam: mode === 'replicate' ? (initialPred?.winnerTeam || '') : winnerTeam,
+      pinVerified: true,
+      updatedAt: firebaseTools.serverTimestamp(),
+      clientTimestamp: new Date().toISOString()
+    };
+
+    const msg = card.querySelector('[data-reform-message]');
+    try {
+      await firebaseTools.setDoc(firebaseTools.doc(firestoreDb, REFORM_COLLECTION, docId), payload, { merge: true });
+      if (msg) msg.textContent = 'Gravado com sucesso.';
+      await Promise.allSettled([loadPublicPredictions(), loadReformsCache()]);
+      openModal(renderReformStage());
+    } catch (error) {
+      console.error(error);
+      if (msg) msg.textContent = 'Não foi possível gravar. Confirma as regras do Firebase.';
+      alert('Não foi possível gravar a reformulação. Confirma as regras do Firebase.');
+    }
+  }
+
+  document.addEventListener('click', async (event) => {
+    const openBtn = event.target.closest('#reformPredictionsBtnClosed');
+    if (openBtn) {
+      await openReformModal();
+      return;
+    }
+
+    const loginBtn = event.target.closest('[data-reform-login]');
+    if (loginBtn) {
+      await handleReformLogin();
+      return;
+    }
+
+    const stageBtn = event.target.closest('[data-reform-stage]');
+    if (stageBtn) {
+      reformSession.activeStage = stageBtn.dataset.reformStage;
+      openModal(renderReformStage());
+      return;
+    }
+
+    const saveBtn = event.target.closest('[data-reform-save]');
+    if (saveBtn) {
+      const card = saveBtn.closest('[data-reform-match]');
+      if (card) await saveReformMatch(card);
+    }
+  });
+
+  document.addEventListener('change', (event) => {
+    const modeInput = event.target.closest('.section2-mode input[type="radio"][name^="reform-mode-"]');
+    if (!modeInput) return;
+    const card = modeInput.closest('[data-reform-match]');
+    const form = card?.querySelector('.section2-form');
+    if (form) form.classList.toggle('is-hidden', modeInput.value === 'replicate');
+  });
+
+  const previousRenderClosed = typeof renderClosedPublicView === 'function' ? renderClosedPublicView : null;
+  if (previousRenderClosed) {
+    renderClosedPublicView = async function() {
+      await previousRenderClosed();
+      await loadReformWindows(true);
+      updateReformButton();
+    };
+  }
+
+  window.addEventListener('DOMContentLoaded', () => {
+    setTimeout(() => loadReformWindows(true), 600);
+  });
 })();

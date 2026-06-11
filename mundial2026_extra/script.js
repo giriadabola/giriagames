@@ -1420,6 +1420,20 @@ function resolvedWinner(match, pred, q) {
   return pred.winner ? resolveTeam(match, pred.winner, q) : '';
 }
 
+
+function getOrCreateParticipantPin(participantKey) {
+  const key = `worldcup2026_pin_${participantKey || 'participante'}`;
+  let pin = localStorage.getItem(key);
+  if (!/^\d{6}$/.test(String(pin || ''))) {
+    const array = new Uint32Array(1);
+    if (window.crypto?.getRandomValues) window.crypto.getRandomValues(array);
+    const n = window.crypto?.getRandomValues ? array[0] : Math.floor(Math.random() * 1000000);
+    pin = String(100000 + (n % 900000));
+    localStorage.setItem(key, pin);
+  }
+  return pin;
+}
+
 function buildSubmissionPayload(participantKey = '', visitorKey = '') {
   const ctx = getTournamentContext();
   const participantName = ($('#userName')?.value || state.name || '').trim();
@@ -1453,6 +1467,7 @@ function buildSubmissionPayload(participantKey = '', visitorKey = '') {
     participantName,
     participantKey,
     visitorKey,
+    pin: getOrCreateParticipantPin(participantKey),
     createdAt: firebaseTools.serverTimestamp(),
     clientTimestamp: new Date().toISOString(),
     locale: 'pt-PT',
@@ -2031,7 +2046,9 @@ async function saveToFirebase() {
       clientTimestamp: new Date().toISOString()
     });
     await batch.commit();
-    status.textContent = 'Prognóstico gravado com sucesso.';
+    const createdPin = payload.pin || getOrCreateParticipantPin(participantKey);
+    status.textContent = `Prognóstico gravado com sucesso. PIN: ${createdPin}`;
+    alert(`Prognóstico gravado com sucesso. Guarda este PIN para poderes reformular nas eliminatórias: ${createdPin}`);
     state.lastSaved = new Date().toLocaleString('pt-PT');
     localStorage.setItem(STORE_KEY, JSON.stringify(state));
     localStorage.setItem('worldcup2026_submission_saved', docId);
