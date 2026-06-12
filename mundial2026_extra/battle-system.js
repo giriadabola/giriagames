@@ -757,11 +757,21 @@
 
   async function finalizeBattlesIfMatchFinished(match, battles) {
     if (!firestoreDb || !firebaseTools || !match?.finished) return;
-    const finishedBattles = (battles || []).filter(b => b.status !== 'finished');
-    if (!finishedBattles.length) return;
+    
+    // Se o jogo terminou mas ainda não tem os golos oficiais na base de dados, não finaliza as battles ainda.
+    if (match.homeGoals == null || match.awayGoals == null || match.homeGoals === '' || match.awayGoals === '') return;
+
+    // Procura battles que ainda não estão finalizadas, OU que estão finalizadas mas com dados/golos desatualizados
+    const toFinalize = (battles || []).filter(b => {
+      if (b.status !== 'finished') return true;
+      const diffGoals = (b.officialHomeGoals !== match.homeGoals) || (b.officialAwayGoals !== match.awayGoals);
+      return diffGoals;
+    });
+
+    if (!toFinalize.length) return;
 
     try {
-      await Promise.all(finishedBattles.map(battle => {
+      await Promise.all(toFinalize.map(battle => {
         const payload = battleSnapshotPayload(battle, {
           status: 'finished',
           finishedAt: firebaseTools.serverTimestamp()
@@ -772,7 +782,7 @@
           { merge: true }
         );
       }));
-      finishedBattles.forEach(b => {
+      toFinalize.forEach(b => {
         const result = calculateBattleResult(b);
         Object.assign(b, {
           status: 'finished',
@@ -784,7 +794,7 @@
           officialAwayGoals: result.officialAwayGoals ?? null
         });
       });
-      await markBattleMatchCreated({ ...match, finished: true }, battles?.length || finishedBattles.length);
+      await markBattleMatchCreated({ ...match, finished: true }, battles?.length || toFinalize.length);
     } catch (error) {
       console.warn('Não foi possível finalizar battles no Firebase.', error);
     }

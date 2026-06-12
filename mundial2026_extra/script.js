@@ -26,13 +26,13 @@ const FIREBASE_MATCHES_COLLECTION = 'worldcupextraMatches';
 const WORLD_CUP_API_BASE = 'https://worldcup26.ir';
 const SPORTSDB_API_BASE = 'https://www.thesportsdb.com/api/v1/json/123';
 const API_FOOTBALL_BASE = 'https://v3.football.api-sports.io';
-const API_FOOTBALL_KEY = 'COLOCA_AQUI_A_TUA_KEY';
+const API_FOOTBALL_KEY = '28fe67fa1477141ea513286716d04cd6';
 const FOOTBALL_DATA_BASE = 'https://api.football-data.org/v4';
-const FOOTBALL_DATA_KEY = 'COLOCA_AQUI_A_TUA_KEY';
+const FOOTBALL_DATA_KEY = '92761a7be0594efc9686e0f3031d2709';
 const HIGHLIGHTLY_BASE = 'https://api.highlightly.net/football';
 const HIGHLIGHTLY_KEY = 'COLOCA_AQUI_A_TUA_KEY';
 const ALLSPORTS_BASE = 'https://apiv2.allsportsapi.com/football/';
-const ALLSPORTS_KEY = 'COLOCA_AQUI_A_TUA_KEY';
+const ALLSPORTS_KEY = 'dade46c3d79174fc03a9cc1e58b0cbcd0cef90cd9806260b407eaa645f8a042f';
 const SOFASCORE_PROXY_URL = ''; // opcional: proxy teu para evitar CORS, ex: https://teusite.com/api/sofascore
 const ESPN_PROXY_URL = ''; // opcional: proxy teu para evitar CORS, ex: https://teusite.com/api/espn
 const API_SYNC_INTERVAL_MS = 30000;
@@ -133,7 +133,8 @@ function isOfficialResultFinished(result) {
 
 function shouldTrackMatchDocAsOfficial(doc) {
   if (!doc) return false;
-  return isOfficialResultLive(doc) || isOfficialResultFinished(doc) || resultHasScore(doc);
+  const hasG = doc.homeGoals != null && doc.homeGoals !== '' && doc.awayGoals != null && doc.awayGoals !== '';
+  return (isOfficialResultLive(doc) || isOfficialResultFinished(doc) || resultHasScore(doc)) && hasG;
 }
 
 function normalizeMatchStateDoc(docId, raw = {}) {
@@ -2370,6 +2371,59 @@ function directLiveBattleCardsForGame(game) {
   return cards.join('');
 }
 
+function renderFinishedBattleCardsForGame(game) {
+  const rows = calculateGgamesTable();
+  if (!game || rows.length < 2) return '';
+
+  const pairs = buildDiverseLiveBattlePairs(rows, game, 10);
+  const cards = [];
+  const official = getOfficialResult(game.id) || game;
+
+  pairs.forEach((pair) => {
+    const top = pair.a.row;
+    const below = pair.b.row;
+    const p1 = pair.a.player;
+    const p2 = pair.b.player;
+    const pred1 = pair.a.pred;
+    const pred2 = pair.b.pred;
+
+    const s1 = scoreOnePrediction(pred1, official);
+    const s2 = scoreOnePrediction(pred2, official);
+
+    const pts1 = s1.points || 0;
+    const pts2 = s2.points || 0;
+
+    let state = `Resultado do jogo: ${official.homeGoals}-${official.awayGoals}`;
+    if (pts1 > pts2) state += ` · Vencedor: ${escapeHtml(top.name)} (+${pts1} pts)`;
+    else if (pts2 > pts1) state += ` · Vencedor: ${escapeHtml(below.name)} (+${pts2} pts)`;
+    else if (pts1 === pts2 && pts1 > 0) state += ` · Empate (+${pts1} pts cada)`;
+    else state += ` · Empate (0 pts)`;
+
+    const leadA = pts1 > pts2;
+    const leadB = pts2 > pts1;
+
+    cards.push(`
+      <div class="battle-card live-battle battle-card-horizontal">
+        <span class="battle-match">Jogo ${escapeHtml(game.id)} · ${escapeHtml(game.homeTeam)} vs ${escapeHtml(game.awayTeam)} <em class="battle-contrast-chip" style="background: rgba(97,211,148,.16); color: var(--accent); border: 1px solid rgba(97,211,148,.35);">Terminado</em></span>
+        <div class="battle-duel-row">
+          <div class="battle-player battle-player-a ${leadA ? 'battle-player-leading' : ''}">
+            <strong>${renderParticipantIdentity(`#${top.rank} ${top.name}`, p1.icon || p1.participantIcon || p1.playerIcon || top.icon, 'participant-ident--compact')}${leadA ? ' <span style="font-size:1rem; margin-left:4px;">👑</span>' : ''}</strong>
+            <span>${predictionResultText(pred1)}</span>
+          </div>
+          <b class="battle-versus">VS</b>
+          <div class="battle-player battle-player-b ${leadB ? 'battle-player-leading' : ''}">
+            <strong>${renderParticipantIdentity(`#${below.rank} ${below.name}`, p2.icon || p2.participantIcon || p2.playerIcon || below.icon, 'participant-ident--compact')}${leadB ? ' <span style="font-size:1rem; margin-left:4px;">👑</span>' : ''}</strong>
+            <span>${predictionResultText(pred2)}</span>
+          </div>
+        </div>
+        <p class="battle-state" style="color: var(--accent-2); font-weight: 600;">${state}</p>
+      </div>
+    `);
+  });
+
+  return cards.join('');
+}
+
 function renderLiveGiriaBattles() {
   const liveGame = getCurrentLiveGameForDashboard();
 
@@ -2378,6 +2432,15 @@ function renderLiveGiriaBattles() {
   if (liveGame) {
     const directCards = directLiveBattleCardsForGame(liveGame);
     return directCards || `<p class="modal-muted">Este jogo está em direto, mas ainda não há prognósticos suficientes para criar battles live.</p>`;
+  }
+
+  // Se não há jogo em direto, mostra os resultados das battles do jogo anterior (último terminado)
+  const finishedGames = worldCupApi.games.filter(g => g.finished && g.id);
+  const lastFinished = finishedGames.sort((a, b) => Number(b.id) - Number(a.id))[0];
+
+  if (lastFinished) {
+    const finishedCards = renderFinishedBattleCardsForGame(lastFinished);
+    if (finishedCards) return finishedCards;
   }
 
   const rows = calculateGgamesTable();
@@ -2814,7 +2877,7 @@ function sameLocalDay(a, b) {
 }
 
 function actualOutcome(result) {
-  if (!result) return '';
+  if (!result || result.homeGoals == null || result.homeGoals === '' || result.awayGoals == null || result.awayGoals === '') return '';
   const home = Number(result.homeGoals);
   const away = Number(result.awayGoals);
   if (home > away) return 'home';
@@ -2846,7 +2909,7 @@ function officialWinnerTeam(official) {
 }
 
 function scoreOnePrediction(pred, official) {
-  if (!pred || !official || pred.homeGoals == null || pred.awayGoals == null || official.homeGoals == null || official.awayGoals == null) {
+  if (!pred || !official || pred.homeGoals == null || pred.awayGoals == null || official.homeGoals == null || official.awayGoals == null || official.homeGoals === '' || official.awayGoals === '') {
     return { points: 0, exact: false, outcomeHit: false, goalsHit: 0, goalsMissed: 0, winHit: 0, drawHit: 0, lossHit: 0, played: false };
   }
   const ph = Number(pred.homeGoals);
