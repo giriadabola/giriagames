@@ -2086,6 +2086,8 @@ function renderLiveGameUserPredictions(gameId) {
     return nameA.localeCompare(nameB, 'pt-PT');
   });
 
+  const official = officialResults[String(gameId)] || worldCupApi.games.find(g => String(g.id) === String(gameId)) || null;
+
   return `
     <div class="live-game-predictions">
       <h4 class="live-predictions-title">Prognósticos dos Participantes</h4>
@@ -2108,8 +2110,17 @@ function renderLiveGameUserPredictions(gameId) {
           }
           const predText = `${escapeHtml(item.pred.homeTeam)} ${item.pred.homeGoals}-${item.pred.awayGoals} ${escapeHtml(item.pred.awayTeam)}${extra}`;
           
+          // Verificar se está a ganhar em direto (resultado exato)
+          let isWinning = false;
+          if (official && official.homeGoals !== null && official.awayGoals !== null) {
+            const evaluation = scoreOnePrediction(item.pred, official);
+            if (evaluation && evaluation.exact === true) {
+              isWinning = true;
+            }
+          }
+
           return `
-            <li class="live-prediction-item">
+            <li class="live-prediction-item ${isWinning ? 'is-winning' : ''}">
               ${identHtml}
               <strong class="live-prediction-choice">${predText}</strong>
             </li>
@@ -2628,6 +2639,50 @@ function autoWinner(matchId) {
 }
 
 
+let realtimeMatchesListener = null;
+
+function startRealtimeMatchesListener() {
+  if (!firestoreDb || !firebaseTools || !firebaseTools.onSnapshot) return;
+  if (realtimeMatchesListener) return;
+
+  try {
+    const matchesCollectionRef = firebaseTools.collection(firestoreDb, FIREBASE_MATCHES_COLLECTION);
+    realtimeMatchesListener = firebaseTools.onSnapshot(matchesCollectionRef, (snapshot) => {
+      let changed = false;
+      snapshot.docChanges().forEach((change) => {
+        const docId = change.doc.id;
+        const rawData = change.doc.data();
+        const normalized = normalizeMatchStateDoc(docId, rawData);
+        
+        if (change.type === "added" || change.type === "modified") {
+          if (shouldTrackMatchDocAsOfficial(normalized)) {
+            officialResults[String(normalized.matchId)] = normalized;
+            changed = true;
+          }
+        } else if (change.type === "removed") {
+          const matchId = normalized.matchId || String(docId).replace(/^match_/, '').replace(/^official-match-/, '');
+          if (matchId && officialResults[String(matchId)]) {
+            delete officialResults[String(matchId)];
+            changed = true;
+          }
+        }
+      });
+
+      if (changed) {
+        mergeApiResultsIntoOfficialResults();
+        if (typeof refreshLiveDashboardView === 'function' && isVotingClosed()) {
+          refreshLiveDashboardView();
+        }
+        window.dispatchEvent(new CustomEvent('ggames-live-updated', { detail: { updatedAt: new Date() } }));
+      }
+    }, (error) => {
+      console.warn('Erro no listener real-time:', error);
+    });
+  } catch (error) {
+    console.error('Não foi possível iniciar o listener real-time:', error);
+  }
+}
+
 async function initFirebase() {
   try {
     const appModule = await import(`https://www.gstatic.com/firebasejs/${FIREBASE_SDK_VERSION}/firebase-app.js`);
@@ -2646,11 +2701,13 @@ async function initFirebase() {
       doc: firestoreModule.doc,
       setDoc: firestoreModule.setDoc,
       limit: firestoreModule.limit,
-      writeBatch: firestoreModule.writeBatch
+      writeBatch: firestoreModule.writeBatch,
+      onSnapshot: firestoreModule.onSnapshot
     };
     updateSaveButton();
     await loadScoringRules();
     await loadVotingDeadline();
+    startRealtimeMatchesListener();
   } catch (error) {
     console.error('Erro ao preparar ligação:', error);
     const status = $('#firebaseStatus');
@@ -3681,6 +3738,20 @@ async function init() {
     updateSummary();
     renderMatches();
     await initFirebase();
+    
+    // Se a votação estiver fechada, atualiza a mensagem no ecrã de carregamento e aguarda a API Live e Prognósticos
+    if (isVotingClosed()) {
+      const loadingSub = document.querySelector('#loadingScreen span');
+      if (loadingSub) {
+        loadingSub.textContent = 'A obter resultados em tempo real e prognósticos...';
+      }
+      await Promise.allSettled([
+        loadApiWorldCupData({ sync: true }),
+        loadPublicPredictions()
+      ]);
+      refreshLiveDashboardView();
+    }
+    
     hideLoadingScreen();
   } catch (error) {
     hideLoadingScreen();
