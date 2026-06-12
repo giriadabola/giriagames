@@ -1626,7 +1626,34 @@ function startLiveApiSync() {
   if (liveSyncTimer) clearInterval(liveSyncTimer);
 
   const tick = async () => {
+    const liveMatchIdsBefore = new Set(
+      (worldCupApi.games || [])
+        .filter(g => g.live && !g.finished)
+        .map(g => String(g.id))
+    );
+
     await loadApiWorldCupData({ sync: true });
+
+    const finishedMatchIdsAfter = new Set(
+      (worldCupApi.games || [])
+        .filter(g => g.finished)
+        .map(g => String(g.id))
+    );
+
+    let transitionDetected = false;
+    for (const id of liveMatchIdsBefore) {
+      if (finishedMatchIdsAfter.has(id)) {
+        transitionDetected = true;
+        break;
+      }
+    }
+
+    if (transitionDetected) {
+      console.log('Um jogo em direto terminou. A recarregar a página forçadamente...');
+      location.reload(true);
+      return;
+    }
+
     if (isVotingClosed()) refreshLiveDashboardView();
     window.dispatchEvent(new CustomEvent('ggames-live-updated', { detail: { updatedAt: worldCupApi.lastUpdate } }));
   };
