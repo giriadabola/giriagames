@@ -1688,7 +1688,7 @@ function renderLiveStatusText(game) {
   
   let elapsed = game.timeElapsed;
 
-  if (String(elapsed || '').startsWith('~')) return '';
+  if (String(elapsed || '').startsWith('~')) return 'EM PAUSA';
   return liveStatusLabel(elapsed);
 }
 
