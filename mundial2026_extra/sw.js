@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ggames-mundial-2026-v29-realtime';
+const CACHE_NAME = 'ggames-mundial-2026-v30-realtime';
 
 self.addEventListener('install', event => {
   self.skipWaiting();

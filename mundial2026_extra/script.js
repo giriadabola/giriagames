@@ -1687,13 +1687,6 @@ function renderLiveStatusText(game) {
   if (!game?.live) return game?.finished ? 'Terminado' : 'Por jogar';
   
   let elapsed = game.timeElapsed;
-  const text = String(elapsed || '').trim().toLowerCase();
-  if (!text || text === 'live' || text === 'ao vivo' || text === 'notstarted') {
-    const local = localMatchById(game.id);
-    if (local && isMatchInLiveWindow(local)) {
-      elapsed = elapsedMinuteFromSchedule(local);
-    }
-  }
 
   if (String(elapsed || '').startsWith('~')) return '';
   return liveStatusLabel(elapsed);
@@ -1745,14 +1738,16 @@ function liveStatusLabel(value) {
   const raw = String(value || '').trim();
   const text = raw.toLowerCase();
 
-  // Se o valor foi estimado pelo horário local, não mostramos texto nenhum.
-  // Isto inclui minutos estimados e "halftime"/"Intervalo" estimados.
-  if (raw.startsWith('~') || text.startsWith('estimado:')) return '';
+  let cleanValue = raw;
+  if (raw.startsWith('~')) {
+    cleanValue = raw.substring(1);
+  }
+  const cleanText = cleanValue.toLowerCase();
 
-  if (!text || text === 'notstarted' || text === 'live') return 'Ao vivo';
-  if (text === 'halftime' || text === 'half-time' || text === 'interval') return 'Intervalo';
-  if (/^\d+([+\d]*)?$/.test(text)) return `${text}'`;
-  return String(value);
+  if (!cleanText || cleanText === 'notstarted' || cleanText === 'live') return 'EM PAUSA';
+  if (cleanText === 'halftime' || cleanText === 'half-time' || cleanText === 'interval') return 'Intervalo';
+  if (/^\d+([+\d]*)?$/.test(cleanText)) return `${cleanValue}'`;
+  return String(cleanValue);
 }
 
 function apiScorerList(value) {
