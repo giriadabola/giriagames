@@ -858,6 +858,8 @@
     const liveCtx = battleLiveContext(battle);
     const leadA = liveCtx.live && result.playerAFactors > result.playerBFactors;
     const leadB = liveCtx.live && result.playerBFactors > result.playerAFactors;
+    const isWinnerA = result.status === 'finished' && result.winnerKey === battle.playerAKey;
+    const isWinnerB = result.status === 'finished' && result.winnerKey === battle.playerBKey;
     const status = result.status === 'finished'
       ? `Resultado Battle: ${result.playerAFactors}-${result.playerBFactors}${result.draw ? ' · empate' : result.winnerKey === battle.playerAKey ? ` · vence ${escapeHtml(battle.playerAName)}` : ` · vence ${escapeHtml(battle.playerBName)}`}`
       : liveCtx.live
@@ -869,17 +871,17 @@
         <span class="battle-match">Jogo ${escapeHtml(battle.matchId)} · ${escapeHtml(match?.home || battle.homeTeam || '')} vs ${escapeHtml(match?.away || battle.awayTeam || '')}${battle._contrast ? ` <em class="battle-contrast-chip">${escapeHtml(battle._contrast)}</em>` : ''}</span>
         <div class="battle-duel-row">
           <div class="battle-player battle-player-a ${leadA ? 'battle-player-leading' : ''}">
-            <strong>${renderParticipantIdentity(`#${escapeHtml(battle.playerARank || '')} ${battle.playerAName || pA.participantName}`, pA.icon || pA.participantIcon || pA.playerIcon || '', 'participant-ident--compact')}</strong>
+            <strong>${renderParticipantIdentity(`#${escapeHtml(battle.playerARank || '')} ${battle.playerAName || pA.participantName}`, pA.icon || pA.participantIcon || pA.playerIcon || '', 'participant-ident--compact')}${(leadA || isWinnerA) ? ' <span style="font-size:1rem; margin-left:4px;">👑</span>' : ''}</strong>
             <span>${predictionResultText(predA)}</span>
             ${pickA ? `<small>Marcador: ${escapeHtml(pickA.pickedPlayerName)}</small>` : ''}
-            ${leadA ? '<div class="battle-fans" aria-hidden="true"><span>🙌</span><span>⚑</span><span>🙌</span><span>⚑</span><span>🙌</span></div>' : ''}
+            ${leadA && liveCtx.live ? '<div class="battle-fans" aria-hidden="true"><span>🙌</span><span>⚑</span><span>🙌</span><span>⚑</span><span>🙌</span></div>' : ''}
           </div>
           <b class="battle-versus">VS</b>
           <div class="battle-player battle-player-b ${leadB ? 'battle-player-leading' : ''}">
-            <strong>${renderParticipantIdentity(`#${escapeHtml(battle.playerBRank || '')} ${battle.playerBName || pB.participantName}`, pB.icon || pB.participantIcon || pB.playerIcon || '', 'participant-ident--compact')}</strong>
+            <strong>${renderParticipantIdentity(`#${escapeHtml(battle.playerBRank || '')} ${battle.playerBName || pB.participantName}`, pB.icon || pB.participantIcon || pB.playerIcon || '', 'participant-ident--compact')}${(leadB || isWinnerB) ? ' <span style="font-size:1rem; margin-left:4px;">👑</span>' : ''}</strong>
             <span>${predictionResultText(predB)}</span>
             ${pickB ? `<small>Marcador: ${escapeHtml(pickB.pickedPlayerName)}</small>` : ''}
-            ${leadB ? '<div class="battle-fans" aria-hidden="true"><span>🙌</span><span>⚑</span><span>🙌</span><span>⚑</span><span>🙌</span></div>' : ''}
+            ${leadB && liveCtx.live ? '<div class="battle-fans" aria-hidden="true"><span>🙌</span><span>⚑</span><span>🙌</span><span>⚑</span><span>🙌</span></div>' : ''}
           </div>
         </div>
         <p class="${result.status === 'finished' ? 'battle-result-line' : 'battle-state'}">${status}</p>
