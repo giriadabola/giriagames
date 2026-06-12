@@ -1339,7 +1339,7 @@ function normalizeApiGame(raw) {
   const finished = normalizeApiBoolean(raw.finished);
   const rawElapsed = raw.time_elapsed ?? raw.status ?? 'notstarted';
   const apiLive = isApiStatusLive(rawElapsed);
-  const scheduleMatch = { ...local, date: parsedDate.date || local?.date || '', time: parsedDate.time || local?.time || '' };
+  const scheduleMatch = { ...local, date: local?.date || parsedDate.date || '', time: local?.time || parsedDate.time || '' };
   const scheduleLive = !finished && isMatchInLiveWindow(scheduleMatch);
   const live = !finished && (apiLive || scheduleLive);
   const timeElapsed = apiLive ? rawElapsed : (scheduleLive ? elapsedMinuteFromSchedule(scheduleMatch) : rawElapsed);
@@ -1348,8 +1348,8 @@ function normalizeApiGame(raw) {
     matchId: id,
     stage: apiStageToLocal(raw.type || local?.stage),
     group: raw.group || local?.group || null,
-    date: parsedDate.date || local?.date || '',
-    time: parsedDate.time || local?.time || '',
+    date: local?.date || parsedDate.date || '',
+    time: local?.time || parsedDate.time || '',
     homeTeam: homeName,
     awayTeam: awayName,
     homeTeamId: raw.home_team_id || null,
