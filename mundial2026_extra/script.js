@@ -1685,8 +1685,18 @@ function renderLiveRightPanel() {
 
 function renderLiveStatusText(game) {
   if (!game?.live) return game?.finished ? 'Terminado' : 'Por jogar';
-  if (String(game.timeElapsed || '').startsWith('~')) return '';
-  return liveStatusLabel(game.timeElapsed);
+  
+  let elapsed = game.timeElapsed;
+  const text = String(elapsed || '').trim().toLowerCase();
+  if (!text || text === 'live' || text === 'ao vivo' || text === 'notstarted') {
+    const local = localMatchById(game.id);
+    if (local && isMatchInLiveWindow(local)) {
+      elapsed = elapsedMinuteFromSchedule(local);
+    }
+  }
+
+  if (String(elapsed || '').startsWith('~')) return '';
+  return liveStatusLabel(elapsed);
 }
 
 
@@ -1749,9 +1759,10 @@ function apiScorerList(value) {
   if (value == null) return [];
 
   const clean = item => String(item || '')
+    .replace(/[{}[\]"]/g, '') // Limpa chavetas, parênteses retos e aspas residuais de JSON
     .replace(/\s+/g, ' ')
     .replace(/^\d+\s*[:.'’-]\s*/, '')
-    .replace(/\b\d{1,3}(?:\+\d+)?['’]?\b/g, '')
+    .replace(/\b\d{1,3}(?:\+\d+)?['’]?/g, '') // Remove o número do minuto e o apóstrofo
     .trim();
 
   const fromObject = obj => {
@@ -1784,7 +1795,14 @@ function apiScorerList(value) {
   try {
     const parsed = JSON.parse(text);
     if (Array.isArray(parsed)) return apiScorerList(parsed);
-    if (parsed && typeof parsed === 'object') return apiScorerList(Object.values(parsed));
+    if (parsed && typeof parsed === 'object') {
+      const keys = Object.keys(parsed);
+      const isKeyNameMap = keys.length && keys.every(k => !/^\d+$/.test(k) && k.length > 2);
+      if (isKeyNameMap) {
+        return apiScorerList(keys);
+      }
+      return apiScorerList(Object.values(parsed));
+    }
   } catch {}
 
   return text
@@ -3727,7 +3745,28 @@ async function exportPdf() {
 }
 
 async function init() {
+  let secondsLeft = 3;
+  let countdownInterval = null;
+  const loadingSub = document.querySelector('#loadingScreen span');
+  const updateCountdownMsg = (msg) => {
+    if (loadingSub) {
+      if (secondsLeft > 0) {
+        loadingSub.textContent = `${msg} (Pronto em ~${secondsLeft}s)`;
+      } else {
+        loadingSub.textContent = `${msg} (A finalizar...)`;
+      }
+    }
+  };
+
   try {
+    let baseMsg = 'A carregar jogos, prognósticos e classificação...';
+    updateCountdownMsg(baseMsg);
+    
+    countdownInterval = setInterval(() => {
+      secondsLeft--;
+      updateCountdownMsg(baseMsg);
+    }, 1000);
+
     const [matchesResponse, squadsResponse] = await Promise.all([fetch('matches.json'), fetch('squads.json')]);
     data = await matchesResponse.json();
     squadsData = await squadsResponse.json();
@@ -3739,12 +3778,12 @@ async function init() {
     renderMatches();
     await initFirebase();
     
-    // Se a votação estiver fechada, atualiza a mensagem no ecrã de carregamento e aguarda a API Live e Prognósticos
+    // Se a votação estiver fechada, atualiza a mensagem e ajusta o tempo estimado para a carga das APIs
     if (isVotingClosed()) {
-      const loadingSub = document.querySelector('#loadingScreen span');
-      if (loadingSub) {
-        loadingSub.textContent = 'A obter resultados em tempo real e prognósticos...';
-      }
+      baseMsg = 'A obter resultados em tempo real e prognósticos...';
+      secondsLeft = Math.max(secondsLeft, 3); // Dá mais 3 segundos estimados para o carregamento pesado
+      updateCountdownMsg(baseMsg);
+      
       await Promise.allSettled([
         loadApiWorldCupData({ sync: true }),
         loadPublicPredictions()
@@ -3752,8 +3791,10 @@ async function init() {
       refreshLiveDashboardView();
     }
     
+    if (countdownInterval) clearInterval(countdownInterval);
     hideLoadingScreen();
   } catch (error) {
+    if (countdownInterval) clearInterval(countdownInterval);
     hideLoadingScreen();
     $('#matchesContainer').innerHTML = `<div class="empty-state">Erro ao carregar o calendário e as equipas. Abre o site através de um servidor local, por exemplo VS Code + Live Server.</div>`;
     console.error(error);

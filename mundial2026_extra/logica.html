@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Central de Lógica e APIs - Central de Diagnóstico</title>
+  <link rel="icon" href="favicon.ico" sizes="any">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #07111f;
+      --card: #0e1b2f;
+      --card-2: #13243d;
+      --text: #eef4ff;
+      --muted: #9fb0c7;
+      --accent: #61d394;
+      --accent-2: #f8c14a;
+      --danger: #ff6b6b;
+      --line: rgba(255,255,255,.12);
+      --shadow: 0 20px 50px rgba(0,0,0,.35);
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'Outfit', sans-serif;
+      color: var(--text);
+      background: radial-gradient(circle at top left, #12345b 0, transparent 35%), var(--bg);
+      min-height: 100vh;
+      padding: 30px 15px;
+    }
+
+    header {
+      max-width: 1200px;
+      margin: 0 auto 30px auto;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 20px;
+    }
+
+    h1 {
+      margin: 0 0 10px 0;
+      font-size: 2.2rem;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      font-weight: 800;
+    }
+
+    .subtitle {
+      margin: 0;
+      color: var(--muted);
+      font-size: 1.1rem;
+    }
+
+    main {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 24px;
+    }
+
+    @media (min-width: 900px) {
+      main {
+        grid-template-columns: 2fr 1fr;
+      }
+      .full-width {
+        grid-column: span 2;
+      }
+    }
+
+    .panel {
+      background: rgba(14, 27, 47, 0.88);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 24px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+    }
+
+    .panel-title {
+      margin-top: 0;
+      margin-bottom: 20px;
+      font-size: 1.35rem;
+      font-weight: 700;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      padding-bottom: 12px;
+    }
+
+    .badge {
+      font-size: 0.8rem;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .badge-info { background: rgba(97,211,148,.16); color: var(--accent); border: 1px solid rgba(97,211,148,.35); }
+    .badge-warning { background: rgba(248,193,74,.12); color: var(--accent-2); border: 1px solid rgba(248,193,74,.25); }
+    .badge-danger { background: rgba(255,107,107,.14); color: var(--danger); border: 1px solid rgba(255,107,107,.25); }
+
+    .grid-apis {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 15px;
+    }
+
+    .api-card {
+      background: var(--card-2);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      transition: all 0.3s ease;
+    }
+
+    .api-card:hover {
+      border-color: var(--accent);
+      transform: translateY(-2px);
+    }
+
+    .api-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 12px;
+    }
+
+    .api-name {
+      margin: 0;
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+
+    .api-status {
+      font-size: 0.8rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .status-dot.idle { background: var(--muted); }
+    .status-dot.fetching { background: var(--accent-2); animation: pulse 1s infinite alternate; }
+    .status-dot.success { background: var(--accent); }
+    .status-dot.error { background: var(--danger); }
+
+    .api-details {
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-bottom: 15px;
+      word-break: break-all;
+    }
+
+    .btn {
+      border: 0;
+      border-radius: 8px;
+      padding: 8px 14px;
+      font-weight: 600;
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid var(--line);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-size: 0.85rem;
+      text-align: center;
+    }
+    .btn:hover {
+      border-color: var(--accent);
+      background: rgba(97,211,148,0.1);
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), #36a873);
+      color: #062012;
+      border-color: transparent;
+    }
+    .btn-primary:hover {
+      background: linear-gradient(135deg, #7cf0b0, #46c489);
+      box-shadow: 0 0 15px rgba(97, 211, 148, 0.4);
+    }
+    .btn-danger {
+      background: linear-gradient(135deg, var(--danger), #e04f4f);
+      color: #fff;
+      border-color: transparent;
+    }
+    .btn-danger:hover {
+      box-shadow: 0 0 15px rgba(255, 107, 107, 0.4);
+    }
+
+    .time-info {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+
+    .time-card {
+      background: var(--card-2);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px;
+    }
+
+    .time-card span {
+      display: block;
+      color: var(--muted);
+      font-size: 0.85rem;
+      margin-bottom: 5px;
+    }
+
+    .time-card strong {
+      font-size: 1.15rem;
+      font-family: var(--font-mono);
+    }
+
+    .console-panel {
+      display: flex;
+      flex-direction: column;
+      height: 400px;
+    }
+
+    .console-output {
+      flex: 1;
+      background: #040913;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 12px;
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      overflow-y: auto;
+      color: #00ff66;
+      white-space: pre-wrap;
+    }
+
+    .match-inspector-card {
+      background: var(--card-2);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 15px;
+    }
+
+    .match-inspector-title {
+      font-weight: 800;
+      font-size: 1.15rem;
+      margin-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .inspector-row {
+      display: flex;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      padding: 8px 0;
+      font-size: 0.9rem;
+    }
+
+    .inspector-row:last-child {
+      border-bottom: 0;
+    }
+
+    .inspector-label {
+      color: var(--muted);
+    }
+
+    .inspector-value {
+      font-weight: 600;
+      font-family: var(--font-mono);
+    }
+
+    @keyframes pulse {
+      from { opacity: 0.4; }
+      to { opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>Central de Lógica e APIs</h1>
+    <p class="subtitle">Diagnóstico em tempo real dos serviços, fusos horários e estados dos jogos no Firebase.</p>
+  </header>
+
+  <main>
+    <!-- APIs e Estado de Conexão -->
+    <div class="panel full-width">
+      <div class="panel-title">
+        <span>Fontes de Dados (APIs) Ativas</span>
+        <button class="btn btn-primary" onclick="testAllApis()">Testar Todas as APIs</button>
+      </div>
+      <div class="grid-apis">
+        <!-- API 1: worldcup26.ir -->
+        <div class="api-card" id="card-worldcup26">
+          <div>
+            <div class="api-header">
+              <h3 class="api-name">worldcup26.ir</h3>
+              <div class="api-status"><span class="status-dot idle"></span> <span class="status-text">Inativo</span></div>
+            </div>
+            <div class="api-details">Endpoint principal para dados de jogos e classificação. Sem necessidade de chave.</div>
+          </div>
+          <button class="btn" onclick="testApi('worldcup26')">Testar Fetch</button>
+        </div>
+
+        <!-- API 2: SofaScore -->
+        <div class="api-card" id="card-sofaScore">
+          <div>
+            <div class="api-header">
+              <h3 class="api-name">SofaScore</h3>
+              <div class="api-status"><span class="status-dot idle"></span> <span class="status-text">Inativo</span></div>
+            </div>
+            <div class="api-details">Carrega cronologia do jogo (incidents) e eventos diários direto do SofaScore.</div>
+          </div>
+          <button class="btn" onclick="testApi('sofaScore')">Testar Fetch</button>
+        </div>
+
+        <!-- API 3: ESPN -->
+        <div class="api-card" id="card-espn">
+          <div>
+            <div class="api-header">
+              <h3 class="api-name">ESPN</h3>
+              <div class="api-status"><span class="status-dot idle"></span> <span class="status-text">Inativo</span></div>
+            </div>
+            <div class="api-details">Placar geral em tempo real da FIFA World Cup via CDN pública da ESPN.</div>
+          </div>
+          <button class="btn" onclick="testApi('espn')">Testar Fetch</button>
+        </div>
+
+        <!-- API 4: TheSportsDB -->
+        <div class="api-card" id="card-sportsdb">
+          <div>
+            <div class="api-header">
+              <h3 class="api-name">TheSportsDB</h3>
+              <div class="api-status"><span class="status-dot idle"></span> <span class="status-text">Inativo</span></div>
+            </div>
+            <div class="api-details">Recupera eventos e escalações diárias usando a chave pública '123'.</div>
+          </div>
+          <button class="btn" onclick="testApi('sportsdb')">Testar Fetch</button>
+        </div>
+
+        <!-- API 5: API-Football -->
+        <div class="api-card" id="card-apiFootball">
+          <div>
+            <div class="api-header">
+              <h3 class="api-name">API-Football</h3>
+              <div class="api-status"><span class="status-dot idle"></span> <span class="status-text">Inativo</span></div>
+            </div>
+            <div class="api-details" id="key-apiFootball">Chave: A verificar...</div>
+          </div>
+          <button class="btn" onclick="testApi('apiFootball')">Testar Fetch</button>
+        </div>
+
+        <!-- API 6: football-data.org -->
+        <div class="api-card" id="card-footballData">
+          <div>
+            <div class="api-header">
+              <h3 class="api-name">football-data.org</h3>
+              <div class="api-status"><span class="status-dot idle"></span> <span class="status-text">Inativo</span></div>
+            </div>
+            <div class="api-details" id="key-footballData">Chave: A verificar...</div>
+          </div>
+          <button class="btn" onclick="testApi('footballData')">Testar Fetch</button>
+        </div>
+
+        <!-- API 7: Highlightly -->
+        <div class="api-card" id="card-highlightly">
+          <div>
+            <div class="api-header">
+              <h3 class="api-name">Highlightly</h3>
+              <div class="api-status"><span class="status-dot idle"></span> <span class="status-text">Inativo</span></div>
+            </div>
+            <div class="api-details" id="key-highlightly">Chave: A verificar...</div>
+          </div>
+          <button class="btn" onclick="testApi('highlightly')">Testar Fetch</button>
+        </div>
+
+        <!-- API 8: AllSportsAPI -->
+        <div class="api-card" id="card-allSports">
+          <div>
+            <div class="api-header">
+              <h3 class="api-name">AllSportsAPI</h3>
+              <div class="api-status"><span class="status-dot idle"></span> <span class="status-text">Inativo</span></div>
+            </div>
+            <div class="api-details" id="key-allSports">Chave: A verificar...</div>
+          </div>
+          <button class="btn" onclick="testApi('allSports')">Testar Fetch</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Análise do Jogo 3 (Canadá vs Bósnia) e Timezones -->
+    <div class="panel">
+      <div class="panel-title">Inspecionar Jogo 3 (Caso de Estudo)</div>
+      
+      <div class="time-info">
+        <div class="time-card">
+          <span>Data/Hora Atual do PC</span>
+          <strong id="pc-time">-</strong>
+        </div>
+        <div class="time-card">
+          <span>Timezone do PC</span>
+          <strong id="pc-timezone">-</strong>
+        </div>
+      </div>
+
+      <div class="match-inspector-card">
+        <div class="match-inspector-title">
+          <span>Jogo 3 (Canadá vs Bósnia) no matches.json</span>
+          <span class="badge badge-info">Estático</span>
+        </div>
+        <div class="inspector-row">
+          <span class="inspector-label">Data Definida</span>
+          <span class="inspector-value">2026-06-12</span>
+        </div>
+        <div class="inspector-row">
+          <span class="inspector-label">Hora Definida (Fuso PT/UK)</span>
+          <span class="inspector-value">20:00</span>
+        </div>
+        <div class="inspector-row">
+          <span class="inspector-label">Hora em ET (New York)</span>
+          <span class="inspector-value">15:00</span>
+        </div>
+        <div class="inspector-row">
+          <span class="inspector-label">Construção Local (Date Object)</span>
+          <span class="inspector-value" id="match3-date-obj">-</span>
+        </div>
+        <div class="inspector-row">
+          <span class="inspector-label">Localmente está no Live Window?</span>
+          <span class="inspector-value" id="match3-live-window">-</span>
+        </div>
+        <div class="inspector-row">
+          <span class="inspector-label">Minutos Decorridos Estimados</span>
+          <span class="inspector-value" id="match3-elapsed">-</span>
+        </div>
+      </div>
+
+      <div class="match-inspector-card" style="margin-top: 20px;">
+        <div class="match-inspector-title">
+          <span>Estado do Jogo 3 no Firebase Firestore</span>
+          <span class="badge badge-warning" id="firebase-badge">A carregar...</span>
+        </div>
+        <div class="inspector-row">
+          <span class="inspector-label">Existe no Firestore?</span>
+          <span class="inspector-value" id="fb-exists">-</span>
+        </div>
+        <div class="inspector-row">
+          <span class="inspector-label">Campo "live"</span>
+          <span class="inspector-value" id="fb-live">-</span>
+        </div>
+        <div class="inspector-row">
+          <span class="inspector-label">Campo "finished"</span>
+          <span class="inspector-value" id="fb-finished">-</span>
+        </div>
+        <div class="inspector-row">
+          <span class="inspector-label">Resultado no DB</span>
+          <span class="inspector-value" id="fb-score">-</span>
+        </div>
+        <div class="inspector-row">
+          <span class="inspector-label">Estado / Tempo decorrido</span>
+          <span class="inspector-value" id="fb-elapsed">-</span>
+        </div>
+        <div style="margin-top: 15px; display: flex; gap: 10px;">
+          <button class="btn btn-danger" style="flex: 1;" onclick="resetMatchFirebase(3)">Apagar Estado no Firebase</button>
+          <button class="btn" onclick="checkMatch3Firebase()">Recarregar Firebase</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Painel de Logs / Consola -->
+    <div class="panel console-panel">
+      <div class="panel-title">Consola de Pedidos de Rede</div>
+      <div class="console-output" id="console-log">Consola inicializada. Clique em "Testar Fetch" numa API para ver a resposta detalhada.</div>
+    </div>
+  </main>
+
+  <script type="module">
+    // Carregar configurações do Firebase do script.js ou definir fallback direto
+    const FIREBASE_CONFIG = {
+      apiKey: 'AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0',
+      authDomain: 'g-games-8a8fc.firebaseapp.com',
+      projectId: 'g-games-8a8fc',
+      storageBucket: 'g-games-8a8fc.firebasestorage.app',
+      messagingSenderId: '689897349449',
+      appId: '1:689897349449:web:536599794579901beb7a98',
+      measurementId: 'G-GTTPJ6G5MD'
+    };
+    const FIREBASE_SDK_VERSION = '10.14.1';
+    const FIREBASE_MATCHES_COLLECTION = 'worldcupextraMatches';
+
+    let firestoreDb = null;
+    let firebaseTools = null;
+
+    // Helper functions
+    function logMessage(msg) {
+      const consoleLog = document.getElementById('console-log');
+      const time = new Date().toLocaleTimeString();
+      consoleLog.textContent += `\n[${time}] ${msg}`;
+      consoleLog.scrollTop = consoleLog.scrollHeight;
+    }
+
+    function updateApiStatus(apiName, status, text) {
+      const card = document.getElementById(`card-${apiName}`);
+      if (!card) return;
+      const dot = card.querySelector('.status-dot');
+      const label = card.querySelector('.api-status .status-text');
+      
+      dot.className = `status-dot ${status}`;
+      label.textContent = text;
+    }
+
+    // Identificar chaves locais
+    function verifyApiKeys() {
+      const keys = {
+        apiFootball: localStorage.getItem('ggames_api_football_key') || 'Sem Key no localStorage (COLOCA_AQUI_A_TUA_KEY no script.js)',
+        footballData: localStorage.getItem('ggames_football_data_key') || 'Sem Key no localStorage (COLOCA_AQUI_A_TUA_KEY no script.js)',
+        highlightly: localStorage.getItem('ggames_highlightly_key') || 'Sem Key no localStorage (COLOCA_AQUI_A_TUA_KEY no script.js)',
+        allSports: localStorage.getItem('ggames_allsports_key') || 'Sem Key no localStorage (COLOCA_AQUI_A_TUA_KEY no script.js)'
+      };
+
+      for (const [api, val] of Object.entries(keys)) {
+        const el = document.getElementById(`key-${api}`);
+        if (el) {
+          const isConfigured = val && !val.includes('COLOCA_AQUI_A_TUA_KEY');
+          el.innerHTML = `Chave: <span style="color: ${isConfigured ? 'var(--accent)' : 'var(--danger)'}">${isConfigured ? 'Configurada' : 'Não Configurada'}</span><br><small style="font-size:0.75rem; opacity:0.6">${val.substring(0, 15)}...</small>`;
+        }
+      }
+    }
+
+    // Timezone calculations
+    function calculateTimezones() {
+      const now = new Date();
+      document.getElementById('pc-time').textContent = now.toLocaleString('pt-PT');
+      document.getElementById('pc-timezone').textContent = `${Intl.DateTimeFormat().resolvedOptions().timeZone} (UTC${now.getTimezoneOffset() <= 0 ? '+' : ''}${Math.abs(now.getTimezoneOffset() / -60)})`;
+
+      // Jogo 3
+      const matchDateStr = '2026-06-12';
+      const matchTimeStr = '20:00';
+      const matchDateObj = new Date(`${matchDateStr}T${matchTimeStr}:00`);
+      
+      document.getElementById('match3-date-obj').textContent = matchDateObj.toString();
+
+      const elapsedMs = now.getTime() - matchDateObj.getTime();
+      const inLiveWindow = elapsedMs >= 0 && elapsedMs <= 130 * 60 * 1000;
+      
+      const inLiveEl = document.getElementById('match3-live-window');
+      inLiveEl.textContent = inLiveWindow ? 'SIM (Está na janela de 130min)' : 'NÃO (Fora da janela)';
+      inLiveEl.style.color = inLiveWindow ? 'var(--accent)' : 'var(--danger)';
+
+      const elapsedMinutes = Math.max(1, Math.floor(elapsedMs / 60000));
+      let elapsedLabel = '-';
+      if (elapsedMs >= 0) {
+        if (elapsedMinutes <= 45) elapsedLabel = `${elapsedMinutes} min (1ª parte)`;
+        else if (elapsedMinutes <= 60) elapsedLabel = `Intervalo (Halftime)`;
+        else if (elapsedMinutes <= 105) elapsedLabel = `${elapsedMinutes - 15} min (2ª parte)`;
+        else elapsedLabel = `Terminado / Fim do tempo (~${Math.min(90, elapsedMinutes - 15)} min)`;
+      } else {
+        elapsedLabel = `Falta ${Math.abs(Math.floor(elapsedMs / 60000))} minutos para começar`;
+      }
+      document.getElementById('match3-elapsed').textContent = elapsedLabel;
+    }
+
+    // Firebase loading
+    async function initFirebase() {
+      try {
+        logMessage('A importar SDKs do Firebase...');
+        const appModule = await import(`https://www.gstatic.com/firebasejs/${FIREBASE_SDK_VERSION}/firebase-app.js`);
+        const firestoreModule = await import(`https://www.gstatic.com/firebasejs/${FIREBASE_SDK_VERSION}/firebase-firestore.js`);
+        
+        logMessage('A inicializar app Firebase...');
+        const app = appModule.initializeApp(FIREBASE_CONFIG);
+        firestoreDb = firestoreModule.getFirestore(app);
+        firebaseTools = {
+          doc: firestoreModule.doc,
+          getDoc: firestoreModule.getDoc,
+          setDoc: firestoreModule.setDoc,
+          deleteDoc: firestoreModule.deleteDoc
+        };
+        logMessage('Firebase ligado com sucesso.');
+        document.getElementById('firebase-badge').className = 'badge badge-info';
+        document.getElementById('firebase-badge').textContent = 'Ligado';
+        await checkMatch3Firebase();
+      } catch (err) {
+        logMessage(`Erro ao ligar ao Firebase: ${err.message}`);
+        document.getElementById('firebase-badge').className = 'badge badge-danger';
+        document.getElementById('firebase-badge').textContent = 'Erro';
+      }
+    }
+
+    window.checkMatch3Firebase = async function() {
+      if (!firestoreDb) return;
+      try {
+        const matchDocId = `official-match-3`;
+        const ref = firebaseTools.doc(firestoreDb, FIREBASE_MATCHES_COLLECTION, matchDocId);
+        logMessage(`A verificar estado do Jogo 3 no Firestore em worldcupextraMatches/${matchDocId}...`);
+        const snap = await firebaseTools.getDoc(ref);
+        
+        const exists = snap.exists();
+        document.getElementById('fb-exists').textContent = exists ? 'SIM' : 'NÃO';
+        document.getElementById('fb-exists').style.color = exists ? 'var(--accent)' : 'var(--danger)';
+        
+        if (exists) {
+          const data = snap.data();
+          document.getElementById('fb-live').textContent = String(data.live);
+          document.getElementById('fb-live').style.color = data.live ? 'var(--accent)' : 'var(--muted)';
+          document.getElementById('fb-finished').textContent = String(data.finished);
+          document.getElementById('fb-finished').style.color = data.finished ? 'var(--accent)' : 'var(--muted)';
+          document.getElementById('fb-score').textContent = `${data.homeGoals} - ${data.awayGoals}`;
+          document.getElementById('fb-elapsed').textContent = data.timeElapsed || 'Não definido';
+          
+          logMessage(`Dados Jogo 3 no Firebase: live=${data.live}, finished=${data.finished}, resultado=${data.homeGoals}-${data.awayGoals}, elapsed=${data.timeElapsed}`);
+        } else {
+          document.getElementById('fb-live').textContent = '-';
+          document.getElementById('fb-finished').textContent = '-';
+          document.getElementById('fb-score').textContent = '-';
+          document.getElementById('fb-elapsed').textContent = '-';
+          logMessage('O Jogo 3 não tem documento ativo no Firebase Matches.');
+        }
+      } catch (err) {
+        logMessage(`Erro ao ler Jogo 3 no Firebase: ${err.message}`);
+      }
+    };
+
+    window.resetMatchFirebase = async function(id) {
+      if (!firestoreDb) {
+        alert('Firebase não inicializado!');
+        return;
+      }
+      const confirmOk = confirm(`Tem a certeza que deseja eliminar o estado oficial do Jogo ${id} no Firebase?\nIsto fará com que o jogo volte a respeitar o horário local estimado.`);
+      if (!confirmOk) return;
+
+      try {
+        const matchDocId = `official-match-${id}`;
+        const ref = firebaseTools.doc(firestoreDb, FIREBASE_MATCHES_COLLECTION, matchDocId);
+        await firebaseTools.deleteDoc(ref);
+        logMessage(`Estado do Jogo ${id} apagado com sucesso no Firebase.`);
+        alert(`Estado do Jogo ${id} apagado no Firebase com sucesso!`);
+        await checkMatch3Firebase();
+      } catch (err) {
+        logMessage(`Erro ao apagar estado no Firebase: ${err.message}`);
+        alert(`Erro: ${err.message}`);
+      }
+    };
+
+    // APIs triggers
+    window.testApi = async function(apiId) {
+      updateApiStatus(apiId, 'fetching', 'A puxar...');
+      logMessage(`A puxar dados da API: ${apiId}...`);
+      
+      try {
+        let url = '';
+        let headers = {};
+
+        if (apiId === 'worldcup26') {
+          url = 'https://worldcup26.ir/get/games';
+        } else if (apiId === 'sportsdb') {
+          url = 'https://www.thesportsdb.com/api/v1/json/123/eventsday.php?d=2026-06-12&s=Soccer';
+        } else if (apiId === 'sofaScore') {
+          const dateStr = '2026-06-12';
+          url = `https://www.sofascore.com/api/v1/sport/football/scheduled-events/${dateStr}`;
+        } else if (apiId === 'espn') {
+          url = 'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard';
+        } else if (apiId === 'apiFootball') {
+          const key = localStorage.getItem('ggames_api_football_key') || '';
+          url = 'https://v3.football.api-sports.io/fixtures?date=2026-06-12&timezone=Europe/Lisbon';
+          headers = { 'x-apisports-key': key };
+        } else if (apiId === 'footballData') {
+          const key = localStorage.getItem('ggames_football_data_key') || '';
+          url = 'https://api.football-data.org/v4/matches?dateFrom=2026-06-12&dateTo=2026-06-12';
+          headers = { 'X-Auth-Token': key };
+        } else if (apiId === 'highlightly') {
+          url = 'https://api.highlightly.net/football/fixtures'; // Exemplo
+        } else if (apiId === 'allSports') {
+          const key = localStorage.getItem('ggames_allsports_key') || '';
+          url = `https://apiv2.allsportsapi.com/football/?met=Livescore&APIkey=${key}`;
+        }
+
+        logMessage(`Fetch URL: ${url}`);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+        const res = await fetch(url, { 
+          headers: headers,
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        
+        const data = await res.json();
+        updateApiStatus(apiId, 'success', 'Sucesso');
+        logMessage(`Sucesso ao contactar ${apiId}. Recebidos ${JSON.stringify(data).length} bytes.`);
+        
+        // Procurar Jogo 3
+        inspectDataForMatch3(apiId, data);
+      } catch (err) {
+        updateApiStatus(apiId, 'error', 'Erro');
+        logMessage(`Erro na API ${apiId}: ${err.message}`);
+      }
+    };
+
+    function inspectDataForMatch3(apiId, payload) {
+      logMessage(`--- A inspecionar Jogo 3 (Canadá vs Bósnia) no payload de ${apiId} ---`);
+      
+      let found = false;
+      
+      if (apiId === 'worldcup26') {
+        const games = payload.games || [];
+        const match3 = games.find(g => String(g.id) === '3');
+        if (match3) {
+          found = true;
+          logMessage(`Encontrado Jogo 3 no worldcup26.ir: status="${match3.time_elapsed}", home_score=${match3.home_score}, away_score=${match3.away_score}, finished=${match3.finished}`);
+        }
+      } else if (apiId === 'sportsdb') {
+        const events = payload.events || [];
+        const match3 = events.find(e => 
+          (e.strHomeTeam?.includes('Canada') && e.strAwayTeam?.includes('Bosnia')) ||
+          (e.strHomeTeam?.includes('Bosnia') && e.strAwayTeam?.includes('Canada'))
+        );
+        if (match3) {
+          found = true;
+          logMessage(`Encontrado Jogo no TheSportsDB: status="${match3.strStatus}", score=${match3.intHomeScore}-${match3.intAwayScore}`);
+        }
+      } else if (apiId === 'espn') {
+        const events = payload.events || [];
+        const match3 = events.find(e => {
+          const comps = e.competitions || [];
+          return comps.some(c => 
+            c.competitors?.some(comp => comp.team?.name?.includes('Canada') || comp.team?.name?.includes('Bosnia'))
+          );
+        });
+        if (match3) {
+          found = true;
+          const comp = match3.competitions?.[0];
+          const score = comp?.competitors?.map(c => `${c.team.name}: ${c.score}`).join(' vs ');
+          logMessage(`Encontrado Jogo na ESPN: status="${match3.status?.type?.name || match3.status?.type?.detail}", score=[${score}]`);
+        }
+      } else if (apiId === 'sofaScore') {
+        const events = payload.events || [];
+        const match3 = events.find(e => 
+          e.homeTeam?.name?.includes('Canada') || e.awayTeam?.name?.includes('Canada')
+        );
+        if (match3) {
+          found = true;
+          logMessage(`Encontrado Jogo no SofaScore: status="${match3.status?.description}", score=${match3.homeScore?.current}-${match3.awayScore?.current}`);
+        }
+      }
+
+      if (!found) {
+        logMessage(`Não foi possível filtrar dados automáticos do Jogo 3 para a API ${apiId}. Veja o payload completo de tamanho ${JSON.stringify(payload).length} bytes.`);
+      }
+    }
+
+    window.testAllApis = function() {
+      testApi('worldcup26');
+      testApi('sofaScore');
+      testApi('espn');
+      testApi('sportsdb');
+      testApi('apiFootball');
+      testApi('footballData');
+      testApi('highlightly');
+      testApi('allSports');
+    };
+
+    // Init page
+    calculateTimezones();
+    verifyApiKeys();
+    initFirebase();
+    setInterval(calculateTimezones, 30000);
+  </script>
+</body>
+</html>
