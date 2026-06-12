@@ -2056,6 +2056,67 @@ function openLiveMatchModal(matchId) {
   hydrateLiveMatchLineups(game, local);
 }
 
+function renderLiveGameUserPredictions(gameId) {
+  if (!publicPredictions || !publicPredictions.length) {
+    return '';
+  }
+
+  const gamePredictions = [];
+  publicPredictions.forEach(player => {
+    const pred = (player.matches || []).find(m => String(m.id) === String(gameId));
+    if (pred && pred.homeGoals !== '' && pred.awayGoals !== '' && pred.homeGoals !== null && pred.awayGoals !== null) {
+      gamePredictions.push({
+        player,
+        pred
+      });
+    }
+  });
+
+  if (!gamePredictions.length) {
+    return '';
+  }
+
+  // Ordenar alfabeticamente pelo nome do participante
+  gamePredictions.sort((a, b) => {
+    const nameA = a.player.participantName || a.player.name || '';
+    const nameB = b.player.participantName || b.player.name || '';
+    return nameA.localeCompare(nameB, 'pt-PT');
+  });
+
+  return `
+    <div class="live-game-predictions">
+      <h4 class="live-predictions-title">Prognósticos dos Participantes</h4>
+      <ul class="live-predictions-list">
+        ${gamePredictions.map(item => {
+          const playerName = item.player.participantName || item.player.name || 'Participante';
+          const iconKey = item.player.icon || item.player.participantIcon || item.player.playerIcon || '';
+          const identHtml = renderParticipantIdentity(playerName, iconKey, 'participant-ident--compact');
+          
+          // Formatação simples: remove vencedor redundante para resultado normal
+          const homeG = Number(item.pred.homeGoals);
+          const awayG = Number(item.pred.awayGoals);
+          let extra = '';
+          if (homeG === awayG && item.pred.winnerTeam && item.pred.winnerTeam !== 'Empate') {
+            const methodLabel = item.pred.method === 'et' ? 'após prolongamento' : item.pred.method === 'pens' ? 'após penáltis' : '';
+            extra = ` · vence ${escapeHtml(item.pred.winnerTeam)}${methodLabel ? ` ${methodLabel}` : ''}`;
+          } else if (item.pred.method === 'et' || item.pred.method === 'pens') {
+            const methodLabel = item.pred.method === 'et' ? 'prolongamento' : 'penáltis';
+            extra = ` (${methodLabel})`;
+          }
+          const predText = `${escapeHtml(item.pred.homeTeam)} ${item.pred.homeGoals}-${item.pred.awayGoals} ${escapeHtml(item.pred.awayTeam)}${extra}`;
+          
+          return `
+            <li class="live-prediction-item">
+              ${identHtml}
+              <strong class="live-prediction-choice">${predText}</strong>
+            </li>
+          `;
+        }).join('')}
+      </ul>
+    </div>
+  `;
+}
+
 function renderLiveApiGames() {
   let games = worldCupApi.games.filter(g => g.live && !g.finished).sort((a,b) => Number(a.id)-Number(b.id));
 
@@ -2080,7 +2141,16 @@ function renderLiveApiGames() {
   }
 
   if (!games.length) return '<div class="empty-state">Neste momento não há jogos em direto.</div>';
-  return `<div class="api-games-list">${games.map(g => renderLiveGameCard(g, 'live')).join('')}</div>`;
+  return `
+    <div class="api-games-list">
+      ${games.map(g => `
+        <div class="live-game-wrapper" style="display: flex; flex-direction: column; gap: 8px;">
+          ${renderLiveGameCard(g, 'live')}
+          ${renderLiveGameUserPredictions(g.id)}
+        </div>
+      `).join('')}
+    </div>
+  `;
 }
 
 function renderFutureApiGames() {
