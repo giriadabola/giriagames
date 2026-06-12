@@ -1212,7 +1212,9 @@ function mergeApiGameLists(...lists) {
 
 function buildLocalScheduleGames() {
   return (data?.matches || []).map(match => {
-    const scheduleLive = isMatchInLiveWindow(match);
+    const official = officialResults[String(match.id)];
+    const isFinished = isOfficialResultFinished(official);
+    const scheduleLive = !isFinished && isMatchInLiveWindow(match);
     return {
       id: String(match.id),
       matchId: String(match.id),
@@ -1222,11 +1224,11 @@ function buildLocalScheduleGames() {
       time: match.time,
       homeTeam: match.home,
       awayTeam: match.away,
-      homeGoals: null,
-      awayGoals: null,
-      finished: false,
+      homeGoals: official?.homeGoals ?? null,
+      awayGoals: official?.awayGoals ?? null,
+      finished: isFinished,
       live: scheduleLive,
-      timeElapsed: scheduleLive ? `~${elapsedMinuteFromSchedule(match)}` : 'notstarted',
+      timeElapsed: scheduleLive ? `~${elapsedMinuteFromSchedule(match)}` : (isFinished ? 'finished' : 'notstarted'),
       venue: match.venue || '',
       city: match.city || '',
       country: match.country || '',
@@ -2145,13 +2147,13 @@ function renderLiveGameUserPredictions(gameId) {
 }
 
 function renderLiveApiGames() {
-  let games = worldCupApi.games.filter(g => g.live && !g.finished).sort((a,b) => Number(a.id)-Number(b.id));
+  let games = worldCupApi.games.filter(g => g.live && !g.finished && !isOfficialResultFinished(officialResults[String(g.id)])).sort((a,b) => Number(a.id)-Number(b.id));
 
   // Salvaguarda: se a API ainda não marcar o jogo como "live" mas o horário local já estiver dentro da janela do jogo,
   // mostramos o jogo em direto na mesma. Isto evita o ecrã "não há jogos em direto" durante jogos 0-0 ou quando a API atrasa o estado.
   if (!games.length && data?.matches?.length) {
     games = data.matches
-      .filter(m => isMatchInLiveWindow(m))
+      .filter(m => !isOfficialResultFinished(officialResults[String(m.id)]) && isMatchInLiveWindow(m))
       .map(m => ({
         ...m,
         id: String(m.id),
