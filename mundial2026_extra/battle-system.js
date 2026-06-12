@@ -325,8 +325,8 @@
                   <th>Jogador</th>
                   ${ggamesSortHeaderSafe('points', 'Pontos')}
                   ${ggamesSortHeaderSafe('battleWins', 'BW', 'Battle Wins')}
-                  ${ggamesSortHeaderSafe('correctPredictions', 'Acertados')}
-                  ${ggamesSortHeaderSafe('failedPredictions', 'Falhados')}
+                  ${ggamesSortHeaderSafe('correctPredictions', 'A', 'Acertados')}
+                  ${ggamesSortHeaderSafe('failedPredictions', 'E', 'Errados')}
                   ${ggamesSortHeaderSafe('goalsHit', 'GM', 'Golos marcados')}
                   ${ggamesSortHeaderSafe('goalsMissed', 'GF', 'Golos falhados')}
                   ${ggamesSortHeaderSafe('winsHit', 'V', 'Vitórias/desfechos certos')}

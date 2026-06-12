@@ -1518,6 +1518,7 @@ async function loadApiWorldCupData({ sync = false } = {}) {
       await syncFinishedApiResultsToFirebase();
       const loaded = await loadOfficialMatchStateDocs();
       officialResults = loaded.officialByMatchId;
+      mergeApiResultsIntoOfficialResults();
     }
     return worldCupApi;
   } catch (error) {
@@ -1536,7 +1537,7 @@ function mergeApiResultsIntoOfficialResults() {
   worldCupApi.games.forEach(game => {
     const hasScore = game.homeGoals !== null && game.awayGoals !== null;
     if (!hasScore) return;
-    if (game.finished) return;
+    if (game.finished || !game.live) return;
     const existing = officialResults[String(game.id)];
     if (!existing || game.live) {
       officialResults[String(game.id)] = {
@@ -2768,6 +2769,7 @@ async function loadPublicPredictions() {
   const loaded = await loadOfficialMatchStateDocs();
   publicPredictions = loaded.allDocs.filter(doc => doc.status !== 'official' && doc.type !== 'officialResult' && Array.isArray(doc.matches));
   officialResults = loaded.officialByMatchId;
+  mergeApiResultsIntoOfficialResults();
   return publicPredictions;
   if (!firestoreDb || !firebaseTools) throw new Error('A ligação ainda não está pronta.');
   const collectionRef = firebaseTools.collection(firestoreDb, FIREBASE_COLLECTION);
@@ -3058,8 +3060,8 @@ function renderGgamesTable(options = {}) {
                 <th>#</th>
                 <th>Jogador</th>
                 ${ggamesSortHeader('points', 'Pontos')}
-                ${ggamesSortHeader('correctPredictions', 'Acertados')}
-                ${ggamesSortHeader('failedPredictions', 'Falhados')}
+                ${ggamesSortHeader('correctPredictions', 'A', 'Acertados')}
+                ${ggamesSortHeader('failedPredictions', 'E', 'Errados')}
                 ${ggamesSortHeader('goalsHit', 'GM', 'Golos marcados')}
                 ${ggamesSortHeader('goalsMissed', 'GF', 'Golos falhados')}
                 ${ggamesSortHeader('winsHit', 'Vitórias')}
@@ -4716,6 +4718,7 @@ async function loadApiWorldCupData({ sync = false } = {}) {
       await syncFinishedApiResultsToFirebase();
       const loaded = await loadOfficialMatchStateDocs();
       officialResults = loaded.officialByMatchId;
+      mergeApiResultsIntoOfficialResults();
     }
     if (shouldShowLoadingNotice) {
       apiLoadingRequests = Math.max(0, apiLoadingRequests - 1);
