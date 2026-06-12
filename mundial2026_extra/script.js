@@ -1032,6 +1032,7 @@ function normalizeApiBoolean(value) {
 }
 
 function normalizeApiScore(value) {
+  if (value === null || value === undefined || String(value).trim() === '') return null;
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
 }
@@ -1488,7 +1489,7 @@ function buildGroupsTableFromGames(games) {
       (b.gf - a.gf) ||
       a.team.localeCompare(b.team, 'pt-PT')
     )
-  }));
+  })).sort((a, b) => a.group.localeCompare(b.group));
 }
 
 async function loadApiWorldCupData({ sync = false } = {}) {
@@ -1501,7 +1502,7 @@ async function loadApiWorldCupData({ sync = false } = {}) {
     ]);
 
     worldCupApi.games = mergeApiGameLists(localGames, worldcup26.games, sportsDbGames, apiFootballGames);
-    worldCupApi.groups = worldcup26.groups?.length ? worldcup26.groups : buildGroupsTableFromGames(worldCupApi.games);
+    worldCupApi.groups = buildGroupsTableFromGames(worldCupApi.games);
     worldCupApi.loaded = true;
     worldCupApi.error = null;
     worldCupApi.lastUpdate = new Date();
@@ -2454,7 +2455,6 @@ function openGgamesPlayerHistory(playerId) {
       <tr>
         <td>${escapeHtml(pred.id)}</td>
         <td>${escapeHtml(match.stageLabel || STAGE_LABELS[match.stage] || match.stage || 'Jogo')}</td>
-        <td>${escapeHtml(match.home || pred.homeTeam || 'Equipa A')} vs ${escapeHtml(match.away || pred.awayTeam || 'Equipa B')}</td>
         <td>${predictionResultText(pred)}</td>
         <td>${officialText}</td>
         <td><span class="history-pill ${statusClass}">${status}${score ? ` · ${score.points} pts` : ''}</span></td>
@@ -2477,8 +2477,8 @@ function openGgamesPlayerHistory(playerId) {
     </section>
     <div class="table-scroll history-scroll">
       <table class="ggames-table player-history-table">
-        <thead><tr><th>Jogo</th><th>Fase</th><th>Partida</th><th>Prognóstico</th><th>Resultado</th><th>Estado</th></tr></thead>
-        <tbody>${historyRows || '<tr><td colspan="6">Sem prognósticos para mostrar.</td></tr>'}</tbody>
+        <thead><tr><th>Jogo</th><th>Fase</th><th>Prognóstico</th><th>Resultado</th><th>Estado</th></tr></thead>
+        <tbody>${historyRows || '<tr><td colspan="5">Sem prognósticos para mostrar.</td></tr>'}</tbody>
       </table>
     </div>
   `);
@@ -2931,9 +2931,28 @@ function calculateGgamesTable() {
 
 function predictionResultText(matchPrediction) {
   if (!matchPrediction) return '—';
-  const methodLabel = matchPrediction.method === 'et' ? 'após prolongamento' : matchPrediction.method === 'pens' ? 'após penáltis' : '';
-  const winner = matchPrediction.winnerTeam && matchPrediction.winnerTeam !== 'Empate' ? ` · vence ${escapeHtml(matchPrediction.winnerTeam)}${methodLabel ? ` ${methodLabel}` : ''}` : '';
-  return `${escapeHtml(matchPrediction.homeTeam)} ${matchPrediction.homeGoals}-${matchPrediction.awayGoals} ${escapeHtml(matchPrediction.awayTeam)}${winner}`;
+  
+  const homeG = Number(matchPrediction.homeGoals);
+  const awayG = Number(matchPrediction.awayGoals);
+  const isDraw = homeG === awayG;
+  
+  // Detetar se é fase de grupos (pelo stage, ou pela falta de dados de desempate)
+  const isGroup = matchPrediction.stage === 'groups' || (!matchPrediction.stage && !matchPrediction.method && !matchPrediction.winnerTeam);
+  
+  let winnerSuffix = '';
+  if (!isGroup) {
+    const hasMethod = matchPrediction.method === 'et' || matchPrediction.method === 'pens';
+    if (isDraw && matchPrediction.winnerTeam && matchPrediction.winnerTeam !== 'Empate') {
+      const methodLabel = matchPrediction.method === 'et' ? 'após prolongamento' : matchPrediction.method === 'pens' ? 'após penáltis' : '';
+      winnerSuffix = ` · vence ${escapeHtml(matchPrediction.winnerTeam)}${methodLabel ? ` ${methodLabel}` : ''}`;
+    } else if (hasMethod) {
+      const methodLabel = matchPrediction.method === 'et' ? 'prolongamento' : 'penáltis';
+      const winnerName = matchPrediction.winnerTeam && matchPrediction.winnerTeam !== 'Empate' ? `vence ${escapeHtml(matchPrediction.winnerTeam)} ` : '';
+      winnerSuffix = ` · ${winnerName}(${methodLabel})`;
+    }
+  }
+
+  return `${escapeHtml(matchPrediction.homeTeam)} ${matchPrediction.homeGoals}-${matchPrediction.awayGoals} ${escapeHtml(matchPrediction.awayTeam)}${winnerSuffix}`;
 }
 
 function renderPublicPlayerList() {
@@ -4650,7 +4669,7 @@ function ggamesBuildGroupsFromCurrentGames(games) {
       (b.gf - a.gf) ||
       a.team.localeCompare(b.team, 'pt-PT')
     )
-  }));
+  })).sort((a, b) => a.group.localeCompare(b.group));
 }
 
 async function loadApiWorldCupData({ sync = false } = {}) {
@@ -4689,7 +4708,7 @@ async function loadApiWorldCupData({ sync = false } = {}) {
       : externalGames;
 
     worldCupApi.games = mergedGames;
-    worldCupApi.groups = primary.groups?.length ? primary.groups : ggamesBuildGroupsFromCurrentGames(mergedGames);
+    worldCupApi.groups = ggamesBuildGroupsFromCurrentGames(mergedGames);
     worldCupApi.loaded = true;
     worldCupApi.error = (!apiFootball.ok && !footballData.ok && !highlightly.ok && !allSports.ok && !sofaScore.ok && !espn.ok && !primary.ok && !sportsDb.ok)
       ? 'Dados live indisponíveis; modo estimado ativo.'
