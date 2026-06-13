@@ -1163,10 +1163,8 @@ function normalizeApiFootballGame(item, events = []) {
   const apiLive = apiFootballStatusIsLive(status);
   const scheduleMatch = { ...local, date: local?.date || parsed.date, time: local?.time || parsed.time };
   const scheduleLive = !finished && isMatchInLiveWindow(scheduleMatch);
-  const live = !finished && scheduleLive;
-  const timeElapsed = live
-    ? (apiLive ? apiFootballTimeLabel(status) : elapsedMinuteFromSchedule(scheduleMatch))
-    : (status.short || 'notstarted');
+  const live = !finished && (apiLive || scheduleLive);
+  const timeElapsed = apiLive ? apiFootballTimeLabel(status) : (scheduleLive ? elapsedMinuteFromSchedule(scheduleMatch) : (status.short || 'notstarted'));
   const scorerEvents = (events || []).filter(e => ['Goal', 'Own Goal', 'Penalty'].includes(String(e.type || '')) || /Goal|Penalty/i.test(String(e.detail || '')));
   const homeScorers = scorerEvents.filter(e => apiTeamKey(e.team?.name) === apiTeamKey(teams.home?.name)).map(e => e.player?.name || e.assist?.name || '').filter(Boolean);
   const awayScorers = scorerEvents.filter(e => apiTeamKey(e.team?.name) === apiTeamKey(teams.away?.name)).map(e => e.player?.name || e.assist?.name || '').filter(Boolean);
@@ -1324,10 +1322,6 @@ function isMatchInLiveWindow(match, now = new Date()) {
   return elapsedMs >= 0 && elapsedMs <= 130 * 60 * 1000;
 }
 
-function ggamesCanPersistLiveState(match) {
-  return !!match?.id && !match.finished && isMatchInLiveWindow(match);
-}
-
 function elapsedMinuteFromSchedule(match, now = new Date()) {
   if (!match?.date) return null;
   const start = getMatchDateObj({ date: match.date, time: match.time || '12:00' });
@@ -1352,12 +1346,8 @@ function normalizeApiGame(raw) {
   const apiLive = isApiStatusLive(rawElapsed);
   const scheduleMatch = { ...local, date: local?.date || parsedDate.date || '', time: local?.time || parsedDate.time || '' };
   const scheduleLive = !finished && isMatchInLiveWindow(scheduleMatch);
-  const live = !finished && scheduleLive;
-  const timeElapsed = finished
-    ? rawElapsed
-    : scheduleLive
-      ? (apiLive ? rawElapsed : elapsedMinuteFromSchedule(scheduleMatch))
-      : 'notstarted';
+  const live = !finished && (apiLive || scheduleLive);
+  const timeElapsed = apiLive ? rawElapsed : (scheduleLive ? elapsedMinuteFromSchedule(scheduleMatch) : rawElapsed);
   return {
     id,
     matchId: id,
@@ -1451,7 +1441,7 @@ function normalizeSportsDbGame(raw) {
     awayScorers: raw.strAwayGoalDetails || null,
     finished,
     live: scheduleLive,
-    timeElapsed: scheduleLive ? `~${elapsedMinuteFromSchedule(local)}` : (finished ? statusText || 'FT' : 'notstarted'),
+    timeElapsed: scheduleLive ? `~${elapsedMinuteFromSchedule(local)}` : statusText || 'notstarted',
     venue: raw.strVenue || local.venue || '',
     city: local.city || '',
     country: local.country || '',
@@ -1550,6 +1540,17 @@ async function loadApiWorldCupData({ sync = false } = {}) {
 }
 
 function mergeApiResultsIntoOfficialResults() {
+  // Enforce kickoff rule: games before kickoff cannot be live, finished or have goals/scorers.
+  worldCupApi.games.forEach(g => {
+    if (isMatchBeforeKickoff(g)) {
+      g.live = false;
+      g.finished = false;
+      g.homeGoals = null;
+      g.awayGoals = null;
+      g.timeElapsed = '';
+    }
+  });
+
   worldCupApi.games.forEach(game => {
     const hasScore = game.homeGoals !== null && game.awayGoals !== null;
     if (!hasScore) return;
@@ -1589,12 +1590,6 @@ function ggamesMatchKickoffStillFuture(existingData) {
   return Date.now() < kickoffMs;
 }
 
-function ggamesMatchKickoffAllowsWrite(existingData) {
-  const kickoffMs = ggamesFirestoreTimestampToMillis(existingData?.kickoff);
-  if (!kickoffMs) return false;
-  return Date.now() >= kickoffMs + 1000;
-}
-
 function ggamesShouldSkipFootballDataDirectCors() {
   try {
     const host = String(window.location.hostname || '').toLowerCase();
@@ -1610,7 +1605,7 @@ async function syncFinishedApiResultsToFirebase() {
   if (!firestoreDb || !firebaseTools || !worldCupApi.games.length) return;
   const trustedSources = new Set(['API-Football', 'football-data', 'Highlightly', 'AllSportsAPI', 'SofaScore', 'ESPN', 'worldcup26.ir', 'TheSportsDB v1 free', 'lineups', 'worldcup']);
   const relevantGames = worldCupApi.games.filter(g =>
-    (g.finished || ggamesCanPersistLiveState(g)) &&
+    (g.live || g.finished) &&
     trustedSources.has(g.source) &&
     (g.finished ? !String(g.timeElapsed || '').startsWith('~') : true)
   );
@@ -1628,7 +1623,7 @@ async function syncFinishedApiResultsToFirebase() {
       // Regra de segurança: se o kickoff guardado no Firebase ainda não chegou,
       // não escrever absolutamente nada neste documento. Isto impede o próximo jogo
       // de receber 0-0/live/finished antes da hora.
-      if (!ggamesMatchKickoffAllowsWrite(existing)) return;
+      if (ggamesMatchKickoffStillFuture(existing)) return;
       const nextStatus = game.finished ? 'finished' : 'live';
       const nextLive = !!(game.live && !game.finished);
       const nextFinished = !!game.finished;
@@ -1812,12 +1807,23 @@ function scorerValueForSide(game, side) {
   return game.awayScorers || game.awayGoalScorers || game.away_goals || game.goalsAway || game.awayGoalsDetails || game.away_goal_details;
 }
 
+function isMatchBeforeKickoff(game) {
+  if (!game) return false;
+  const local = localMatchById(game.id || game.matchId);
+  const dateStr = game.date || local?.date;
+  const timeStr = game.time || local?.time;
+  if (!dateStr) return false;
+  const kickoff = new Date(`${dateStr}T${timeStr || '12:00'}:00`);
+  return new Date() < kickoff;
+}
+
 function renderLiveGameCard(game, mode = 'live') {
   const status = renderLiveStatusText(game);
-  const score = game.homeGoals !== null && game.awayGoals !== null ? `${game.homeGoals} - ${game.awayGoals}` : 'vs';
+  const isFuture = isMatchBeforeKickoff(game);
+  const score = isFuture ? 'vs' : (game.homeGoals !== null && game.awayGoals !== null ? `${game.homeGoals} - ${game.awayGoals}` : 'vs');
   const local = localMatchById(game.id);
-  const homeScorers = compactScorersForCard(scorerValueForSide(game, 'home'));
-  const awayScorers = compactScorersForCard(scorerValueForSide(game, 'away'));
+  const homeScorers = isFuture ? '' : compactScorersForCard(scorerValueForSide(game, 'home'));
+  const awayScorers = isFuture ? '' : compactScorersForCard(scorerValueForSide(game, 'away'));
 
   return `
     <button type="button" class="api-game-card ${game.live ? 'is-live' : ''} ${game.finished ? 'is-finished' : ''}" data-live-match="${escapeHtml(game.id)}">
@@ -2139,7 +2145,8 @@ function openLiveMatchModal(matchId) {
   const home = game.homeTeam || game.home || local?.home || 'A definir';
   const away = game.awayTeam || game.away || local?.away || 'A definir';
   const stage = game.stage || local?.stage || 'groups';
-  const score = game.homeGoals !== null && game.homeGoals !== undefined && game.awayGoals !== null && game.awayGoals !== undefined ? `${game.homeGoals} - ${game.awayGoals}` : 'vs';
+  const isFuture = isMatchBeforeKickoff(game);
+  const score = isFuture ? 'vs' : (game.homeGoals !== null && game.homeGoals !== undefined && game.awayGoals !== null && game.awayGoals !== undefined ? `${game.homeGoals} - ${game.awayGoals}` : 'vs');
   const status = renderLiveStatusText(game);
   openModal(`
     <div class="modal-head">
@@ -2151,7 +2158,7 @@ function openLiveMatchModal(matchId) {
     </div>
     <section class="live-detail-section">
       <h3>Marcadores</h3>
-      ${renderScorersBlock(game)}
+      ${isFuture ? '<p class="modal-muted">Ainda não há marcadores registados para este jogo.</p>' : renderScorersBlock(game)}
     </section>
     <section class="live-detail-section">
       <h3>11’s não oficiais</h3>
@@ -2177,6 +2184,12 @@ function openLiveMatchModal(matchId) {
 }
 
 function renderLiveGameUserPredictions(gameId) {
+  const local = localMatchById(gameId);
+  const game = worldCupApi.games.find(g => String(g.id) === String(gameId)) || officialResults[String(gameId)] || local;
+  if (isMatchBeforeKickoff(game)) {
+    return '';
+  }
+
   if (!publicPredictions || !publicPredictions.length) {
     return '';
   }
@@ -4130,7 +4143,7 @@ function ggamesNormalizeApiFootballFixture(item, events = []) {
   const finished = ggamesApiFootballStatusIsFinished(status);
   const liveByApi = ggamesApiFootballStatusIsLive(status);
   const liveBySchedule = !finished && isMatchInLiveWindow(local);
-  const live = !finished && liveBySchedule;
+  const live = !finished && (liveByApi || liveBySchedule);
 
   const goalEvents = (events || []).filter(event =>
     /goal|penalty/i.test(String(event.type || event.detail || '')) && !/missed/i.test(String(event.detail || ''))
@@ -4162,9 +4175,7 @@ function ggamesNormalizeApiFootballFixture(item, events = []) {
     awayScorers,
     finished,
     live,
-    timeElapsed: live
-      ? (liveByApi ? ggamesApiFootballTimeLabel(status) : `~${elapsedMinuteFromSchedule(local)}`)
-      : (finished ? ggamesApiFootballTimeLabel(status) : 'notstarted'),
+    timeElapsed: liveByApi ? ggamesApiFootballTimeLabel(status) : (liveBySchedule ? `~${elapsedMinuteFromSchedule(local)}` : ggamesApiFootballTimeLabel(status)),
     venue: fixture.venue?.name || local.venue || '',
     city: fixture.venue?.city || local.city || '',
     country: local.country || '',
@@ -4301,10 +4312,10 @@ function ggamesNormalizeSportsDbEvent(event) {
   const awayGoals = ggamesSafeScore(event.intAwayScore);
   const statusText = event.strStatus || event.strProgress || event.strResult || '';
   const scheduleGame = { ...local, date, time };
-  const liveBySchedule = !ggamesStatusIsFinished(statusText) && isMatchInLiveWindow(scheduleGame);
+  const liveBySchedule = isMatchInLiveWindow(scheduleGame);
   const liveByApi = ggamesStatusIsLive(statusText);
   const finished = ggamesStatusIsFinished(statusText) || (!!event.intHomeScore && !!event.intAwayScore && !liveBySchedule);
-  const live = !finished && liveBySchedule;
+  const live = !finished && (liveByApi || liveBySchedule);
 
   return {
     id: String(local.id),
@@ -4324,9 +4335,7 @@ function ggamesNormalizeSportsDbEvent(event) {
     awayScorers: event.strAwayGoalDetails || null,
     finished,
     live,
-    timeElapsed: live
-      ? (liveByApi ? statusText : `~${elapsedMinuteFromSchedule(scheduleGame)}`)
-      : (finished ? statusText || 'FT' : 'notstarted'),
+    timeElapsed: liveByApi ? statusText : (liveBySchedule ? `~${elapsedMinuteFromSchedule(scheduleGame)}` : statusText || 'notstarted'),
     venue: event.strVenue || local.venue || '',
     city: local.city || '',
     country: local.country || '',
@@ -4722,9 +4731,8 @@ function ggamesNormalizeAllSportsEvent(event) {
   const [ftHome, ftAway] = ggamesParseAllSportsScore(event.event_ft_result || event.event_final_result);
   const [liveHome, liveAway] = ggamesParseAllSportsScore(event.event_final_result || event.event_live_result || event.event_halftime_result);
   const finished = ggamesAllSportsStatusIsFinished(event);
+  const live = !finished && ggamesAllSportsStatusIsLive(event);
   const statusText = event.event_status || event.event_live || event.event_status_info || '';
-  const scheduleLive = !finished && isMatchInLiveWindow(local);
-  const live = scheduleLive;
   const scorers = Array.isArray(event.goalscorers) ? event.goalscorers : [];
 
   return {
@@ -4737,15 +4745,13 @@ function ggamesNormalizeAllSportsEvent(event) {
     time: local.time || '',
     homeTeam: local.home,
     awayTeam: local.away,
-    homeGoals: finished ? ftHome : (scheduleLive ? liveHome : null),
-    awayGoals: finished ? ftAway : (scheduleLive ? liveAway : null),
+    homeGoals: finished ? ftHome : liveHome,
+    awayGoals: finished ? ftAway : liveAway,
     homeScorers: scorers.filter(s => ggamesTeamKey(s.home_scorer)).map(s => s.home_scorer).filter(Boolean),
     awayScorers: scorers.filter(s => ggamesTeamKey(s.away_scorer)).map(s => s.away_scorer).filter(Boolean),
     finished,
     live,
-    timeElapsed: live
-      ? String(statusText || 'live').replace(/[^0-9+HTA-Za-z' ]/g, '').trim()
-      : (finished ? 'FT' : 'notstarted'),
+    timeElapsed: live ? String(statusText || 'live').replace(/[^0-9+HTA-Za-z' ]/g, '').trim() : (finished ? 'FT' : 'notstarted'),
     venue: event.event_stadium || local.venue || '',
     city: local.city || '',
     country: local.country || '',
@@ -4837,9 +4843,8 @@ function ggamesNormalizeSofaScoreEvent(event) {
   const status = event.status || {};
   const homeGoals = ggamesSafeScore(event.homeScore?.current ?? event.homeScore?.normaltime ?? event.homeScore?.display);
   const awayGoals = ggamesSafeScore(event.awayScore?.current ?? event.awayScore?.normaltime ?? event.awayScore?.display);
+  const live = ggamesSofaScoreStatusIsLive(status);
   const finished = ggamesSofaScoreStatusIsFinished(status);
-  const scheduleLive = !finished && isMatchInLiveWindow(local);
-  const live = scheduleLive;
   // Sem estimativas: só aceitamos minuto se vier diretamente escrito na resposta da fonte.
   const minute = event.statusTime?.prefix || event.statusTime?.short || event.statusTime?.long || '';
 
@@ -4858,8 +4863,8 @@ function ggamesNormalizeSofaScoreEvent(event) {
     homeScorers: event.homeScorers || null,
     awayScorers: event.awayScorers || null,
     finished,
-    live,
-    timeElapsed: live && ggamesSofaScoreStatusIsLive(status) && minute ? String(minute) : (finished ? 'FT' : 'notstarted'),
+    live: !finished && live,
+    timeElapsed: live && minute ? String(minute) : (finished ? 'FT' : (status.description || status.type || 'notstarted')),
     venue: event.venue?.name || local.venue || '',
     city: local.city || '',
     country: local.country || '',
@@ -4933,9 +4938,8 @@ function ggamesNormalizeEspnCompetition(event) {
   if (!local) return null;
 
   const status = event.status || comp.status || {};
+  const live = ggamesEspnStatusIsLive(status);
   const finished = ggamesEspnStatusIsFinished(status);
-  const scheduleLive = !finished && isMatchInLiveWindow(local);
-  const live = scheduleLive;
   const homeScorers = [];
   const awayScorers = [];
 
@@ -4963,10 +4967,8 @@ function ggamesNormalizeEspnCompetition(event) {
     homeScorers,
     awayScorers,
     finished,
-    live,
-    timeElapsed: live && ggamesEspnStatusIsLive(status)
-      ? (status.displayClock || status.type?.shortDetail || status.type?.description || 'live')
-      : (finished ? 'FT' : 'notstarted'),
+    live: !finished && live,
+    timeElapsed: live ? (status.displayClock || status.type?.shortDetail || status.type?.description || 'live') : (finished ? 'FT' : 'notstarted'),
     venue: comp.venue?.fullName || local.venue || '',
     city: local.city || '',
     country: local.country || '',
