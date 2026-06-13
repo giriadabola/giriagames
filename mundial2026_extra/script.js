@@ -1554,9 +1554,9 @@ function mergeApiResultsIntoOfficialResults() {
   worldCupApi.games.forEach(game => {
     const hasScore = game.homeGoals !== null && game.awayGoals !== null;
     if (!hasScore) return;
-    if (game.finished || !game.live) return;
+    if (!game.live && !game.finished) return;
     const existing = officialResults[String(game.id)];
-    if (!existing || game.live) {
+    if (!existing || game.live || game.finished) {
       officialResults[String(game.id)] = {
         ...existing,
         ...game,
@@ -3926,6 +3926,12 @@ async function init() {
 }
 
 init();
+
+// Recarregar a página forçadamente a cada 5 minutos (300000ms)
+setInterval(() => {
+  console.log('Forçando refresh completo da página a cada 5 minutos...');
+  location.reload(true);
+}, 5 * 60 * 1000);
 
 
 
