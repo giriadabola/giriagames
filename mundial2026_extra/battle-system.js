@@ -71,6 +71,10 @@
     return BATTLE_KO_STAGES.includes(stage);
   }
 
+  function canPersistLiveBattleMatch(match) {
+    return !!match?.id && !match.finished && isMatchInLiveWindow(match);
+  }
+
   function battleStage(battle) {
     return battle.stage || localMatch(battle.matchId)?.stage || '';
   }
@@ -403,11 +407,12 @@
     };
 
     if (typeof getCurrentLiveGameForDashboard === 'function') {
-      addMatch(getCurrentLiveGameForDashboard());
+      const currentLive = getCurrentLiveGameForDashboard();
+      if (canPersistLiveBattleMatch(currentLive)) addMatch(currentLive);
     }
 
     (worldCupApi?.games || [])
-      .filter(game => game.live && !game.finished && game.id)
+      .filter(game => game.live && canPersistLiveBattleMatch(game))
       .sort((a, b) => Number(a.id) - Number(b.id))
       .forEach(addMatch);
 
@@ -438,10 +443,13 @@
     const liveMatches = liveMatchesForBattles();
     if (liveMatches.length) return liveMatches[0];
 
-    if (typeof getCurrentLiveGameForDashboard === 'function') return getCurrentLiveGameForDashboard();
+    if (typeof getCurrentLiveGameForDashboard === 'function') {
+      const currentLive = getCurrentLiveGameForDashboard();
+      if (canPersistLiveBattleMatch(currentLive)) return currentLive;
+    }
 
     const apiLive = (worldCupApi?.games || [])
-      .filter(game => game.live && !game.finished && game.id)
+      .filter(game => game.live && canPersistLiveBattleMatch(game))
       .sort((a, b) => Number(a.id) - Number(b.id))[0];
     if (apiLive) return apiLive;
 
@@ -645,6 +653,7 @@
 
   async function markBattleMatchCreated(liveMatch, count = 0) {
     if (!firestoreDb || !firebaseTools || !liveMatch?.id) return;
+    if (!liveMatch.finished && !canPersistLiveBattleMatch(liveMatch)) return;
     try {
       await firebaseTools.setDoc(
         firebaseTools.doc(firestoreDb, LIVE_BATTLE_MATCHES_COLLECTION, matchDocId(liveMatch.id)),
@@ -670,7 +679,7 @@
   }
 
   async function persistLiveBattlesForMatch(liveMatch, rows, limit = 8) {
-    if (!firestoreDb || !firebaseTools || !liveMatch?.id) return [];
+    if (!firestoreDb || !firebaseTools || !canPersistLiveBattleMatch(liveMatch)) return [];
 
     // 1) Verificação local + Firestore por matchId/IDs determinísticos.
     // Se já existirem battles deste jogo, nunca cria novas.

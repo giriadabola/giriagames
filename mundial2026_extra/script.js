@@ -1322,6 +1322,10 @@ function isMatchInLiveWindow(match, now = new Date()) {
   return elapsedMs >= 0 && elapsedMs <= 130 * 60 * 1000;
 }
 
+function ggamesCanPersistLiveState(match) {
+  return !!match?.id && !match.finished && isMatchInLiveWindow(match);
+}
+
 function elapsedMinuteFromSchedule(match, now = new Date()) {
   if (!match?.date) return null;
   const start = getMatchDateObj({ date: match.date, time: match.time || '12:00' });
@@ -1600,7 +1604,7 @@ async function syncFinishedApiResultsToFirebase() {
   if (!firestoreDb || !firebaseTools || !worldCupApi.games.length) return;
   const trustedSources = new Set(['API-Football', 'football-data', 'Highlightly', 'AllSportsAPI', 'SofaScore', 'ESPN', 'worldcup26.ir', 'TheSportsDB v1 free', 'lineups', 'worldcup']);
   const relevantGames = worldCupApi.games.filter(g =>
-    (g.live || g.finished) &&
+    (g.finished || ggamesCanPersistLiveState(g)) &&
     trustedSources.has(g.source) &&
     (g.finished ? !String(g.timeElapsed || '').startsWith('~') : true)
   );
