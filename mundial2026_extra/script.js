@@ -981,7 +981,9 @@ async function renderClosedPublicView() {
     dashboard.innerHTML = '<div class="live-loading-card">A carregar a Central Ggames...</div>';
   }
 
-  await Promise.allSettled([loadScoringRules(), loadApiWorldCupData({ sync: true }), loadPublicPredictions()]);
+  await loadScoringRules();
+  await loadPublicPredictions();
+  await loadApiWorldCupData({ sync: true });
 
   if (dashboard) {
     dashboard.innerHTML = renderLiveDashboard();
@@ -1003,7 +1005,8 @@ async function openLiveResultsModal() {
     </div>
   `);
 
-  await Promise.allSettled([loadApiWorldCupData({ sync: true }), loadPublicPredictions()]);
+  await loadPublicPredictions();
+  await loadApiWorldCupData({ sync: true });
   const body = $('#liveViewerBody');
   if (body) body.innerHTML = renderLiveDashboard();
   startLiveApiSync();
@@ -1081,6 +1084,8 @@ const API_TEAM_ALIASES = {
   'inglaterra': 'england',
   'japao': 'japan',
   'marrocos': 'morocco',
+  'brasil': 'brazil',
+  'brazil': 'brazil',
   'suica': 'switzerland',
   'croacia': 'croatia',
   'servia': 'serbia',
@@ -1334,8 +1339,17 @@ function elapsedMinuteFromSchedule(match, now = new Date()) {
 }
 
 function normalizeApiGame(raw) {
-  const id = String(raw.id ?? raw.match_id ?? raw.game_id ?? raw._id ?? '');
-  const local = localMatchById(id);
+  const homeNameRaw = raw.home_team_name_en || raw.home_team_name || raw.home_team_label;
+  const awayNameRaw = raw.away_team_name_en || raw.away_team_name || raw.away_team_label;
+  let local = null;
+  if (homeNameRaw && awayNameRaw) {
+    local = (data?.matches || []).find(match => apiTeamsMatch(homeNameRaw, awayNameRaw, match.home, match.away));
+  }
+  if (!local) {
+    const rawId = String(raw.id ?? raw.match_id ?? raw.game_id ?? raw._id ?? '');
+    local = localMatchById(rawId);
+  }
+  const id = local ? String(local.id) : String(raw.id ?? raw.match_id ?? raw.game_id ?? raw._id ?? '');
   const parsedDate = parseApiDate(raw.local_date || raw.date || raw.datetime);
   const homeName = raw.home_team_name_en || raw.home_team_name || raw.home_team_label || local?.home || 'A definir';
   const awayName = raw.away_team_name_en || raw.away_team_name || raw.away_team_label || local?.away || 'A definir';
@@ -1624,6 +1638,8 @@ async function syncFinishedApiResultsToFirebase() {
       // não escrever absolutamente nada neste documento. Isto impede o próximo jogo
       // de receber 0-0/live/finished antes da hora.
       if (ggamesMatchKickoffStillFuture(existing)) return;
+      // Se o documento foi atualizado manualmente (pelo painel ou manualmente no DB), impede a reescrita automática da API
+      if (existing && (existing.syncOrigin === 'manual-logic-panel' || existing.syncOrigin === 'manual')) return;
       const nextStatus = game.finished ? 'finished' : 'live';
       const nextLive = !!(game.live && !game.finished);
       const nextFinished = !!game.finished;
@@ -1673,37 +1689,51 @@ async function syncFinishedApiResultsToFirebase() {
 function startLiveApiSync() {
   if (liveSyncTimer) clearInterval(liveSyncTimer);
 
+  let isSyncing = false;
+
   const tick = async () => {
-    const liveMatchIdsBefore = new Set(
-      (worldCupApi.games || [])
-        .filter(g => g.live && !g.finished)
-        .map(g => String(g.id))
-    );
+    if (isSyncing) return;
+    isSyncing = true;
+    try {
+      const liveMatchIdsBefore = new Set(
+        (worldCupApi.games || [])
+          .filter(g => g.live && !g.finished)
+          .map(g => String(g.id))
+      );
 
-    await loadApiWorldCupData({ sync: true });
+      await loadApiWorldCupData({ sync: true });
 
-    const finishedMatchIdsAfter = new Set(
-      (worldCupApi.games || [])
-        .filter(g => g.finished)
-        .map(g => String(g.id))
-    );
+      const finishedMatchIdsAfter = new Set(
+        (worldCupApi.games || [])
+          .filter(g => g.finished)
+          .map(g => String(g.id))
+      );
 
-    let transitionDetected = false;
-    for (const id of liveMatchIdsBefore) {
-      if (finishedMatchIdsAfter.has(id)) {
-        transitionDetected = true;
-        break;
+      let transitionDetected = false;
+      for (const id of liveMatchIdsBefore) {
+        if (finishedMatchIdsAfter.has(id)) {
+          transitionDetected = true;
+          break;
+        }
       }
-    }
 
-    if (transitionDetected) {
-      console.log('Um jogo em direto terminou. A recarregar a página forçadamente...');
-      location.reload(true);
-      return;
-    }
+      if (transitionDetected) {
+        console.log('Um jogo em direto terminou. A recarregar a página forçadamente...');
+        location.reload(true);
+        return;
+      }
 
-    if (isVotingClosed()) refreshLiveDashboardView();
-    window.dispatchEvent(new CustomEvent('ggames-live-updated', { detail: { updatedAt: worldCupApi.lastUpdate } }));
+      if (isVotingClosed()) refreshLiveDashboardView();
+      window.dispatchEvent(new CustomEvent('ggames-live-updated', { detail: { updatedAt: worldCupApi.lastUpdate } }));
+
+      // Se a API principal do worldcup26.ir falhou/está inativa, força nova sincronização em 5 segundos
+      if (worldCupApi.sources && worldCupApi.sources.primary !== 'ok') {
+        console.warn('worldcup26.ir não está ativo. A agendar nova tentativa rápida em 5 segundos...');
+        setTimeout(tick, 5000);
+      }
+    } finally {
+      isSyncing = false;
+    }
   };
 
   liveSyncTimer = setInterval(tick, API_SYNC_INTERVAL_MS);
@@ -3498,7 +3528,8 @@ async function openMobilePublicPredictionsPage(active = 'games') {
   updateMobileAppNav();
   refreshLiveDashboardView();
   try {
-    await Promise.allSettled([loadApiWorldCupData({ sync: false }), loadPublicPredictions()]);
+    await loadPublicPredictions();
+    await loadApiWorldCupData({ sync: false });
     mobilePublicViewerHtml = renderPublicViewer(active);
   } catch (error) {
     console.error(error);
@@ -3521,7 +3552,8 @@ async function openPublicPredictionsEntry() {
 async function openPublicPredictionsModal() {
   openModal('<h2>Outros jogadores</h2><p class="modal-muted">A carregar prognósticos...</p>');
   try {
-    await Promise.allSettled([loadApiWorldCupData({ sync: false }), loadPublicPredictions()]);
+    await loadPublicPredictions();
+    await loadApiWorldCupData({ sync: false });
     openModal(renderPublicViewer('games'));
   } catch (error) {
     console.error(error);
@@ -3908,10 +3940,8 @@ async function init() {
       secondsLeft = Math.max(secondsLeft, 3); // Dá mais 3 segundos estimados para o carregamento pesado
       updateCountdownMsg(baseMsg);
       
-      await Promise.allSettled([
-        loadApiWorldCupData({ sync: true }),
-        loadPublicPredictions()
-      ]);
+      await loadPublicPredictions();
+      await loadApiWorldCupData({ sync: true });
       refreshLiveDashboardView();
     }
     
@@ -4030,6 +4060,9 @@ const GGAMES_TEAM_API_ALIASES = {
   'japan': 'japan',
   'marrocos': 'morocco',
   'morocco': 'morocco',
+  'brasil': 'brazil',
+  'brazil': 'brazil',
+  'holanda': 'netherlands',
   'suica': 'switzerland',
   'switzerland': 'switzerland',
   'croacia': 'croatia',
@@ -4281,7 +4314,9 @@ function ggamesStatusIsLive(value) {
 }
 
 function ggamesBuildLocalScheduledGame(match) {
-  const scheduleLive = isMatchInLiveWindow(match);
+  const official = getOfficialResult(match.id);
+  const isFinished = isOfficialResultFinished(official);
+  const scheduleLive = !isFinished && isMatchInLiveWindow(match);
   return {
     id: String(match.id),
     matchId: String(match.id),
@@ -4291,13 +4326,13 @@ function ggamesBuildLocalScheduledGame(match) {
     time: match.time || '',
     homeTeam: match.home,
     awayTeam: match.away,
-    homeGoals: null,
-    awayGoals: null,
-    homeScorers: null,
-    awayScorers: null,
-    finished: false,
+    homeGoals: official?.homeGoals ?? null,
+    awayGoals: official?.awayGoals ?? null,
+    homeScorers: official?.homeScorers || null,
+    awayScorers: official?.awayScorers || null,
+    finished: isFinished,
     live: scheduleLive,
-    timeElapsed: scheduleLive ? `~${elapsedMinuteFromSchedule(match)}` : 'notstarted',
+    timeElapsed: scheduleLive ? `~${elapsedMinuteFromSchedule(match)}` : (isFinished ? 'finished' : 'notstarted'),
     venue: match.venue || '',
     city: match.city || '',
     country: match.country || '',
@@ -5170,27 +5205,21 @@ async function loadApiWorldCupData({ sync = false } = {}) {
     let sofaScore = await cachedLive('SofaScore');
     let espn = await cachedLive('ESPN');
 
-    // Poupar quotas: só tenta a próxima API de minutos se a anterior não trouxe minuto direto.
-    let foundDirectLiveMinute = ggamesSourceHasDirectLiveMinute(apiFootball);
-    if (canFetchExtra && !foundDirectLiveMinute) {
-      highlightly = await ggamesLoadHighlightly();
-      foundDirectLiveMinute = ggamesSourceHasDirectLiveMinute(highlightly);
+    // Obter todas as fontes ativas para consolidar o melhor resultado possível
+    if (canFetchExtra) {
+       highlightly = await ggamesLoadHighlightly();
     }
-    if (canFetchExtra && !foundDirectLiveMinute) {
-      footballData = await ggamesLoadFootballData();
-      foundDirectLiveMinute = ggamesSourceHasDirectLiveMinute(footballData);
+    if (canFetchExtra) {
+       footballData = await ggamesLoadFootballData();
     }
-    if (canFetchExtra && !foundDirectLiveMinute) {
-      allSports = await ggamesLoadAllSports();
-      foundDirectLiveMinute = ggamesSourceHasDirectLiveMinute(allSports);
+    if (canFetchExtra) {
+       allSports = await ggamesLoadAllSports();
     }
-    if (canFetchExtra && !foundDirectLiveMinute) {
-      sofaScore = await ggamesLoadSofaScore();
-      foundDirectLiveMinute = ggamesSourceHasDirectLiveMinute(sofaScore);
+    if (canFetchExtra) {
+       sofaScore = await ggamesLoadSofaScore();
     }
-    if (canFetchExtra && !foundDirectLiveMinute) {
-      espn = await ggamesLoadEspn();
-      foundDirectLiveMinute = ggamesSourceHasDirectLiveMinute(espn);
+    if (canFetchExtra) {
+       espn = await ggamesLoadEspn();
     }
 
     const externalGames = [
