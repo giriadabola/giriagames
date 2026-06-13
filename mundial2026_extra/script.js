@@ -30,9 +30,11 @@ const API_FOOTBALL_KEY = '28fe67fa1477141ea513286716d04cd6';
 const FOOTBALL_DATA_BASE = 'https://api.football-data.org/v4';
 const FOOTBALL_DATA_KEY = '92761a7be0594efc9686e0f3031d2709';
 const HIGHLIGHTLY_BASE = 'https://api.highlightly.net/football';
-const HIGHLIGHTLY_KEY = 'COLOCA_AQUI_A_TUA_KEY';
+const HIGHLIGHTLY_KEY = '5bc92d9d-077d-4e4c-be4a-403ae7f5792a';
 const ALLSPORTS_BASE = 'https://apiv2.allsportsapi.com/football/';
 const ALLSPORTS_KEY = 'dade46c3d79174fc03a9cc1e58b0cbcd0cef90cd9806260b407eaa645f8a042f';
+const ZAFRONIX_WC_BASE = 'https://api.zafronix.com/fifa/worldcup/v1';
+const ZAFRONIX_WC_KEY = 'zwc_free_4408ccc66492ac311b28addc';
 const SOFASCORE_PROXY_URL = ''; // opcional: proxy teu para evitar CORS, ex: https://teusite.com/api/sofascore
 const ESPN_PROXY_URL = ''; // opcional: proxy teu para evitar CORS, ex: https://teusite.com/api/espn
 const API_SYNC_INTERVAL_MS = 30000;
@@ -1557,6 +1559,43 @@ function mergeApiResultsIntoOfficialResults() {
   });
 }
 
+
+function ggamesFirestoreTimestampToMillis(value) {
+  if (!value) return null;
+  if (typeof value.toMillis === 'function') return value.toMillis();
+  if (typeof value.seconds === 'number') return (value.seconds * 1000) + Math.floor((value.nanoseconds || 0) / 1000000);
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+  return null;
+}
+
+function ggamesMatchKickoffStillFuture(existingData) {
+  const kickoffMs = ggamesFirestoreTimestampToMillis(existingData?.kickoff);
+  if (!kickoffMs) return false;
+  return Date.now() < kickoffMs;
+}
+
+function ggamesMatchKickoffAllowsWrite(existingData) {
+  const kickoffMs = ggamesFirestoreTimestampToMillis(existingData?.kickoff);
+  if (!kickoffMs) return false;
+  return Date.now() >= kickoffMs + 1000;
+}
+
+function ggamesShouldSkipFootballDataDirectCors() {
+  try {
+    const host = String(window.location.hostname || '').toLowerCase();
+    // football-data.org responde com Access-Control-Allow-Origin: http://localhost.
+    // Em 127.0.0.1 o preflight rebenta antes de a app poder tratar o erro.
+    return host === '127.0.0.1';
+  } catch {
+    return false;
+  }
+}
+
 async function syncFinishedApiResultsToFirebase() {
   if (!firestoreDb || !firebaseTools || !worldCupApi.games.length) return;
   const trustedSources = new Set(['API-Football', 'football-data', 'Highlightly', 'AllSportsAPI', 'SofaScore', 'ESPN', 'worldcup26.ir', 'TheSportsDB v1 free', 'lineups', 'worldcup']);
@@ -1576,6 +1615,10 @@ async function syncFinishedApiResultsToFirebase() {
     const batch = firebaseTools.writeBatch(firestoreDb);
     relevantGames.forEach(game => {
       const existing = existingByMatchId[String(game.id)] || null;
+      // Regra de segurança: se o kickoff guardado no Firebase ainda não chegou,
+      // não escrever absolutamente nada neste documento. Isto impede o próximo jogo
+      // de receber 0-0/live/finished antes da hora.
+      if (!ggamesMatchKickoffAllowsWrite(existing)) return;
       const nextStatus = game.finished ? 'finished' : 'live';
       const nextLive = !!(game.live && !game.finished);
       const nextFinished = !!game.finished;
@@ -1712,12 +1755,34 @@ function renderLiveRightPanel() {
 }
 
 
+function hasRealApiMinuteLabel(value) {
+  const raw = String(value || '').trim();
+  if (!raw || raw.startsWith('~')) return false;
+
+  const text = raw.toLowerCase();
+  if (['live', 'notstarted', 'halftime', 'half-time', 'interval', 'paused', 'pause', 'ht', 'em pausa', 'ao vivo'].includes(text)) {
+    return false;
+  }
+
+  // Aceita apenas minuto direto vindo da API: 23, 23', 45+2, 45'+2, 90+5'
+  return (
+    /^\d{1,3}$/.test(raw) ||
+    /^\d{1,3}['’]$/.test(raw) ||
+    /^\d{1,3}\+\d{1,2}$/.test(raw) ||
+    /^\d{1,3}\+\d{1,2}['’]$/.test(raw) ||
+    /^\d{1,3}['’]\+\d{1,2}['’]?$/.test(raw)
+  );
+}
+
 function renderLiveStatusText(game) {
   if (!game?.live) return game?.finished ? 'Terminado' : 'Por jogar';
-  
-  let elapsed = game.timeElapsed;
 
-  if (String(elapsed || '').startsWith('~')) return 'EM PAUSA';
+  const elapsed = String(game.timeElapsed || '').trim();
+
+  // Se não houver minuto real vindo diretamente da API, fica só a bola vermelha a piscar.
+  // Não mostra: EM PAUSA, AO VIVO, LIVE, HT, Intervalo, nem minutos estimados com ~.
+  if (!hasRealApiMinuteLabel(elapsed)) return '';
+
   return liveStatusLabel(elapsed);
 }
 
@@ -1765,18 +1830,18 @@ function renderLiveGameCard(game, mode = 'live') {
 
 function liveStatusLabel(value) {
   const raw = String(value || '').trim();
-  const text = raw.toLowerCase();
 
-  let cleanValue = raw;
-  if (raw.startsWith('~')) {
-    cleanValue = raw.substring(1);
-  }
-  const cleanText = cleanValue.toLowerCase();
+  if (!hasRealApiMinuteLabel(raw)) return '';
 
-  if (!cleanText || cleanText === 'notstarted' || cleanText === 'live') return 'EM PAUSA';
-  if (cleanText === 'halftime' || cleanText === 'half-time' || cleanText === 'interval') return 'Intervalo';
-  if (/^\d+([+\d]*)?$/.test(cleanText)) return `${cleanValue}'`;
-  return String(cleanValue);
+  // 23 -> 23'
+  if (/^\d{1,3}$/.test(raw)) return `${raw}'`;
+
+  // 45+2 -> 45+2'
+  if (/^\d{1,3}\+\d{1,2}$/.test(raw)) return `${raw}'`;
+
+  // 45'+2 -> 45+2'
+  const normalized = raw.replace(/[’]/g, "'").replace(/^(\d{1,3})'\+(\d{1,2})'?$/, '$1+$2\'');
+  return normalized;
 }
 
 function apiScorerList(value) {
@@ -2219,15 +2284,27 @@ function renderFutureApiGames() {
 
 function renderApiGroupsTable() {
   if (worldCupApi.groups.length) {
-    return `<div class="api-groups-grid">${worldCupApi.groups.map(group => {
+    const sourceName = worldCupApi.groups.some(g => g.source === 'Zafronix WC API') ? 'Zafronix WC API — classificação oficial' : 'Tabela calculada por resultados/Firebase';
+    return `<div class="api-source-note">Fonte: ${escapeHtml(sourceName)}</div><div class="api-groups-grid">${worldCupApi.groups.map(group => {
       const groupName = group.group || group.name || group.group_name || '';
       const teams = Array.isArray(group.teams) ? group.teams : [];
-      return `<section class="api-group-card"><h4>Grupo ${escapeHtml(groupName)}</h4><table><thead><tr><th>Equipa</th><th>Pts</th><th>GM</th><th>GS</th></tr></thead><tbody>${teams.map(t => `<tr><td>${escapeHtml(t.team_name_en || t.name_en || t.team || t.team_id || 'Equipa')}</td><td>${escapeHtml(t.pts ?? t.points ?? 0)}</td><td>${escapeHtml(t.gf ?? 0)}</td><td>${escapeHtml(t.ga ?? 0)}</td></tr>`).join('')}</tbody></table></section>`;
+      return `<section class="api-group-card"><h4>Grupo ${escapeHtml(groupName)}</h4><table><thead><tr><th>#</th><th>Equipa</th><th>J</th><th>V</th><th>E</th><th>D</th><th>GM</th><th>GS</th><th>DG</th><th>Pts</th></tr></thead><tbody>${teams.map((t, index) => {
+        const position = t.position ?? (index + 1);
+        const teamName = t.team_name_en || t.name_en || t.team || t.team_id || 'Equipa';
+        const played = t.played ?? t.p ?? 0;
+        const wins = t.wins ?? t.won ?? t.w ?? 0;
+        const draws = t.draws ?? t.drawn ?? t.d ?? 0;
+        const losses = t.losses ?? t.lost ?? t.l ?? 0;
+        const gf = t.gf ?? t.goalsFor ?? 0;
+        const ga = t.ga ?? t.goalsAgainst ?? 0;
+        const gd = t.gd ?? t.goalDifference ?? (Number(gf || 0) - Number(ga || 0));
+        const pts = t.pts ?? t.points ?? 0;
+        return `<tr class="${t.advanced ? 'qualified' : ''}"><td>${escapeHtml(position)}</td><td>${escapeHtml(teamName)}</td><td>${escapeHtml(played)}</td><td>${escapeHtml(wins)}</td><td>${escapeHtml(draws)}</td><td>${escapeHtml(losses)}</td><td>${escapeHtml(gf)}</td><td>${escapeHtml(ga)}</td><td>${escapeHtml(gd)}</td><td><strong>${escapeHtml(pts)}</strong></td></tr>`;
+      }).join('')}</tbody></table></section>`;
     }).join('')}</div>`;
   }
   return '<div class="empty-state">Ainda não há classificação dos grupos para mostrar.</div>';
 }
-
 
 
 function getCurrentLiveGameForDashboard() {
@@ -3868,6 +3945,10 @@ const GGAMES_API_SOURCES = {
   espn: {
     name: 'ESPN',
     baseUrl: 'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard'
+  },
+  zafronix: {
+    name: 'Zafronix WC API',
+    baseUrl: ZAFRONIX_WC_BASE
   }
 };
 
@@ -4415,6 +4496,11 @@ async function ggamesLoadFootballData() {
     result.error = 'Sem chave configurada.';
     return result;
   }
+  if (ggamesShouldSkipFootballDataDirectCors()) {
+    result.skipped = true;
+    result.error = 'football-data ignorada em 127.0.0.1 para evitar CORS. Usa http://localhost:5502 ou um proxy teu.';
+    return result;
+  }
   try {
     const dates = ggamesRelevantApiFootballDates();
     const from = dates.sort()[0];
@@ -4452,6 +4538,71 @@ function ggamesHighlightlyStatusIsLive(value) {
   return /live|in.?play|first|second|half.?time|1h|2h|ht|^\d{1,3}/i.test(String(value || ''));
 }
 
+
+function ggamesExtractDirectMinuteLabel(value) {
+  if (value == null) return '';
+  if (typeof value === 'number' && Number.isFinite(value)) return String(Math.max(0, Math.floor(value)));
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  const cleaned = raw
+    .replace(/min(?:ute)?s?/ig, '')
+    .replace(/′/g, "'")
+    .replace(/\s+/g, '')
+    .trim();
+
+  if (/^\d{1,3}$/.test(cleaned)) return cleaned;
+  if (/^\d{1,3}'$/.test(cleaned)) return cleaned;
+  if (/^\d{1,3}\+\d{1,2}$/.test(cleaned)) return cleaned;
+  if (/^\d{1,3}'\+\d{1,2}'?$/.test(cleaned)) return cleaned;
+  if (/^\d{1,3}:\d{2}$/.test(cleaned)) return cleaned.split(':')[0];
+  return '';
+}
+
+function ggamesExtractHighlightlyMinute(item) {
+  const candidates = [
+    item?.minute,
+    item?.minutes,
+    item?.elapsed,
+    item?.elapsedTime,
+    item?.matchMinute,
+    item?.match_time,
+    item?.matchTime,
+    item?.liveMinute,
+    item?.clock,
+    item?.displayClock,
+    item?.timer,
+    item?.time,
+    item?.time?.minute,
+    item?.time?.minutes,
+    item?.time?.elapsed,
+    item?.time?.current,
+    item?.time?.display,
+    item?.status?.minute,
+    item?.status?.minutes,
+    item?.status?.elapsed,
+    item?.status?.clock,
+    item?.status?.displayClock,
+    item?.period?.minute,
+    item?.period?.elapsed,
+    item?.periodTime,
+    item?.gameTime
+  ];
+  for (const candidate of candidates) {
+    const label = ggamesExtractDirectMinuteLabel(candidate);
+    if (label) return label;
+  }
+  return '';
+}
+
+function ggamesGameHasDirectMinute(game) {
+  if (!game || !game.live) return false;
+  return !!ggamesExtractDirectMinuteLabel(game.timeElapsed);
+}
+
+function ggamesSourceHasDirectLiveMinute(result) {
+  return !!(result && Array.isArray(result.games) && result.games.some(ggamesGameHasDirectMinute));
+}
+
 function ggamesNormalizeHighlightlyMatch(item) {
   const homeName = item.homeTeam?.name || item.home?.name || item.home_team?.name || item.homeTeamName || item.home_name || item.home;
   const awayName = item.awayTeam?.name || item.away?.name || item.away_team?.name || item.awayTeamName || item.away_name || item.away;
@@ -4463,7 +4614,7 @@ function ggamesNormalizeHighlightlyMatch(item) {
   const awayGoals = ggamesSafeScore(item.score?.away ?? item.scores?.away ?? item.awayScore ?? item.away_score ?? item.goals?.away);
   const live = ggamesHighlightlyStatusIsLive(status);
   const finished = ggamesHighlightlyStatusIsFinished(status);
-  const minute = item.minute ?? item.time?.minute ?? item.elapsed ?? item.status?.elapsed ?? '';
+  const minute = ggamesExtractHighlightlyMinute(item);
 
   return {
     id: String(local.id),
@@ -4479,7 +4630,8 @@ function ggamesNormalizeHighlightlyMatch(item) {
     awayGoals,
     finished,
     live: !finished && live,
-    timeElapsed: live && minute ? String(minute) : (live ? 'live' : status || 'notstarted'),
+    timeElapsed: live && minute ? String(minute) : (finished ? 'FT' : ''),
+    minuteProvider: live && minute ? 'Highlightly' : '',
     venue: item.venue?.name || local.venue || '',
     city: local.city || '',
     country: local.country || '',
@@ -4502,13 +4654,22 @@ async function ggamesLoadHighlightly() {
       `/matches?date=${encodeURIComponent(dates[0])}`,
       `/fixtures?date=${encodeURIComponent(dates[0])}`
     ];
-    const payloads = await Promise.all(paths.map(path => ggamesFetchHighlightly(path).catch(() => null)));
-    const matches = payloads.flatMap(payload =>
-      ggamesArrayFromPayload(payload, 'matches')
+
+    const allGames = [];
+    for (const path of paths) {
+      const payload = await ggamesFetchHighlightly(path).catch(() => null);
+      if (!payload) continue;
+      const matches = ggamesArrayFromPayload(payload, 'matches')
         .concat(ggamesArrayFromPayload(payload, 'fixtures'))
-        .concat(ggamesArrayFromPayload(payload, 'data'))
-    );
-    result.games = matches.map(ggamesNormalizeHighlightlyMatch).filter(Boolean);
+        .concat(ggamesArrayFromPayload(payload, 'data'));
+      const games = matches.map(ggamesNormalizeHighlightlyMatch).filter(Boolean);
+      allGames.push(...games);
+
+      // Poupa requests: se a primeira chamada já trouxer minuto direto, não tenta os endpoints seguintes.
+      if (games.some(ggamesGameHasDirectMinute)) break;
+    }
+
+    result.games = allGames;
     result.ok = true;
   } catch (error) {
     result.error = String(error?.message || error);
@@ -4661,9 +4822,8 @@ function ggamesNormalizeSofaScoreEvent(event) {
   const awayGoals = ggamesSafeScore(event.awayScore?.current ?? event.awayScore?.normaltime ?? event.awayScore?.display);
   const live = ggamesSofaScoreStatusIsLive(status);
   const finished = ggamesSofaScoreStatusIsFinished(status);
-  const minute = event.time?.currentPeriodStartTimestamp
-    ? Math.max(1, Math.floor((Date.now() / 1000 - Number(event.time.currentPeriodStartTimestamp)) / 60))
-    : (event.statusTime?.prefix || event.statusTime?.short || event.statusTime?.long || '');
+  // Sem estimativas: só aceitamos minuto se vier diretamente escrito na resposta da fonte.
+  const minute = event.statusTime?.prefix || event.statusTime?.short || event.statusTime?.long || '';
 
   return {
     id: String(local.id),
@@ -4809,6 +4969,92 @@ async function ggamesLoadEspn() {
 }
 
 
+
+async function ggamesFetchZafronix(path) {
+  if (!ZAFRONIX_WC_KEY || ZAFRONIX_WC_KEY === 'COLOCA_AQUI_A_TUA_KEY') {
+    throw new Error('Zafronix WC API sem key configurada.');
+  }
+  const response = await fetch(`${GGAMES_API_SOURCES.zafronix.baseUrl}${path}`, {
+    cache: 'no-store',
+    headers: {
+      'Accept': 'application/json',
+      'X-API-Key': ZAFRONIX_WC_KEY
+    }
+  });
+  if (!response.ok) throw new Error(`Zafronix ${path}: ${response.status}`);
+  return response.json();
+}
+
+function ggamesNormalizeZafronixGroupLetter(rawGroup) {
+  const value = String(rawGroup || '').trim().toUpperCase();
+  const direct = value.match(/^([A-L])$/);
+  if (direct) return direct[1];
+  const fromStage = value.match(/GROUP[_\s-]*([A-L])/i);
+  return fromStage ? fromStage[1].toUpperCase() : value;
+}
+
+function ggamesNormalizeZafronixStandingRow(row = {}) {
+  const played = Number(row.played ?? row.matchesPlayed ?? row.gamesPlayed ?? row.p ?? 0) || 0;
+  const wins = Number(row.won ?? row.wins ?? row.w ?? 0) || 0;
+  const draws = Number(row.drawn ?? row.draws ?? row.d ?? 0) || 0;
+  const losses = Number(row.lost ?? row.losses ?? row.l ?? 0) || 0;
+  const gf = Number(row.goalsFor ?? row.gf ?? row.goals_for ?? 0) || 0;
+  const ga = Number(row.goalsAgainst ?? row.ga ?? row.goals_against ?? 0) || 0;
+  const gd = Number(row.goalDifference ?? row.gd ?? (gf - ga)) || 0;
+  const pts = Number(row.points ?? row.pts ?? 0) || 0;
+  return {
+    team: row.team || row.teamName || row.name || row.country || 'Equipa',
+    played,
+    wins,
+    draws,
+    losses,
+    gf,
+    ga,
+    gd,
+    pts,
+    points: pts,
+    position: row.position ?? row.rank ?? null,
+    advanced: row.advanced === true,
+    source: 'Zafronix WC API'
+  };
+}
+
+function ggamesNormalizeZafronixStandings(payload) {
+  const rawGroups = payload?.groups || payload?.data?.groups || payload?.standings || payload?.data || {};
+  const entries = Array.isArray(rawGroups)
+    ? rawGroups.map(groupObj => [groupObj.group || groupObj.name || groupObj.letter, groupObj.teams || groupObj.rows || groupObj.standings || groupObj.table || []])
+    : Object.entries(rawGroups);
+
+  return entries
+    .map(([group, rows]) => {
+      const groupLetter = ggamesNormalizeZafronixGroupLetter(group);
+      const teams = (Array.isArray(rows) ? rows : [])
+        .map(ggamesNormalizeZafronixStandingRow)
+        .sort((a, b) => {
+          const pa = a.position == null ? 999 : Number(a.position);
+          const pb = b.position == null ? 999 : Number(b.position);
+          return (pa - pb) || (b.pts - a.pts) || (b.gd - a.gd) || (b.gf - a.gf) || a.team.localeCompare(b.team, 'pt-PT');
+        });
+      return { group: groupLetter, teams, source: 'Zafronix WC API' };
+    })
+    .filter(group => group.group && group.teams.length)
+    .sort((a, b) => a.group.localeCompare(b.group, 'pt-PT'));
+}
+
+async function ggamesLoadZafronixStandings() {
+  const result = { ok: false, groups: [], error: null };
+  try {
+    const payload = await ggamesFetchZafronix('/standings?year=2026');
+    result.groups = ggamesNormalizeZafronixStandings(payload);
+    result.ok = result.groups.length > 0;
+    if (!result.ok) result.error = 'Zafronix respondeu sem grupos.';
+  } catch (error) {
+    result.error = String(error?.message || error);
+    console.warn('Zafronix standings falhou; a usar tabela calculada por jogos/Firebase.', error);
+  }
+  return result;
+}
+
 async function ggamesLoadSportsDb() {
   const result = { ok: false, games: [], groups: [], error: null };
   // Em muitos browsers a fonte bloqueia CORS. Evitamos chamadas diretas que geram erros no console.
@@ -4880,16 +5126,43 @@ async function loadApiWorldCupData({ sync = false } = {}) {
 
   try {
     const canFetchExtra = ggamesCanFetchExtraLiveApis();
-    const [apiFootball, footballData, highlightly, allSports, sofaScore, espn, primary, sportsDb] = await Promise.all([
-      ggamesLoadApiFootball(),
-      canFetchExtra ? ggamesLoadFootballData() : Promise.resolve({ ok: true, games: (worldCupApi.games || []).filter(g => g.source === 'football-data'), cached: true }),
-      canFetchExtra ? ggamesLoadHighlightly() : Promise.resolve({ ok: true, games: (worldCupApi.games || []).filter(g => g.source === 'Highlightly'), cached: true }),
-      canFetchExtra ? ggamesLoadAllSports() : Promise.resolve({ ok: true, games: (worldCupApi.games || []).filter(g => g.source === 'AllSportsAPI'), cached: true }),
-      canFetchExtra ? ggamesLoadSofaScore() : Promise.resolve({ ok: true, games: (worldCupApi.games || []).filter(g => g.source === 'SofaScore'), cached: true }),
-      canFetchExtra ? ggamesLoadEspn() : Promise.resolve({ ok: true, games: (worldCupApi.games || []).filter(g => g.source === 'ESPN'), cached: true }),
+    const cachedLive = (source) => Promise.resolve({ ok: true, games: (worldCupApi.games || []).filter(g => g.source === source), cached: true, skipped: true });
+
+    const [primary, sportsDb, zafronixStandings] = await Promise.all([
       ggamesLoadWorldCup26(),
-      ggamesLoadSportsDb()
+      ggamesLoadSportsDb(),
+      ggamesLoadZafronixStandings()
     ]);
+
+    const apiFootball = await ggamesLoadApiFootball();
+    let footballData = await cachedLive('football-data');
+    let highlightly = await cachedLive('Highlightly');
+    let allSports = await cachedLive('AllSportsAPI');
+    let sofaScore = await cachedLive('SofaScore');
+    let espn = await cachedLive('ESPN');
+
+    // Poupar quotas: só tenta a próxima API de minutos se a anterior não trouxe minuto direto.
+    let foundDirectLiveMinute = ggamesSourceHasDirectLiveMinute(apiFootball);
+    if (canFetchExtra && !foundDirectLiveMinute) {
+      highlightly = await ggamesLoadHighlightly();
+      foundDirectLiveMinute = ggamesSourceHasDirectLiveMinute(highlightly);
+    }
+    if (canFetchExtra && !foundDirectLiveMinute) {
+      footballData = await ggamesLoadFootballData();
+      foundDirectLiveMinute = ggamesSourceHasDirectLiveMinute(footballData);
+    }
+    if (canFetchExtra && !foundDirectLiveMinute) {
+      allSports = await ggamesLoadAllSports();
+      foundDirectLiveMinute = ggamesSourceHasDirectLiveMinute(allSports);
+    }
+    if (canFetchExtra && !foundDirectLiveMinute) {
+      sofaScore = await ggamesLoadSofaScore();
+      foundDirectLiveMinute = ggamesSourceHasDirectLiveMinute(sofaScore);
+    }
+    if (canFetchExtra && !foundDirectLiveMinute) {
+      espn = await ggamesLoadEspn();
+      foundDirectLiveMinute = ggamesSourceHasDirectLiveMinute(espn);
+    }
 
     const externalGames = [
       ...primary.games,
@@ -4907,9 +5180,9 @@ async function loadApiWorldCupData({ sync = false } = {}) {
       : externalGames;
 
     worldCupApi.games = mergedGames;
-    worldCupApi.groups = ggamesBuildGroupsFromCurrentGames(mergedGames);
+    worldCupApi.groups = (zafronixStandings?.groups?.length ? zafronixStandings.groups : ggamesBuildGroupsFromCurrentGames(mergedGames));
     worldCupApi.loaded = true;
-    worldCupApi.error = (!apiFootball.ok && !footballData.ok && !highlightly.ok && !allSports.ok && !sofaScore.ok && !espn.ok && !primary.ok && !sportsDb.ok)
+    worldCupApi.error = (!apiFootball.ok && !footballData.ok && !highlightly.ok && !allSports.ok && !sofaScore.ok && !espn.ok && !primary.ok && !sportsDb.ok && !zafronixStandings.ok)
       ? 'Dados live indisponíveis; modo estimado ativo.'
       : null;
     worldCupApi.lastUpdate = new Date();
@@ -4922,6 +5195,7 @@ async function loadApiWorldCupData({ sync = false } = {}) {
       espn: espn.ok ? (espn.cached ? 'cache' : 'ok') : espn.error,
       primary: primary.ok ? 'ok' : primary.error,
       sportsDb: sportsDb.ok ? 'ok' : sportsDb.error,
+      zafronixStandings: zafronixStandings.ok ? 'ok' : zafronixStandings.error,
       fallback: 'matches.json/Firebase'
     };
 

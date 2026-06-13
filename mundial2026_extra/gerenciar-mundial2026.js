@@ -70,6 +70,27 @@ function resolvedTeam(match, side) {
   return resolvePreviousWinner(raw);
 }
 
+function firebaseTimestampToMillis(value) {
+  if (!value) return null;
+  if (typeof value.toMillis === 'function') return value.toMillis();
+  if (typeof value.seconds === 'number') return (value.seconds * 1000) + Math.floor((value.nanoseconds || 0) / 1000000);
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+  return null;
+}
+
+async function canWriteOfficialMatch(matchId) {
+  const ref = tools.doc(db, MATCHES_COLLECTION, matchDocId(matchId));
+  const snap = await tools.getDoc(ref);
+  if (!snap.exists()) return false;
+  const kickoffMs = firebaseTimestampToMillis(snap.data()?.kickoff);
+  return !!kickoffMs && Date.now() >= kickoffMs + 1000;
+}
+
 async function initFirebase() {
   const appModule = await import(`https://www.gstatic.com/firebasejs/${FIREBASE_SDK_VERSION}/firebase-app.js`);
   const authModule = await import(`https://www.gstatic.com/firebasejs/${FIREBASE_SDK_VERSION}/firebase-auth.js`);
@@ -258,6 +279,11 @@ async function saveOfficialMatch(card) {
   }
   if (isKnockout(match) && Number(homeInput.value) === Number(awayInput.value) && !card.querySelector('[data-field="winnerSide"]').value) {
     msg.textContent = 'Como houve empate, escolhe o vencedor.';
+    msg.className = 'admin-message error';
+    return;
+  }
+  if (!await canWriteOfficialMatch(id)) {
+    msg.textContent = 'O kickoff ainda nao foi ultrapassado. Nao podes gravar este jogo agora.';
     msg.className = 'admin-message error';
     return;
   }
