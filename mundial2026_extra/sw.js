@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ggames-mundial-2026-v30-realtime';
+const CACHE_NAME = 'ggames-mundial-2026-v31-repair';
 
 self.addEventListener('install', event => {
   self.skipWaiting();
@@ -49,7 +49,7 @@ self.addEventListener('fetch', event => {
       return network;
     } catch (error) {
       const cached = await caches.match(request);
-      return cached || new Response('', { status: 204 });
+      return cached || new Response(null, { status: 204 });
     }
   })());
 });

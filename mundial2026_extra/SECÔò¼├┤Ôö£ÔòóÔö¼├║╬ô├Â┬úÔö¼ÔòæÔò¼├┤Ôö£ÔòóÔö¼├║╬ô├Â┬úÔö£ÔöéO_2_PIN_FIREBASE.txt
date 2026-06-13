@@ -1,0 +1,83 @@
+SECÇÃO 2 — Reformulação com PIN
+
+1) PIN dos participantes
+No documento original de cada participante, em worldcupextra/{participantKey}, deve existir:
+
+pin: "482917"
+
+A partir desta versão, novos prognósticos gravados pelo site já recebem automaticamente um PIN de 6 dígitos e o site mostra esse PIN ao jogador no fim da gravação.
+
+2) Janela temporal das reformulações
+Cria/usa este documento:
+
+settings/worldcupReformWindows
+
+Campos recomendados, todos como Timestamp:
+
+dezasseisAvosOpen
+dezasseisAvosClose
+oitavosOpen
+oitavosClose
+quartosOpen
+quartosClose
+meiasOpen
+meiasClose
+terceiroLugarOpen
+terceiroLugarClose
+finalOpen
+finalClose
+
+O botão “Reformular prognósticos...” só aparece no site quando a hora atual estiver dentro de uma dessas janelas.
+
+3) Onde grava
+As reformulações ficam em nova coleção:
+
+worldcupextraReforms
+
+Exemplo de documento:
+
+andre-henriques_round32_73
+
+Campos principais:
+- participantKey
+- participantName
+- stage
+- matchId
+- homeTeam
+- awayTeam
+- mode: "replicate" ou "changed"
+- homeGoals
+- awayGoals
+- method
+- winnerTeam
+- pinVerified: true
+- updatedAt
+
+4) Regras Firestore necessárias
+Adiciona esta lógica às tuas regras, adaptando se necessário ao teu ficheiro atual:
+
+function reformWindowIsOpen(stage) {
+  let w = get(/databases/$(database)/documents/settings/worldcupReformWindows).data;
+  return exists(/databases/$(database)/documents/settings/worldcupReformWindows) && (
+    (stage == 'round32' && request.time >= w.dezasseisAvosOpen && request.time < w.dezasseisAvosClose) ||
+    (stage == 'round16' && request.time >= w.oitavosOpen && request.time < w.oitavosClose) ||
+    (stage == 'quarterfinals' && request.time >= w.quartosOpen && request.time < w.quartosClose) ||
+    (stage == 'semifinals' && request.time >= w.meiasOpen && request.time < w.meiasClose) ||
+    (stage == 'third_place' && request.time >= w.terceiroLugarOpen && request.time < w.terceiroLugarClose) ||
+    (stage == 'final' && request.time >= w.finalOpen && request.time < w.finalClose)
+  );
+}
+
+match /worldcupextraReforms/{docId} {
+  allow read: if true;
+  allow create, update: if request.resource.data.status == 'section2'
+    && request.resource.data.type == 'knockoutRevision'
+    && request.resource.data.participantKey is string
+    && request.resource.data.participantName is string
+    && request.resource.data.stage is string
+    && request.resource.data.matchId is int
+    && reformWindowIsOpen(request.resource.data.stage);
+  allow delete: if isAdmin();
+}
+
+Nota: o PIN é validado no site antes de gravar. Para segurança máxima, o ideal futuro seria Cloud Function/PIN hash, porque regras Firestore não devem comparar PIN público em texto simples.

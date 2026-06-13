@@ -206,6 +206,19 @@
     return new Date(`${match.date}T${match.time || '12:00'}:00`);
   }
 
+  function kickoffToMillis(value) {
+    if (!value) return null;
+    if (typeof value.toMillis === 'function') return value.toMillis();
+    if (typeof value.seconds === 'number') return (value.seconds * 1000) + Math.floor((value.nanoseconds || 0) / 1000000);
+    if (value instanceof Date) return value.getTime();
+    if (typeof value === 'number') return value;
+    if (typeof value === 'string') {
+      const parsed = Date.parse(value);
+      return Number.isNaN(parsed) ? null : parsed;
+    }
+    return null;
+  }
+
   function escapeHtml(value) {
     return String(value ?? '').replace(/[&<>'"]/g, ch => ({
       '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#039;', '"':'&quot;'
@@ -337,6 +350,14 @@
 
       for (const match of matches) {
         const ref = tools.doc(db, 'worldcupextraMatches', padId(match.id));
+        const snap = await tools.getDoc(ref);
+        if (snap.exists()) {
+          const existingKickoffMs = kickoffToMillis(snap.data()?.kickoff);
+          if (existingKickoffMs && Date.now() < existingKickoffMs + 1000) {
+            log(`Jogo ${match.id}: kickoff ainda nao chegou, a gravacao foi ignorada.`, 'warn');
+            continue;
+          }
+        }
         batch.set(ref, matchPayload(match), { merge: true });
         count++;
         batchCount++;

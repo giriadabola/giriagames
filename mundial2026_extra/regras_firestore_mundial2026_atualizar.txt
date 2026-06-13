@@ -158,9 +158,18 @@ match /settings/worldcupScoringRules {
 
 // Horários oficiais dos jogos usados para bloquear escolhas de marcadores/battles.
 // Colocar dentro de match /databases/{database}/documents { ... }
+function matchKickoffPassed(matchId) {
+  return exists(/databases/$(database)/documents/worldcupextraMatches/$(matchId < 10 ? 'match_00' + string(matchId) : matchId < 100 ? 'match_0' + string(matchId) : 'match_' + string(matchId)))
+    && request.time >= get(/databases/$(database)/documents/worldcupextraMatches/$(matchId < 10 ? 'match_00' + string(matchId) : matchId < 100 ? 'match_0' + string(matchId) : 'match_' + string(matchId))).data.kickoff + duration.value(1, 's');
+}
+
 match /worldcupextraMatches/{matchDocId} {
   allow read: if true;
-  allow create, update, delete: if isAdmin();
+  allow create: if isAdmin() && (
+    matchDocId.matches('^match_[0-9]{3}$') ||
+    (matchDocId.matches('^official-match-[0-9]+$') && request.resource.data.matchId is int && matchKickoffPassed(request.resource.data.matchId))
+  );
+  allow update, delete: if isAdmin() && resource.data.matchId is int && matchKickoffPassed(resource.data.matchId);
 }
 
 match /worldcupextraLiveBattles/{battleId} {
