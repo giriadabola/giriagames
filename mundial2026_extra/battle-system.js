@@ -830,6 +830,24 @@
         .slice(0, 12);
     }
 
+    // Se não há jogo em LIVE, mostrar as battles do jogo imediatamente anterior ao próximo jogo futuro
+    const source = (worldCupApi?.games && worldCupApi.games.length)
+      ? worldCupApi.games
+      : (data?.matches || []).map(m => ({...m, id: String(m.id), homeTeam: m.home, awayTeam: m.away, homeGoals: null, awayGoals: null, finished: false, live: false}));
+    const futureMatches = source.filter(g => !g.finished && !g.live && getMatchDateObj({ date: g.date, time: g.time }) >= now);
+
+    if (futureMatches.length) {
+      const nextMatchId = Number(futureMatches[0].id);
+      const prevMatchesBattles = ggamesBattleDocs.filter(b => Number(b.matchId) < nextMatchId);
+      if (prevMatchesBattles.length) {
+        const maxPrevMatchId = Math.max(...prevMatchesBattles.map(b => Number(b.matchId)));
+        return ggamesBattleDocs
+          .filter(b => Number(b.matchId) === maxPrevMatchId)
+          .sort((a, b) => Number(a.createdOrder || 0) - Number(b.createdOrder || 0))
+          .slice(0, 12);
+      }
+    }
+
     const playable = ggamesBattleDocs.filter(b => {
       const m = localMatch(b.matchId);
       if (!m) return false;
@@ -891,9 +909,16 @@
 
   function generatedFallbackBattles(rows) {
     const liveMatch = (worldCupApi?.games || []).find(game => game.live && !game.finished && game.id);
-    const futureMatches = data?.matches?.filter(match => !getOfficialResult(match.id) && getMatchDateObj(match) >= new Date()) || [];
+    const now = new Date();
+    const source = (worldCupApi?.games && worldCupApi.games.length)
+      ? worldCupApi.games
+      : (data?.matches || []).map(m => ({...m, id: String(m.id), homeTeam: m.home, awayTeam: m.away, homeGoals: null, awayGoals: null, finished: false, live: false}));
+    const futureMatches = source.filter(g => !g.finished && !g.live && getMatchDateObj({ date: g.date, time: g.time }) >= now);
     if (!liveMatch && !futureMatches.length) return [];
-    const match = liveMatch ? { id: liveMatch.id, stage: liveMatch.stage, home: liveMatch.homeTeam, away: liveMatch.awayTeam } : futureMatches[0];
+    const nextGame = futureMatches[0];
+    const match = liveMatch
+      ? { id: liveMatch.id, stage: liveMatch.stage, home: liveMatch.homeTeam, away: liveMatch.awayTeam }
+      : { id: nextGame.id, stage: nextGame.stage, home: nextGame.homeTeam || nextGame.home, away: nextGame.awayTeam || nextGame.away };
     const sorted = rows.slice().sort((a, b) => a.rank - b.rank);
     const battles = [];
     for (let i = 0; i < sorted.length - 1; i += 2) {
