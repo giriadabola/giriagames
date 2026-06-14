@@ -170,11 +170,11 @@ async function loadOfficialMatchStateDocs() {
   const legacyOfficialDocs = allDocs
     .filter(doc => doc.status === 'official' || doc.type === 'officialResult')
     .filter(doc => doc.matchId != null || doc.id?.startsWith?.('official-match-'))
-    .map(doc => [String(doc.matchId ?? String(doc.id).replace('official-match-', '')), doc]);
+    .map(doc => [String(doc.matchId ?? String(doc.id).replace('official-match-', '')), { ...doc, _officialSource: 'firestore' }]);
   const matchStateDocs = (matchesSnapshot?.docs || [])
     .map(doc => normalizeMatchStateDoc(doc.id, doc.data()))
     .filter(shouldTrackMatchDocAsOfficial)
-    .map(doc => [String(doc.matchId), doc]);
+    .map(doc => [String(doc.matchId), { ...doc, _officialSource: 'firestore' }]);
   return {
     allDocs,
     officialByMatchId: Object.fromEntries([...legacyOfficialDocs, ...matchStateDocs])
@@ -1570,7 +1570,7 @@ function mergeApiResultsIntoOfficialResults() {
     if (!hasScore) return;
     if (!game.live && !game.finished) return;
     const existing = officialResults[String(game.id)];
-    if (!existing || game.live || game.finished) {
+    if (!existing || existing._officialSource !== 'firestore') {
       officialResults[String(game.id)] = {
         ...existing,
         ...game,
@@ -1578,7 +1578,8 @@ function mergeApiResultsIntoOfficialResults() {
         type: 'officialResult',
         source: 'api-live',
         _live: game.live,
-        _finished: game.finished
+        _finished: game.finished,
+        _officialSource: 'apiOverlay'
       };
     }
   });
@@ -2703,13 +2704,18 @@ function openGgamesPlayerHistory(playerId) {
   const historyRows = predictions.map(pred => {
     const match = data?.matches?.find(m => String(m.id) === String(pred.id)) || {};
     const official = getOfficialResult(pred.id);
-    const score = official ? scoreOnePrediction(pred, official) : null;
+    const isLive = !!official && isOfficialResultLive(official) && !isOfficialResultFinished(official);
+    const score = official && isOfficialResultFinished(official) ? scoreOnePrediction(pred, official) : null;
     const status = official
-      ? (score?.points > 0 ? 'Acertou' : 'Falhou')
+      ? (isLive ? 'Live' : (score?.points > 0 ? 'Acertou' : 'Falhou'))
       : 'Por jogar';
-    const statusClass = official ? (score?.points > 0 ? 'ok' : 'bad') : 'wait';
+    const statusClass = official
+      ? (isLive ? 'wait' : (score?.points > 0 ? 'ok' : 'bad'))
+      : 'wait';
     const officialText = official
-      ? `${escapeHtml(official.homeTeam || match.home || '')} ${official.homeGoals ?? official.homeScore ?? 0}-${official.awayGoals ?? official.awayScore ?? 0} ${escapeHtml(official.awayTeam || match.away || '')}`
+      ? (isLive
+        ? 'Live'
+        : `${escapeHtml(official.homeTeam || match.home || '')} ${official.homeGoals ?? official.homeScore ?? 0}-${official.awayGoals ?? official.awayScore ?? 0} ${escapeHtml(official.awayTeam || match.away || '')}`)
       : 'Ainda sem resultado oficial';
     return `
       <tr>
@@ -3211,7 +3217,7 @@ function calculateGgamesTable() {
     };
     (item.matches || []).forEach(pred => {
       const official = getOfficialResult(pred.id);
-      if (!official) return;
+      if (!official || !isOfficialResultFinished(official)) return;
       const score = scoreOnePrediction(pred, official);
       stats.points += score.points;
       stats.correctPredictions += score.points > 0 ? 1 : 0;
