@@ -1,0 +1,950 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gerir Battles de Jogos Realizados — Ggames</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #061120;
+      --panel: #0b1b31;
+      --panel2: #10233d;
+      --line: rgba(148,163,184,.25);
+      --text: #ecfdf5;
+      --muted: #9fb2ca;
+      --accent: #61d394;
+      --danger: #fb7185;
+      --warn: #fbbf24;
+      --gold: #f8c14a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, Segoe UI, sans-serif;
+      background: radial-gradient(circle at 0 0, rgba(97,211,148,.18), transparent 30%), var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    main { width: min(1220px, calc(100% - 28px)); margin: 0 auto; padding: 28px 0 50px; }
+    .top {
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: flex-start;
+      margin-bottom: 18px;
+    }
+    h1 { margin: 0 0 8px; font-size: clamp(1.8rem, 5vw, 3rem); }
+    p { color: var(--muted); line-height: 1.55; }
+    .card {
+      background: linear-gradient(180deg, rgba(16,35,61,.92), rgba(8,20,39,.92));
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      padding: 18px;
+      box-shadow: 0 25px 70px rgba(0,0,0,.26);
+      margin: 16px 0;
+    }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    button, input, select {
+      font: inherit;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: #0b1b31;
+      color: var(--text);
+      padding: 11px 14px;
+    }
+    button {
+      cursor: pointer;
+      font-weight: 800;
+      background: linear-gradient(135deg, var(--accent), var(--gold));
+      color: #052015;
+      border: 0;
+      transition: opacity 0.2s ease, transform 0.1s ease;
+    }
+    button:hover {
+      opacity: 0.95;
+      transform: translateY(-1px);
+    }
+    button:active {
+      transform: translateY(1px);
+    }
+    button.secondary { background: #122642; color: var(--text); border: 1px solid var(--line); }
+    button.danger { background: linear-gradient(135deg, #fb7185, #f97316); color: #fff; }
+    button:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+    .status {
+      white-space: pre-wrap;
+      background: #071529;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 14px;
+      color: var(--muted);
+      max-height: 260px;
+      overflow: auto;
+    }
+    .good { color: var(--accent); }
+    .bad { color: var(--danger); }
+    .warn { color: var(--warn); }
+    table { width: 100%; border-collapse: collapse; min-width: 900px; }
+    th, td { padding: 12px 10px; border-bottom: 1px solid rgba(148,163,184,.16); text-align: left; font-size: .92rem; }
+    th { color: #d8fbe7; position: sticky; top: 0; background: #0b1b31; z-index: 1; }
+    .table-wrap { overflow: auto; max-height: 520px; border: 1px solid var(--line); border-radius: 18px; }
+    
+    .match-row-registered {
+      background: rgba(97, 211, 148, 0.08) !important;
+      border-left: 4px solid var(--accent);
+    }
+    .match-row-pending {
+      background: rgba(251, 113, 133, 0.08) !important;
+      border-left: 4px solid var(--danger);
+    }
+    
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 9px;
+      border-radius: 999px;
+      font-weight: 800;
+      font-size: .8rem;
+    }
+    .pill.registered {
+      background: rgba(97, 211, 148, 0.15);
+      color: #61d394;
+    }
+    .pill.pending {
+      background: rgba(251, 113, 133, 0.15);
+      color: #fb7185;
+    }
+    .hidden { display: none !important; }
+    .small { font-size: .86rem; }
+    code { background: rgba(255,255,255,.08); padding: 2px 6px; border-radius: 8px; }
+    
+    .btn-action-icon {
+      padding: 6px 12px;
+      font-size: 0.9rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn-generate {
+      background: linear-gradient(135deg, var(--gold), #f59e0b);
+      color: #3f1e00;
+    }
+    .btn-save {
+      background: linear-gradient(135deg, var(--accent), #10b981);
+      color: #062015;
+    }
+    
+    .battle-preview-box {
+      margin-top: 14px;
+      padding: 14px;
+      background: rgba(16, 35, 61, 0.5);
+      border: 1px dashed var(--line);
+      border-radius: 14px;
+    }
+    .battle-preview-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 10px;
+      margin-top: 8px;
+    }
+    .preview-card {
+      background: #091629;
+      border: 1px solid rgba(148, 163, 184, 0.15);
+      border-radius: 12px;
+      padding: 10px 12px;
+      font-size: 0.88rem;
+    }
+    .preview-card.finished-win-a {
+      border-left: 3px solid #61d394;
+    }
+    .preview-card.finished-win-b {
+      border-left: 3px solid #f8c14a;
+    }
+    .preview-card.finished-draw {
+      border-left: 3px solid #64748b;
+    }
+    .preview-card-head {
+      display: flex;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      padding-bottom: 4px;
+      margin-bottom: 6px;
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+    .preview-duel-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .preview-player {
+      display: flex;
+      flex-direction: column;
+      max-width: 42%;
+    }
+    .preview-player.winner {
+      color: var(--accent);
+      font-weight: bold;
+    }
+    .preview-score {
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+    .vs-divider {
+      font-weight: 800;
+      color: rgba(255,255,255,0.2);
+    }
+  </style>
+</head>
+<body>
+<main>
+  <div class="top">
+    <div>
+      <h1>Gerir Battles de Jogos Realizados</h1>
+      <p>Gere e grave no Firebase as Live Battles para jogos que já terminaram, calculando os vencedores automaticamente.</p>
+    </div>
+    <div class="actions">
+      <button id="loadBtn" type="button">Carregar dados</button>
+      <button id="loginBtn" class="secondary" type="button">Entrar com Google</button>
+      <button id="logoutBtn" class="secondary hidden" type="button">Sair</button>
+    </div>
+  </div>
+<section class="card">
+    <h2>Estado e Credenciais</h2>
+    <p class="small">Requer estatuto <strong>ruler</strong> ou <strong>estafeta</strong> no documento <code>users/{uid}</code> para gravar no Firebase.</p>
+    <div id="status" class="status">A preparar...</div>
+  </section>
+  <section class="card">
+    <h2>Todos os Jogos do Torneio</h2>
+    <p>As linhas ficam verdes se o jogo já tiver as battles registadas ou vermelhas se não tiver.</p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Jogo</th>
+            <th>Confronto</th>
+            <th>Resultado</th>
+            <th>Ações</th>
+          </tr>
+        </thead>
+        <tbody id="matchesTable">
+          <tr><td colspan="4" style="text-align:center;color:var(--muted)">Clica em "Carregar dados" para começar.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="previewSection" class="card hidden">
+    <h2>Pré-visualização das Battles Geradas</h2>
+    <p id="previewMatchTitle" style="font-weight:bold;color:var(--gold);"></p>
+    <div class="actions" style="margin-bottom:12px;">
+      <button id="saveBatchBtn" class="btn-save" type="button">Gravar no Firebase</button>
+      <button id="cancelPreviewBtn" class="secondary" type="button">Cancelar</button>
+    </div>
+    <div id="previewContainer" class="battle-preview-grid"></div>
+  </section>
+</main>
+
+<script type="module">
+  const FIREBASE_CONFIG = {
+    apiKey: 'AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0',
+    authDomain: 'g-games-8a8fc.firebaseapp.com',
+    projectId: 'g-games-8a8fc',
+    storageBucket: 'g-games-8a8fc.firebasestorage.app',
+    messagingSenderId: '689897349449',
+    appId: '1:689897349449:web:536599794579901beb7a98',
+    measurementId: 'G-GTTPJ6G5MD'
+  };
+
+  const SDK_VERSION = '10.14.1';
+  const API_URL = 'https://worldcup26.ir';
+  const PRED_COLLECTION = 'worldcupextra';
+  const BATTLES_COLLECTION = 'worldcupextraLiveBattles';
+  const MATCHES_MARKER_COLLECTION = 'worldcupextraLiveBattleMatches';
+  const SCORERS_COLLECTION = 'worldcupextraBattleScorers';
+
+  const statusEl = document.querySelector('#status');
+  const tableEl = document.querySelector('#matchesTable');
+  const previewSection = document.querySelector('#previewSection');
+  const previewMatchTitle = document.querySelector('#previewMatchTitle');
+  const previewContainer = document.querySelector('#previewContainer');
+  const saveBatchBtn = document.querySelector('#saveBatchBtn');
+  const cancelPreviewBtn = document.querySelector('#cancelPreviewBtn');
+  const loadBtn = document.querySelector('#loadBtn');
+  const loginBtn = document.querySelector('#loginBtn');
+  const logoutBtn = document.querySelector('#logoutBtn');
+
+  let app, db, auth, tools;
+  let matches = [];
+  let predictions = [];
+  let officialResults = {};
+  let firebaseBattles = [];
+  let firebaseMarkers = [];
+  let apiGames = [];
+  let firestoreMatches = {};
+  let currentUser = null;
+  let isAdmin = false;
+
+  // Variável para guardar as battles geradas em memória que estão em preview
+  let activePreviewMatchId = null;
+  let activePreviewBattlesList = [];
+
+  const stageLabels = {
+    groups: 'Fase de grupos',
+    round32: '16 avos',
+    round16: 'Oitavos',
+    quarterfinals: 'Quartos',
+    semifinals: 'Meias',
+    third_place: '3.º/4.º lugar',
+    final: 'Final'
+  };
+
+  function log(message, type = '') {
+    const prefix = type === 'bad' ? '❌ ' : type === 'good' ? '✅ ' : type === 'warn' ? '⚠️ ' : '• ';
+    statusEl.textContent += `\n${prefix}${message}`;
+    statusEl.scrollTop = statusEl.scrollHeight;
+  }
+
+  function setStatus(message) {
+    statusEl.textContent = message;
+  }
+
+  function norm(s) {
+    return String(s || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  }
+
+  const keyOf = p => p.participantKey || norm(p.participantName || p.name || p.id);
+
+  function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>'"]/g, ch => ({
+      '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#039;', '"':'&quot;'
+    }[ch]));
+  }
+
+  async function initFirebase() {
+    const appM = await import(`https://www.gstatic.com/firebasejs/${SDK_VERSION}/firebase-app.js`);
+    const fs = await import(`https://www.gstatic.com/firebasejs/${SDK_VERSION}/firebase-firestore.js`);
+    const au = await import(`https://www.gstatic.com/firebasejs/${SDK_VERSION}/firebase-auth.js`);
+
+    app = appM.initializeApp(FIREBASE_CONFIG);
+    db = fs.getFirestore(app);
+    auth = au.getAuth(app);
+
+    tools = {
+      collection: fs.collection,
+      getDocs: fs.getDocs,
+      doc: fs.doc,
+      getDoc: fs.getDoc,
+      setDoc: fs.setDoc,
+      writeBatch: fs.writeBatch,
+      serverTimestamp: fs.serverTimestamp,
+      GoogleAuthProvider: au.GoogleAuthProvider,
+      signInWithPopup: au.signInWithPopup,
+      signOut: au.signOut,
+      onAuthStateChanged: au.onAuthStateChanged
+    };
+
+    tools.onAuthStateChanged(auth, async u => {
+      currentUser = u;
+      isAdmin = false;
+      if (!u) {
+        setStatus('Não autenticado. Entra com Google para ter permissões de escrita.');
+        updateButtons();
+        return;
+      }
+      setStatus(`Autenticado: ${u.email || u.uid}. A verificar estatuto...`);
+      try {
+        const snap = await tools.getDoc(tools.doc(db, 'users', u.uid));
+        const estatuto = snap.exists() ? snap.data().estatuto : '';
+        isAdmin = ['ruler', 'estafeta'].includes(estatuto);
+        log(isAdmin ? `Estatuto confirmado: ${estatuto}. Escrita permitida.` : `Sem permissão ruler/estafeta.`, isAdmin ? 'good' : 'bad');
+      } catch (err) {
+        log(`Erro a validar estatuto: ${err.message}`, 'bad');
+      }
+      updateButtons();
+    });
+  }
+
+  function updateButtons() {
+    loginBtn.classList.toggle('hidden', !!currentUser);
+    logoutBtn.classList.toggle('hidden', !currentUser);
+    saveBatchBtn.disabled = !isAdmin || !activePreviewBattlesList.length;
+  }
+
+  // --- FUNÇÕES DE CÁLCULO / RANKING ---
+  function scoreOnePrediction(pred, official) {
+    if (!pred || !official || pred.homeGoals == null || pred.awayGoals == null || official.homeGoals == null || official.awayGoals == null || official.homeGoals === '' || official.awayGoals === '') {
+      return { points: 0, exact: false };
+    }
+    const ph = Number(pred.homeGoals);
+    const pa = Number(pred.awayGoals);
+    const oh = Number(official.homeGoals);
+    const oa = Number(official.awayGoals);
+    
+    const outcomeHit = (ph > pa && oh > oa) || (pa > ph && oa > oh) || (ph === pa && oh === oa);
+    const exact = ph === oh && pa === oa;
+    
+    // Simplificado seguindo o padrão de pontuação base Ggames
+    let points = 0;
+    if (exact) points = 3;
+    else if (outcomeHit) points = 1;
+    
+    return { points, exact };
+  }
+
+  function calculateRanks() {
+    const rows = predictions.map(item => {
+      const stats = {
+        id: item.id,
+        name: item.participantName || 'Participante',
+        participantKey: keyOf(item),
+        points: 0,
+        correctPredictions: 0
+      };
+      (item.matches || []).forEach(pred => {
+        const official = getOfficialResult(pred.id);
+        if (!official) return;
+        const score = scoreOnePrediction(pred, official);
+        stats.points += score.points;
+        stats.correctPredictions += score.points > 0 ? 1 : 0;
+      });
+      return stats;
+    });
+
+    return rows.sort((a, b) => (b.points - a.points) || (b.correctPredictions - a.correctPredictions) || a.name.localeCompare(b.name, 'pt-PT'))
+               .map((row, index) => ({ ...row, rank: index + 1 }));
+  }
+
+  function getOfficialResult(matchId) {
+    const key = String(matchId);
+    
+    // Prioridade 1: worldcupextraMatches do Firestore
+    const fsMatch = firestoreMatches[key];
+    if (fsMatch && fsMatch.finished && fsMatch.homeGoals != null && fsMatch.awayGoals != null) {
+      return {
+        matchId: Number(matchId),
+        homeGoals: Number(fsMatch.homeGoals),
+        awayGoals: Number(fsMatch.awayGoals),
+        finished: true
+      };
+    }
+
+    // Prioridade 2: API Games
+    const api = apiGames.find(g => String(g.id) === key);
+    if (api && api.home_score != null && api.away_score != null) {
+      return {
+        matchId: Number(matchId),
+        homeGoals: Number(api.home_score),
+        awayGoals: Number(api.away_score),
+        finished: Boolean(api.finished)
+      };
+    }
+
+    // Prioridade 3: Fallback legado no worldcupextra
+    const localOfficial = officialResults[key];
+    return localOfficial || null;
+  }
+
+  // --- CARREGAMENTO DE DADOS ---
+  async function loadAll() {
+    setStatus('A carregar dados do Firebase e ficheiro local...');
+    try {
+      // 1. matches.json
+      const mRes = await fetch('matches.json', { cache: 'no-store' });
+      const mData = await mRes.json();
+      matches = Array.isArray(mData.matches) ? mData.matches : mData;
+
+      // 2. API Games (para resultados em tempo real / finalizados)
+      try {
+        const apiRes = await fetch(`${API_URL}/get/games`, { cache: 'no-store' });
+        const api = await apiRes.json();
+        apiGames = Array.isArray(api) ? api : (api.data || api.games || []);
+      } catch (err) {
+        log('API externa de jogos falhou. Usaremos apenas resultados guardados.', 'warn');
+      }
+
+      // 3. worldcupextraMatches do Firestore (resultados oficiais definitivos)
+      firestoreMatches = {};
+      try {
+        const mSnap = await tools.getDocs(tools.collection(db, 'worldcupextraMatches'));
+        mSnap.docs.forEach(doc => {
+          const d = doc.data();
+          const matchIdStr = String(d.matchId || doc.id.replace('match_', ''));
+          if (matchIdStr) {
+            firestoreMatches[matchIdStr] = d;
+          }
+        });
+      } catch (err) {
+        log('Não foi possível carregar os jogos do worldcupextraMatches do Firestore.', 'warn');
+      }
+
+      // 4. Predictions e resultados no Firebase
+      const predSnap = await tools.getDocs(tools.collection(db, PRED_COLLECTION));
+      const allDocs = predSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+      predictions = allDocs.filter(doc => doc.status !== 'official' && doc.type !== 'officialResult' && Array.isArray(doc.matches));
+      officialResults = Object.fromEntries(
+        allDocs.filter(doc => (doc.status === 'official' || doc.type === 'officialResult') && (doc.matchId != null || String(doc.id).startsWith('official-match-')))
+               .map(doc => [String(doc.matchId ?? String(doc.id).replace('official-match-', '')), doc])
+      );
+
+      // 5. Battles Existentes e marcadores
+      const bSnap = await tools.getDocs(tools.collection(db, BATTLES_COLLECTION));
+      firebaseBattles = bSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+      const markerSnap = await tools.getDocs(tools.collection(db, MATCHES_MARKER_COLLECTION));
+      firebaseMarkers = markerSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+      log(`Dados carregados: ${predictions.length} jogadores, ${matches.length} jogos totais.`, 'good');
+      renderMatches();
+    } catch (error) {
+      log(`Erro no carregamento: ${error.message}`, 'bad');
+    }
+  }
+
+  function getMatchFinishedState(match) {
+    const official = getOfficialResult(match.id);
+    if (official && (official.finished || official.homeGoals != null)) {
+      return {
+        finished: true,
+        homeGoals: official.homeGoals,
+        awayGoals: official.awayGoals
+      };
+    }
+    // Fallback por fuso horário (se a hora do jogo já passou há mais de 3 horas)
+    const kickoff = new Date(`${match.date}T${match.time || '12:00'}:00`);
+    const limit = new Date(kickoff.getTime() + 3 * 60 * 60 * 1000);
+    if (new Date() > limit) {
+      return { finished: true, homeGoals: 0, awayGoals: 0, fallback: true };
+    }
+    return { finished: false };
+  }
+
+  function isMatchRegistered(matchId) {
+    // Só marcamos como registado se existirem de facto documentos na coleção worldcupextraLiveBattles
+    return firebaseBattles.some(b => Number(b.matchId) === Number(matchId));
+  }
+
+  function renderMatches() {
+    if (!matches.length) {
+      tableEl.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--muted)">Nenhum jogo disponível.</td></tr>`;
+      return;
+    }
+
+    tableEl.innerHTML = matches.map(match => {
+      const isReg = isMatchRegistered(match.id);
+      const stateInfo = getMatchFinishedState(match);
+      const scoreText = stateInfo.finished 
+        ? (stateInfo.fallback ? 'Terminado' : `${stateInfo.homeGoals} - ${stateInfo.awayGoals}`) 
+        : 'Por jogar';
+      
+      const rowClass = isReg ? 'match-row-registered' : 'match-row-pending';
+
+      let actionHtml = '';
+      if (!isReg) {
+        actionHtml = `<button class="btn-action-icon btn-generate" onclick="window.previewAndGenerate(${match.id})">⚡ Gerar Battles</button>`;
+      } else {
+        actionHtml = `
+          <button class="btn-action-icon secondary" onclick="window.viewRegisteredBattles(${match.id})">👁️ Ver</button>
+          <button class="btn-action-icon secondary" style="background: linear-gradient(135deg, var(--warn), #f59e0b); color: #3f1e00; border: none; margin-left: 6px;" onclick="window.previewAndGenerate(${match.id})">🔄 Recalcular</button>
+        `;
+      }
+
+      const homeUpper = String(match.home || match.homeTeam || '').toUpperCase();
+      const awayUpper = String(match.away || match.awayTeam || '').toUpperCase();
+
+      return `
+        <tr class="${rowClass}">
+          <td><b>Jogo ${match.id}</b></td>
+          <td style="font-size: 1.05rem; letter-spacing: 0.5px;"><strong>${homeUpper} X ${awayUpper}</strong></td>
+          <td><b>${scoreText}</b></td>
+          <td>${actionHtml}</td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  // --- ALGORITMO DE GERAÇÃO E COMPATIBILIDADE ---
+  function predictionOutcome(pred) {
+    if (!pred) return '';
+    const h = Number(pred.homeGoals);
+    const a = Number(pred.awayGoals);
+    return h > a ? 'home' : a > h ? 'away' : 'draw';
+  }
+
+  function predictionScoreKey(pred) {
+    if (!pred) return '';
+    return `${Number(pred.homeGoals)}-${Number(pred.awayGoals)}-${pred.winnerTeam || ''}`;
+  }
+
+  function savedLiveBattlePairScore(a, b, matchId, indexA, indexB) {
+    const diffOutcome = predictionOutcome(a.pred) !== predictionOutcome(b.pred);
+    const diffScore = predictionScoreKey(a.pred) !== predictionScoreKey(b.pred);
+    const diffWinner = String(a.pred?.winnerTeam || '') !== String(b.pred?.winnerTeam || '');
+    const rankGap = Math.abs(Number(a.row.rank || indexA) - Number(b.row.rank || indexB));
+    const seed = Number(matchId || 0);
+    const rotation = ((indexA + 1) * 19 + (indexB + 1) * 29 + seed * 11) % 23;
+
+    let score = 0;
+    if (diffOutcome) score += 120;
+    if (diffWinner) score += 80;
+    if (diffScore) score += 45;
+    score += Math.max(0, 35 - rankGap);
+    score += rotation / 10;
+    return score;
+  }
+
+  function buildLiveBattlePairs(rows, match, limit = 8) {
+    const candidates = rows
+      .map((row, index) => {
+        const player = predictions.find(p => keyOf(p) === row.participantKey || String(p.id) === String(row.id));
+        const pred = (player?.matches || []).find(m => Number(m.id) === Number(match.id));
+        return player && pred ? { row, player, pred, index } : null;
+      })
+      .filter(Boolean);
+
+    const allPairs = [];
+    for (let i = 0; i < candidates.length; i++) {
+      for (let j = i + 1; j < candidates.length; j++) {
+        const a = candidates[i];
+        const b = candidates[j];
+        allPairs.push({ a, b, score: savedLiveBattlePairScore(a, b, match.id, i, j) });
+      }
+    }
+
+    allPairs.sort((x, y) => y.score - x.score);
+
+    const selected = [];
+    const usedPlayers = new Set();
+
+    for (const pair of allPairs) {
+      const keyA = String(pair.a.row.id);
+      const keyB = String(pair.b.row.id);
+      if (usedPlayers.has(keyA) || usedPlayers.has(keyB)) continue;
+      selected.push(pair);
+      usedPlayers.add(keyA);
+      usedPlayers.add(keyB);
+      if (selected.length >= limit) break;
+    }
+
+    // fallback para encher o limite se faltarem jogadores com picks sem cruzamento
+    if (selected.length < limit) {
+      const usedPairKeys = new Set(selected.map(pair => [pair.a.row.id, pair.b.row.id].sort().join('|')));
+      for (const pair of allPairs) {
+        const pairKey = [pair.a.row.id, pair.b.row.id].sort().join('|');
+        if (usedPairKeys.has(pairKey)) continue;
+        selected.push(pair);
+        usedPairKeys.add(pairKey);
+        if (selected.length >= limit) break;
+      }
+    }
+
+    return selected;
+  }
+
+  function calculateBattleResultInMemory(battle, official) {
+    if (!official || official.homeGoals == null || official.awayGoals == null) {
+      return { status: 'pending', playerAFactors: 0, playerBFactors: 0, winnerKey: '', draw: true, detailsA: null, detailsB: null };
+    }
+
+    const playerA = predictions.find(p => keyOf(p) === battle.playerAKey);
+    const playerB = predictions.find(p => keyOf(p) === battle.playerBKey);
+    const predA = (playerA?.matches || []).find(m => Number(m.id) === Number(battle.matchId));
+    const predB = (playerB?.matches || []).find(m => Number(m.id) === Number(battle.matchId));
+
+    const computeDetails = (pred) => {
+      if (!pred || pred.homeGoals == null || pred.awayGoals == null) {
+        return { total: 0, predText: 'sem palp.', w: 0, hG: 0, aG: 0, exact: 0 };
+      }
+      const ph = Number(pred.homeGoals);
+      const pa = Number(pred.awayGoals);
+      const oh = Number(official.homeGoals);
+      const oa = Number(official.awayGoals);
+      
+      const w = ((ph > pa && oh > oa) || (pa > ph && oa > oh) || (ph === pa && oh === oa)) ? 1 : 0;
+      const hG = ph === oh ? 1 : 0;
+      const aG = pa === oa ? 1 : 0;
+      const exact = (ph === oh && pa === oa) ? 1 : 0;
+      
+      return {
+        total: w + hG + aG + exact,
+        predText: `${ph}-${pa}`,
+        w,
+        hG,
+        aG,
+        exact
+      };
+    };
+
+    const detA = computeDetails(predA);
+    const detB = computeDetails(predB);
+    const winnerKey = detA.total > detB.total ? battle.playerAKey : detB.total > detA.total ? battle.playerBKey : '';
+
+    return {
+      status: 'finished',
+      playerAFactors: detA.total,
+      playerBFactors: detB.total,
+      winnerKey,
+      draw: !winnerKey,
+      officialHomeGoals: official.homeGoals,
+      officialAwayGoals: official.awayGoals,
+      detailsA: detA,
+      detailsB: detB
+    };
+  }
+
+  // --- PREVIEW E AÇÕES DE GERAÇÃO ---
+  window.previewAndGenerate = function(matchId) {
+    const match = matches.find(m => Number(m.id) === Number(matchId));
+    if (!match) return;
+
+    activePreviewMatchId = matchId;
+    const ranks = calculateRanks();
+    const pairs = buildLiveBattlePairs(ranks, match, 8);
+    const official = getOfficialResult(matchId);
+
+    activePreviewBattlesList = pairs.map((pair, index) => {
+      const a = pair.a.row;
+      const b = pair.b.row;
+      const battleId = `live_match_${String(matchId).padStart(3, '0')}_battle_${String(index + 1).padStart(2, '0')}`;
+      
+      const battleBase = {
+        id: battleId,
+        matchDocId: `match_${String(matchId).padStart(3, '0')}`,
+        matchId: Number(matchId),
+        stage: match.stage || 'groups',
+        group: match.group || null,
+        homeTeam: match.home,
+        awayTeam: match.away,
+        playerAKey: a.participantKey,
+        playerAName: a.name,
+        playerARank: a.rank,
+        playerBKey: b.participantKey,
+        playerBName: b.name,
+        playerBRank: b.rank,
+        createdOrder: index + 1,
+        lockedAtKickoff: true,
+        _contrast: predictionOutcome(pair.a.pred) !== predictionOutcome(pair.b.pred) ? 'Vencedores diferentes' : 'Resultados diferentes'
+      };
+
+      const result = calculateBattleResultInMemory(battleBase, official);
+      return { ...battleBase, ...result };
+    });
+
+    // Renderizar Preview
+    previewMatchTitle.innerHTML = `Jogo ${matchId}: ${match.home} vs ${match.away} (Resultado Oficial: ${official ? `${official.homeGoals}-${official.awayGoals}` : '—'})`;
+    previewContainer.innerHTML = activePreviewBattlesList.map(b => {
+      let cardClass = 'finished-draw';
+      let statusText = 'Empate';
+      if (!b.draw) {
+        if (b.winnerKey === b.playerAKey) {
+          cardClass = 'finished-win-a';
+          statusText = `Vence ${b.playerAName}`;
+        } else {
+          cardClass = 'finished-win-b';
+          statusText = `Vence ${b.playerBName}`;
+        }
+      }
+
+      const renderPlayerDetails = (name, rank, det, isWinner) => {
+        if (!det) return `<div class="preview-player"><span>${name}</span><span class="preview-score">0 pts</span></div>`;
+        const hits = [];
+        if (det.w) hits.push('Desfecho (+1)');
+        if (det.hG) hits.push('Golos Casa (+1)');
+        if (det.aG) hits.push('Golos Fora (+1)');
+        if (det.exact) hits.push('Exato (+1)');
+        const hitsText = hits.length ? hits.join(', ') : 'Nenhum acerto';
+        
+        return `
+          <div class="preview-player ${isWinner ? 'winner' : ''}" style="flex: 1;">
+            <span style="font-weight:600">${name} (#${rank})</span>
+            <span style="color:var(--accent);font-size:0.95rem;font-weight:bold;margin:2px 0;">Palpite: ${det.predText} &nbsp;&rarr;&nbsp; ${det.total} pts</span>
+            <span style="font-size:0.75rem;color:var(--muted);">${hitsText}</span>
+          </div>
+        `;
+      };
+
+      return `
+        <div class="preview-card ${cardClass}">
+          <div class="preview-card-head">
+            <span>Battle #${b.createdOrder}</span>
+            <span>${b._contrast}</span>
+          </div>
+          <div class="preview-duel-row" style="align-items: flex-start; gap: 8px;">
+            ${renderPlayerDetails(b.playerAName, b.playerARank, b.detailsA, b.winnerKey === b.playerAKey)}
+            <span class="vs-divider" style="margin-top:16px;">VS</span>
+            ${renderPlayerDetails(b.playerBName, b.playerBRank, b.detailsB, b.winnerKey === b.playerBKey)}
+          </div>
+          <div style="text-align:center;margin-top:10px;font-size:0.8rem;border-top:1px solid rgba(255,255,255,0.06);padding-top:6px;color:var(--gold)">
+            <b>${statusText}</b>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    previewSection.classList.remove('hidden');
+    previewSection.scrollIntoView({ behavior: 'smooth' });
+    updateButtons();
+  };
+
+  window.viewRegisteredBattles = function(matchId) {
+    const match = matches.find(m => Number(m.id) === Number(matchId));
+    if (!match) return;
+
+    activePreviewMatchId = null;
+    activePreviewBattlesList = [];
+
+    const existing = firebaseBattles.filter(b => Number(b.matchId) === Number(matchId))
+                                    .sort((a,b) => a.createdOrder - b.createdOrder);
+    const official = getOfficialResult(matchId);
+
+    previewMatchTitle.innerHTML = `Jogo ${matchId} (Já gravado no Firebase): ${match.home} vs ${match.away} (Resultado Oficial: ${official ? `${official.homeGoals}-${official.awayGoals}` : '—'})`;
+    previewContainer.innerHTML = existing.map(b => {
+      const fullBattleData = {
+        ...b,
+        playerARank: b.playerARank || '—',
+        playerBRank: b.playerBRank || '—'
+      };
+      const result = calculateBattleResultInMemory(fullBattleData, official);
+
+      let cardClass = 'finished-draw';
+      let statusText = 'Empate';
+      if (!result.draw) {
+        if (result.winnerKey === b.playerAKey) {
+          cardClass = 'finished-win-a';
+          statusText = `Vence ${b.playerAName}`;
+        } else {
+          cardClass = 'finished-win-b';
+          statusText = `Vence ${b.playerBName}`;
+        }
+      }
+
+      const renderPlayerDetails = (name, rank, det, isWinner) => {
+        if (!det) return `<div class="preview-player"><span>${name}</span><span class="preview-score">0 pts</span></div>`;
+        const hits = [];
+        if (det.w) hits.push('Desfecho (+1)');
+        if (det.hG) hits.push('Golos Casa (+1)');
+        if (det.aG) hits.push('Golos Fora (+1)');
+        if (det.exact) hits.push('Exato (+1)');
+        const hitsText = hits.length ? hits.join(', ') : 'Nenhum acerto';
+        
+        return `
+          <div class="preview-player ${isWinner ? 'winner' : ''}" style="flex: 1;">
+            <span style="font-weight:600">${name} (#${rank})</span>
+            <span style="color:var(--accent);font-size:0.95rem;font-weight:bold;margin:2px 0;">Palpite: ${det.predText} &nbsp;&rarr;&nbsp; ${det.total} pts</span>
+            <span style="font-size:0.75rem;color:var(--muted);">${hitsText}</span>
+          </div>
+        `;
+      };
+
+      return `
+        <div class="preview-card ${cardClass}" style="opacity: 0.95;">
+          <div class="preview-card-head">
+            <span>Battle #${b.createdOrder}</span>
+            <span>Existente</span>
+          </div>
+          <div class="preview-duel-row" style="align-items: flex-start; gap: 8px;">
+            ${renderPlayerDetails(b.playerAName, b.playerARank || '—', result.detailsA, result.winnerKey === b.playerAKey)}
+            <span class="vs-divider" style="margin-top:16px;">VS</span>
+            ${renderPlayerDetails(b.playerBName, b.playerBRank || '—', result.detailsB, result.winnerKey === b.playerBKey)}
+          </div>
+          <div style="text-align:center;margin-top:10px;font-size:0.8rem;border-top:1px solid rgba(255,255,255,0.06);padding-top:6px;color:var(--gold)">
+            <b>${statusText}</b>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    previewSection.classList.remove('hidden');
+    previewSection.scrollIntoView({ behavior: 'smooth' });
+    updateButtons();
+  };
+
+  cancelPreviewBtn.onclick = () => {
+    previewSection.classList.add('hidden');
+    activePreviewMatchId = null;
+    activePreviewBattlesList = [];
+    updateButtons();
+  };
+
+  saveBatchBtn.onclick = async () => {
+    if (!isAdmin) {
+      log('Sem permissão de administrador.', 'bad');
+      return;
+    }
+    if (!activePreviewMatchId || !activePreviewBattlesList.length) return;
+
+    saveBatchBtn.disabled = true;
+    log(`A gravar ${activePreviewBattlesList.length} battles do Jogo ${activePreviewMatchId} no Firebase...`);
+
+    try {
+      const batch = tools.writeBatch(db);
+      
+      // 1. Gravar Battles individuais
+      activePreviewBattlesList.forEach(b => {
+        const { id, ...payload } = b;
+        const ref = tools.doc(db, BATTLES_COLLECTION, id);
+        batch.set(ref, {
+          ...payload,
+          updatedAt: tools.serverTimestamp()
+        }, { merge: true });
+      });
+
+      // 2. Criar marcador de jogo finalizado nas battles
+      const match = matches.find(m => Number(m.id) === Number(activePreviewMatchId));
+      const matchDocIdStr = `match_${String(activePreviewMatchId).padStart(3, '0')}`;
+      const markerRef = tools.doc(db, MATCHES_MARKER_COLLECTION, matchDocIdStr);
+      
+      batch.set(markerRef, {
+        matchId: Number(activePreviewMatchId),
+        matchDocId: matchDocIdStr,
+        status: 'finished',
+        battlesCreated: true,
+        battlesCount: activePreviewBattlesList.length,
+        sourceCollection: BATTLES_COLLECTION,
+        stage: match.stage || '',
+        homeTeam: match.home,
+        awayTeam: match.away,
+        createdAt: tools.serverTimestamp(),
+        updatedAt: tools.serverTimestamp()
+      }, { merge: true });
+
+      await batch.commit();
+      log(`Sucesso: Gravadas as battles e marcador para o Jogo ${activePreviewMatchId}!`, 'good');
+      
+      previewSection.classList.add('hidden');
+      activePreviewMatchId = null;
+      activePreviewBattlesList = [];
+      
+      await loadAll();
+    } catch (err) {
+      log(`Erro na gravação: ${err.message}`, 'bad');
+      saveBatchBtn.disabled = false;
+    }
+  };
+
+  loginBtn.onclick = async () => {
+    try {
+      await tools.signInWithPopup(auth, new tools.GoogleAuthProvider());
+    } catch (e) {
+      log(`Erro no login: ${e.message}`, 'bad');
+    }
+  };
+
+  logoutBtn.onclick = async () => {
+    await tools.signOut(auth);
+  };
+
+  loadBtn.onclick = loadAll;
+
+  setStatus('A ligar ao Firebase...');
+  try {
+    await initFirebase();
+    await loadAll();
+  } catch (err) {
+    setStatus(`Erro de inicialização: ${err.message}`);
+  }
+</script>
+</body>
+</html>

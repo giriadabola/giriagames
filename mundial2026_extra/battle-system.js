@@ -244,10 +244,142 @@
     }
   }
 
+  function calculateCurrentRanksForAutoGeneration() {
+    const rows = publicPredictions.map(item => {
+      const stats = {
+        id: item.id,
+        name: item.participantName || 'Participante',
+        participantKey: participantKeyOf(item),
+        points: 0,
+        correctPredictions: 0
+      };
+      (item.matches || []).forEach(pred => {
+        const official = officialWithApi(pred.id);
+        if (!official || official.homeGoals == null || official.awayGoals == null || official.homeGoals === '' || official.awayGoals === '') return;
+        
+        const ph = Number(pred.homeGoals);
+        const pa = Number(pred.awayGoals);
+        const oh = Number(official.homeGoals);
+        const oa = Number(official.awayGoals);
+        
+        const outcomeHit = (ph > pa && oh > oa) || (pa > ph && oa > oh) || (ph === pa && oh === oa);
+        const exact = ph === oh && pa === oa;
+        
+        let pts = 0;
+        if (exact) pts = 3;
+        else if (outcomeHit) pts = 1;
+        
+        stats.points += pts;
+        stats.correctPredictions += pts > 0 ? 1 : 0;
+      });
+      return stats;
+    });
+
+    return rows.sort((a, b) => (b.points - a.points) || (b.correctPredictions - a.correctPredictions) || a.name.localeCompare(b.name, 'pt-PT'))
+               .map((row, index) => ({ ...row, rank: index + 1 }));
+  }
+
+  async function autoGenerateMissingFinishedBattles() {
+    if (!firestoreDb || !firebaseTools || !publicPredictions.length) return;
+    
+    const finishedMatches = (data?.matches || []).filter(match => {
+      const official = officialWithApi(match.id);
+      return official && (official.finished || official.homeGoals != null) && official.homeGoals !== '' && official.awayGoals !== '';
+    });
+
+    let generatedAny = false;
+
+    for (const match of finishedMatches) {
+      const matchId = match.id;
+      const hasBattles = ggamesBattleDocs.some(b => Number(b.matchId) === Number(matchId));
+      if (!hasBattles) {
+        console.log(`Auto-gerar battles para o jogo terminado ${matchId}...`);
+        const ranks = calculateCurrentRanksForAutoGeneration();
+        const pairs = buildSavedDiverseLiveBattlePairs(ranks, { id: matchId }, 8);
+        if (!pairs.length) continue;
+        
+        const created = pairs.map((pair, index) => {
+          const a = pair.a.row;
+          const b = pair.b.row;
+          const battleId = battleDocId(matchId, index + 1);
+          
+          const battleBase = {
+            id: battleId,
+            matchDocId: matchDocId(matchId),
+            matchId: Number(matchId),
+            stage: match.stage || 'groups',
+            group: match.group || null,
+            homeTeam: match.home || match.homeTeam || '',
+            awayTeam: match.away || match.awayTeam || '',
+            playerAKey: a.participantKey,
+            playerAName: a.name,
+            playerARank: a.rank,
+            playerBKey: b.participantKey,
+            playerBName: b.name,
+            playerBRank: b.rank,
+            createdOrder: index + 1,
+            lockedAtKickoff: true,
+            status: 'finished',
+            _contrast: predictionOutcome(pair.a.pred) !== predictionOutcome(pair.b.pred) ? 'Vencedores diferentes' : 'Resultados diferentes'
+          };
+
+          const result = calculateBattleResult(battleBase);
+          return { ...battleBase, ...result };
+        });
+
+        try {
+          await Promise.all(created.map(battleDoc => {
+            const { id, ...payload } = battleDoc;
+            delete payload.playerADetails;
+            delete payload.playerBDetails;
+            return firebaseTools.setDoc(
+              firebaseTools.doc(firestoreDb, LIVE_BATTLES_COLLECTION, id),
+              payload,
+              { merge: true }
+            );
+          }));
+
+          await firebaseTools.setDoc(
+            firebaseTools.doc(firestoreDb, LIVE_BATTLE_MATCHES_COLLECTION, matchDocId(matchId)),
+            {
+              matchId: Number(matchId),
+              matchDocId: matchDocId(matchId),
+              status: 'finished',
+              battlesCreated: true,
+              battlesCount: created.length,
+              sourceCollection: LIVE_BATTLES_COLLECTION,
+              stage: match.stage || '',
+              homeTeam: match.home || '',
+              awayTeam: match.away || '',
+              createdAt: firebaseTools.serverTimestamp ? firebaseTools.serverTimestamp() : new Date().toISOString(),
+              updatedAt: firebaseTools.serverTimestamp ? firebaseTools.serverTimestamp() : new Date().toISOString()
+            },
+            { merge: true }
+          );
+
+          ggamesBattleDocs = [
+            ...ggamesBattleDocs.filter(b => String(b.matchId) !== String(matchId)),
+            ...created
+          ];
+          window.ggamesBattleDocs = ggamesBattleDocs;
+          generatedAny = true;
+          console.log(`Jogo ${matchId}: Battles auto-geradas e gravadas com sucesso.`);
+        } catch (err) {
+          console.warn(`Erro ao auto-gerar battles para o jogo ${matchId}:`, err);
+        }
+      }
+    }
+
+    if (generatedAny && typeof refreshLiveDashboardView === 'function') {
+      refreshLiveDashboardView();
+    }
+  }
+
   const baseLoadPublicPredictionsForBattles = loadPublicPredictions;
   loadPublicPredictions = async function() {
     const result = await baseLoadPublicPredictionsForBattles();
     await loadGgamesBattlesData();
+    await autoGenerateMissingFinishedBattles();
     return result;
   };
 
@@ -255,6 +387,7 @@
 
   function calculateBattleEnhancedRows(options = {}) {
     const includeLive = options.includeLive !== false;
+    const showBw = window.ggamesShowBwBonus !== false;
     const originalOfficialResults = officialResults;
     if (!includeLive) {
       officialResults = Object.fromEntries(
@@ -276,7 +409,7 @@
           battleDraws: b.battleDraws || 0,
           battleLosses: b.battleLosses || 0,
           battleBonusPoints: b.battleBonusPoints || 0,
-          points: (row.points || 0) + (b.battleBonusPoints || 0)
+          points: (row.points || 0) + (showBw ? (b.battleBonusPoints || 0) : 0)
         };
       });
 
@@ -317,10 +450,19 @@
     const baseRankById = Object.fromEntries(baseRows.map(row => [String(row.id), row.rank]));
     const basePointsById = Object.fromEntries(baseRows.map(row => [String(row.id), row.points]));
     if (!rows.length) return '<div class="empty-state">Ainda não há jogadores para mostrar.</div>';
+    
+    const showBw = window.ggamesShowBwBonus !== false;
+
     return `
       <div class="leaderboard-layout">
         <section class="leaderboard-card ${liveMode ? 'leaderboard-card-live' : ''}">
-          <h3>Tabela Ggames ${liveMode ? '<span class="table-live-badge">AO VIVO</span>' : ''}</h3>
+          <div class="table-header-row" style="display:flex; justify-content:flex-start; align-items:center; flex-wrap:wrap; gap:30px; margin-bottom:12px; border-bottom:1px solid var(--line); padding-bottom:8px;">
+            <h3 style="margin:0;">Tabela Ggames ${liveMode ? '<span class="table-live-badge">AO VIVO</span>' : ''}</h3>
+            <label style="display:inline-flex; align-items:center; gap:6px; font-size:0.82rem; color:var(--muted); cursor:pointer; font-weight:normal; user-select:none; margin-left: 10px;">
+              <input type="checkbox" id="ggamesBwToggle" ${showBw ? 'checked' : ''} style="cursor:pointer; margin:0; width:14px; height:14px;">
+              Exibir bónus BW
+            </label>
+          </div>
           <div class="table-scroll">
             <table class="ggames-table">
               <thead>
@@ -346,7 +488,7 @@
                   return `<tr class="ggames-player-row ${liveMode ? 'ggames-player-row-live' : ''}" data-live-player="${escapeHtml(row.id)}" title="Ver histórico de ${escapeHtml(row.name)}">
                     <td><div class="ggames-rank-cell"><strong>${row.rank}</strong>${liveMode ? movementIndicator(previousRank, row.rank) : ''}</div></td>
                     <td><button type="button" class="ggames-player-link" data-live-player="${escapeHtml(row.id)}"><strong>${renderParticipantIdentity(row.name, row.icon, 'participant-ident--compact')}</strong></button></td>
-                    <td><strong>${row.points}</strong>${row.battleBonusPoints ? `<small class="battle-bonus-note">+${row.battleBonusPoints} BW</small>` : ''}${liveMode && liveDelta > 0 ? `<small class="live-points-note">+${liveDelta} live</small>` : ''}</td>
+                    <td><strong>${row.points}</strong>${showBw && row.battleBonusPoints ? `<small class="battle-bonus-note">+${row.battleBonusPoints} BW</small>` : ''}${liveMode && liveDelta > 0 ? `<small class="live-points-note">+${liveDelta} live</small>` : ''}</td>
                     <td title="Battle Wins">${row.battleWins || 0}</td>
                     <td>${row.correctPredictions}</td>
                     <td>${row.failedPredictions}</td>
@@ -366,7 +508,7 @@
           </div>
         </section>
         ${showBattles ? `<aside class="battles-card ${liveMode ? 'battles-card-live' : ''}">
-          <h3>Ggames Battles Live ${liveMode ? '<span class="table-live-badge">AO VIVO</span>' : ''}</h3>
+          <h3 style="margin-bottom:12px;">Ggames Battles Live ${liveMode ? '<span class="table-live-badge">AO VIVO</span>' : ''}</h3>
           ${renderGiriaBattles(rows)}
         </aside>` : ''}
       </div>
@@ -1167,6 +1309,24 @@
 
   window.ensurePersistedBattlesForCurrentLiveMatch = ensurePersistedBattlesForCurrentLiveMatch;
   window.finalizeBattlesIfMatchFinished = finalizeBattlesIfMatchFinished;
+
+  window.ggamesShowBwBonus = localStorage.getItem('ggames_show_bw_bonus') !== 'false';
+
+  document.addEventListener('change', event => {
+    if (event.target && event.target.id === 'ggamesBwToggle') {
+      window.ggamesShowBwBonus = event.target.checked;
+      localStorage.setItem('ggames_show_bw_bonus', event.target.checked ? 'true' : 'false');
+      
+      if (typeof refreshLiveDashboardView === 'function') {
+        refreshLiveDashboardView();
+      }
+      
+      const viewerBody = document.querySelector('#viewerBody');
+      if (viewerBody && document.querySelector('.viewer-tab[data-view-tab="table"].active')) {
+        viewerBody.innerHTML = renderGgamesTable();
+      }
+    }
+  });
 
   document.body.addEventListener('click', event => {
     const battleCard = event.target.closest('[data-battle-id]');
