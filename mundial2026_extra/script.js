@@ -1751,7 +1751,20 @@ function apiMatchForLocal(match) {
   return worldCupApi.games.find(g => String(g.id) === String(match.id)) || null;
 }
 
+function hasAnyLiveMatch() {
+  const games = (worldCupApi?.games || []).filter(g => g.live && !g.finished && !isOfficialResultFinished(officialResults[String(g.id)]));
+  if (games.length) return true;
+  if (data?.matches?.length) {
+    const fallbackGames = data.matches.filter(m => !isOfficialResultFinished(officialResults[String(m.id)]) && isMatchInLiveWindow(m));
+    if (fallbackGames.length) return true;
+  }
+  return false;
+}
+
 function renderLiveDashboard() {
+  if (!window.liveRightTabUserOverride) {
+    liveRightTab = hasAnyLiveMatch() ? 'battles' : 'table';
+  }
   return `
     <div class="live-two-columns">
       <section class="live-column" data-mobile-live-section="games">
@@ -3768,6 +3781,7 @@ function bindEvents() {
     if (liveRight) {
       event.stopPropagation();
       liveRightTab = liveRight.dataset.liveRight;
+      window.liveRightTabUserOverride = true;
       refreshLiveDashboardView();
       return;
     }
