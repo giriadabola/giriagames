@@ -2716,6 +2716,7 @@ function openGgamesPlayerHistory(playerId) {
     </div>
     <section class="player-history-summary">
       <article><span>Pontos</span><strong>${row.points}</strong></article>
+      <article><span>Pontos BW</span><strong>${row.battleBonusPoints || 0}</strong></article>
       <article><span>Acertados</span><strong>${row.correctPredictions}</strong></article>
       <article><span>Falhados</span><strong>${row.failedPredictions}</strong></article>
       <article><span>Golos Marcados</span><strong>${row.goalsHit}</strong></article>
