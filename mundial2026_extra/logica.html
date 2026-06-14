@@ -893,8 +893,12 @@
       return null;
     }
 
+    function firebaseMatchDocId(selectedId) {
+      return `match_${String(selectedId).padStart(3, '0')}`;
+    }
+
     async function canWriteOfficialMatch(selectedId) {
-      const ref = firebaseTools.doc(firestoreDb, FIREBASE_MATCHES_COLLECTION, `match_${String(selectedId).padStart(3, '0')}`);
+      const ref = firebaseTools.doc(firestoreDb, FIREBASE_MATCHES_COLLECTION, firebaseMatchDocId(selectedId));
       const snap = await firebaseTools.getDoc(ref);
       if (!snap.exists()) return false;
       const kickoffMs = firebaseTimestampToMillis(snap.data()?.kickoff);
@@ -1762,7 +1766,7 @@
       }
 
       try {
-        const matchDocId = `official-match-${selectedMatchId}`;
+        const matchDocId = firebaseMatchDocId(selectedMatchId);
         const ref = firebaseTools.doc(firestoreDb, FIREBASE_MATCHES_COLLECTION, matchDocId);
         logMessage(`A verificar estado do Jogo ${selectedMatchId} no Firestore...`);
         const snap = await firebaseTools.getDoc(ref);
@@ -1811,7 +1815,7 @@
       if (!confirmOk) return;
 
       try {
-        const matchDocId = `official-match-${selectedMatchId}`;
+        const matchDocId = firebaseMatchDocId(selectedMatchId);
         const ref = firebaseTools.doc(firestoreDb, FIREBASE_MATCHES_COLLECTION, matchDocId);
         await firebaseTools.deleteDoc(ref);
         logMessage(`Estado do Jogo ${selectedMatchId} apagado no Firebase.`);
@@ -1838,8 +1842,12 @@
       if (!confirmOk) return;
 
       try {
-        const matchDocId = `official-match-${selectedMatchId}`;
+        const matchDocId = firebaseMatchDocId(selectedMatchId);
         const ref = firebaseTools.doc(firestoreDb, FIREBASE_MATCHES_COLLECTION, matchDocId);
+        const existingSnap = await firebaseTools.getDoc(ref);
+        if (existingSnap.exists() && existingSnap.data()?.status === 'finished') {
+          return alert('Este documento já está com status finished. A API não pode voltar a gravá-lo.');
+        }
         
         await firebaseTools.setDoc(ref, {
           documentId: matchDocId,

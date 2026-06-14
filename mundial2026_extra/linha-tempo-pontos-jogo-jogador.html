@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Linha do tempo de pontos por jogo e jogador</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png" />
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+  <style>
+    :root {
+      --bg: #07111f;
+      --panel: #0f1b2d;
+      --panel-2: #122338;
+      --line: #213a57;
+      --text: #eaf2ff;
+      --muted: #9fb0c8;
+      --accent: #4fd1ff;
+      --good: #16a34a;
+      --bad: #ef4444;
+      --warn: #f59e0b;
+      --shadow: 0 18px 40px rgba(0,0,0,.35);
+      --radius: 22px;
+    }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: radial-gradient(circle at top, #0d1a2e 0%, #07111f 55%, #040a13 100%); color: var(--text); min-height:100vh; }
+    .page { max-width: 1280px; margin: 0 auto; padding: 24px; }
+    .topbar { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:20px; flex-wrap:wrap; }
+    .titlebox h1 { margin:0 0 6px; font-size: clamp(1.5rem, 2.6vw, 2.1rem); }
+    .titlebox p { margin:0; color:var(--muted); }
+    .actions { display:flex; gap:10px; flex-wrap:wrap; }
+    .btn { appearance:none; border:none; border-radius:999px; padding:12px 18px; font-weight:800; cursor:pointer; background:linear-gradient(135deg,#22c55e,#16a34a); color:white; box-shadow:var(--shadow); }
+    .btn.secondary { background:linear-gradient(135deg,#1e3a8a,#2563eb); }
+    .btn.ghost { background:#13233a; border:1px solid #274060; color:#dbeafe; box-shadow:none; }
+    .panel { background:linear-gradient(180deg, rgba(15,27,45,.96), rgba(10,18,31,.96)); border:1px solid rgba(107,137,175,.22); border-radius: var(--radius); box-shadow: var(--shadow); }
+    .controls { padding:18px; display:grid; grid-template-columns: repeat(4, minmax(180px, 1fr)); gap:14px; margin-bottom:18px; }
+    .field { display:flex; flex-direction:column; gap:7px; }
+    .field label { font-size:.86rem; color:var(--muted); font-weight:700; }
+    .field select { width:100%; border-radius:16px; border:1px solid #2a4667; background:#0b1628; color:var(--text); padding:13px 14px; font-size:.98rem; }
+    .statusbox { padding: 0 18px 18px; color: var(--muted); font-size:.95rem; }
+    .manual-box { margin: 0 18px 18px; padding:16px; border-radius:20px; background:#0b1628; border:1px solid #2a4667; display:none; }
+    .manual-box.is-open { display:block; }
+    .manual-head { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
+    .manual-head h3 { margin:0; font-size:1rem; }
+    .manual-head p { margin:3px 0 0; color:var(--muted); font-size:.88rem; }
+    .manual-actions { display:flex; gap:10px; flex-wrap:wrap; }
+    .manual-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+    .manual-team { border-radius:18px; border:1px solid #233b59; background:#091426; padding:14px; }
+    .manual-team h4 { margin:0 0 10px; display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .manual-team h4 span { color:#dbeafe; }
+    .manual-row { display:grid; grid-template-columns:80px 1fr 38px; gap:8px; align-items:center; margin-bottom:8px; }
+    .manual-row input { width:100%; border-radius:12px; border:1px solid #2a4667; background:#08111f; color:var(--text); padding:10px; }
+    .icon-btn { width:38px; height:38px; border-radius:12px; border:1px solid #2a4667; background:#13233a; color:#fff; cursor:pointer; font-weight:900; }
+    .icon-btn.add { width:auto; padding:0 12px; background:linear-gradient(135deg,#16a34a,#22c55e); border:none; }
+    .api-warning { margin:0 18px 18px; border-radius:18px; padding:12px 14px; background:rgba(245,158,11,.12); border:1px solid rgba(245,158,11,.35); color:#ffe7b0; display:none; }
+    .api-warning.is-open { display:block; }
+    @media (max-width: 700px) { .manual-grid { grid-template-columns:1fr; } .manual-row { grid-template-columns:70px 1fr 38px; } }
+    .capture-wrap { padding: 18px; }
+    .capture-area { background:linear-gradient(180deg, #0d182a 0%, #08111d 100%); border:1px solid rgba(120,151,188,.16); border-radius:28px; padding:24px; min-height: 560px; }
+    .report-header { display:flex; justify-content:space-between; gap:20px; align-items:flex-start; flex-wrap:wrap; margin-bottom: 20px; }
+    .identity { display:flex; gap:16px; align-items:center; }
+    .identity h2 { margin:0 0 4px; font-size: clamp(1.2rem, 2vw, 1.7rem); }
+    .identity p { margin:0; color:var(--muted); }
+    .participant-icon { width:78px; height:78px; display:inline-flex; flex:0 0 78px; }
+    .participant-icon svg { width:100%; height:100%; display:block; filter: drop-shadow(0 12px 18px rgba(0,0,0,.28)); }
+    .summary-chips { display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end; }
+    .chip { padding:10px 14px; border-radius:999px; background:#13233a; border:1px solid #274060; color:#d6e6ff; font-weight:800; font-size:.92rem; }
+    .chip strong { color:#fff; }
+    .game-banner { margin-top:4px; padding:16px 18px; border-radius:22px; background:linear-gradient(135deg, rgba(37,99,235,.18), rgba(34,197,94,.12)); border:1px solid rgba(116,160,219,.2); }
+    .game-banner h3 { margin:0 0 8px; font-size:1.18rem; }
+    .game-banner .sub { color:var(--muted); font-size:.96rem; }
+    .legend { display:flex; gap:12px; flex-wrap:wrap; margin:18px 0 0; color:var(--muted); font-size:.88rem; }
+    .legend span { display:inline-flex; align-items:center; gap:7px; }
+    .legend i { display:inline-block; width:10px; height:10px; border-radius:50%; }
+    .legend .up i { background:var(--good); }
+    .legend .down i { background:var(--bad); }
+    .legend .flat i { background:var(--warn); }
+    .timeline-panel { position:relative; margin-top:24px; padding: 24px 10px 34px; }
+    .timeline-frame { position:relative; height: 330px; }
+    .axis { position:absolute; left:40px; right:40px; top:50%; height:6px; border-radius:999px; background: linear-gradient(90deg, #294f73, #6bc1ff, #294f73); box-shadow: 0 0 0 1px rgba(255,255,255,.06), 0 0 26px rgba(79,209,255,.16); }
+    .axis-mark { position:absolute; top: calc(50% - 18px); width:1px; height:36px; background:#7aa7d6; opacity:.7; }
+    .axis-label { position:absolute; top: calc(50% + 18px); transform: translateX(-50%); color:#d5e6ff; font-weight:800; font-size:.94rem; white-space:nowrap; }
+    .goal-marker { position:absolute; left:0; top:50%; transform: translate(-50%, -50%); width: 0; z-index:5; }
+    .goal-marker .dot { position:absolute; left:50%; top:50%; transform: translate(-50%, -50%); width:16px; height:16px; border-radius:50%; border:3px solid rgba(255,255,255,.9); box-shadow:0 0 0 5px rgba(255,255,255,.05); }
+    .goal-marker.up .dot { background: var(--good); }
+    .goal-marker.down .dot { background: var(--bad); }
+    .goal-marker.flat .dot { background: var(--warn); }
+    .goal-marker .stem { position:absolute; left:50%; width:4px; border-radius:999px; transform: translateX(-50%); }
+    .goal-marker.up .stem { bottom:8px; height:88px; background:linear-gradient(180deg, rgba(22,163,74,0), rgba(22,163,74,.95)); }
+    .goal-marker.down .stem { top:8px; height:88px; background:linear-gradient(180deg, rgba(239,68,68,.95), rgba(239,68,68,0)); }
+    .goal-marker.flat .stem { top:-24px; height:48px; background:linear-gradient(180deg, rgba(245,158,11,0), rgba(245,158,11,.95), rgba(245,158,11,0)); }
+    .goal-marker .bubble { position:absolute; left:50%; transform:translateX(-50%); min-width:64px; text-align:center; padding:7px 10px; border-radius:16px; font-weight:900; font-size:1rem; border:1px solid rgba(255,255,255,.12); box-shadow:var(--shadow); }
+    .goal-marker.up .bubble { bottom: 101px; background:rgba(22,163,74,.18); color:#bff8cf; }
+    .goal-marker.down .bubble { top: 101px; background:rgba(239,68,68,.16); color:#ffd4d4; }
+    .goal-marker.flat .bubble { top: -70px; background:rgba(245,158,11,.18); color:#ffe7b0; }
+    .goal-marker .meta { position:absolute; left:50%; transform:translateX(-50%); width:160px; text-align:center; color:#dce7f7; font-size:.79rem; line-height:1.28; }
+    .goal-marker.up .meta { bottom: 146px; }
+    .goal-marker.down .meta { top: 146px; }
+    .goal-marker.flat .meta { top: -122px; }
+    .goal-marker .meta strong { display:block; font-size:.86rem; color:white; }
+    .goal-marker .score-note { display:block; margin-top:3px; color:var(--muted); }
+    .event-list { margin-top: 18px; display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+    .event-card { border-radius:18px; background:#0d182a; border:1px solid #233b59; padding:14px 15px; }
+    .event-card header { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; margin-bottom:6px; }
+    .event-card h4 { margin:0; font-size:1rem; }
+    .badge { padding:6px 10px; border-radius:999px; font-weight:900; font-size:.84rem; white-space:nowrap; }
+    .badge.up { background:rgba(22,163,74,.18); color:#bff8cf; }
+    .badge.down { background:rgba(239,68,68,.16); color:#ffd4d4; }
+    .badge.flat { background:rgba(245,158,11,.18); color:#ffe7b0; }
+    .event-card p { margin:4px 0 0; color:var(--muted); font-size:.92rem; }
+    .empty { padding:36px 18px; text-align:center; color:var(--muted); background:#0b1627; border:1px dashed #294663; border-radius:22px; }
+    .smallprint { margin-top:18px; color:#91a6c3; font-size:.83rem; }
+    @media (max-width: 900px) {
+      .controls { grid-template-columns: 1fr 1fr; }
+      .capture-area { padding:18px; }
+      .timeline-frame { height: 420px; }
+      .axis { left:22px; right:22px; }
+      .goal-marker .meta { width: 120px; font-size:.73rem; }
+      .goal-marker .bubble { min-width:56px; font-size:.92rem; }
+    }
+    @media (max-width: 640px) {
+      .page { padding: 14px; }
+      .controls { grid-template-columns: 1fr; }
+      .identity { align-items:flex-start; }
+      .participant-icon { width:66px; height:66px; flex-basis:66px; }
+      .timeline-frame { height: 460px; }
+      .goal-marker .meta { width:100px; }
+      .goal-marker.up .meta { bottom: 154px; }
+      .goal-marker.down .meta { top: 154px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="topbar">
+      <div class="titlebox">
+        <h1>Linha do tempo de pontos</h1>
+        <p>Seleciona um jogo e um jogador para ver, golo a golo, quando ganhou ou perdeu pontos.</p>
+      </div>
+      <div class="actions">
+        <button class="btn ghost" id="refreshBtn" type="button">Atualizar dados</button>
+        <button class="btn secondary" id="exportBtn" type="button">Extrair em PNG</button>
+      </div>
+    </div>
+
+    <section class="panel controls">
+      <div class="field">
+        <label for="gameSelect">Jogo</label>
+        <select id="gameSelect"></select>
+      </div>
+      <div class="field">
+        <label for="playerSelect">Jogador</label>
+        <select id="playerSelect"></select>
+      </div>
+      <div class="field">
+        <label for="providerSelect">API dos marcadores</label>
+        <select id="providerSelect">
+          <option value="api-football">API-Football</option>
+          <option value="manual">Manual — meter minutos dos golos</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>&nbsp;</label>
+        <button class="btn" id="renderBtn" type="button">Gerar linha do tempo</button>
+      </div>
+    </section>
+
+    <div class="statusbox" id="statusBox">A carregar jogadores e jogos...</div>
+    <div class="api-warning" id="apiWarning"></div>
+    <section class="manual-box" id="manualBox">
+      <div class="manual-head">
+        <div>
+          <h3>⚽ Minutos manuais dos golos</h3>
+          <p>Usa isto quando a API não encontrar os marcadores. Coloca o minuto e, se quiseres, o marcador.</p>
+        </div>
+        <div class="manual-actions">
+          <button class="btn ghost" id="clearManualBtn" type="button">Limpar</button>
+          <button class="btn" id="applyManualBtn" type="button">Aplicar minutos manuais</button>
+        </div>
+      </div>
+      <div class="manual-grid">
+        <div class="manual-team">
+          <h4><span id="manualHomeName">Casa</span><button class="icon-btn add" type="button" data-add-goal="home">+ ⚽</button></h4>
+          <div id="manualHomeGoals"></div>
+        </div>
+        <div class="manual-team">
+          <h4><span id="manualAwayName">Fora</span><button class="icon-btn add" type="button" data-add-goal="away">+ ⚽</button></h4>
+          <div id="manualAwayGoals"></div>
+        </div>
+      </div>
+    </section>
+
+    <div class="panel capture-wrap">
+      <div id="captureArea" class="capture-area"></div>
+    </div>
+  </div>
+
+<script>
+const FIREBASE_CONFIG = {
+  apiKey: 'AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0',
+  authDomain: 'g-games-8a8fc.firebaseapp.com',
+  projectId: 'g-games-8a8fc',
+  storageBucket: 'g-games-8a8fc.firebasestorage.app',
+  messagingSenderId: '689897349449',
+  appId: '1:689897349449:web:536599794579901beb7a98',
+  measurementId: 'G-GTTPJ6G5MD'
+};
+const FIREBASE_COLLECTION = 'worldcupextra';
+const API_FOOTBALL_BASE = 'https://v3.football.api-sports.io';
+const API_FOOTBALL_KEY = '28fe67fa1477141ea513286716d04cd6';
+const DEFAULT_SCORING_RULES = {
+  groupExact: 3,
+  groupOutcome: 1,
+  knockoutInitialExact: 6,
+  knockoutInitialWinner: 2,
+  finalInitialExact: 8,
+  finalInitialWinner: 4,
+  finalInitialMethod: 2,
+  knockoutReformExact: 2,
+  finalReformExact: 3
+};
+const STAGE_LABELS = {
+  groups: 'Fase de grupos',
+  round32: '16 avos',
+  round16: 'Oitavos',
+  quarterfinals: 'Quartos de final',
+  semifinals: 'Meias-finais',
+  third_place: '3.º lugar',
+  final: 'Final'
+};
+const API_TEAM_ALIASES = {
+  'usa': 'united-states', 'estados-unidos': 'united-states', 'united-states-of-america': 'united-states',
+  'portugal': 'portugal', 'espanha': 'spain', 'españa': 'spain', 'inglaterra': 'england',
+  'japao': 'japan', 'japão': 'japan', 'marrocos': 'morocco', 'suica': 'switzerland', 'suíça': 'switzerland',
+  'croacia': 'croatia', 'croácia': 'croatia', 'servia': 'serbia', 'sérvia': 'serbia',
+  'argelia': 'algeria', 'argélia': 'algeria', 'egito': 'egypt', 'egipto': 'egypt', 'camaroes': 'cameroon', 'camarões': 'cameroon'
+};
+const CUSTOM_PLAYER_ICONS = {
+  lion: { label: 'Leão', bg1: '#f59e0b', bg2: '#7c2d12', glyph: '<path d="M26 25l7-9 9 5 9-5 7 9-4 27H30z"/><path d="M31 33c2-7 7-11 11-11s9 4 11 11"/><circle cx="37" cy="38" r="2.2"/><circle cx="47" cy="38" r="2.2"/><path d="M39 44l3 3 3-3"/><path d="M36 49c4 2 8 2 12 0"/>' },
+  wave: { label: 'Água', bg1: '#38bdf8', bg2: '#1d4ed8', glyph: '<path d="M18 46c6 0 6-7 12-7s6 7 12 7 6-7 12-7 6 7 12 7"/><path d="M18 35c6 0 6-7 12-7s6 7 12 7 6-7 12-7 6 7 12 7"/><path d="M42 18c6 7 6 12 0 18-6-6-6-11 0-18z"/>' },
+  buffalo: { label: 'Búfalo', bg1: '#92400e', bg2: '#2d1606', glyph: '<path d="M18 27c8 0 9-10 18-10v7c3-3 6-5 8-5s5 2 8 5v-7c9 0 10 10 18 10-4 2-7 6-8 10H26c-1-4-4-8-8-10z"/><path d="M28 37h28l-3 17H31z"/><circle cx="38" cy="41" r="2.2"/><circle cx="46" cy="41" r="2.2"/><path d="M39 49h6"/>' },
+  elephant: { label: 'Elefante', bg1: '#94a3b8', bg2: '#334155', glyph: '<path d="M23 34c0-10 8-16 19-16h1c11 0 19 6 19 16v8c0 6-4 11-10 13v7h-9v-8h-2c-10 0-18-8-18-18z"/><path d="M42 35c0 5 3 7 7 9 5 2 7 5 7 9 0 3-2 6-4 8"/><path d="M33 33c2 2 4 3 6 3"/><circle cx="35" cy="30" r="2.2"/><path d="M33 42l-3 5m24-5l3 5"/>' },
+  tiger: { label: 'Tigre', bg1: '#fb923c', bg2: '#7c2d12', glyph: '<path d="M24 27l8-10 8 7 2-6 2 6 8-7 8 10-4 27H28z"/><path d="M31 30l3 9m8-13v16m11-12l-3 9"/><circle cx="37" cy="39" r="2.2"/><circle cx="47" cy="39" r="2.2"/><path d="M39 44l3 3 3-3"/><path d="M37 49c4 2 8 2 10 0"/>' },
+  hyena: { label: 'Hiena', bg1: '#a16207', bg2: '#3f2a0f', glyph: '<path d="M25 29l7-10 7 4 5-3 7 3 8-4 5 10-4 24H29z"/><circle cx="37" cy="38" r="2.2"/><circle cx="47" cy="37" r="2.2"/><path d="M37 47c4 3 10 3 14 0"/><path d="M35 48l4-1m4 1l4-1m4 1l4-1"/><path d="M31 33l-3 3m26-4l4 3"/>' },
+  boa: { label: 'Jiboia', bg1: '#22c55e', bg2: '#14532d', glyph: '<path d="M22 44c0-8 5-13 12-13 6 0 8 4 8 7s-2 7-8 7c-4 0-6 3-6 6 0 3 3 5 6 5h16c7 0 12-5 12-11 0-7-5-12-12-12-4 0-7 2-9 5"/><circle cx="25" cy="44" r="5"/><circle cx="23.5" cy="43" r="1.4"/><circle cx="26.5" cy="43" r="1.4"/><path d="M25 48v5"/>' },
+  gator: { label: 'Jacaré', bg1: '#16a34a', bg2: '#14532d', glyph: '<path d="M17 41c8-10 18-15 31-15 6 0 12 1 19 4-7 3-12 7-15 13l-24 1c-4 0-8-1-11-3z"/><path d="M36 33h21"/><path d="M42 38h18"/><path d="M47 44l3 3 3-3 3 3 3-3"/><circle cx="32" cy="31" r="2"/>' },
+  hippo: { label: 'Hipopótamo', bg1: '#64748b', bg2: '#1e293b', glyph: '<path d="M19 36c0-11 10-18 23-18s23 7 23 18v6c0 7-5 12-12 12H31c-7 0-12-5-12-12z"/><path d="M27 39h30v11H27z"/><circle cx="37" cy="33" r="2.2"/><circle cx="47" cy="33" r="2.2"/><circle cx="37" cy="44" r="1.8"/><circle cx="47" cy="44" r="1.8"/>' },
+  eagle: { label: 'Águia', bg1: '#fbbf24', bg2: '#78350f', glyph: '<path d="M22 44c7-12 16-19 29-19 7 0 12 2 18 7-5 1-8 3-12 7l-5 6H31z"/><path d="M50 35l12 2-8 6"/><circle cx="39" cy="31" r="2.1"/><path d="M25 48l8-7m10 4l8-6"/>' },
+  wolf: { label: 'Lobo', bg1: '#cbd5e1', bg2: '#334155', glyph: '<path d="M24 28l8-12 8 9 2-7 2 7 8-9 8 12-5 25H29z"/><circle cx="37" cy="39" r="2.2"/><circle cx="47" cy="39" r="2.2"/><path d="M39 45l3-3 3 3"/><path d="M36 50c5 2 9 2 12 0"/>' },
+  rhino: { label: 'Rinoceronte', bg1: '#9ca3af', bg2: '#374151', glyph: '<path d="M20 42c0-9 8-16 21-16 9 0 16 2 24 8l-8 3v13H30c-6 0-10-3-10-8z"/><path d="M57 30l9-8-2 10"/><circle cx="34" cy="31" r="2.1"/><path d="M29 50h19"/>' },
+  cobra: { label: 'Cobra', bg1: '#10b981', bg2: '#064e3b', glyph: '<path d="M42 17c10 0 18 7 18 17 0 8-5 13-12 16v9H36v-9c-7-3-12-8-12-16 0-10 8-17 18-17z"/><circle cx="36" cy="32" r="2.1"/><circle cx="48" cy="32" r="2.1"/><path d="M42 38v10"/><path d="M42 48l-2 4m2-4l2 4"/>' },
+  shark: { label: 'Tubarão', bg1: '#38bdf8', bg2: '#0f172a', glyph: '<path d="M15 43c8-11 18-17 32-17 6 0 12 2 18 5l7 2-7 4 7 6c-6 3-12 5-18 5-14 0-24-5-32-13z"/><path d="M39 27l8-12 5 13"/><path d="M23 43l-8-7v14z"/><circle cx="47" cy="35" r="2"/><path d="M54 42c-4 2-8 3-13 3"/>' },
+  falcon: { label: 'Falcão', bg1: '#60a5fa', bg2: '#172554', glyph: '<path d="M20 46c7-14 17-22 29-22 8 0 13 2 19 7l-14 3-5 8-6 7H27z"/><path d="M49 34l13 2-7 5"/><circle cx="39" cy="30" r="2"/><path d="M32 48l8-7"/>' },
+  panther: { label: 'Pantera', bg1: '#475569', bg2: '#020617', glyph: '<path d="M24 28l8-11 8 8 2-6 2 6 8-8 8 11-5 26H29z"/><circle cx="37" cy="39" r="2.2"/><circle cx="47" cy="39" r="2.2"/><path d="M39 45l3 2 3-2"/><path d="M36 50c4 1 8 1 12 0"/>' },
+  bear: { label: 'Urso', bg1: '#92400e', bg2: '#422006', glyph: '<circle cx="31" cy="25" r="5"/><circle cx="53" cy="25" r="5"/><path d="M22 37c0-11 9-18 20-18s20 7 20 18v6c0 6-5 11-11 11H33c-6 0-11-5-11-11z"/><circle cx="37" cy="36" r="2.2"/><circle cx="47" cy="36" r="2.2"/><path d="M39 44l3 2 3-2"/>' },
+  fox: { label: 'Raposa', bg1: '#f97316', bg2: '#7c2d12', glyph: '<path d="M22 28l10-12 10 10 10-10 10 12-8 26H30z"/><circle cx="37" cy="38" r="2.2"/><circle cx="47" cy="38" r="2.2"/><path d="M39 45l3 3 3-3"/><path d="M34 50l8-5 8 5"/>' },
+  owl: { label: 'Coruja', bg1: '#8b5cf6', bg2: '#312e81', glyph: '<path d="M27 25l7-8 8 7 8-7 7 8v23c0 4-3 7-7 7H34c-4 0-7-3-7-7z"/><circle cx="36" cy="35" r="5"/><circle cx="48" cy="35" r="5"/><circle cx="36" cy="35" r="1.8"/><circle cx="48" cy="35" r="1.8"/><path d="M42 42l-3 4h6z"/>' },
+  bull: { label: 'Touro', bg1: '#ef4444', bg2: '#450a0a', glyph: '<path d="M18 27c8 0 10-10 19-10v7c2-3 4-4 5-4s3 1 5 4v-7c9 0 11 10 19 10-5 2-8 6-9 10H27c-1-4-4-8-9-10z"/><path d="M28 37h28l-4 17H32z"/><circle cx="38" cy="41" r="2.2"/><circle cx="46" cy="41" r="2.2"/><path d="M39 49h6"/>' }
+};
+const CUSTOM_PLAYER_ICON_ALIASES = {
+  leao: 'lion', 'leão': 'lion', agua: 'wave', 'água': 'wave', bufalo: 'buffalo', 'búfalo': 'buffalo',
+  elefante: 'elephant', tigre: 'tiger', hiena: 'hyena', jiboia: 'boa', jibóia: 'boa',
+  jacare: 'gator', jacaré: 'gator', hipopotamo: 'hippo', hipopótamo: 'hippo', aguia: 'eagle', 'águia': 'eagle',
+  lobo: 'wolf', rinoceronte: 'rhino', cobra: 'cobra', tubarao: 'shark', tubarão: 'shark',
+  falcao: 'falcon', falcão: 'falcon', pantera: 'panther', urso: 'bear', raposa: 'fox', coruja: 'owl', touro: 'bull'
+};
+let db;
+let scoringRules = { ...DEFAULT_SCORING_RULES };
+let allPlayers = [];
+let allGames = [];
+const apiCache = { fixturesByDate: new Map(), eventsByFixture: new Map() };
+let manualGoals = { home: [], away: [] };
+
+function $(id) { return document.getElementById(id); }
+function escapeHtml(v) { return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function normalizeText(v) { return String(v || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''); }
+function numericRule(name) { const v = Number(scoringRules?.[name]); return Number.isFinite(v) ? v : DEFAULT_SCORING_RULES[name]; }
+function predictionOutcome(pred) { const h=Number(pred.homeGoals), a=Number(pred.awayGoals); if (h>a) return 'home'; if (a>h) return 'away'; return 'draw'; }
+function actualOutcome(res) { const h=Number(res.homeGoals), a=Number(res.awayGoals); if (h>a) return 'home'; if (a>h) return 'away'; return 'draw'; }
+function normalizeIconKey(value) { const raw = String(value || '').trim().toLowerCase().replace(/^fa-/, '').replace(/\s+/g, '-').replace(/_/g, '-'); return CUSTOM_PLAYER_ICON_ALIASES?.[raw] || raw; }
+function participantIconKey(source) { if (!source) return ''; if (typeof source === 'string') return normalizeIconKey(source); return normalizeIconKey(source.icon || source.participantIcon || source.playerIcon || source.animalIcon || ''); }
+function participantIconMeta(key) { return CUSTOM_PLAYER_ICONS[participantIconKey(key)] || null; }
+function renderParticipantIcon(iconKey, label='') {
+  const normalized = participantIconKey(iconKey);
+  const meta = participantIconMeta(normalized);
+  if (!meta) return `<span class="participant-icon" style="border-radius:50%; background:linear-gradient(135deg,#1e3a8a,#2563eb); color:#fff; display:grid; place-items:center; font-size:1.5rem; font-weight:900;">${escapeHtml((label||'?').slice(0,1).toUpperCase())}</span>`;
+  return `<span class="participant-icon" title="${escapeHtml(meta.label)}"><svg viewBox="0 0 84 84" role="img" focusable="false"><defs><linearGradient id="grad-${normalized}" x1="0" x2="1" y1="0" y2="1"><stop offset="0%" stop-color="${meta.bg1}"/><stop offset="100%" stop-color="${meta.bg2}"/></linearGradient></defs><rect x="4" y="4" width="76" height="76" rx="24" fill="url(#grad-${normalized})"/><circle cx="42" cy="42" r="31" fill="rgba(255,255,255,.08)"/><g fill="none" stroke="#f8fbff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round">${meta.glyph}</g></svg></span>`;
+}
+function apiTeamKey(name) { const base = normalizeText(name); return API_TEAM_ALIASES[base] || base; }
+function apiTeamsMatch(homeA, awayA, homeB, awayB) { const aH = apiTeamKey(homeA), aA = apiTeamKey(awayA), bH = apiTeamKey(homeB), bA = apiTeamKey(awayB); return !!aH && !!aA && ((aH===bH && aA===bA) || (aH===bA && aA===bH)); }
+function scoreOnePrediction(pred, official) {
+  if (!pred || pred.homeGoals == null || pred.awayGoals == null || official.homeGoals == null || official.awayGoals == null) return { points:0, exact:false, outcomeHit:false };
+  const ph = Number(pred.homeGoals), pa = Number(pred.awayGoals), oh = Number(official.homeGoals), oa = Number(official.awayGoals);
+  const stage = pred.stage || official.stage || 'groups';
+  const exact = ph === oh && pa === oa;
+  const outcomeHit = actualOutcome(official) === predictionOutcome(pred);
+  const winnerHit = pred.winnerTeam && actualOutcome(official) !== 'draw' && normalizeText(pred.winnerTeam) === normalizeText(oh > oa ? official.homeTeam : official.awayTeam);
+  let points = 0;
+  if (stage === 'groups') points = exact ? numericRule('groupExact') : outcomeHit ? numericRule('groupOutcome') : 0;
+  else if (stage === 'final') points = exact ? numericRule('finalInitialExact') : winnerHit ? numericRule('finalInitialWinner') : outcomeHit ? numericRule('finalInitialMethod') : 0;
+  else points = exact ? numericRule('knockoutInitialExact') : (outcomeHit || winnerHit) ? numericRule('knockoutInitialWinner') : 0;
+  return { points, exact, outcomeHit: outcomeHit || winnerHit };
+}
+function formatPrediction(pred) { if (!pred) return 'Sem prognóstico'; const score = `${pred.homeGoals}-${pred.awayGoals}`; if (pred.stage === 'groups') return score; const method = pred.method === 'PEN' ? ' (pen.)' : pred.method === 'ET' ? ' (prol.)' : ''; return score + method; }
+function formatGameLabel(game) { const dateText = game.date ? new Date(`${game.date}T${game.time || '12:00'}:00`).toLocaleString('pt-PT', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) : ''; const stageLabel = STAGE_LABELS[game.stage] || game.stage || 'Jogo'; const groupPart = game.group ? `Grupo ${game.group} • ` : ''; return `${game.id} • ${game.homeTeam} vs ${game.awayTeam} • ${groupPart}${stageLabel}${dateText ? ' • ' + dateText : ''}`; }
+function timelinePos(pct) { return `calc(40px + (${pct}% * (100% - 80px) / 100))`; }
+
+async function init() {
+  firebase.initializeApp(FIREBASE_CONFIG);
+  db = firebase.firestore();
+  await loadScoringRules();
+  await loadPredictionsAndGames();
+  bindUi();
+  renderInitialState();
+}
+
+async function loadScoringRules() {
+  try {
+    const snap = await db.collection('settings').doc('worldcupScoringRules').get();
+    if (snap.exists) scoringRules = { ...DEFAULT_SCORING_RULES, ...snap.data() };
+  } catch (error) {
+    console.warn('Não foi possível carregar regras de pontuação.', error);
+  }
+}
+
+async function loadPredictionsAndGames() {
+  $('statusBox').textContent = 'A carregar jogadores e jogos do Firebase...';
+  const snap = await db.collection(FIREBASE_COLLECTION).get();
+  const docs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(doc => doc.status !== 'official' && Array.isArray(doc.matches));
+  allPlayers = docs.map(doc => ({
+    id: doc.id,
+    name: doc.participantName || 'Participante',
+    icon: doc.icon || doc.participantIcon || doc.playerIcon || '',
+    matches: Array.isArray(doc.matches) ? doc.matches : []
+  })).sort((a,b) => a.name.localeCompare(b.name, 'pt'));
+  const byGame = new Map();
+  allPlayers.forEach(player => player.matches.forEach(match => {
+    if (!byGame.has(String(match.id))) byGame.set(String(match.id), { ...match, id: String(match.id) });
+  }));
+  allGames = [...byGame.values()].sort((a,b) => {
+    const ad = new Date(`${a.date || '2099-01-01'}T${a.time || '12:00'}:00`).getTime();
+    const bd = new Date(`${b.date || '2099-01-01'}T${b.time || '12:00'}:00`).getTime();
+    return ad - bd || Number(a.id) - Number(b.id);
+  });
+  populateGameSelect();
+  populatePlayerSelect();
+  $('statusBox').textContent = `Carregados ${allGames.length} jogos e ${allPlayers.length} jogadores.`;
+}
+
+function populateGameSelect() {
+  const sel = $('gameSelect');
+  sel.innerHTML = allGames.map(game => `<option value="${escapeHtml(game.id)}">${escapeHtml(formatGameLabel(game))}</option>`).join('');
+}
+function populatePlayerSelect() {
+  const sel = $('playerSelect');
+  const gameId = $('gameSelect').value;
+  const eligible = allPlayers.filter(p => p.matches.some(m => String(m.id) === String(gameId)));
+  sel.innerHTML = eligible.map(player => `<option value="${escapeHtml(player.id)}">${escapeHtml(player.name)}</option>`).join('');
+}
+function bindUi() {
+  $('gameSelect').addEventListener('change', () => { populatePlayerSelect(); resetManualGoalsForSelectedGame(); renderTimeline().catch(showError); });
+  $('playerSelect').addEventListener('change', () => renderTimeline().catch(showError));
+  $('providerSelect').addEventListener('change', () => {
+    updateManualBoxVisibility();
+    renderTimeline().catch(showError);
+  });
+  $('renderBtn').addEventListener('click', () => renderTimeline().catch(showError));
+  $('refreshBtn').addEventListener('click', async () => { try { await loadPredictionsAndGames(); await renderTimeline(); } catch (e) { showError(e); } });
+  $('exportBtn').addEventListener('click', exportPng);
+  $('applyManualBtn').addEventListener('click', () => { readManualGoalsFromDom(); renderTimeline().catch(showError); });
+  $('clearManualBtn').addEventListener('click', () => { manualGoals = { home: [], away: [] }; renderManualInputs(); renderTimeline().catch(showError); });
+  document.body.addEventListener('click', event => {
+    const add = event.target.closest('[data-add-goal]');
+    if (add) {
+      const side = add.dataset.addGoal;
+      manualGoals[side].push({ minute: '', scorer: '' });
+      renderManualInputs();
+      return;
+    }
+    const remove = event.target.closest('[data-remove-goal]');
+    if (remove) {
+      const [side, index] = remove.dataset.removeGoal.split(':');
+      manualGoals[side].splice(Number(index), 1);
+      renderManualInputs();
+    }
+  });
+}
+function renderInitialState() { renderManualInputs(); updateManualBoxVisibility(); renderTimeline().catch(showError); }
+function showError(error) { console.error(error); $('statusBox').textContent = 'Erro: ' + (error?.message || error); $('captureArea').innerHTML = `<div class="empty">${escapeHtml(error?.message || String(error))}</div>`; }
+
+function selectedProvider() { return $('providerSelect')?.value || 'api-football'; }
+function updateManualBoxVisibility(forceOpen = false) {
+  const box = $('manualBox');
+  if (!box) return;
+  const open = forceOpen || selectedProvider() === 'manual';
+  box.classList.toggle('is-open', open);
+}
+function showApiWarning(message = '') {
+  const warning = $('apiWarning');
+  if (!warning) return;
+  if (!message) {
+    warning.classList.remove('is-open');
+    warning.textContent = '';
+    return;
+  }
+  warning.textContent = message;
+  warning.classList.add('is-open');
+}
+function resetManualGoalsForSelectedGame() {
+  manualGoals = { home: [], away: [] };
+  renderManualInputs();
+}
+function renderManualInputs() {
+  const game = getSelectedGame();
+  if ($('manualHomeName')) $('manualHomeName').textContent = game?.homeTeam || 'Casa';
+  if ($('manualAwayName')) $('manualAwayName').textContent = game?.awayTeam || 'Fora';
+  const renderSide = (side) => {
+    const holder = $(side === 'home' ? 'manualHomeGoals' : 'manualAwayGoals');
+    if (!holder) return;
+    const rows = manualGoals[side].map((goal, index) => `
+      <div class="manual-row">
+        <input type="text" inputmode="numeric" placeholder="Min." value="${escapeHtml(goal.minute)}" data-manual-minute="${side}:${index}">
+        <input type="text" placeholder="Marcador opcional" value="${escapeHtml(goal.scorer)}" data-manual-scorer="${side}:${index}">
+        <button class="icon-btn" type="button" title="Remover" data-remove-goal="${side}:${index}">×</button>
+      </div>
+    `).join('');
+    holder.innerHTML = rows || '<p style="margin:0;color:var(--muted);font-size:.9rem;">Sem golos. Clica em + ⚽ para adicionar.</p>';
+  };
+  renderSide('home');
+  renderSide('away');
+}
+function readManualGoalsFromDom() {
+  ['home', 'away'].forEach(side => {
+    const rows = [];
+    document.querySelectorAll(`[data-manual-minute^="${side}:"]`).forEach(input => {
+      const index = Number(input.dataset.manualMinute.split(':')[1]);
+      const scorerInput = document.querySelector(`[data-manual-scorer="${side}:${index}"]`);
+      rows.push({ minute: input.value.trim(), scorer: scorerInput?.value?.trim() || '' });
+    });
+    manualGoals[side] = rows;
+  });
+}
+function manualMinuteValue(value) {
+  const text = String(value || '').trim().replace('’', "'");
+  const match = text.match(/^(\d{1,3})(?:\s*\+\s*(\d{1,2}))?/);
+  if (!match) return null;
+  return Number(match[1]) + Number(match[2] || 0);
+}
+function manualMinuteLabel(value) {
+  const text = String(value || '').trim().replace('’', "'");
+  const match = text.match(/^(\d{1,3})(?:\s*\+\s*(\d{1,2}))?/);
+  if (!match) return text || '?';
+  return match[2] ? `${Number(match[1])}+${Number(match[2])}'` : `${Number(match[1])}'`;
+}
+function manualGoalEventsForGame(game) {
+  readManualGoalsFromDom();
+  const combined = [];
+  ['home', 'away'].forEach(side => {
+    manualGoals[side].forEach((goal, index) => {
+      const minuteValue = manualMinuteValue(goal.minute);
+      if (minuteValue == null) return;
+      combined.push({
+        minuteValue,
+        minuteLabel: manualMinuteLabel(goal.minute),
+        side,
+        scorer: goal.scorer || (side === 'home' ? game.homeTeam : game.awayTeam),
+        type: 'Golo manual',
+        manualIndex: index
+      });
+    });
+  });
+  combined.sort((a, b) => a.minuteValue - b.minuteValue);
+  let home = 0, away = 0;
+  return combined.map(ev => {
+    const before = { homeGoals: home, awayGoals: away, homeTeam: game.homeTeam, awayTeam: game.awayTeam, stage: game.stage };
+    if (ev.side === 'home') home += 1; else away += 1;
+    const after = { homeGoals: home, awayGoals: away, homeTeam: game.homeTeam, awayTeam: game.awayTeam, stage: game.stage };
+    return { ...ev, before, after, scoreText: `${home}-${away}` };
+  });
+}
+
+
+function getSelectedGame() { return allGames.find(g => String(g.id) === String($('gameSelect').value)) || null; }
+function getSelectedPlayer() { return allPlayers.find(p => p.id === $('playerSelect').value) || null; }
+
+async function fetchApiFootballJson(endpoint) {
+  const res = await fetch(`${API_FOOTBALL_BASE}${endpoint}`, { headers: { 'x-apisports-key': API_FOOTBALL_KEY }, cache: 'no-store' });
+  if (!res.ok) throw new Error(`API-Football ${endpoint}: ${res.status}`);
+  return res.json();
+}
+
+async function findApiFootballFixture(game) {
+  if (apiCache.fixturesByDate.has(game.date)) return apiCache.fixturesByDate.get(game.date).find(item => apiTeamsMatch(item.teams?.home?.name, item.teams?.away?.name, game.homeTeam, game.awayTeam)) || null;
+  const payload = await fetchApiFootballJson(`/fixtures?date=${encodeURIComponent(game.date)}&timezone=Europe/Lisbon`);
+  const fixtures = Array.isArray(payload.response) ? payload.response : [];
+  apiCache.fixturesByDate.set(game.date, fixtures);
+  return fixtures.find(item => apiTeamsMatch(item.teams?.home?.name, item.teams?.away?.name, game.homeTeam, game.awayTeam)) || null;
+}
+
+function parseMinuteValue(event) {
+  const elapsed = Number(event.time?.elapsed ?? event.minute ?? 0) || 0;
+  const extra = Number(event.time?.extra ?? 0) || 0;
+  return elapsed + extra;
+}
+function parseMinuteLabel(event) {
+  const elapsed = Number(event.time?.elapsed ?? event.minute ?? 0) || 0;
+  const extra = Number(event.time?.extra ?? 0) || 0;
+  if (extra > 0) return `${elapsed}+${extra}'`;
+  return `${elapsed}'`;
+}
+function normalizeGoalEvents(game, fixture, events) {
+  const homeName = fixture.teams?.home?.name || game.homeTeam;
+  const awayName = fixture.teams?.away?.name || game.awayTeam;
+  const goalEvents = (events || [])
+    .filter(ev => /goal|penalty/i.test(String(ev.type || ev.detail || '')) && !/miss/i.test(String(ev.detail || ev.comments || '')))
+    .map(ev => {
+      const teamName = ev.team?.name || '';
+      const side = apiTeamKey(teamName) === apiTeamKey(homeName) ? 'home' : apiTeamKey(teamName) === apiTeamKey(awayName) ? 'away' : '';
+      return {
+        minuteValue: parseMinuteValue(ev),
+        minuteLabel: parseMinuteLabel(ev),
+        side,
+        scorer: ev.player?.name || ev.assist?.name || 'Marcador',
+        type: ev.detail || ev.type || 'Goal'
+      };
+    })
+    .filter(ev => ev.side)
+    .sort((a,b) => a.minuteValue - b.minuteValue);
+
+  let home = 0, away = 0;
+  return goalEvents.map(ev => {
+    const before = { homeGoals: home, awayGoals: away, homeTeam: game.homeTeam, awayTeam: game.awayTeam, stage: game.stage };
+    if (ev.side === 'home') home += 1; else away += 1;
+    const after = { homeGoals: home, awayGoals: away, homeTeam: game.homeTeam, awayTeam: game.awayTeam, stage: game.stage };
+    return { ...ev, before, after, scoreText: `${home}-${away}` };
+  });
+}
+
+async function loadGoalTimelineForGame(game) {
+  const fixture = await findApiFootballFixture(game);
+  if (!fixture?.fixture?.id) throw new Error('Não foi possível localizar o jogo na API dos marcadores.');
+  const fixtureId = String(fixture.fixture.id);
+  if (apiCache.eventsByFixture.has(fixtureId)) return apiCache.eventsByFixture.get(fixtureId);
+  const payload = await fetchApiFootballJson(`/fixtures/events?fixture=${encodeURIComponent(fixtureId)}`);
+  const events = normalizeGoalEvents(game, fixture, Array.isArray(payload.response) ? payload.response : []);
+  apiCache.eventsByFixture.set(fixtureId, events);
+  return events;
+}
+
+function buildReactionEvents(player, game, rawEvents) {
+  const pred = player.matches.find(m => String(m.id) === String(game.id));
+  if (!pred) return { pred: null, events: [] };
+  let previousPoints = scoreOnePrediction(pred, { homeGoals: 0, awayGoals: 0, homeTeam: game.homeTeam, awayTeam: game.awayTeam, stage: game.stage }).points;
+  const events = rawEvents.map((ev, index) => {
+    const afterScore = { ...ev.after, homeTeam: game.homeTeam, awayTeam: game.awayTeam, stage: game.stage };
+    const afterPoints = scoreOnePrediction(pred, afterScore).points;
+    const delta = afterPoints - previousPoints;
+    const direction = delta > 0 ? 'up' : delta < 0 ? 'down' : 'flat';
+    const item = { ...ev, index, beforePoints: previousPoints, afterPoints, delta, direction };
+    previousPoints = afterPoints;
+    return item;
+  });
+  return { pred, events };
+}
+
+function timelineMarks(events) {
+  const maxMinute = Math.max(90, ...events.map(e => e.minuteValue || 0));
+  const marks = [{ value:0, label:'0' }, { value:45, label:'45' }, { value:90, label:`90'` }];
+  let axisMax = 90;
+  if (maxMinute > 90) { axisMax = 120; marks.push({ value:105, label:'105' }, { value:120, label:`120'` }); }
+  return { marks, axisMax };
+}
+
+function renderTimelineHtml(player, game, pred, events) {
+  const { marks, axisMax } = timelineMarks(events);
+  const playerIcon = renderParticipantIcon(player.icon, player.name);
+  const stageLabel = STAGE_LABELS[game.stage] || game.stage || 'Jogo';
+  const groupPart = game.group ? `Grupo ${escapeHtml(game.group)} • ` : '';
+  const subtitle = `${escapeHtml(game.homeTeam)} vs ${escapeHtml(game.awayTeam)} • ${groupPart}${escapeHtml(stageLabel)}`;
+  const dateLine = [game.date, game.time].filter(Boolean).join(' • ');
+  const axisHtml = marks.map(mark => {
+    const left = (mark.value / axisMax) * 100;
+    return `<span class="axis-mark" style="left:${timelinePos(left)};"></span><span class="axis-label" style="left:${timelinePos(left)};">${mark.label}</span>`;
+  }).join('');
+
+  const markersHtml = events.map(ev => {
+    const pct = Math.max(0, Math.min(100, (ev.minuteValue / axisMax) * 100));
+    const deltaLabel = ev.delta > 0 ? `+${ev.delta}` : `${ev.delta}`;
+    const badgePrefix = ev.direction === 'up' ? '⬆' : ev.direction === 'down' ? '⬇' : '•';
+    return `<div class="goal-marker ${ev.direction}" style="left:${timelinePos(pct)};">
+      <span class="stem"></span>
+      <span class="dot"></span>
+      <span class="bubble">${badgePrefix} ${deltaLabel}</span>
+      <div class="meta"><strong>${escapeHtml(ev.minuteLabel)} • ${escapeHtml(ev.scorer)}</strong><span>${escapeHtml(ev.type)}</span><span class="score-note">Resultado: ${escapeHtml(ev.scoreText)} • Pontos: ${ev.afterPoints}</span></div>
+    </div>`;
+  }).join('');
+
+  const listHtml = events.length ? events.map(ev => {
+    const cls = ev.direction;
+    const deltaLabel = ev.delta > 0 ? `+${ev.delta}` : `${ev.delta}`;
+    return `<article class="event-card"><header><div><h4>${escapeHtml(ev.minuteLabel)} • ${escapeHtml(ev.scorer)}</h4><p>${escapeHtml(ev.type)} • Resultado ficou ${escapeHtml(ev.scoreText)}</p></div><span class="badge ${cls}">${deltaLabel} ponto(s)</span></header><p>Antes: <strong>${ev.beforePoints}</strong> ponto(s) • Depois: <strong>${ev.afterPoints}</strong> ponto(s)</p></article>`;
+  }).join('') : '<div class="empty">Ainda não apareceram golos com minuto disponível nesta API para este jogo.</div>';
+
+  const initialPoints = scoreOnePrediction(pred, { homeGoals: 0, awayGoals: 0, homeTeam: game.homeTeam, awayTeam: game.awayTeam, stage: game.stage }).points;
+  const finalPoints = events.length ? events[events.length - 1].afterPoints : initialPoints;
+
+  return `<div class="report-header">
+      <div style="min-width:280px;">
+        <div class="identity">${playerIcon}<div><h2>${escapeHtml(player.name)}</h2><p>${subtitle}</p></div></div>
+        <div class="game-banner"><h3>${escapeHtml(game.homeTeam)} <span style="opacity:.72;">vs</span> ${escapeHtml(game.awayTeam)}</h3><div class="sub">${escapeHtml(dateLine)}${dateLine ? ' • ' : ''}ID do jogo: ${escapeHtml(game.id)}</div></div>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:12px; align-items:flex-end;">
+        <div class="summary-chips">
+          <span class="chip">Prognóstico <strong>${escapeHtml(formatPrediction(pred))}</strong></span>
+          <span class="chip">Pontos no 0-0 <strong>${initialPoints}</strong></span>
+          <span class="chip">Pontos no último golo <strong>${finalPoints}</strong></span>
+        </div>
+        <div class="legend"><span class="up"><i></i> ganhou pontos</span><span class="down"><i></i> perdeu pontos</span><span class="flat"><i></i> sem mudança</span></div>
+      </div>
+    </div>
+    <section class="timeline-panel panel">
+      <div class="timeline-frame">
+        <div class="axis"></div>
+        ${axisHtml}
+        ${markersHtml}
+      </div>
+    </section>
+    <section class="event-list">${listHtml}</section>
+    <div class="smallprint">A linha mostra a variação de pontos <strong>após cada golo</strong>, comparando o resultado imediatamente antes e depois do lance, com base no prognóstico inicial do jogador.</div>`;
+}
+
+async function renderTimeline() {
+  const game = getSelectedGame();
+  const player = getSelectedPlayer();
+  renderManualInputs();
+  updateManualBoxVisibility();
+  showApiWarning('');
+  if (!game || !player) { $('captureArea').innerHTML = '<div class="empty">Seleciona um jogo e um jogador.</div>'; return; }
+
+  let rawEvents = [];
+  if (selectedProvider() === 'manual') {
+    $('statusBox').textContent = 'A usar minutos manuais dos golos.';
+    rawEvents = manualGoalEventsForGame(game);
+  } else {
+    $('statusBox').textContent = 'A carregar minutos dos golos na API dos marcadores...';
+    try {
+      rawEvents = await loadGoalTimelineForGame(game);
+      if (!rawEvents.length) {
+        showApiWarning('A API funcionou, mas não devolveu golos/minutos para este jogo. Podes usar a opção Manual e meter os minutos por seleção.');
+        updateManualBoxVisibility(true);
+      }
+    } catch (error) {
+      console.warn('API dos marcadores falhou. A abrir modo manual.', error);
+      showApiWarning('A API dos marcadores não funcionou para este jogo. Abri o modo manual para colocares os minutos dos golos por seleção.');
+      $('providerSelect').value = 'manual';
+      updateManualBoxVisibility(true);
+      rawEvents = manualGoalEventsForGame(game);
+    }
+  }
+
+  const { pred, events } = buildReactionEvents(player, game, rawEvents);
+  if (!pred) throw new Error('Este jogador não tem prognóstico para o jogo selecionado.');
+  $('captureArea').innerHTML = renderTimelineHtml(player, game, pred, events);
+  $('statusBox').textContent = events.length ? `Foram encontrados/aplicados ${events.length} golos com minuto para este jogo.` : 'Sem golos/minutos disponíveis neste momento para este jogo.';
+}
+
+async function exportPng() {
+  const area = $('captureArea');
+  if (!window.html2canvas) { alert('html2canvas não foi carregado.'); return; }
+  $('statusBox').textContent = 'A exportar PNG...';
+  const canvas = await window.html2canvas(area, { scale: 2, backgroundColor: '#08111d', useCORS: true });
+  const link = document.createElement('a');
+  const game = getSelectedGame();
+  const player = getSelectedPlayer();
+  link.download = `timeline-${normalizeText(player?.name || 'jogador')}-jogo-${normalizeText(game?.id || 'x')}.png`;
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+  $('statusBox').textContent = 'PNG exportado com sucesso.';
+}
+
+window.addEventListener('load', () => init().catch(showError));
+</script>
+</body>
+</html>
