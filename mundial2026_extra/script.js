@@ -2700,10 +2700,10 @@ function openGgamesPlayerHistory(playerId) {
     return `
       <tr>
         <td>${escapeHtml(pred.id)}</td>
-        <td>${escapeHtml(match.stageLabel || STAGE_LABELS[match.stage] || match.stage || 'Jogo')}</td>
+        <td><span class="history-pill ${statusClass}">${status}${score ? ` · ${score.points} pts` : ''}</span></td>
         <td>${predictionResultText(pred)}</td>
         <td>${officialText}</td>
-        <td><span class="history-pill ${statusClass}">${status}${score ? ` · ${score.points} pts` : ''}</span></td>
+        <td>${escapeHtml(match.stageLabel || STAGE_LABELS[match.stage] || match.stage || 'Jogo')}</td>
       </tr>`;
   }).join('');
 
@@ -2724,7 +2724,7 @@ function openGgamesPlayerHistory(playerId) {
     </section>
     <div class="table-scroll history-scroll">
       <table class="ggames-table player-history-table">
-        <thead><tr><th>Jogo</th><th>Fase</th><th>Prognóstico</th><th>Resultado</th><th>Estado</th></tr></thead>
+        <thead><tr><th>Jogo</th><th>Estado</th><th>Prognóstico</th><th>Resultado</th><th>Fase</th></tr></thead>
         <tbody>${historyRows || '<tr><td colspan="5">Sem prognósticos para mostrar.</td></tr>'}</tbody>
       </table>
     </div>
