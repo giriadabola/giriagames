@@ -489,7 +489,7 @@
                     <td><div class="ggames-rank-cell"><strong>${row.rank}</strong>${liveMode ? movementIndicator(previousRank, row.rank) : ''}</div></td>
                     <td><button type="button" class="ggames-player-link" data-live-player="${escapeHtml(row.id)}"><strong>${renderParticipantIdentity(row.name, row.icon, 'participant-ident--compact')}</strong></button></td>
                     <td><strong>${row.points}</strong>${showBw && row.battleBonusPoints ? `<small class="battle-bonus-note">+${row.battleBonusPoints} BW</small>` : ''}${liveMode && liveDelta > 0 ? `<small class="live-points-note">+${liveDelta} live</small>` : ''}</td>
-                    <td title="Battle Wins">${row.battleWins || 0}</td>
+                    <td title="Battle Wins">${showBw ? (row.battleWins || 0) : 0}</td>
                     <td>${row.correctPredictions}</td>
                     <td>${row.failedPredictions}</td>
                     <td title="Golos marcados">${row.goalsHit}</td>
