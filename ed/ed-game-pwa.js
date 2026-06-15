@@ -1,4 +1,25 @@
 (() => {
+  const APP_VERSION = 'v34';
+  if (localStorage.getItem('ggames-app-version') !== APP_VERSION) {
+    localStorage.setItem('ggames-app-version', APP_VERSION);
+    const reload = () => window.location.reload(true);
+    if ('caches' in window) {
+      caches.keys().then(keys => Promise.all(keys.map(key => caches.delete(key))))
+        .catch(() => {})
+        .then(() => {
+          if ('serviceWorker' in navigator) {
+            return navigator.serviceWorker.getRegistrations().then(regs => Promise.all(regs.map(reg => reg.unregister())));
+          }
+        })
+        .catch(() => {})
+        .then(reload);
+      return;
+    } else {
+      reload();
+      return;
+    }
+  }
+
   const DISMISS_UNTIL_KEY = 'ggames-ed-game-pwa-dismiss-until-v1';
   const INSTALLED_KEY = 'ggames-ed-game-pwa-installed-v1';
   let deferredPrompt = null;
