@@ -255,10 +255,26 @@
     .switch input:checked + .slider { background: linear-gradient(135deg, #dc2626, #991b1b); border-color: rgba(255,255,255,.32); }
     .switch input:checked + .slider:before { transform: translateX(36px); }
 
+    .auth-card {
+      margin-top: 18px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap: 14px;
+      padding: 14px 16px;
+      border: 1px solid rgba(56,189,248,.34);
+      border-radius: 24px;
+      background: rgba(14, 165, 233, .10);
+      box-shadow: var(--shadow);
+    }
+    .auth-card strong { display:block; font-size: 1.02rem; }
+    .auth-card span { display:block; color: var(--muted); font-weight: 750; margin-top: 4px; }
+    .auth-actions { display:flex; gap: 8px; flex-wrap: wrap; justify-content:flex-end; }
+
     @media (max-width: 720px) {
-      .topbar, .panel-head, .selected-card { align-items: stretch; flex-direction: column; }
+      .topbar, .panel-head, .selected-card, .maintenance-card, .auth-card { align-items: stretch; flex-direction: column; }
       .top-actions { justify-content: stretch; }
-      .top-actions .btn, .editor-actions .btn { flex: 1; }
+      .top-actions .btn, .editor-actions .btn, .auth-actions .btn { flex: 1; }
       .form-grid { grid-template-columns: 1fr; }
       .match-row { grid-template-columns: 1fr; }
       .badge { justify-self:start; }
@@ -295,6 +311,18 @@
         </label>
       </div>
     </section>
+
+    <section class="auth-card" aria-live="polite">
+      <div>
+        <strong>Autenticação Firebase</strong>
+        <span id="authStatus">A verificar login...</span>
+      </div>
+      <div class="auth-actions">
+        <button class="btn primary" id="loginBtn" type="button">Entrar com Google</button>
+        <button class="btn" id="logoutBtn" type="button" hidden>Sair</button>
+      </div>
+    </section>
+
 
     <section class="panel" id="listPanel">
       <div class="panel-head">
@@ -396,11 +424,15 @@
 
     const appModule = await import(`https://www.gstatic.com/firebasejs/${FIREBASE_SDK_VERSION}/firebase-app.js`);
     const firestoreModule = await import(`https://www.gstatic.com/firebasejs/${FIREBASE_SDK_VERSION}/firebase-firestore.js`);
+    const authModule = await import(`https://www.gstatic.com/firebasejs/${FIREBASE_SDK_VERSION}/firebase-auth.js`);
     const { initializeApp } = appModule;
     const { getFirestore, collection, getDocs, doc, getDoc, setDoc, updateDoc, deleteField, serverTimestamp, onSnapshot } = firestoreModule;
+    const { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signOut } = authModule;
 
     const app = initializeApp(FIREBASE_CONFIG);
     const db = getFirestore(app);
+    const auth = getAuth(app);
+    const googleProvider = new GoogleAuthProvider();
 
     const els = {
       status: document.getElementById('connectionStatus'),
@@ -430,6 +462,53 @@
 
     let matches = [];
     let selected = null;
+    let currentUser = null;
+    let isAdmin = false;
+
+    function setWriteControls() {
+      const locked = !isAdmin;
+      if (els.save) els.save.disabled = locked;
+      if (els.deleteState) els.deleteState.disabled = locked;
+      if (els.maintenanceToggle) els.maintenanceToggle.disabled = locked;
+    }
+
+    function setAuthStatus(text, type = '') {
+      els.authStatus.textContent = text;
+      els.authStatus.style.color = type === 'ok' ? '#bbf7d0' : type === 'err' ? '#fecaca' : '#a8b7cf';
+    }
+
+    async function checkAdmin(user) {
+      const userSnap = await getDoc(doc(db, 'users', user.uid));
+      const estatuto = userSnap.exists() ? userSnap.data()?.estatuto : '';
+      return ['ruler', 'estafeta'].includes(estatuto);
+    }
+
+    async function handleAuthUser(user) {
+      currentUser = user;
+      isAdmin = false;
+      if (!user) {
+        setAuthStatus('Não está autenticado nesta página. Entra para poderes gravar alterações.', 'err');
+        els.login.hidden = false;
+        els.logout.hidden = true;
+        setWriteControls();
+        return;
+      }
+      els.login.hidden = true;
+      els.logout.hidden = false;
+      setAuthStatus(`Autenticado como ${user.email || user.uid}. A verificar estatuto...`);
+      try {
+        isAdmin = await checkAdmin(user);
+        if (isAdmin) {
+          setAuthStatus(`Login confirmado: ${user.email || user.uid}. Permissão de edição OK.`, 'ok');
+        } else {
+          setAuthStatus(`Login feito, mas este utilizador não tem estatuto ruler/estafeta em users/${user.uid}.`, 'err');
+        }
+      } catch (error) {
+        console.error(error);
+        setAuthStatus('Login feito, mas não consegui confirmar o estatuto no documento users.', 'err');
+      }
+      setWriteControls();
+    }
 
     function setStatus(text, type = '') {
       els.status.textContent = text;
@@ -580,6 +659,7 @@
       ensureOption(els.winnerTeam, data.winnerTeam, `valor atual: ${data.winnerTeam}`);
       els.winnerTeam.value = data.winnerTeam ? String(data.winnerTeam) : 'none';
       setMessage('');
+      setWriteControls();
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
@@ -613,6 +693,10 @@
 
     async function saveSelected(deleteStatesOnly = false) {
       if (!selected) return;
+      if (!isAdmin) {
+        setMessage('Tens de estar autenticado com estatuto ruler/estafeta para gravar.', 'err');
+        return;
+      }
       els.save.disabled = true;
       setMessage('A guardar...', '');
       try {
@@ -633,7 +717,7 @@
         console.error(error);
         setMessage('Erro ao guardar. Confirma as permissões de escrita no Firebase.', 'err');
       } finally {
-        els.save.disabled = false;
+        els.save.disabled = !isAdmin;
       }
     }
 
@@ -648,6 +732,7 @@
       els.editorPanel.classList.remove('active');
       els.listPanel.hidden = false;
       setMessage('');
+      setWriteControls();
       window.scrollTo({ top: 0, behavior: 'smooth' });
     });
 
@@ -666,6 +751,11 @@
 
     els.maintenanceToggle.addEventListener('change', async () => {
       const active = els.maintenanceToggle.checked;
+      if (!isAdmin) {
+        setMaintenanceUi(!active);
+        setMessage('Tens de estar autenticado com estatuto ruler/estafeta para alterar o modo manutenção.', 'err');
+        return;
+      }
       setMaintenanceUi(active);
       try {
         await setDoc(maintenanceRef, {
@@ -681,6 +771,23 @@
       }
     });
 
+
+    els.login.addEventListener('click', async () => {
+      try {
+        await signInWithPopup(auth, googleProvider);
+      } catch (error) {
+        console.warn('Popup falhou. A tentar redirect:', error);
+        await signInWithRedirect(auth, googleProvider);
+      }
+    });
+
+    els.logout.addEventListener('click', async () => {
+      await signOut(auth);
+    });
+
+    getRedirectResult(auth).catch(error => console.warn('Redirect login:', error));
+    onAuthStateChanged(auth, handleAuthUser);
+    setWriteControls();
 
     loadMatches();
   </script>
