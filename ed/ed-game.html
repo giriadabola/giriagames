@@ -1,0 +1,592 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Editor de Jogos · Ggames Mundial 2026</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="ed-game-favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="ed-game-favicon-16.png">
+  <link rel="apple-touch-icon" sizes="192x192" href="ed-game-icon-192.png">
+  <link rel="manifest" href="ed-game.webmanifest">
+  <meta name="theme-color" content="#071a3f">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Editor Jogos">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #071a3f;
+      --bg2: #020817;
+      --card: rgba(15, 23, 42, .82);
+      --card2: rgba(30, 41, 59, .72);
+      --line: rgba(148, 163, 184, .22);
+      --text: #f8fafc;
+      --muted: #a8b7cf;
+      --green: #22c55e;
+      --greenSoft: rgba(34, 197, 94, .16);
+      --red: #ef4444;
+      --redSoft: rgba(239, 68, 68, .16);
+      --yellow: #facc15;
+      --blue: #38bdf8;
+      --shadow: 0 24px 70px rgba(0,0,0,.35);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 15% 5%, rgba(56,189,248,.22), transparent 34rem),
+        radial-gradient(circle at 85% 10%, rgba(34,197,94,.18), transparent 30rem),
+        linear-gradient(135deg, var(--bg), var(--bg2));
+    }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: .16;
+      background-image:
+        linear-gradient(rgba(255,255,255,.08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,.08) 1px, transparent 1px);
+      background-size: 42px 42px;
+      mask-image: linear-gradient(to bottom, #000, transparent 82%);
+    }
+    .wrap { width: min(1080px, calc(100% - 28px)); margin: 0 auto; padding: 22px 0 90px; position: relative; }
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      background: rgba(2, 8, 23, .56);
+      backdrop-filter: blur(18px);
+      box-shadow: var(--shadow);
+    }
+    .brand { display: flex; align-items: center; gap: 13px; min-width: 0; }
+    .brand img { width: 58px; height: 58px; border-radius: 18px; box-shadow: 0 12px 28px rgba(0,0,0,.34); }
+    .brand strong { display:block; font-size: clamp(1.2rem, 3.5vw, 2rem); letter-spacing: -.04em; line-height: 1; }
+    .brand span { display:block; color: var(--muted); font-weight: 700; margin-top: 5px; font-size: .9rem; }
+    .top-actions { display:flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+    button, select {
+      font: inherit;
+    }
+    .btn {
+      border: 1px solid rgba(255,255,255,.16);
+      color: var(--text);
+      border-radius: 999px;
+      background: rgba(255,255,255,.08);
+      padding: 10px 14px;
+      font-weight: 900;
+      cursor: pointer;
+      transition: transform .16s ease, border-color .16s ease, background .16s ease;
+    }
+    .btn:hover { transform: translateY(-1px); border-color: rgba(255,255,255,.32); background: rgba(255,255,255,.12); }
+    .btn.primary { background: linear-gradient(135deg, #16a34a, #0ea5e9); border-color: rgba(255,255,255,.28); }
+    .btn.danger { background: rgba(239,68,68,.14); border-color: rgba(239,68,68,.44); color: #fecaca; }
+    .btn:disabled { opacity: .55; cursor: not-allowed; transform: none; }
+    .panel {
+      margin-top: 18px;
+      border: 1px solid var(--line);
+      border-radius: 28px;
+      background: var(--card);
+      backdrop-filter: blur(18px);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .panel-head {
+      display:flex;
+      align-items:flex-start;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 18px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255,255,255,.035);
+    }
+    .panel-head h1, .panel-head h2 { margin: 0; font-size: clamp(1.1rem, 3vw, 1.55rem); letter-spacing: -.03em; }
+    .panel-head p { margin: 6px 0 0; color: var(--muted); font-weight: 650; }
+    .status-pill {
+      white-space: nowrap;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 8px 11px;
+      color: var(--muted);
+      font-size: .86rem;
+      font-weight: 900;
+      background: rgba(2,8,23,.45);
+    }
+    .status-pill.ok { color: #bbf7d0; border-color: rgba(34,197,94,.45); background: var(--greenSoft); }
+    .status-pill.err { color: #fecaca; border-color: rgba(239,68,68,.45); background: var(--redSoft); }
+    .list { padding: 10px; display: grid; gap: 8px; }
+    .match-row {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-left-width: 6px;
+      border-radius: 18px;
+      background: rgba(15,23,42,.62);
+      color: var(--text);
+      padding: 13px;
+      cursor:pointer;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      text-align: left;
+      align-items: center;
+    }
+    .match-row.finished { border-left-color: var(--green); background: linear-gradient(90deg, var(--greenSoft), rgba(15,23,42,.58)); }
+    .match-row.not-finished { border-left-color: var(--red); background: linear-gradient(90deg, var(--redSoft), rgba(15,23,42,.58)); }
+    .teams { display:flex; gap: 9px; align-items:center; min-width:0; font-weight: 1000; letter-spacing: -.02em; }
+    .team-name { overflow:hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .score { flex: 0 0 auto; padding: 4px 8px; border-radius: 10px; background: rgba(255,255,255,.1); font-variant-numeric: tabular-nums; }
+    .meta { margin-top: 5px; color: var(--muted); font-size: .82rem; font-weight: 750; display:flex; gap: 8px; flex-wrap: wrap; }
+    .badge { justify-self:end; border-radius:999px; padding: 6px 9px; font-size: .76rem; font-weight:1000; }
+    .badge.green { color:#bbf7d0; background: var(--greenSoft); border:1px solid rgba(34,197,94,.35); }
+    .badge.red { color:#fecaca; background: var(--redSoft); border:1px solid rgba(239,68,68,.35); }
+    .editor { padding: 18px; display: none; }
+    .editor.active { display:block; }
+    .selected-card {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap: 12px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background: rgba(255,255,255,.055);
+      margin-bottom: 14px;
+    }
+    .selected-card strong { font-size: clamp(1rem, 4vw, 1.45rem); letter-spacing: -.03em; }
+    .form-grid { display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; }
+    .field {
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 12px;
+      background: rgba(2,8,23,.34);
+    }
+    .field label { display:block; color: var(--muted); font-size: .82rem; font-weight: 900; margin-bottom: 8px; }
+    .field select {
+      width:100%;
+      border: 1px solid rgba(255,255,255,.14);
+      border-radius: 14px;
+      background: #0f172a;
+      color: var(--text);
+      padding: 11px 12px;
+      outline: none;
+      font-weight: 900;
+    }
+    .wide { grid-column: 1 / -1; }
+    .editor-actions { display:flex; gap:10px; flex-wrap:wrap; margin-top: 14px; }
+    .message { margin-top: 12px; color: var(--muted); font-weight: 800; min-height: 1.3em; }
+    .message.ok { color: #bbf7d0; }
+    .message.err { color: #fecaca; }
+    .empty { padding: 28px; color: var(--muted); text-align:center; font-weight: 850; }
+    .ed-pwa-banner {
+      position: fixed;
+      left: 12px;
+      right: 12px;
+      bottom: calc(12px + env(safe-area-inset-bottom));
+      z-index: 99999;
+      margin: 0 auto;
+      max-width: 520px;
+      display:flex;
+      align-items:center;
+      gap: 9px;
+      padding: 10px;
+      border-radius: 18px;
+      border: 1px solid rgba(56,189,248,.38);
+      background: rgba(2,8,23,.96);
+      box-shadow: 0 18px 55px rgba(0,0,0,.45);
+      backdrop-filter: blur(16px);
+    }
+    .ed-pwa-banner div { min-width:0; flex:1; }
+    .ed-pwa-banner strong, .ed-pwa-banner span { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .ed-pwa-banner span { color: var(--muted); font-size:.78rem; margin-top:2px; }
+    .ed-pwa-banner button { border: 1px solid rgba(255,255,255,.16); background: rgba(255,255,255,.08); color: var(--text); border-radius:999px; font-weight:900; padding:8px 10px; }
+    .ed-pwa-close { width:32px; height:32px; padding:0 !important; font-size:1.1rem; }
+    @media (max-width: 720px) {
+      .topbar, .panel-head, .selected-card { align-items: stretch; flex-direction: column; }
+      .top-actions { justify-content: stretch; }
+      .top-actions .btn, .editor-actions .btn { flex: 1; }
+      .form-grid { grid-template-columns: 1fr; }
+      .match-row { grid-template-columns: 1fr; }
+      .badge { justify-self:start; }
+      .teams { flex-wrap:wrap; }
+      .team-name { white-space: normal; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="topbar">
+      <div class="brand">
+        <img src="ed-game-icon-192.png" alt="Editor Ggames">
+        <div>
+          <strong>Editor de Jogos</strong>
+          <span>Firebase → worldcupextraMatches</span>
+        </div>
+      </div>
+      <div class="top-actions">
+        <a class="btn" href="index.html">Voltar ao site</a>
+        <button class="btn primary" id="reloadBtn" type="button">Atualizar lista</button>
+      </div>
+    </header>
+
+    <section class="panel" id="listPanel">
+      <div class="panel-head">
+        <div>
+          <h1>Lista de jogos</h1>
+          <p>Verde = <code>finished</code> true. Vermelho = ainda não terminado ou campo ausente.</p>
+        </div>
+        <span class="status-pill" id="connectionStatus">A ligar...</span>
+      </div>
+      <div class="list" id="matchesList">
+        <div class="empty">A carregar jogos...</div>
+      </div>
+    </section>
+
+    <section class="panel editor" id="editorPanel" aria-live="polite">
+      <div class="panel-head">
+        <div>
+          <h2>Editar jogo</h2>
+          <p>Ao escolher <strong>none</strong>, o campo é eliminado do documento no Firebase.</p>
+        </div>
+        <span class="status-pill" id="docIdPill">—</span>
+      </div>
+      <div style="padding:18px">
+        <div class="selected-card">
+          <strong id="selectedTitle">—</strong>
+          <button class="btn" id="backBtn" type="button">← Voltar à lista</button>
+        </div>
+
+        <form id="editForm">
+          <div class="form-grid">
+            <div class="field">
+              <label id="homeGoalsLabel" for="homeGoalsSelect">Golos casa</label>
+              <select id="homeGoalsSelect" name="homeGoals"></select>
+            </div>
+            <div class="field">
+              <label id="awayGoalsLabel" for="awayGoalsSelect">Golos fora</label>
+              <select id="awayGoalsSelect" name="awayGoals"></select>
+            </div>
+            <div class="field">
+              <label for="finishedSelect">finished</label>
+              <select id="finishedSelect" name="finished">
+                <option value="none">none — eliminar campo</option>
+                <option value="false">false</option>
+                <option value="true">true</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="liveSelect">live</label>
+              <select id="liveSelect" name="live">
+                <option value="none">none — eliminar campo</option>
+                <option value="false">false</option>
+                <option value="true">true</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="statusSelect">status</label>
+              <select id="statusSelect" name="status">
+                <option value="none">none — eliminar campo</option>
+                <option value="finished">finished</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="timeElapsedSelect">timeElapsed</label>
+              <select id="timeElapsedSelect" name="timeElapsed">
+                <option value="none">none — eliminar campo</option>
+                <option value="finished">finished</option>
+              </select>
+            </div>
+            <div class="field wide">
+              <label for="winnerTeamSelect">winnerTeam</label>
+              <select id="winnerTeamSelect" name="winnerTeam"></select>
+            </div>
+          </div>
+          <div class="editor-actions">
+            <button class="btn primary" id="saveBtn" type="submit">Guardar alterações</button>
+            <button class="btn danger" id="deleteStateBtn" type="button">Colocar estados como none</button>
+          </div>
+          <div class="message" id="message"></div>
+        </form>
+      </div>
+    </section>
+  </div>
+
+  <script type="module">
+    const FIREBASE_CONFIG = {
+      apiKey: 'AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0',
+      authDomain: 'g-games-8a8fc.firebaseapp.com',
+      projectId: 'g-games-8a8fc',
+      storageBucket: 'g-games-8a8fc.firebasestorage.app',
+      messagingSenderId: '689897349449',
+      appId: '1:689897349449:web:536599794579901beb7a98',
+      measurementId: 'G-GTTPJ6G5MD'
+    };
+    const FIREBASE_MATCHES_COLLECTION = 'worldcupextraMatches';
+    const FIREBASE_SDK_VERSION = '10.14.1';
+
+    const appModule = await import(`https://www.gstatic.com/firebasejs/${FIREBASE_SDK_VERSION}/firebase-app.js`);
+    const firestoreModule = await import(`https://www.gstatic.com/firebasejs/${FIREBASE_SDK_VERSION}/firebase-firestore.js`);
+    const { initializeApp } = appModule;
+    const { getFirestore, collection, getDocs, doc, setDoc, updateDoc, deleteField, serverTimestamp } = firestoreModule;
+
+    const app = initializeApp(FIREBASE_CONFIG);
+    const db = getFirestore(app);
+
+    const els = {
+      status: document.getElementById('connectionStatus'),
+      list: document.getElementById('matchesList'),
+      listPanel: document.getElementById('listPanel'),
+      editorPanel: document.getElementById('editorPanel'),
+      docIdPill: document.getElementById('docIdPill'),
+      selectedTitle: document.getElementById('selectedTitle'),
+      form: document.getElementById('editForm'),
+      homeGoals: document.getElementById('homeGoalsSelect'),
+      awayGoals: document.getElementById('awayGoalsSelect'),
+      homeGoalsLabel: document.getElementById('homeGoalsLabel'),
+      awayGoalsLabel: document.getElementById('awayGoalsLabel'),
+      finished: document.getElementById('finishedSelect'),
+      live: document.getElementById('liveSelect'),
+      statusField: document.getElementById('statusSelect'),
+      timeElapsed: document.getElementById('timeElapsedSelect'),
+      winnerTeam: document.getElementById('winnerTeamSelect'),
+      message: document.getElementById('message'),
+      reload: document.getElementById('reloadBtn'),
+      back: document.getElementById('backBtn'),
+      deleteState: document.getElementById('deleteStateBtn'),
+      save: document.getElementById('saveBtn')
+    };
+
+    let matches = [];
+    let selected = null;
+
+    function setStatus(text, type = '') {
+      els.status.textContent = text;
+      els.status.className = `status-pill ${type}`.trim();
+    }
+
+    function setMessage(text, type = '') {
+      els.message.textContent = text;
+      els.message.className = `message ${type}`.trim();
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>'"]/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' }[char]));
+    }
+
+    function scoreValue(value) {
+      return value === null || value === undefined || value === '' ? '—' : String(value);
+    }
+
+    function matchNumber(match) {
+      const byField = Number(match.data?.matchId ?? match.data?.id);
+      if (Number.isFinite(byField)) return byField;
+      const byDoc = Number(String(match.id || '').replace(/\D+/g, ''));
+      return Number.isFinite(byDoc) ? byDoc : 999999;
+    }
+
+    function fillNumberSelect(select, current) {
+      select.innerHTML = '';
+      for (let i = 0; i <= 20; i++) {
+        const opt = document.createElement('option');
+        opt.value = String(i);
+        opt.textContent = String(i);
+        select.appendChild(opt);
+      }
+      const normalized = Number(current);
+      select.value = Number.isFinite(normalized) && normalized >= 0 && normalized <= 20 ? String(normalized) : '0';
+    }
+
+    function setTriState(select, value) {
+      if (value === true) select.value = 'true';
+      else if (value === false) select.value = 'false';
+      else select.value = 'none';
+    }
+
+    function ensureOption(select, value, label = value) {
+      if (value === null || value === undefined || value === '') return;
+      const stringValue = String(value);
+      if (![...select.options].some(option => option.value === stringValue)) {
+        const opt = document.createElement('option');
+        opt.value = stringValue;
+        opt.textContent = label;
+        select.insertBefore(opt, select.firstChild);
+      }
+    }
+
+    function renderList() {
+      if (!matches.length) {
+        els.list.innerHTML = '<div class="empty">Não encontrei documentos em worldcupextraMatches.</div>';
+        return;
+      }
+      els.list.innerHTML = matches.map(match => {
+        const data = match.data;
+        const finished = data.finished === true;
+        const home = data.homeTeam || data.home || 'Casa';
+        const away = data.awayTeam || data.away || 'Fora';
+        const matchId = data.matchId ?? matchNumber(match);
+        return `
+          <button type="button" class="match-row ${finished ? 'finished' : 'not-finished'}" data-doc-id="${escapeHtml(match.id)}">
+            <div>
+              <div class="teams">
+                <span class="team-name">${escapeHtml(home)}</span>
+                <span class="score">${escapeHtml(scoreValue(data.homeGoals))} - ${escapeHtml(scoreValue(data.awayGoals))}</span>
+                <span class="team-name">${escapeHtml(away)}</span>
+              </div>
+              <div class="meta">
+                <span>${escapeHtml(match.id)}</span>
+                <span>Jogo ${escapeHtml(matchId)}</span>
+                ${data.live === true ? '<span>● live</span>' : ''}
+                ${data.status ? `<span>status: ${escapeHtml(data.status)}</span>` : ''}
+              </div>
+            </div>
+            <span class="badge ${finished ? 'green' : 'red'}">finished: ${finished ? 'true' : 'false'}</span>
+          </button>
+        `;
+      }).join('');
+      els.list.querySelectorAll('.match-row').forEach(button => {
+        button.addEventListener('click', () => openEditor(button.dataset.docId));
+      });
+    }
+
+    async function loadMatches() {
+      selected = null;
+      setMessage('');
+      setStatus('A carregar...', '');
+      els.list.innerHTML = '<div class="empty">A carregar jogos...</div>';
+      try {
+        const snapshot = await getDocs(collection(db, FIREBASE_MATCHES_COLLECTION));
+        matches = snapshot.docs.map(item => ({ id: item.id, data: item.data() }))
+          .sort((a, b) => matchNumber(a) - matchNumber(b) || String(a.id).localeCompare(String(b.id)));
+        setStatus(`${matches.length} jogos carregados`, 'ok');
+        els.editorPanel.classList.remove('active');
+        els.listPanel.hidden = false;
+        renderList();
+      } catch (error) {
+        console.error(error);
+        setStatus('Erro Firebase', 'err');
+        els.list.innerHTML = '<div class="empty">Não foi possível carregar os jogos. Confirma a internet e as regras do Firebase.</div>';
+      }
+    }
+
+    function openEditor(docId) {
+      selected = matches.find(match => match.id === docId);
+      if (!selected) return;
+      const data = selected.data;
+      const home = data.homeTeam || data.home || 'Casa';
+      const away = data.awayTeam || data.away || 'Fora';
+
+      els.listPanel.hidden = true;
+      els.editorPanel.classList.add('active');
+      els.docIdPill.textContent = selected.id;
+      els.selectedTitle.textContent = `${home} ${scoreValue(data.homeGoals)} - ${scoreValue(data.awayGoals)} ${away}`;
+      els.homeGoalsLabel.textContent = `${home} · homeGoals`;
+      els.awayGoalsLabel.textContent = `${away} · awayGoals`;
+      fillNumberSelect(els.homeGoals, data.homeGoals);
+      fillNumberSelect(els.awayGoals, data.awayGoals);
+      setTriState(els.finished, data.finished);
+      setTriState(els.live, data.live);
+
+      els.statusField.innerHTML = `
+        <option value="none">none — eliminar campo</option>
+        <option value="finished">finished</option>
+      `;
+      ensureOption(els.statusField, data.status, `valor atual: ${data.status}`);
+      els.statusField.value = data.status === 'finished' ? 'finished' : (data.status ? String(data.status) : 'none');
+
+      els.timeElapsed.innerHTML = `
+        <option value="none">none — eliminar campo</option>
+        <option value="finished">finished</option>
+      `;
+      ensureOption(els.timeElapsed, data.timeElapsed, `valor atual: ${data.timeElapsed}`);
+      els.timeElapsed.value = data.timeElapsed === 'finished' ? 'finished' : (data.timeElapsed ? String(data.timeElapsed) : 'none');
+
+      els.winnerTeam.innerHTML = `
+        <option value="none">none — eliminar campo</option>
+        <option value="${escapeHtml(home)}">${escapeHtml(home)}</option>
+        <option value="${escapeHtml(away)}">${escapeHtml(away)}</option>
+      `;
+      ensureOption(els.winnerTeam, data.winnerTeam, `valor atual: ${data.winnerTeam}`);
+      els.winnerTeam.value = data.winnerTeam ? String(data.winnerTeam) : 'none';
+      setMessage('');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function valueOrDelete(select, transform = value => value) {
+      return select.value === 'none' ? deleteField() : transform(select.value);
+    }
+
+    function buildPayload(deleteStatesOnly = false) {
+      const payload = {
+        homeGoals: Number(els.homeGoals.value),
+        awayGoals: Number(els.awayGoals.value),
+        manualUpdatedAt: new Date().toISOString(),
+        syncOrigin: 'manual-ed-game',
+        updatedAt: serverTimestamp()
+      };
+      const stateDeletes = {
+        finished: deleteField(),
+        live: deleteField(),
+        status: deleteField(),
+        timeElapsed: deleteField(),
+        winnerTeam: deleteField()
+      };
+      if (deleteStatesOnly) return { ...payload, ...stateDeletes };
+      payload.finished = valueOrDelete(els.finished, value => value === 'true');
+      payload.live = valueOrDelete(els.live, value => value === 'true');
+      payload.status = valueOrDelete(els.statusField);
+      payload.timeElapsed = valueOrDelete(els.timeElapsed);
+      payload.winnerTeam = valueOrDelete(els.winnerTeam);
+      return payload;
+    }
+
+    async function saveSelected(deleteStatesOnly = false) {
+      if (!selected) return;
+      els.save.disabled = true;
+      setMessage('A guardar...', '');
+      try {
+        const ref = doc(db, FIREBASE_MATCHES_COLLECTION, selected.id);
+        const payload = buildPayload(deleteStatesOnly);
+        try {
+          await updateDoc(ref, payload);
+        } catch (error) {
+          if (String(error?.code || '').includes('not-found')) await setDoc(ref, payload, { merge: true });
+          else throw error;
+        }
+        const savedId = selected.id;
+        setMessage('Guardado no Firebase.', 'ok');
+        await loadMatches();
+        const updated = matches.find(match => match.id === savedId);
+        if (updated) openEditor(updated.id);
+      } catch (error) {
+        console.error(error);
+        setMessage('Erro ao guardar. Confirma as permissões de escrita no Firebase.', 'err');
+      } finally {
+        els.save.disabled = false;
+      }
+    }
+
+    els.form.addEventListener('submit', event => {
+      event.preventDefault();
+      saveSelected(false);
+    });
+    els.deleteState.addEventListener('click', () => saveSelected(true));
+    els.reload.addEventListener('click', loadMatches);
+    els.back.addEventListener('click', () => {
+      selected = null;
+      els.editorPanel.classList.remove('active');
+      els.listPanel.hidden = false;
+      setMessage('');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+
+    loadMatches();
+  </script>
+  <script defer src="ed-game-pwa.js?v=20260615edgame1"></script>
+</body>
+</html>
