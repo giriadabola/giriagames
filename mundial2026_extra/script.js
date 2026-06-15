@@ -1061,6 +1061,19 @@ function normalizeTeamForApi(name) {
 
 const API_TEAM_ALIASES = {
   'mexico': 'mexico',
+  'belgica': 'belgium',
+  'franca': 'france',
+  'uruguai': 'uruguay',
+  'cabo verde': 'cape verde',
+  'curacau': 'curacao',
+  'equador': 'ecuador',
+  'escocia': 'scotland',
+  'gana': 'ghana',
+  'irao': 'iran',
+  'rd congo': 'dr congo',
+  'suecia': 'sweden',
+  'turquia': 'turkey',
+  'uzbequistao': 'uzbekistan',
   'africa sul': 'south africa',
   'africa do sul': 'south africa',
   'south africa': 'south africa',
@@ -3749,10 +3762,6 @@ function setMobileAppSection(section) {
   mobileAppSection = section || 'games';
   updateMobileAppNav();
   refreshLiveDashboardView();
-  requestAnimationFrame(() => {
-    const target = $('#closedLiveDashboard');
-    target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  });
 }
 
 async function openMobilePublicPredictionsPage(active = 'games') {
