@@ -328,8 +328,9 @@ async function runSync() {
       continue;
     }
 
-    // Regra 2: Status já é finished
-    if (existing?.status === 'finished') {
+    // Regra 2: Status já é finished (não pode voltar a colocar live)
+    if (existing?.status === 'finished' || existing?.finished === true) {
+      console.log(`Jogo ${game.id} saltado: Já está marcado como finalizado.`);
       continue;
     }
 
