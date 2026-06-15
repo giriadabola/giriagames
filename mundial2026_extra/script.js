@@ -40,6 +40,8 @@ const ESPN_PROXY_URL = ''; // opcional: proxy teu para evitar CORS, ex: https://
 const API_SYNC_INTERVAL_MS = 30000;
 const API_FOOTBALL_MIN_INTERVAL_MS = 90000;
 const EXTRA_LIVE_API_MIN_INTERVAL_MS = 120000;
+const API_FINISHED_MIN_DELAY_MS = 40 * 60 * 1000;
+const API_FIRST_MINUTE_SCORE_CAP_MS = 60 * 1000;
 const FIREBASE_SDK_VERSION = '10.14.1';
 let firestoreDb = null;
 let firebaseTools = null;
@@ -1174,7 +1176,7 @@ function normalizeApiFootballGame(item, events = []) {
   const homeScorers = scorerEvents.filter(e => apiTeamKey(e.team?.name) === apiTeamKey(teams.home?.name)).map(e => e.player?.name || e.assist?.name || '').filter(Boolean);
   const awayScorers = scorerEvents.filter(e => apiTeamKey(e.team?.name) === apiTeamKey(teams.away?.name)).map(e => e.player?.name || e.assist?.name || '').filter(Boolean);
 
-  return {
+  return ggamesSanitizeAutomaticApiGame({
     id,
     matchId: id,
     apiFootballFixtureId: fixture.id || null,
@@ -1200,7 +1202,7 @@ function normalizeApiFootballGame(item, events = []) {
     source: 'live-real',
     status: 'official',
     type: 'officialResult'
-  };
+  });
 }
 
 function mergeApiGameLists(...lists) {
@@ -1619,11 +1621,13 @@ function ggamesShouldSkipFootballDataDirectCors() {
 async function syncFinishedApiResultsToFirebase() {
   if (!firestoreDb || !firebaseTools || !worldCupApi.games.length) return;
   const trustedSources = new Set(['API-Football', 'football-data', 'Highlightly', 'AllSportsAPI', 'SofaScore', 'ESPN', 'worldcup26.ir', 'TheSportsDB v1 free', 'lineups', 'worldcup']);
-  const relevantGames = worldCupApi.games.filter(g =>
-    (g.live || g.finished) &&
-    trustedSources.has(g.source) &&
-    (g.finished ? !String(g.timeElapsed || '').startsWith('~') : true)
-  );
+  const relevantGames = worldCupApi.games
+    .map(game => ggamesSanitizeAutomaticApiGame(game))
+    .filter(g =>
+      (g.live || g.finished) &&
+      trustedSources.has(g.source) &&
+      (g.finished ? !String(g.timeElapsed || '').startsWith('~') : true)
+    );
   if (!relevantGames.length) return;
   try {
     const existingDocs = await Promise.all(relevantGames.map(async game => {
@@ -1860,6 +1864,55 @@ function isMatchBeforeKickoff(game) {
   if (!dateStr) return false;
   const kickoff = new Date(`${dateStr}T${timeStr || '12:00'}:00`);
   return new Date() < kickoff;
+}
+
+function ggamesApiKickoffMs(game, fallbackMatch = null) {
+  const local = fallbackMatch || localMatchById(game?.id || game?.matchId);
+  const dateStr = game?.date || local?.date;
+  const timeStr = game?.time || local?.time || '12:00';
+  if (!dateStr) return null;
+  const kickoff = new Date(`${dateStr}T${timeStr}:00`);
+  const kickoffMs = kickoff.getTime();
+  return Number.isNaN(kickoffMs) ? null : kickoffMs;
+}
+
+function ggamesApiElapsedSinceKickoffMs(game, fallbackMatch = null, now = new Date()) {
+  const kickoffMs = ggamesApiKickoffMs(game, fallbackMatch);
+  if (kickoffMs == null) return null;
+  return now.getTime() - kickoffMs;
+}
+
+function ggamesSanitizeEarlyGoalValue(value, elapsedMs) {
+  if (value == null || elapsedMs == null || elapsedMs < 0 || elapsedMs >= API_FIRST_MINUTE_SCORE_CAP_MS) return value ?? null;
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return value ?? null;
+  return Math.min(numeric, 1);
+}
+
+function ggamesSanitizeAutomaticApiGame(game, fallbackMatch = null, options = {}) {
+  if (!game) return game;
+  const now = options.now instanceof Date ? options.now : new Date();
+  const local = fallbackMatch || localMatchById(game.id || game.matchId);
+  const elapsedMs = ggamesApiElapsedSinceKickoffMs(game, local, now);
+  const liveWindow = local ? isMatchInLiveWindow(local, now) : isMatchInLiveWindow(game, now);
+  const finished = !!game.finished && elapsedMs != null && elapsedMs >= API_FINISHED_MIN_DELAY_MS;
+  const live = !finished && !!(game.live || options.scheduleLiveFallback === true || liveWindow);
+  const homeGoals = ggamesSanitizeEarlyGoalValue(game.homeGoals, elapsedMs);
+  const awayGoals = ggamesSanitizeEarlyGoalValue(game.awayGoals, elapsedMs);
+  const timeElapsed = finished
+    ? (game.timeElapsed || 'FT')
+    : (live && String(game.timeElapsed || '').trim().toUpperCase() === 'FT'
+        ? (local?.timeElapsed || '')
+        : game.timeElapsed);
+
+  return {
+    ...game,
+    homeGoals,
+    awayGoals,
+    finished,
+    live,
+    timeElapsed
+  };
 }
 
 function renderLiveGameCard(game, mode = 'live') {
@@ -4447,16 +4500,9 @@ function ggamesMergeOneLocalMatch(match, externalGames) {
   const best = candidates.sort((a, b) => ggamesGameQuality(b) - ggamesGameQuality(a))[0] || null;
   const localGame = ggamesBuildLocalScheduledGame(match);
   if (!best) return localGame;
-  const finished = !!best.finished;
-  const live = !finished && !!(best.live || localGame.live);
-  const timeElapsed = finished
-    ? (best.timeElapsed || 'FT')
-    : (best.live && !String(best.timeElapsed || '').startsWith('~')
-        ? best.timeElapsed
-        : (localGame.live ? localGame.timeElapsed : best.timeElapsed));
 
   // Se uma API tem marcador/estado melhor, entra; senão fica o fallback local.
-  return {
+  return ggamesSanitizeAutomaticApiGame({
     ...localGame,
     ...best,
     id: String(match.id),
@@ -4470,11 +4516,11 @@ function ggamesMergeOneLocalMatch(match, externalGames) {
     venue: best.venue || match.venue || '',
     city: match.city || '',
     country: match.country || '',
-    finished,
-    live,
-    timeElapsed,
+    finished: !!best.finished,
+    live: !!(best.live || localGame.live),
+    timeElapsed: best.timeElapsed || localGame.timeElapsed || '',
     _apiSources: candidates.map(c => c.source).filter(Boolean)
-  };
+  }, match, { scheduleLiveFallback: localGame.live });
 }
 
 async function ggamesLoadWorldCup26() {
@@ -5259,8 +5305,9 @@ async function loadApiWorldCupData({ sync = false } = {}) {
       ? localMatches.map(match => ggamesMergeOneLocalMatch(match, externalGames))
       : externalGames;
 
-    worldCupApi.games = mergedGames;
-    worldCupApi.groups = (zafronixStandings?.groups?.length ? zafronixStandings.groups : ggamesBuildGroupsFromCurrentGames(mergedGames));
+    const sanitizedGames = mergedGames.map(game => ggamesSanitizeAutomaticApiGame(game));
+    worldCupApi.games = sanitizedGames;
+    worldCupApi.groups = (zafronixStandings?.groups?.length ? zafronixStandings.groups : ggamesBuildGroupsFromCurrentGames(sanitizedGames));
     worldCupApi.loaded = true;
     worldCupApi.error = (!apiFootball.ok && !footballData.ok && !highlightly.ok && !allSports.ok && !sofaScore.ok && !espn.ok && !primary.ok && !sportsDb.ok && !zafronixStandings.ok)
       ? 'Dados live indisponíveis; modo estimado ativo.'
