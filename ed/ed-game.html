@@ -114,6 +114,7 @@
     .status-pill.err { color: #fecaca; border-color: rgba(239,68,68,.45); background: var(--redSoft); }
     .list { padding: 10px; display: grid; gap: 8px; }
     .match-row {
+      position: relative;
       width: 100%;
       border: 1px solid var(--line);
       border-left-width: 6px;
@@ -412,6 +413,13 @@
           </div>
           <div class="message" id="message"></div>
         </form>
+        
+        <div id="colabSection" style="margin-top: 24px; padding: 16px; border-radius: 20px; border: 1px solid rgba(56,189,248,.3); background: rgba(56,189,248,.08); display: none;">
+          <h3 style="margin: 0 0 12px; font-size: 1.1rem; color: var(--blue); display: flex; align-items: center; gap: 8px;">
+            <span>🤝</span> Histórico de Colaborações
+          </h3>
+          <ul id="colabList" style="margin: 0; padding-left: 20px; line-height: 1.6; color: var(--muted);"></ul>
+        </div>
       </div>
     </section>
   </div>
@@ -590,8 +598,11 @@
         const home = data.homeTeam || data.home || 'Casa';
         const away = data.awayTeam || data.away || 'Fora';
         const matchId = data.matchId ?? matchNumber(match);
+        const hasColab = Array.isArray(data.colaboracao) && data.colaboracao.length > 0;
+        const colabIcon = hasColab ? `<span class="colab-badge" style="position: absolute; top: 6px; right: 12px; font-size: 1.15rem;" title="Este jogo teve colaborações">🤝</span>` : '';
         return `
-          <button type="button" class="match-row ${finished ? 'finished' : 'not-finished'}" data-doc-id="${escapeHtml(match.id)}">
+          <button type="button" class="match-row ${finished ? 'finished' : 'not-finished'}" data-doc-id="${escapeHtml(match.id)}" style="position: relative;">
+            ${colabIcon}
             <div>
               <div class="teams">
                 <span class="team-name">${escapeHtml(home)}</span>
@@ -673,6 +684,20 @@
       `;
       ensureOption(els.winnerTeam, data.winnerTeam, `valor atual: ${data.winnerTeam}`);
       els.winnerTeam.value = data.winnerTeam ? String(data.winnerTeam) : 'none';
+
+      const colabSection = document.getElementById('colabSection');
+      const colabList = document.getElementById('colabList');
+      if (colabSection && colabList) {
+        const colabData = data.colaboracao;
+        if (Array.isArray(colabData) && colabData.length > 0) {
+          colabList.innerHTML = colabData.map(entry => `<li>${escapeHtml(entry)}</li>`).join('');
+          colabSection.style.display = 'block';
+        } else {
+          colabList.innerHTML = '';
+          colabSection.style.display = 'none';
+        }
+      }
+
       setMessage('');
       setWriteControls();
       window.scrollTo({ top: 0, behavior: 'smooth' });
