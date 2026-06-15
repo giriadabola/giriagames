@@ -2770,13 +2770,17 @@ function openGgamesPlayerHistory(playerId) {
       ? (isLive
         ? 'Live'
         : `${escapeHtml(official.homeTeam || match.home || '')} ${official.homeGoals ?? official.homeScore ?? 0}-${official.awayGoals ?? official.awayScore ?? 0} ${escapeHtml(official.awayTeam || match.away || '')}`)
-      : 'Ainda sem resultado oficial';
+      : '';
+    const isFinished = official && isOfficialResultFinished(official);
+    const resultCell = isFinished
+      ? `<td class="history-result-cell-clickable" data-match-id="${pred.id}" onclick="handleHistoryResultClick(this.dataset.matchId)" style="cursor: pointer; text-decoration: underline; color: var(--accent); font-weight: bold;">${officialText}</td>`
+      : `<td>${officialText}</td>`;
     return `
       <tr>
         <td>${escapeHtml(pred.id)}</td>
         <td><span class="history-pill ${statusClass}">${status}${score ? ` · ${score.points} pts` : ''}</span></td>
         <td>${predictionResultText(pred)}</td>
-        <td>${officialText}</td>
+        ${resultCell}
         <td>${escapeHtml(match.stageLabel || STAGE_LABELS[match.stage] || match.stage || 'Jogo')}</td>
       </tr>`;
   }).join('');
@@ -2804,6 +2808,162 @@ function openGgamesPlayerHistory(playerId) {
     </div>
   `);
 }
+
+window.handleHistoryResultClick = function(matchId) {
+  const official = getOfficialResult(matchId);
+  if (!official || (official.status !== 'finished' && official.finished !== true)) {
+    alert('Este jogo ainda não terminou ou não possui o status "finished". Apenas jogos terminados podem ser editados.');
+    return;
+  }
+  
+  const sortedParticipants = [...publicPredictions].sort((a, b) => 
+    (a.participantName || '').localeCompare(b.participantName || '', 'pt', { sensitivity: 'base' })
+  );
+  let optionsHtml = sortedParticipants.map(p => 
+    `<option value="${escapeHtml(p.participantName)}">${escapeHtml(p.participantName)}</option>`
+  ).join('');
+  
+  const modalHtml = `
+    <div class="modal-head">
+      <h2>Colaborar no Jogo ${escapeHtml(matchId)}</h2>
+      <p class="modal-muted">${escapeHtml(official.homeTeam)} vs ${escapeHtml(official.awayTeam)}</p>
+    </div>
+    <div style="margin: 20px 0; display: flex; flex-direction: column; gap: 15px;">
+      <div>
+        <label for="colabParticipantSelect" style="display:block; margin-bottom:8px; font-weight:800; font-size: 0.95rem;">Selecione o seu participante:</label>
+        <select id="colabParticipantSelect" style="width:100%; padding: 12px; border-radius: 12px; background: #07111f; color: var(--text); border: 1px solid var(--line);">
+          <option value="">-- Escolha um participante --</option>
+          ${optionsHtml}
+        </select>
+      </div>
+      
+      <div>
+        <label for="colabPinInput" style="display:block; margin-bottom:8px; font-weight:800; font-size: 0.95rem;">Introduza o PIN correspondente:</label>
+        <input type="text" id="colabPinInput" placeholder="Ex: 318890984" style="width:100%; padding: 12px; border-radius: 12px; background: #07111f; color: var(--text); border: 1px solid var(--line);" />
+      </div>
+      
+      <button type="button" class="primary" id="colabValidateBtn" style="margin-top: 10px; width:100%; padding: 12px; border-radius: 999px;">Validar PIN</button>
+    </div>
+  `;
+  openModal(modalHtml);
+  
+  document.getElementById('colabValidateBtn').addEventListener('click', () => {
+    const selectedName = document.getElementById('colabParticipantSelect').value;
+    const enteredPin = document.getElementById('colabPinInput').value.trim();
+    
+    if (!selectedName) {
+      alert('Selecione um participante.');
+      return;
+    }
+    
+    const participant = publicPredictions.find(p => p.participantName === selectedName);
+    if (!participant) {
+      alert('Participante não encontrado.');
+      return;
+    }
+    
+    if (String(participant.pin || '').trim() === enteredPin) {
+      openCollaborationEditPopup(matchId, participant.participantName, official);
+    } else {
+      alert('O PIN introduzido não corresponde a este participante.');
+    }
+  });
+};
+
+window.openCollaborationEditPopup = function(matchId, participantName, official) {
+  function makeGoalsOptions(selectedValue) {
+    let html = '';
+    for (let i = 0; i <= 20; i++) {
+      const selectedAttr = (selectedValue !== null && selectedValue !== undefined && Number(selectedValue) === i) ? 'selected' : '';
+      html += `<option value="${i}" ${selectedAttr}>${i}</option>`;
+    }
+    return html;
+  }
+  
+  const homeOptions = makeGoalsOptions(official.homeGoals);
+  const awayOptions = makeGoalsOptions(official.awayGoals);
+  
+  const editHtml = `
+    <div class="modal-head">
+      <h2>Editar Resultado - Jogo ${escapeHtml(matchId)}</h2>
+      <p class="modal-muted">Colaborador: <strong>${escapeHtml(participantName)}</strong></p>
+    </div>
+    <div style="margin: 25px 0; display: grid; grid-template-columns: 1fr 1fr; gap: 24px; text-align: center;">
+      <div style="background: rgba(255,255,255,.03); padding: 16px; border-radius: 16px; border: 1px solid var(--line);">
+        <h3 style="margin: 0 0 12px; font-size: 1.1rem; color: var(--text);">${escapeHtml(official.homeTeam)}</h3>
+        <select id="colabHomeGoals" style="width: 100px; padding: 10px; text-align: center; font-size: 1.25rem; border-radius: 12px; background: #07111f; color: var(--text); border: 1px solid var(--line);">
+          ${homeOptions}
+        </select>
+      </div>
+      <div style="background: rgba(255,255,255,.03); padding: 16px; border-radius: 16px; border: 1px solid var(--line);">
+        <h3 style="margin: 0 0 12px; font-size: 1.1rem; color: var(--text);">${escapeHtml(official.awayTeam)}</h3>
+        <select id="colabAwayGoals" style="width: 100px; padding: 10px; text-align: center; font-size: 1.25rem; border-radius: 12px; background: #07111f; color: var(--text); border: 1px solid var(--line);">
+          ${awayOptions}
+        </select>
+      </div>
+    </div>
+    <div style="margin-top: 25px;">
+      <button type="button" class="primary" id="colabSubmitBtn" style="width:100%; padding: 12px; border-radius: 999px;">Colaborar</button>
+    </div>
+  `;
+  openModal(editHtml);
+  
+  document.getElementById('colabSubmitBtn').addEventListener('click', async () => {
+    const newHomeGoals = Number(document.getElementById('colabHomeGoals').value);
+    const newAwayGoals = Number(document.getElementById('colabAwayGoals').value);
+    
+    const prevHomeGoals = official.homeGoals;
+    const prevAwayGoals = official.awayGoals;
+    
+    const homeGoalsChanged = (prevHomeGoals !== newHomeGoals);
+    const awayGoalsChanged = (prevAwayGoals !== newAwayGoals);
+    
+    if (!homeGoalsChanged && !awayGoalsChanged) {
+      alert('Não alterou nenhum dos golos.');
+      closeModal();
+      return;
+    }
+    
+    let editDesc = '';
+    if (homeGoalsChanged && awayGoalsChanged) {
+      editDesc = `${official.homeTeam} homeGoals (${prevHomeGoals ?? 0} -> ${newHomeGoals}) e ${official.awayTeam} awayGoals (${prevAwayGoals ?? 0} -> ${newAwayGoals})`;
+    } else if (homeGoalsChanged) {
+      editDesc = `${official.homeTeam} homeGoals (${prevHomeGoals ?? 0} -> ${newHomeGoals})`;
+    } else {
+      editDesc = `${official.awayTeam} awayGoals (${prevAwayGoals ?? 0} -> ${newAwayGoals})`;
+    }
+    const colaboracaoEntry = `${participantName} + ${editDesc}`;
+    
+    const matchDocId = firebaseMatchDocId(matchId);
+    const ref = firebaseTools.doc(firestoreDb, FIREBASE_MATCHES_COLLECTION, matchDocId);
+    
+    const submitBtn = document.getElementById('colabSubmitBtn');
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'A gravar...';
+    
+    try {
+      const snap = await firebaseTools.getDoc(ref);
+      let currentData = snap.exists() ? snap.data() : {};
+      
+      let colaboracaoList = Array.isArray(currentData.colaboracao) ? currentData.colaboracao : [];
+      colaboracaoList.push(colaboracaoEntry);
+      
+      await firebaseTools.setDoc(ref, {
+        homeGoals: newHomeGoals,
+        awayGoals: newAwayGoals,
+        colaboracao: colaboracaoList
+      }, { merge: true });
+      
+      closeModal();
+      window.location.reload();
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao gravar colaboração no Firebase: ' + err.message);
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Colaborar';
+    }
+  });
+};
 
 function completionInfo() {
   if (!data) return { filled: 0, total: 0, complete: false, missingName: true, missingMatches: [] };
