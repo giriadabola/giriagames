@@ -257,7 +257,6 @@ function buildOfficialPayload(match, card) {
     winnerSide,
     winnerTeam,
     source: 'admin',
-    syncOrigin: 'manual',
     updatedAt: tools.serverTimestamp(),
     updatedBy: currentUser.uid,
     updatedByEmail: currentUser.email || null

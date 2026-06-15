@@ -1643,8 +1643,7 @@ async function syncFinishedApiResultsToFirebase() {
       // não escrever absolutamente nada neste documento. Isto impede o próximo jogo
       // de receber 0-0/live/finished antes da hora.
       if (ggamesMatchKickoffStillFuture(existing)) return;
-      // Regra de segurança: se o jogo já está como finalizado, não pode voltar a live
-      if (existing?.status === 'finished' || existing?.finished === true) return;
+      if (existing?.status === 'finished') return;
       // Se o documento foi atualizado manualmente (pelo painel ou manualmente no DB), impede a reescrita automática da API
       if (existing && (existing.syncOrigin === 'manual-logic-panel' || existing.syncOrigin === 'manual')) return;
       const nextStatus = game.finished ? 'finished' : 'live';
@@ -2951,10 +2950,6 @@ window.openCollaborationEditPopup = function(matchId, participantName, official)
       await firebaseTools.setDoc(ref, {
         homeGoals: newHomeGoals,
         awayGoals: newAwayGoals,
-        status: 'finished',
-        finished: true,
-        live: false,
-        syncOrigin: 'manual',
         colaboracao: colaboracaoList
       }, { merge: true });
       
