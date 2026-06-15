@@ -14,6 +14,8 @@ try {
 
 // Global configurations & team aliases matching script.js
 const FIREBASE_MATCHES_COLLECTION = 'worldcupextraMatches';
+const API_FINISHED_MIN_DELAY_MS = 40 * 60 * 1000;
+const API_FIRST_MINUTE_SCORE_CAP_MS = 60 * 1000;
 
 const API_TEAM_ALIASES = {
   'mexico': 'mexico',
@@ -237,6 +239,41 @@ function isMatchBeforeKickoff(match, now = new Date()) {
   return now < kickoff;
 }
 
+function getKickoffMs(match) {
+  if (!match || !match.date) return null;
+  const kickoff = new Date(`${match.date}T${match.time || '12:00'}:00`);
+  const kickoffMs = kickoff.getTime();
+  return Number.isNaN(kickoffMs) ? null : kickoffMs;
+}
+
+function getElapsedSinceKickoffMs(match, now = new Date()) {
+  const kickoffMs = getKickoffMs(match);
+  if (kickoffMs == null) return null;
+  return now.getTime() - kickoffMs;
+}
+
+function capEarlyGoalValue(value, elapsedMs) {
+  if (value == null || elapsedMs == null || elapsedMs < 0 || elapsedMs >= API_FIRST_MINUTE_SCORE_CAP_MS) return value ?? null;
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return value ?? null;
+  return Math.min(numeric, 1);
+}
+
+function sanitizeApiWriteGame(game, local, now = new Date()) {
+  const elapsedMs = getElapsedSinceKickoffMs(local || game, now);
+  const finished = !!game.finished && elapsedMs != null && elapsedMs >= API_FINISHED_MIN_DELAY_MS;
+  const liveWindow = elapsedMs != null && elapsedMs >= 0 && elapsedMs <= 130 * 60 * 1000;
+  const live = !finished && !!(game.live || liveWindow);
+  return {
+    ...game,
+    homeGoals: capEarlyGoalValue(game.homeGoals, elapsedMs),
+    awayGoals: capEarlyGoalValue(game.awayGoals, elapsedMs),
+    finished,
+    live,
+    timeElapsed: finished ? (game.timeElapsed || 'FT') : game.timeElapsed
+  };
+}
+
 function ggamesMatchKickoffStillFuture(existingData) {
   if (!existingData || !existingData.kickoff) return false;
   const kickoffDate = existingData.kickoff.toDate ? existingData.kickoff.toDate() : new Date(existingData.kickoff);
@@ -283,6 +320,7 @@ async function runSync() {
     const docId = `match_${String(game.id).padStart(3, '0')}`;
     const existing = currentDocs[docId] || null;
     const local = localMatches.find(m => String(m.id) === String(game.id));
+    const sanitizedGame = sanitizeApiWriteGame(game, local);
 
     // Regra 1: Kickoff no futuro
     if (ggamesMatchKickoffStillFuture(existing) || (local && isMatchBeforeKickoff(local))) {
@@ -302,9 +340,9 @@ async function runSync() {
     }
 
     // Prepare state
-    const nextStatus = game.finished ? 'finished' : 'live';
-    const nextLive = !!(game.live && !game.finished);
-    const nextFinished = !!game.finished;
+    const nextStatus = sanitizedGame.finished ? 'finished' : 'live';
+    const nextLive = !!(sanitizedGame.live && !sanitizedGame.finished);
+    const nextFinished = !!sanitizedGame.finished;
 
     // Check if change is needed
     const sameCoreState =
@@ -312,9 +350,9 @@ async function runSync() {
       existing.status === nextStatus &&
       !!existing.live === nextLive &&
       !!existing.finished === nextFinished &&
-      existing.homeGoals === game.homeGoals &&
-      existing.awayGoals === game.awayGoals &&
-      String(existing.timeElapsed || '') === String(game.timeElapsed || '');
+      existing.homeGoals === sanitizedGame.homeGoals &&
+      existing.awayGoals === sanitizedGame.awayGoals &&
+      String(existing.timeElapsed || '') === String(sanitizedGame.timeElapsed || '');
 
     if (sameCoreState) {
       continue;
@@ -322,9 +360,9 @@ async function runSync() {
 
     // Calculate winner if finished
     let winnerTeam = null;
-    if (nextFinished && game.homeGoals !== null && game.awayGoals !== null) {
-      if (game.homeGoals > game.awayGoals) winnerTeam = local?.home || '';
-      else if (game.awayGoals > game.homeGoals) winnerTeam = local?.away || '';
+    if (nextFinished && sanitizedGame.homeGoals !== null && sanitizedGame.awayGoals !== null) {
+      if (sanitizedGame.homeGoals > sanitizedGame.awayGoals) winnerTeam = local?.home || '';
+      else if (sanitizedGame.awayGoals > sanitizedGame.homeGoals) winnerTeam = local?.away || '';
       else winnerTeam = 'Empate';
     }
 
@@ -342,11 +380,11 @@ async function runSync() {
       time: local?.time || null,
       homeTeam: local?.home || null,
       awayTeam: local?.away || null,
-      homeGoals: game.homeGoals,
-      awayGoals: game.awayGoals,
+      homeGoals: sanitizedGame.homeGoals,
+      awayGoals: sanitizedGame.awayGoals,
       winnerTeam,
-      timeElapsed: game.timeElapsed || null,
-      source: game.source,
+      timeElapsed: sanitizedGame.timeElapsed || null,
+      source: sanitizedGame.source,
       syncOrigin: 'api',
       apiUpdatedAt: new Date().toISOString(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
