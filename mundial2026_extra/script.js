@@ -2951,6 +2951,10 @@ window.openCollaborationEditPopup = function(matchId, participantName, official)
       await firebaseTools.setDoc(ref, {
         homeGoals: newHomeGoals,
         awayGoals: newAwayGoals,
+        status: 'finished',
+        finished: true,
+        live: false,
+        syncOrigin: 'manual',
         colaboracao: colaboracaoList
       }, { merge: true });
       
