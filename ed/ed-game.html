@@ -318,12 +318,17 @@
     </section>
 
     <section class="auth-card" aria-live="polite">
-      <div>
+      <div style="flex: 1; min-width: 0;">
         <strong>Autenticação Firebase</strong>
         <span id="authStatus">A verificar login...</span>
       </div>
-      <div class="auth-actions">
-        <button class="btn primary" id="loginBtn" type="button">Entrar com Google</button>
+      <div class="auth-actions" style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+        <div id="credentialsFields" style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+          <input type="email" id="authEmail" placeholder="E-mail" style="padding: 8px 12px; border-radius: 12px; border: 1px solid var(--line); background: rgba(2,8,23,.5); color: var(--text); font-size: 0.9rem; outline: none; width: 180px;">
+          <input type="password" id="authPassword" placeholder="Palavra-passe" style="padding: 8px 12px; border-radius: 12px; border: 1px solid var(--line); background: rgba(2,8,23,.5); color: var(--text); font-size: 0.9rem; outline: none; width: 140px;">
+          <button class="btn primary" id="loginEmailBtn" type="button" style="padding: 8px 14px;">Entrar</button>
+        </div>
+        <button class="btn" id="loginBtn" type="button">Entrar com Google</button>
         <button class="btn" id="logoutBtn" type="button" hidden>Sair</button>
       </div>
     </section>
@@ -427,7 +432,7 @@
     const FIREBASE_MAINTENANCE_FIELD = 'bugs';
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
     import { getFirestore, collection, getDocs, doc, getDoc, setDoc, updateDoc, deleteField, serverTimestamp, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
-    import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
+    import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signOut, signInWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
 
     const app = initializeApp(FIREBASE_CONFIG);
     const db = getFirestore(app);
@@ -460,7 +465,11 @@
       maintenanceToggleLabel: document.getElementById('maintenanceToggleLabel'),
       authStatus: document.getElementById('authStatus'),
       login: document.getElementById('loginBtn'),
-      logout: document.getElementById('logoutBtn')
+      logout: document.getElementById('logoutBtn'),
+      credentialsFields: document.getElementById('credentialsFields'),
+      authEmail: document.getElementById('authEmail'),
+      authPassword: document.getElementById('authPassword'),
+      loginEmail: document.getElementById('loginEmailBtn')
     };
 
     let matches = [];
@@ -484,7 +493,7 @@
     async function checkAdmin(user) {
       const userSnap = await getDoc(doc(db, 'users', user.uid));
       const estatuto = userSnap.exists() ? userSnap.data()?.estatuto : '';
-      return ['ruler', 'estafeta'].includes(estatuto);
+      return estatuto === 'ruler';
     }
 
     async function handleAuthUser(user) {
@@ -493,11 +502,13 @@
       if (!user) {
         setAuthStatus('Não está autenticado nesta página. Entra para poderes gravar alterações.', 'err');
         els.login.hidden = false;
+        if (els.credentialsFields) els.credentialsFields.style.display = 'flex';
         els.logout.hidden = true;
         setWriteControls();
         return;
       }
       els.login.hidden = true;
+      if (els.credentialsFields) els.credentialsFields.style.display = 'none';
       els.logout.hidden = false;
       setAuthStatus(`Autenticado como ${user.email || user.uid}. A verificar estatuto...`);
       try {
@@ -505,7 +516,7 @@
         if (isAdmin) {
           setAuthStatus(`Login confirmado: ${user.email || user.uid}. Permissão de edição OK.`, 'ok');
         } else {
-          setAuthStatus(`Login feito, mas este utilizador não tem estatuto ruler/estafeta em users/${user.uid}.`, 'err');
+          setAuthStatus(`Login feito, mas este utilizador não tem estatuto ruler em users/${user.uid}.`, 'err');
         }
       } catch (error) {
         console.error(error);
@@ -698,7 +709,7 @@
     async function saveSelected(deleteStatesOnly = false) {
       if (!selected) return;
       if (!isAdmin) {
-        setMessage('Tens de estar autenticado com estatuto ruler/estafeta para gravar.', 'err');
+        setMessage('Tens de estar autenticado com estatuto ruler para gravar.', 'err');
         return;
       }
       els.save.disabled = true;
@@ -756,7 +767,7 @@
     async function requestMaintenanceChange(active) {
       if (!isAdmin) {
         setMaintenanceUi(!active);
-        setMessage('Tens de estar autenticado com estatuto ruler/estafeta para alterar o modo manutenção.', 'err');
+        setMessage('Tens de estar autenticado com estatuto ruler para alterar o modo manutenção.', 'err');
         return;
       }
       setMaintenanceUi(active);
@@ -778,6 +789,28 @@
       await requestMaintenanceChange(els.maintenanceToggle.checked);
     });
 
+
+    els.loginEmail.addEventListener('click', async () => {
+      const email = els.authEmail.value.trim();
+      const password = els.authPassword.value.trim();
+      if (!email || !password) {
+        setAuthStatus('Por favor, introduz o e-mail e a palavra-passe.', 'err');
+        return;
+      }
+      setAuthStatus('A iniciar sessão...', '');
+      try {
+        await signInWithEmailAndPassword(auth, email, password);
+      } catch (error) {
+        console.error('Email login falhou:', error);
+        let msg = 'Erro no login.';
+        if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found') {
+          msg = 'E-mail ou palavra-passe incorretos.';
+        } else if (error.code === 'auth/invalid-email') {
+          msg = 'Formato de e-mail inválido.';
+        }
+        setAuthStatus(`${msg} (${error.code})`, 'err');
+      }
+    });
 
     els.login.addEventListener('click', async () => {
       setAuthStatus('A abrir login Google...', '');
