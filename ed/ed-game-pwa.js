@@ -72,7 +72,7 @@
   });
 
   document.addEventListener('DOMContentLoaded', () => {
-    if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js?v=20260615edgame1').catch(() => {});
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js?v=20260615edgame2', { scope: './' }).catch(() => {});
     if (isStandalone()) {
       localStorage.setItem(INSTALLED_KEY, '1');
       return;
