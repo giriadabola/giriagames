@@ -343,6 +343,17 @@
         </div>
         <span class="status-pill" id="connectionStatus">A ligar...</span>
       </div>
+      <div id="allColabsCollapsible" style="border-bottom: 1px solid var(--line); background: rgba(56,189,248,.04);">
+        <button type="button" id="toggleAllColabsBtn" style="width: 100%; text-align: left; padding: 14px 18px; background: transparent; border: 0; font-weight: 800; color: var(--blue); display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
+          <span>🤝 Ver Todas as Colaborações Realizadas</span>
+          <span id="colabsToggleArrow">▼</span>
+        </button>
+        <div id="allColabsListContainer" style="display: none; padding: 0 18px 18px 18px; max-height: 250px; overflow-y: auto;">
+          <ul id="globalColabsList" style="margin: 0; padding-left: 20px; line-height: 1.8; color: var(--muted); font-size: 0.9rem;">
+            <li>Nenhuma colaboração registada nos jogos.</li>
+          </ul>
+        </div>
+      </div>
       <div class="list" id="matchesList">
         <div class="empty">A carregar jogos...</div>
       </div>
@@ -623,6 +634,7 @@
       els.list.querySelectorAll('.match-row').forEach(button => {
         button.addEventListener('click', () => openEditor(button.dataset.docId));
       });
+      updateGlobalColabs();
     }
 
     async function loadMatches() {
@@ -774,6 +786,46 @@
       setMessage('');
       setWriteControls();
       window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+
+    function updateGlobalColabs() {
+      const globalList = document.getElementById('globalColabsList');
+      if (!globalList) return;
+      const colabEntries = [];
+      matches.forEach(match => {
+        const data = match.data;
+        if (Array.isArray(data.colaboracao) && data.colaboracao.length > 0) {
+          const home = data.homeTeam || data.home || 'Casa';
+          const away = data.awayTeam || data.away || 'Fora';
+          const matchId = data.matchId ?? matchNumber(match);
+          data.colaboracao.forEach(entry => {
+            colabEntries.push({
+              matchId: matchId,
+              label: `${home} vs ${away}`,
+              entry: entry
+            });
+          });
+        }
+      });
+      if (colabEntries.length === 0) {
+        globalList.innerHTML = '<li>Nenhuma colaboração registada nos jogos.</li>';
+      } else {
+        globalList.innerHTML = colabEntries.map(item => 
+          `<li><strong>Jogo ${item.matchId} (${escapeHtml(item.label)}):</strong> ${escapeHtml(item.entry)}</li>`
+        ).join('');
+      }
+    }
+
+    document.getElementById('toggleAllColabsBtn').addEventListener('click', () => {
+      const container = document.getElementById('allColabsListContainer');
+      const arrow = document.getElementById('colabsToggleArrow');
+      if (container.style.display === 'none') {
+        container.style.display = 'block';
+        arrow.textContent = '▲';
+      } else {
+        container.style.display = 'none';
+        arrow.textContent = '▼';
+      }
     });
 
     function setMaintenanceUi(active) {
