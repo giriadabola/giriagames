@@ -4599,7 +4599,7 @@ function ggamesNormalizeSportsDbEvent(event) {
   const scheduleGame = { ...local, date, time };
   const liveBySchedule = isMatchInLiveWindow(scheduleGame);
   const liveByApi = ggamesStatusIsLive(statusText);
-  const finished = ggamesStatusIsFinished(statusText) || (!!event.intHomeScore && !!event.intAwayScore && !liveBySchedule);
+  const finished = homeGoals !== null && awayGoals !== null && (ggamesStatusIsFinished(statusText) || (getMatchDateObj(local) < new Date(Date.now() - 130 * 60 * 1000) && !/live|active|1h|2h|ht/i.test(statusText)));
   const live = !finished && (liveByApi || liveBySchedule);
 
   return {
@@ -4832,7 +4832,8 @@ async function ggamesFetchHighlightly(path) {
 }
 
 function ggamesHighlightlyStatusIsFinished(value) {
-  return /finished|ft|full.?time|ended|after extra|pen/i.test(String(value || ''));
+  const statusStr = String(value || '');
+  return /finished|ft|full.?time|ended|after extra|pen/i.test(statusStr) && !/live|in.?play|1h|2h|ht/i.test(statusStr);
 }
 
 function ggamesHighlightlyStatusIsLive(value) {
@@ -4989,8 +4990,8 @@ async function ggamesFetchAllSports(params) {
 }
 
 function ggamesAllSportsStatusIsFinished(event) {
-  return /finished|ft|after extra|penalties/i.test(String(event.event_status || event.event_status_info || event.event_final_result || '')) ||
-    (!!event.event_ft_result && String(event.event_ft_result).includes(' - '));
+  const status = String(event.event_status || event.event_status_info || event.event_live || '');
+  return /finished|ft|aet|ap/i.test(status) && !/live|half|[0-9]+/i.test(status);
 }
 
 function ggamesAllSportsStatusIsLive(event) {
