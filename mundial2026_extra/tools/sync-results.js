@@ -235,13 +235,13 @@ try {
 // Rules for writing
 function isMatchBeforeKickoff(match, now = new Date()) {
   if (!match || !match.date) return false;
-  const kickoff = new Date(`${match.date}T${match.time || '12:00'}:00`);
+  const kickoff = new Date(`${match.date}T${match.time || '12:00'}:00+01:00`);
   return now < kickoff;
 }
 
 function getKickoffMs(match) {
   if (!match || !match.date) return null;
-  const kickoff = new Date(`${match.date}T${match.time || '12:00'}:00`);
+  const kickoff = new Date(`${match.date}T${match.time || '12:00'}:00+01:00`);
   const kickoffMs = kickoff.getTime();
   return Number.isNaN(kickoffMs) ? null : kickoffMs;
 }
