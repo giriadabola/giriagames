@@ -1661,25 +1661,44 @@ async function syncFinishedApiResultsToFirebase() {
     const batch = firebaseTools.writeBatch(firestoreDb);
     relevantGames.forEach(game => {
       const existing = existingByMatchId[String(game.id)] || null;
-      // Regra de segurança: se o kickoff guardado no Firebase ainda não chegou,
-      // não escrever absolutamente nada neste documento. Isto impede o próximo jogo
-      // de receber 0-0/live/finished antes da hora.
-      if (ggamesMatchKickoffStillFuture(existing)) return;
+      
+      // Timing boundaries check
+      const local = (data?.matches || []).find(m => String(m.id) === String(game.id));
+      const kickoffMs = local ? getMatchDateObj({ date: local.date, time: local.time || '12:00' }).getTime() : null;
+      const nowMs = Date.now();
+
+      // Rule 1: Kickoff has not arrived yet
+      if (kickoffMs && nowMs < kickoffMs) return;
+
+      // Rule 2: 180 minutes have passed since kickoff
+      if (kickoffMs && nowMs > kickoffMs + 180 * 60 * 1000) return;
+
       if (existing?.status === 'finished') return;
       // Se o documento foi atualizado manualmente (pelo painel ou manualmente no DB), impede a reescrita automática da API
       if (existing && (existing.syncOrigin === 'manual-logic-panel' || existing.syncOrigin === 'manual')) return;
+      
       const nextStatus = game.finished ? 'finished' : 'live';
       const nextLive = !!(game.live && !game.finished);
       const nextFinished = !!game.finished;
+
+      const targetHomeGoalsLive = game.homeGoals ?? null;
+      const targetAwayGoalsLive = game.awayGoals ?? null;
+      const targetHomeGoals = nextFinished ? (game.homeGoals ?? null) : null;
+      const targetAwayGoals = nextFinished ? (game.awayGoals ?? null) : null;
+
       const sameCoreState =
         existing &&
         existing.status === nextStatus &&
         !!existing.live === nextLive &&
         !!existing.finished === nextFinished &&
-        (existing.homeGoals ?? null) === (game.homeGoals ?? null) &&
-        (existing.awayGoals ?? null) === (game.awayGoals ?? null) &&
+        existing.homeGoalsLive === targetHomeGoalsLive &&
+        existing.awayGoalsLive === targetAwayGoalsLive &&
+        existing.homeGoals === targetHomeGoals &&
+        existing.awayGoals === targetAwayGoals &&
         String(existing.timeElapsed || '') === String(game.timeElapsed || '');
+        
       if (sameCoreState) return;
+      
       const ref = firebaseTools.doc(firestoreDb, FIREBASE_MATCHES_COLLECTION, firebaseMatchDocId(game.id));
       batch.set(ref, {
         documentId: firebaseMatchDocId(game.id),
@@ -1697,8 +1716,10 @@ async function syncFinishedApiResultsToFirebase() {
         country: game.country || null,
         homeTeam: game.homeTeam,
         awayTeam: game.awayTeam,
-        homeGoals: game.homeGoals ?? null,
-        awayGoals: game.awayGoals ?? null,
+        homeGoalsLive: targetHomeGoalsLive,
+        awayGoalsLive: targetAwayGoalsLive,
+        homeGoals: targetHomeGoals,
+        awayGoals: targetAwayGoals,
         winnerTeam: game.finished && resultHasScore(game) ? getWinnerTeamFromScore(game) : null,
         timeElapsed: game.timeElapsed || null,
         source: game.source || 'api',
@@ -3354,7 +3375,7 @@ function getOfficialResult(matchId) {
 }
 
 function getMatchDateObj(match) {
-  return new Date(`${match.date}T${match.time || '12:00'}:00`);
+  return new Date(`${match.date}T${match.time || '12:00'}:00+01:00`);
 }
 
 function sameLocalDay(a, b) {
