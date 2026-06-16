@@ -322,9 +322,19 @@ async function runSync() {
     const local = localMatches.find(m => String(m.id) === String(game.id));
     const sanitizedGame = sanitizeApiWriteGame(game, local);
 
-    // Regra 1: Kickoff no futuro
-    if (ggamesMatchKickoffStillFuture(existing) || (local && isMatchBeforeKickoff(local))) {
+    // Timing boundaries check
+    const kickoffMs = getKickoffMs(local);
+    const nowMs = Date.now();
+
+    // 1- se o kickoff ainda nao tiver chegado, o API nao pode editar os campos
+    if (kickoffMs && nowMs < kickoffMs) {
       console.log(`Jogo ${game.id} saltado: Kickoff ainda no futuro.`);
+      continue;
+    }
+
+    // 2- se tiver passado 180 minutos do kickoff , o API nao pode editar os campos
+    if (kickoffMs && nowMs > kickoffMs + 180 * 60 * 1000) {
+      console.log(`Jogo ${game.id} saltado: Passaram mais de 180 minutos do kickoff.`);
       continue;
     }
 
@@ -345,14 +355,22 @@ async function runSync() {
     const nextLive = !!(sanitizedGame.live && !sanitizedGame.finished);
     const nextFinished = !!sanitizedGame.finished;
 
+    // Goals assignment based on status
+    const targetHomeGoalsLive = sanitizedGame.homeGoals;
+    const targetAwayGoalsLive = sanitizedGame.awayGoals;
+    const targetHomeGoals = nextFinished ? sanitizedGame.homeGoals : null;
+    const targetAwayGoals = nextFinished ? sanitizedGame.awayGoals : null;
+
     // Check if change is needed
     const sameCoreState =
       existing &&
       existing.status === nextStatus &&
       !!existing.live === nextLive &&
       !!existing.finished === nextFinished &&
-      existing.homeGoals === sanitizedGame.homeGoals &&
-      existing.awayGoals === sanitizedGame.awayGoals &&
+      existing.homeGoalsLive === targetHomeGoalsLive &&
+      existing.awayGoalsLive === targetAwayGoalsLive &&
+      existing.homeGoals === targetHomeGoals &&
+      existing.awayGoals === targetAwayGoals &&
       String(existing.timeElapsed || '') === String(sanitizedGame.timeElapsed || '');
 
     if (sameCoreState) {
@@ -381,8 +399,10 @@ async function runSync() {
       time: local?.time || null,
       homeTeam: local?.home || null,
       awayTeam: local?.away || null,
-      homeGoals: sanitizedGame.homeGoals,
-      awayGoals: sanitizedGame.awayGoals,
+      homeGoalsLive: targetHomeGoalsLive,
+      awayGoalsLive: targetAwayGoalsLive,
+      homeGoals: targetHomeGoals,
+      awayGoals: targetAwayGoals,
       winnerTeam,
       timeElapsed: sanitizedGame.timeElapsed || null,
       source: sanitizedGame.source,
