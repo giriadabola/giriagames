@@ -274,6 +274,13 @@ function sanitizeApiWriteGame(game, local, now = new Date()) {
   };
 }
 
+function buildApiProtectedMatchFields(existing) {
+  return {
+    homeGoals: existing?.homeGoals ?? null,
+    awayGoals: existing?.awayGoals ?? null
+  };
+}
+
 function ggamesMatchKickoffStillFuture(existingData) {
   if (!existingData || !existingData.kickoff) return false;
   const kickoffDate = existingData.kickoff.toDate ? existingData.kickoff.toDate() : new Date(existingData.kickoff);
@@ -358,8 +365,9 @@ async function runSync() {
     // Goals assignment based on status
     const targetHomeGoalsLive = sanitizedGame.homeGoals;
     const targetAwayGoalsLive = sanitizedGame.awayGoals;
-    const targetHomeGoals = nextFinished ? sanitizedGame.homeGoals : null;
-    const targetAwayGoals = nextFinished ? sanitizedGame.awayGoals : null;
+    const protectedFields = buildApiProtectedMatchFields(existing);
+    const targetHomeGoals = protectedFields.homeGoals;
+    const targetAwayGoals = protectedFields.awayGoals;
 
     // Check if change is needed
     const sameCoreState =
@@ -369,8 +377,6 @@ async function runSync() {
       !!existing.finished === nextFinished &&
       existing.homeGoalsLive === targetHomeGoalsLive &&
       existing.awayGoalsLive === targetAwayGoalsLive &&
-      existing.homeGoals === targetHomeGoals &&
-      existing.awayGoals === targetAwayGoals &&
       String(existing.timeElapsed || '') === String(sanitizedGame.timeElapsed || '');
 
     if (sameCoreState) {
