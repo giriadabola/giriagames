@@ -1056,8 +1056,35 @@ async function openLiveResultsModal() {
 
 function refreshLiveDashboardView() {
   const body = $('#liveViewerBody') || $('#closedLiveDashboard') || $('#closedViewerBody');
-  if (body) body.innerHTML = renderLiveDashboard();
+  if (body) {
+    const scrollState = captureLiveDashboardScrollState(body);
+    body.innerHTML = renderLiveDashboard();
+    restoreLiveDashboardScrollState(body, scrollState);
+  }
   updateMobileAppNav();
+}
+
+function captureLiveDashboardScrollState(container) {
+  if (!container) return null;
+  const state = {
+    containerScrollTop: container.scrollTop,
+    windowScrollY: window.scrollY,
+    keyed: {}
+  };
+  container.querySelectorAll('[data-scroll-key]').forEach(node => {
+    state.keyed[node.dataset.scrollKey] = node.scrollTop;
+  });
+  return state;
+}
+
+function restoreLiveDashboardScrollState(container, state) {
+  if (!container || !state) return;
+  container.scrollTop = state.containerScrollTop || 0;
+  container.querySelectorAll('[data-scroll-key]').forEach(node => {
+    const saved = state.keyed?.[node.dataset.scrollKey];
+    if (typeof saved === 'number') node.scrollTop = saved;
+  });
+  window.scrollTo(window.scrollX, state.windowScrollY || 0);
 }
 
 
@@ -1858,7 +1885,7 @@ function renderLiveDashboard() {
           <button type="button" class="viewer-tab ${liveLeftTab === 'future' ? 'active' : ''}" data-live-left="future">Futuros Jogos</button>
           <button type="button" class="viewer-tab ${liveLeftTab === 'groups' ? 'active' : ''}" data-live-left="groups">Tabela dos Grupos</button>
         </div>
-        <div class="live-panel-body">${renderLiveLeftPanel()}</div>
+        <div class="live-panel-body" data-scroll-key="live-games-panel">${renderLiveLeftPanel()}</div>
       </section>
       <section class="live-column" data-mobile-live-section="results">
         <div class="live-column-head"><h3>Resultados</h3></div>
@@ -1866,7 +1893,7 @@ function renderLiveDashboard() {
           <button type="button" class="viewer-tab ${liveRightTab === 'battles' ? 'active' : ''}" data-live-right="battles">Ggames Battles Live</button>
           <button type="button" class="viewer-tab ${liveRightTab === 'table' ? 'active' : ''}" data-live-right="table">Tabela Ggames Live</button>
         </div>
-        <div class="live-panel-body">${renderLiveRightPanel()}</div>
+        <div class="live-panel-body" data-scroll-key="live-results-panel">${renderLiveRightPanel()}</div>
       </section>
       <section class="live-column mobile-public-page" data-mobile-live-section="prognostics">
         ${mobilePublicViewerHtml || '<div class="live-loading-card">Toca no símbolo central para ver os prognósticos dos jogadores.</div>'}
