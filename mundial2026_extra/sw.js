@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ggames-mundial-2026-v33-force-index-clear';
+const CACHE_NAME = 'ggames-mundial-2026-v34-force-index-clear-app';
 
 self.addEventListener('install', event => {
   self.skipWaiting();
