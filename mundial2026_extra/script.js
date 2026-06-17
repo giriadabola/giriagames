@@ -150,13 +150,26 @@ function shouldTrackMatchDocAsOfficial(doc) {
 function normalizeMatchStateDoc(docId, raw = {}) {
   const matchId = Number(raw.matchId ?? String(docId || '').replace(/^match_/, ''));
   const isLive = !!(raw.live === true || raw.status === 'live');
+  const homeEdit = raw.HomeEdit;
+  const awayEdit = raw.AwayEdit;
+  const homeEditNumber = homeEdit == null || homeEdit === '' ? null : Number(homeEdit);
+  const awayEditNumber = awayEdit == null || awayEdit === '' ? null : Number(awayEdit);
+  const hasManualLiveEdit =
+    (Number.isFinite(homeEditNumber) && homeEditNumber > 0) ||
+    (Number.isFinite(awayEditNumber) && awayEditNumber > 0);
+  const resolvedLiveHomeGoals = hasManualLiveEdit
+    ? (Number.isFinite(homeEditNumber) ? homeEditNumber : (raw.homeGoalsLive ?? raw.homeGoals ?? null))
+    : (raw.homeGoalsLive ?? raw.homeGoals ?? null);
+  const resolvedLiveAwayGoals = hasManualLiveEdit
+    ? (Number.isFinite(awayEditNumber) ? awayEditNumber : (raw.awayGoalsLive ?? raw.awayGoals ?? null))
+    : (raw.awayGoalsLive ?? raw.awayGoals ?? null);
   return {
     id: docId,
     ...raw,
     matchId: Number.isFinite(matchId) ? matchId : null,
     documentId: raw.documentId || raw.matchDocId || docId,
-    homeGoals: isLive ? (raw.homeGoalsLive ?? raw.homeGoals ?? null) : (raw.homeGoals ?? null),
-    awayGoals: isLive ? (raw.awayGoalsLive ?? raw.awayGoals ?? null) : (raw.awayGoals ?? null)
+    homeGoals: isLive ? resolvedLiveHomeGoals : (raw.homeGoals ?? null),
+    awayGoals: isLive ? resolvedLiveAwayGoals : (raw.awayGoals ?? null)
   };
 }
 
