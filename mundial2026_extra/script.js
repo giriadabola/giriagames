@@ -108,6 +108,7 @@ let closedMainTab = 'games';
 let mobileAppSection = 'games';
 let mobilePublicViewerHtml = '';
 let mobilePublicViewerLoading = false;
+let livePredictionFilters = {};
 let apiLoadingRequests = 0;
 let state = { name: '', predictions: {}, activeStage: 'groups', lastSaved: '' };
 
@@ -2386,6 +2387,45 @@ function openLiveMatchModal(matchId) {
   hydrateLiveMatchLineups(game, local);
 }
 
+function livePredictionScoreKey(pred) {
+  return `${Number(pred.homeGoals)}-${Number(pred.awayGoals)}`;
+}
+
+function livePredictionFilterOptions(gamePredictions, official) {
+  const uniqueScores = [...new Set(gamePredictions.map(item => livePredictionScoreKey(item.pred)))].sort((a, b) => {
+    const [aHome, aAway] = a.split('-').map(Number);
+    const [bHome, bAway] = b.split('-').map(Number);
+    if (aHome !== bHome) return aHome - bHome;
+    return aAway - bAway;
+  });
+  const currentScoreKey = official && official.homeGoals != null && official.awayGoals != null
+    ? `${Number(official.homeGoals)}-${Number(official.awayGoals)}`
+    : '';
+  const options = [{ key: 'all', label: 'Todos' }];
+  if (currentScoreKey) {
+    options.push({ key: `current:${currentScoreKey}`, label: currentScoreKey });
+  }
+  uniqueScores
+    .filter(scoreKey => !currentScoreKey || scoreKey !== currentScoreKey)
+    .forEach(scoreKey => {
+      options.push({ key: `score:${scoreKey}`, label: scoreKey });
+    });
+  return options;
+}
+
+function filterLivePredictions(gamePredictions, activeFilter) {
+  if (!activeFilter || activeFilter === 'all') return gamePredictions;
+  if (activeFilter.startsWith('current:')) {
+    const currentScoreKey = activeFilter.slice('current:'.length);
+    return gamePredictions.filter(item => livePredictionScoreKey(item.pred) === currentScoreKey);
+  }
+  if (activeFilter.startsWith('score:')) {
+    const scoreKey = activeFilter.slice('score:'.length);
+    return gamePredictions.filter(item => livePredictionScoreKey(item.pred) === scoreKey);
+  }
+  return gamePredictions;
+}
+
 function renderLiveGameUserPredictions(gameId) {
   const local = localMatchById(gameId);
   const game = worldCupApi.games.find(g => String(g.id) === String(gameId)) || officialResults[String(gameId)] || local;
@@ -2420,12 +2460,22 @@ function renderLiveGameUserPredictions(gameId) {
   });
 
   const official = officialResults[String(gameId)] || worldCupApi.games.find(g => String(g.id) === String(gameId)) || null;
+  const filterOptions = livePredictionFilterOptions(gamePredictions, official);
+  const activeFilter = filterOptions.some(option => option.key === livePredictionFilters[String(gameId)])
+    ? livePredictionFilters[String(gameId)]
+    : 'all';
+  const filteredPredictions = filterLivePredictions(gamePredictions, activeFilter);
 
   return `
     <div class="live-game-predictions">
+      <div class="live-predictions-filters">
+        ${filterOptions.map(option => `
+          <button type="button" class="live-predictions-filter ${activeFilter === option.key ? 'is-active' : ''} ${option.key.startsWith('current:') ? 'is-current-score' : ''}" data-live-predictions-filter="${escapeHtml(option.key)}" data-live-predictions-game="${escapeHtml(gameId)}">${escapeHtml(option.label)}</button>
+        `).join('')}
+      </div>
       <h4 class="live-predictions-title">Prognósticos dos Participantes</h4>
       <ul class="live-predictions-list">
-        ${gamePredictions.map(item => {
+        ${filteredPredictions.map(item => {
           const playerName = item.player.participantName || item.player.name || 'Participante';
           const iconKey = item.player.icon || item.player.participantIcon || item.player.playerIcon || '';
           const identHtml = renderParticipantIdentity(playerName, iconKey, 'participant-ident--compact');
@@ -4090,6 +4140,16 @@ function bindEvents() {
       event.stopPropagation();
       publicGameFilter = gameFilter.dataset.gameFilter;
       $('#viewerBody').innerHTML = renderPublicByGame(publicViewerStage, publicGameFilter);
+      return;
+    }
+
+    const livePredictionsFilter = event.target.closest('[data-live-predictions-filter]');
+    if (livePredictionsFilter) {
+      event.stopPropagation();
+      const gameId = livePredictionsFilter.dataset.livePredictionsGame;
+      const filterKey = livePredictionsFilter.dataset.livePredictionsFilter || 'all';
+      livePredictionFilters[String(gameId)] = filterKey;
+      refreshLiveDashboardView();
       return;
     }
 
