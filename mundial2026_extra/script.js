@@ -151,6 +151,7 @@ function shouldTrackMatchDocAsOfficial(doc) {
 function normalizeMatchStateDoc(docId, raw = {}) {
   const matchId = Number(raw.matchId ?? String(docId || '').replace(/^match_/, ''));
   const isLive = !!(raw.live === true || raw.status === 'live');
+  const editWinsOn = raw.editarwins === true || raw.editarwins === 'true' || raw.editarwins === 'on';
   const homeEdit = raw.HomeEdit;
   const awayEdit = raw.AwayEdit;
   const homeEditNumber = homeEdit == null || homeEdit === '' ? null : Number(homeEdit);
@@ -158,12 +159,16 @@ function normalizeMatchStateDoc(docId, raw = {}) {
   const hasManualLiveEdit =
     (Number.isFinite(homeEditNumber) && homeEditNumber > 0) ||
     (Number.isFinite(awayEditNumber) && awayEditNumber > 0);
-  const resolvedLiveHomeGoals = hasManualLiveEdit
-    ? (Number.isFinite(homeEditNumber) ? homeEditNumber : (raw.homeGoalsLive ?? raw.homeGoals ?? null))
-    : (raw.homeGoalsLive ?? raw.homeGoals ?? null);
-  const resolvedLiveAwayGoals = hasManualLiveEdit
-    ? (Number.isFinite(awayEditNumber) ? awayEditNumber : (raw.awayGoalsLive ?? raw.awayGoals ?? null))
-    : (raw.awayGoalsLive ?? raw.awayGoals ?? null);
+  const resolvedLiveHomeGoals = editWinsOn
+    ? (Number.isFinite(homeEditNumber) ? homeEditNumber : null)
+    : (hasManualLiveEdit
+        ? (Number.isFinite(homeEditNumber) ? homeEditNumber : (raw.homeGoalsLive ?? raw.homeGoals ?? null))
+        : (raw.homeGoalsLive ?? raw.homeGoals ?? null));
+  const resolvedLiveAwayGoals = editWinsOn
+    ? (Number.isFinite(awayEditNumber) ? awayEditNumber : null)
+    : (hasManualLiveEdit
+        ? (Number.isFinite(awayEditNumber) ? awayEditNumber : (raw.awayGoalsLive ?? raw.awayGoals ?? null))
+        : (raw.awayGoalsLive ?? raw.awayGoals ?? null));
   return {
     id: docId,
     ...raw,
