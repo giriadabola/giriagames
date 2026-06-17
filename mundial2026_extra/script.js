@@ -1683,8 +1683,10 @@ async function syncFinishedApiResultsToFirebase() {
 
       const targetHomeGoalsLive = game.homeGoals ?? null;
       const targetAwayGoalsLive = game.awayGoals ?? null;
-      const targetHomeGoals = nextFinished ? (game.homeGoals ?? null) : null;
-      const targetAwayGoals = nextFinished ? (game.awayGoals ?? null) : null;
+      const hasOfficialGoals = existing?.homeGoals != null && existing?.homeGoals !== '' && existing?.awayGoals != null && existing?.awayGoals !== '';
+      const shouldPromoteLiveResultOnce = nextFinished && !hasOfficialGoals && targetHomeGoalsLive != null && targetAwayGoalsLive != null;
+      const targetHomeGoals = shouldPromoteLiveResultOnce ? targetHomeGoalsLive : (existing?.homeGoals ?? null);
+      const targetAwayGoals = shouldPromoteLiveResultOnce ? targetAwayGoalsLive : (existing?.awayGoals ?? null);
 
       const sameCoreState =
         existing &&
@@ -1720,7 +1722,9 @@ async function syncFinishedApiResultsToFirebase() {
         awayGoalsLive: targetAwayGoalsLive,
         homeGoals: targetHomeGoals,
         awayGoals: targetAwayGoals,
-        winnerTeam: game.finished && resultHasScore(game) ? getWinnerTeamFromScore(game) : null,
+        winnerTeam: targetHomeGoals != null && targetAwayGoals != null
+          ? getWinnerTeamFromScore({ ...game, homeGoals: targetHomeGoals, awayGoals: targetAwayGoals })
+          : (existing?.winnerTeam ?? null),
         timeElapsed: game.timeElapsed || null,
         source: game.source || 'api',
         syncOrigin: 'api',
