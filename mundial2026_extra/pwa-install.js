@@ -142,7 +142,7 @@
 
   document.addEventListener('DOMContentLoaded', () => {
     cleanupOldBanners();
-    if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js?v=20260611pwa6').catch(() => {});
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js?v=20260617cachefix2').catch(() => {});
     if (isStandalone()) {
       localStorage.setItem(INSTALLED_KEY, '1');
       return;
