@@ -160,6 +160,24 @@ function normalizeMatchStateDoc(docId, raw = {}) {
   };
 }
 
+function mergeLiveGameWithFirestore(game) {
+  const official = officialResults[String(game?.id)];
+  if (!game || !official || !isOfficialResultLive(official)) return game;
+  return {
+    ...game,
+    status: official.status || game.status,
+    live: official.live === true || official.status === 'live',
+    finished: official.finished === true || official.status === 'finished',
+    homeGoals: official.homeGoals ?? game.homeGoals ?? null,
+    awayGoals: official.awayGoals ?? game.awayGoals ?? null,
+    homeGoalsLive: official.homeGoalsLive ?? game.homeGoalsLive ?? null,
+    awayGoalsLive: official.awayGoalsLive ?? game.awayGoalsLive ?? null,
+    timeElapsed: official.timeElapsed || game.timeElapsed,
+    homeTeam: official.homeTeam || game.homeTeam,
+    awayTeam: official.awayTeam || game.awayTeam
+  };
+}
+
 async function loadOfficialMatchStateDocs() {
   if (!firestoreDb || !firebaseTools) return {};
   const collectionRef = firebaseTools.collection(firestoreDb, FIREBASE_COLLECTION);
@@ -2407,7 +2425,10 @@ function renderLiveGameUserPredictions(gameId) {
 }
 
 function renderLiveApiGames() {
-  let games = worldCupApi.games.filter(g => g.live && !g.finished && !isOfficialResultFinished(officialResults[String(g.id)])).sort((a,b) => Number(a.id)-Number(b.id));
+  let games = worldCupApi.games
+    .filter(g => g.live && !g.finished && !isOfficialResultFinished(officialResults[String(g.id)]))
+    .map(mergeLiveGameWithFirestore)
+    .sort((a,b) => Number(a.id)-Number(b.id));
 
   // Salvaguarda: se a API ainda não marcar o jogo como "live" mas o horário local já estiver dentro da janela do jogo,
   // mostramos o jogo em direto na mesma. Isto evita o ecrã "não há jogos em direto" durante jogos 0-0 ou quando a API atrasa o estado.
