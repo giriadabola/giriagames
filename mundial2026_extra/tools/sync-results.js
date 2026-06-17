@@ -14,7 +14,7 @@ try {
 
 // Global configurations & team aliases matching script.js
 const FIREBASE_MATCHES_COLLECTION = 'worldcupextraMatches';
-const API_FINISHED_MIN_DELAY_MS = 40 * 60 * 1000;
+const API_FINISHED_MIN_DELAY_MS = 90 * 60 * 1000;
 const API_FIRST_MINUTE_SCORE_CAP_MS = 60 * 1000;
 
 const API_TEAM_ALIASES = {
