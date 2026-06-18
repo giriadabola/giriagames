@@ -399,8 +399,7 @@ async function loadPublicPredictions() {
 }
 
 function getOfficialResult(matchId) {
-  const key = String(matchId);
-  return officialResults[key] || null;
+  return getVisibleOfficialResult(matchId);
 }
 
 function sameLocalDay(a, b) {

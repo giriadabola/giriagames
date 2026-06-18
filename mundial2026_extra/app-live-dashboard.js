@@ -12,10 +12,10 @@ function apiMatchForLocal(match) {
 }
 
 function hasAnyLiveMatch() {
-  const games = (worldCupApi?.games || []).filter(g => g.live && !g.finished && !isOfficialResultFinished(officialResults[String(g.id)]));
+  const games = (worldCupApi?.games || []).filter(g => g.live && !g.finished && !isOfficialResultFinished(getOfficialResult(g.id)));
   if (games.length) return true;
   if (data?.matches?.length) {
-    const fallbackGames = data.matches.filter(m => !isOfficialResultFinished(officialResults[String(m.id)]) && isMatchInLiveWindow(m));
+    const fallbackGames = data.matches.filter(m => !isOfficialResultFinished(getOfficialResult(m.id)) && isMatchInLiveWindow(m));
     if (fallbackGames.length) return true;
   }
   return false;
@@ -285,19 +285,19 @@ function renderScorersBlock(game) {
 
 
 function findSportsDbEventIdForGame(game, local) {
-  return game?.apiEventId || game?.externalEventId || game?.idEvent || officialResults[String(game?.id || local?.id)]?.apiEventId || local?.apiEventId || null;
+  return game?.apiEventId || game?.externalEventId || game?.idEvent || getOfficialResult(game?.id || local?.id)?.apiEventId || local?.apiEventId || null;
 }
 
 function findApiFootballFixtureIdForGame(game, local) {
-  return game?.apiFootballFixtureId || officialResults[String(game?.id || local?.id)]?.apiFootballFixtureId || local?.apiFootballFixtureId || null;
+  return game?.apiFootballFixtureId || getOfficialResult(game?.id || local?.id)?.apiFootballFixtureId || local?.apiFootballFixtureId || null;
 }
 
 function findHighlightlyMatchIdForGame(game, local) {
-  return game?.highlightlyMatchId || officialResults[String(game?.id || local?.id)]?.highlightlyMatchId || local?.highlightlyMatchId || null;
+  return game?.highlightlyMatchId || getOfficialResult(game?.id || local?.id)?.highlightlyMatchId || local?.highlightlyMatchId || null;
 }
 
 function findAllSportsEventIdForGame(game, local) {
-  return game?.allSportsEventId || officialResults[String(game?.id || local?.id)]?.allSportsEventId || local?.allSportsEventId || null;
+  return game?.allSportsEventId || getOfficialResult(game?.id || local?.id)?.allSportsEventId || local?.allSportsEventId || null;
 }
 
 async function fetchSportsDbLineupForGame(game, local) {
@@ -496,7 +496,7 @@ async function hydrateLiveMatchLineups(game, local) {
 }
 
 function openLiveMatchModal(matchId) {
-  const game = worldCupApi.games.find(g => String(g.id) === String(matchId)) || officialResults[String(matchId)] || localMatchById(matchId);
+  const game = worldCupApi.games.find(g => String(g.id) === String(matchId)) || getOfficialResult(matchId) || localMatchById(matchId);
   if (!game) return;
   const local = localMatchById(matchId);
   const home = game.homeTeam || game.home || local?.home || 'A definir';
@@ -581,7 +581,7 @@ function filterLivePredictions(gamePredictions, activeFilter) {
 
 function renderLiveGameUserPredictions(gameId) {
   const local = localMatchById(gameId);
-  const game = worldCupApi.games.find(g => String(g.id) === String(gameId)) || officialResults[String(gameId)] || local;
+  const game = worldCupApi.games.find(g => String(g.id) === String(gameId)) || getOfficialResult(gameId) || local;
   if (isMatchBeforeKickoff(game)) {
     return '';
   }
@@ -612,7 +612,7 @@ function renderLiveGameUserPredictions(gameId) {
     return nameA.localeCompare(nameB, 'pt-PT');
   });
 
-  const official = officialResults[String(gameId)] || worldCupApi.games.find(g => String(g.id) === String(gameId)) || null;
+  const official = getOfficialResult(gameId) || worldCupApi.games.find(g => String(g.id) === String(gameId)) || null;
   const filterOptions = livePredictionFilterOptions(gamePredictions, official);
   const activeFilter = filterOptions.some(option => option.key === livePredictionFilters[String(gameId)])
     ? livePredictionFilters[String(gameId)]
@@ -669,7 +669,7 @@ function renderLiveGameUserPredictions(gameId) {
 
 function renderLiveApiGames() {
   let games = worldCupApi.games
-    .filter(g => g.live && !g.finished && !isOfficialResultFinished(officialResults[String(g.id)]))
+    .filter(g => g.live && !g.finished && !isOfficialResultFinished(getOfficialResult(g.id)))
     .map(mergeLiveGameWithFirestore)
     .sort((a,b) => Number(a.id)-Number(b.id));
 
@@ -677,7 +677,7 @@ function renderLiveApiGames() {
   // mostramos o jogo em direto na mesma. Isto evita o ecrã "não há jogos em direto" durante jogos 0-0 ou quando a API atrasa o estado.
   if (!games.length && data?.matches?.length) {
     games = data.matches
-      .filter(m => !isOfficialResultFinished(officialResults[String(m.id)]) && isMatchInLiveWindow(m))
+      .filter(m => !isOfficialResultFinished(getOfficialResult(m.id)) && isMatchInLiveWindow(m))
       .map(m => ({
         ...m,
         id: String(m.id),
@@ -749,7 +749,7 @@ function getCurrentLiveGameForDashboard() {
     .filter(match => {
       if (!isMatchInLiveWindow(match)) return false;
       const existing = (worldCupApi?.games || []).find(game => String(game.id) === String(match.id));
-      const official = officialResults[String(match.id)];
+      const official = getOfficialResult(match.id);
       return !(isOfficialResultFinished(existing) || isOfficialResultFinished(official));
     })
     .sort((a, b) => Number(a.id) - Number(b.id))[0];
@@ -757,7 +757,7 @@ function getCurrentLiveGameForDashboard() {
   if (!localLive) return null;
 
   const existing = (worldCupApi?.games || []).find(game => String(game.id) === String(localLive.id)) || {};
-  const official = officialResults[String(localLive.id)] || {};
+  const official = getOfficialResult(localLive.id) || {};
   const elapsed = elapsedMinuteFromSchedule(localLive);
 
   return {
@@ -1011,7 +1011,7 @@ function renderLiveGiriaBattles() {
   const futureMatches = worldCupApi.games.filter(g => !g.finished && !g.live && g.id);
   const localFuture = !futureMatches.length && data?.matches
     ? data.matches
-        .filter(m => !officialResults[String(m.id)])
+        .filter(m => !getOfficialResult(m.id))
         .map(m => ({ id: String(m.id), homeTeam: m.home, awayTeam: m.away, date: m.date, time: m.time, stage: m.stage, live: false, finished: false }))
     : [];
   const gamesPool = futureMatches.length ? futureMatches : localFuture;

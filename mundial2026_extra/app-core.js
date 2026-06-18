@@ -206,8 +206,46 @@ function normalizeMatchStateDoc(docId, raw = {}) {
   };
 }
 
+function resolveOfficialResultKickoffMs(matchId, official = null) {
+  const key = String(matchId || official?.matchId || '').trim();
+  const directKickoffMs = ggamesFirestoreTimestampToMillis(official?.kickoff);
+  if (directKickoffMs) return directKickoffMs;
+
+  const matchStateKickoffMs = ggamesFirestoreTimestampToMillis(matchStateOfficialResults?.[key]?.kickoff);
+  if (matchStateKickoffMs) return matchStateKickoffMs;
+
+  const secureKickoffMs = ggamesFirestoreTimestampToMillis(secureOfficialResults?.[key]?.kickoff);
+  if (secureKickoffMs) return secureKickoffMs;
+
+  const legacyKickoffMs = ggamesFirestoreTimestampToMillis(legacyOfficialResults?.[key]?.kickoff);
+  if (legacyKickoffMs) return legacyKickoffMs;
+
+  if (official?.date) {
+    const dateMs = getMatchDateObj({ date: official.date, time: official.time || '12:00' }).getTime();
+    if (!Number.isNaN(dateMs)) return dateMs;
+  }
+
+  const local = (data?.matches || []).find(m => String(m.id) === key);
+  if (!local) return null;
+  const localMs = getMatchDateObj({ date: local.date, time: local.time || '12:00' }).getTime();
+  return Number.isNaN(localMs) ? null : localMs;
+}
+
+function canExposeOfficialResult(matchId, official = null) {
+  if (!official) return false;
+  const kickoffMs = resolveOfficialResultKickoffMs(matchId, official);
+  if (kickoffMs == null) return true;
+  return Date.now() >= kickoffMs;
+}
+
+function getVisibleOfficialResult(matchId) {
+  const key = String(matchId);
+  const official = officialResults[key] || null;
+  return canExposeOfficialResult(key, official) ? official : null;
+}
+
 function mergeLiveGameWithFirestore(game) {
-  const official = officialResults[String(game?.id)];
+  const official = getVisibleOfficialResult(game?.id);
   if (!game || !official || !isOfficialResultLive(official)) return game;
   return {
     ...game,
@@ -266,6 +304,8 @@ function buildSecureFinishedPayload(docId, raw = {}) {
     documentId: raw.documentId || raw.matchDocId || docId,
     matchDocId: raw.matchDocId || docId,
     matchId: normalized.matchId,
+    kickoff: raw.kickoff || null,
+    kickoffIso: raw.kickoffIso || null,
     status: 'finished',
     finished: true,
     live: false,
