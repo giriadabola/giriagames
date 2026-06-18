@@ -822,7 +822,7 @@
 
     const FIREBASE_COLLECTION = 'worldcupextra';
     const FIREBASE_MATCHES_COLLECTION = 'worldcupextraMatches';
-    const FIREBASE_BATTLES_COLLECTION = 'worldcupextraBattles';
+    const FIREBASE_BATTLES_COLLECTION = 'worldcupextraLiveBattles';
     const DEFAULT_SCORING_RULES = {
       groupExact: 3,
       groupOutcome: 1,
@@ -976,17 +976,26 @@
 
     function shouldTrackMatchDocAsOfficial(doc) {
       if (!doc) return false;
-      const hasGoals = doc.homeGoals != null && doc.homeGoals !== '' && doc.awayGoals != null && doc.awayGoals !== '';
-      return hasGoals && (isOfficialResultLive(doc) || isOfficialResultFinished(doc) || resultHasScore(doc));
+      const isLive = isOfficialResultLive(doc);
+      const hasG = isLive 
+        ? (doc.homeGoalsLive != null && doc.homeGoalsLive !== '') 
+        : (doc.homeGoals != null && doc.homeGoals !== '');
+      const hasAwayG = isLive 
+        ? (doc.awayGoalsLive != null && doc.awayGoalsLive !== '') 
+        : (doc.awayGoals != null && doc.awayGoals !== '');
+      return (isLive || isOfficialResultFinished(doc) || resultHasScore(doc)) && hasG && hasAwayG;
     }
 
     function normalizeMatchStateDoc(docId, raw = {}) {
       const matchId = Number(raw.matchId ?? String(docId || '').replace(/^match_/, ''));
+      const isLive = !!(raw.live === true || raw.status === 'live');
       return {
         id: docId,
         ...raw,
         matchId: Number.isFinite(matchId) ? matchId : null,
-        documentId: raw.documentId || raw.matchDocId || docId
+        documentId: raw.documentId || raw.matchDocId || docId,
+        homeGoals: isLive ? (raw.homeGoalsLive ?? raw.homeGoals ?? null) : (raw.homeGoals ?? null),
+        awayGoals: isLive ? (raw.awayGoalsLive ?? raw.awayGoals ?? null) : (raw.awayGoals ?? null)
       };
     }
 
@@ -1297,6 +1306,62 @@
       ).map((row, index) => ({ ...row, rank: index + 1 }));
     }
 
+    function countBattleWinsForPlayerUpToMatch(player, maxMatchId) {
+      const playerKey = keyOfPlayer(player);
+      return (state.battles || []).filter(battle => {
+        if (maxMatchId != null && Number(battle.matchId) > Number(maxMatchId)) return false;
+        if (!firebaseBattleFinished(battle)) return false;
+        if (battle.draw === true) return false;
+        return String(battle.winnerKey || '').trim() === playerKey;
+      }).length;
+    }
+
+    function calculateTableUpToMatch(maxMatchId) {
+      const includeBattles = !!state.includeBattles;
+
+      const rows = state.predictions.map(player => {
+        const stats = {
+          id: player.id,
+          name: player.participantName || 'Participante',
+          icon: player.icon || '',
+          predictionPoints: 0,
+          battleWins: maxMatchId != null ? countBattleWinsForPlayerUpToMatch(player, maxMatchId) : countBattleWinsForPlayer(player),
+          battleBonusPoints: 0,
+          points: 0,
+          correctPredictions: 0,
+          failedPredictions: 0,
+          exactResults: 0,
+          playedPredictions: 0
+        };
+
+        (player.matches || []).forEach(pred => {
+          if (maxMatchId != null && Number(pred.id) > Number(maxMatchId)) return;
+          const official = getOfficialResult(pred.id);
+          if (!official || !resultHasScore(official)) return;
+          const score = scoreOnePrediction(pred, official);
+          if (!score.played) return;
+          stats.playedPredictions += 1;
+          stats.predictionPoints += score.points;
+          stats.correctPredictions += score.points > 0 ? 1 : 0;
+          stats.failedPredictions += score.points === 0 ? 1 : 0;
+          stats.exactResults += score.exact ? 1 : 0;
+        });
+
+        stats.battleBonusPoints = Math.floor(stats.battleWins / 2);
+        stats.points = includeBattles ? stats.predictionPoints + stats.battleBonusPoints : stats.predictionPoints;
+
+        return stats;
+      });
+
+      return rows.sort((a, b) =>
+        (b.points - a.points) ||
+        (b.battleWins - a.battleWins) ||
+        (b.correctPredictions - a.correctPredictions) ||
+        (b.exactResults - a.exactResults) ||
+        a.name.localeCompare(b.name, 'pt-PT')
+      ).map((row, index) => ({ ...row, rank: index + 1 }));
+    }
+
     function renderRankingTable() {
       state.captureMode = 'ranking';
       const rows = calculateOverallTable();
@@ -1436,29 +1501,6 @@
         return (b.sortPoints - a.sortPoints) || (a.player.participantName || '').localeCompare(b.player.participantName || '', 'pt-PT');
       });
 
-      const winners = (() => {
-        if (status.key !== 'finished') return [];
-        const maxPoints = Math.max(...sorted.map(item => item.score?.points ?? -1), -1);
-        if (maxPoints <= 0) return [];
-        return sorted.filter(item => (item.score?.points ?? -1) === maxPoints);
-      })();
-
-      const winnersHtml = status.key === 'finished'
-        ? winners.length
-          ? `<div class="winner-grid">${winners.map((item, index) => `
-              <article class="winner-card">
-                <div class="winner-top">
-                  ${renderParticipantIdentity(item.player.participantName, item.player.icon)}
-                  <span class="winner-points">${item.score.points} pts</span>
-                </div>
-                <div class="winner-rank">🏆 Melhor pontuação deste jogo${winners.length > 1 ? ` · Empate #${index + 1}` : ''}</div>
-              </article>
-            `).join('')}</div>`
-          : '<div class="muted-card">Neste jogo ninguém somou pontos.</div>'
-        : status.key === 'live'
-          ? '<div class="muted-card">A pontuação final aparecerá quando o jogo terminar.</div>'
-          : '<div class="muted-card">Os melhores pontuadores aparecerão aqui quando o jogo terminar.</div>';
-
       const pickCards = await Promise.all(sorted.map(async item => {
         const pred = item.prediction;
         const homePredFlag = await getFlagSrc(pred.homeTeam || match.home);
@@ -1509,7 +1551,24 @@
         `;
       }));
 
-      const footerUpdated = new Date().toLocaleString('pt-PT');
+      const tableRows = calculateTableUpToMatch(match.id);
+      const includeBattles = !!state.includeBattles;
+
+      const rowsHtml = tableRows.length
+        ? tableRows.map(row => `
+            <tr>
+              <td class="rank-cell">#${row.rank}</td>
+              <td>${renderParticipantIdentity(row.name, row.icon)}</td>
+              <td class="points-cell">${row.points}</td>
+              ${includeBattles ? `<td>${row.predictionPoints}</td><td><span class="battle-pill">⚔️ ${row.battleWins}</span></td><td>+${row.battleBonusPoints}</td>` : ''}
+              <td>${row.correctPredictions}</td>
+              <td>${row.failedPredictions}</td>
+              <td>${row.exactResults}</td>
+              <td>${row.playedPredictions}</td>
+            </tr>
+          `).join('')
+        : `<tr><td colspan="${includeBattles ? 10 : 7}"><div class="muted-card">Ainda não existem prognósticos calculados para este jogo.</div></td></tr>`;
+
       captureArea.innerHTML = `
         <div class="capture-inner">
           <div class="top-strip">
@@ -1517,7 +1576,7 @@
               <div class="brand-mark"><img src="./favicon-source.png" alt="GGames Mundial 2026"></div>
               <div>
                 <h2>Mundial 2026 · Resumo do jogo</h2>
-                <p>Imagem pronta para exportar em PNG</p>
+                <p>Giria Games - onde a normalidade é suspeita...</p>
               </div>
             </div>
             <div class="stage-badges">
@@ -1553,16 +1612,6 @@
           <section class="section">
             <div class="section-header">
               <div>
-                <h3 class="section-title">Melhores pontuações neste jogo</h3>
-                <p class="section-subtitle">Jogadores que fizeram mais pontos neste encontro.</p>
-              </div>
-            </div>
-            ${winnersHtml}
-          </section>
-
-          <section class="section">
-            <div class="section-header">
-              <div>
                 <h3 class="section-title">Prognósticos dos jogadores</h3>
                 <p class="section-subtitle">${sorted.length} prognóstico(s) encontrado(s) para este jogo.</p>
               </div>
@@ -1570,10 +1619,31 @@
             ${pickCards.length ? `<div class="pick-grid">${pickCards.join('')}</div>` : '<div class="muted-card">Ainda não existem prognósticos gravados para este jogo.</div>'}
           </section>
 
-          <div class="capture-footer">
-            <span>Gerado automaticamente a partir do Firebase do Mundial 2026</span>
-            <span>Atualizado em ${escapeHtml(footerUpdated)}</span>
-          </div>
+          <section class="section">
+            <div class="section-header">
+              <div>
+                <h3 class="section-title">Tabela Classificativa até ao Jogo ${match.id}</h3>
+                <p class="section-subtitle">Classificação geral calculada com os jogos realizados até ao Jogo ${match.id}.</p>
+              </div>
+            </div>
+            <div class="ranking-table-wrap">
+              <table class="ranking-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Jogador</th>
+                    <th>${includeBattles ? 'Total' : 'Pts'}</th>
+                    ${includeBattles ? '<th>Pts jogos</th><th>Battles ganhas</th><th>Bónus</th>' : ''}
+                    <th>Acertos</th>
+                    <th>Falhas</th>
+                    <th>Exatos</th>
+                    <th>Jogos</th>
+                  </tr>
+                </thead>
+                <tbody>${rowsHtml}</tbody>
+              </table>
+            </div>
+          </section>
         </div>
       `;
 
@@ -1639,7 +1709,11 @@
     sortSelect.addEventListener('change', renderSelectedMatch);
     includeBattlesToggle.addEventListener('change', () => {
       state.includeBattles = includeBattlesToggle.checked;
-      if (state.captureMode === 'ranking') renderRankingTable();
+      if (state.captureMode === 'ranking') {
+        renderRankingTable();
+      } else {
+        renderSelectedMatch();
+      }
     });
     refreshBtn.addEventListener('click', reloadAll);
     rankingBtn.addEventListener('click', renderRankingTable);

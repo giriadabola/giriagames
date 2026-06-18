@@ -88,7 +88,9 @@ async function canWriteOfficialMatch(matchId) {
   const snap = await tools.getDoc(ref);
   if (!snap.exists()) return false;
   const kickoffMs = firebaseTimestampToMillis(snap.data()?.kickoff);
-  return !!kickoffMs && Date.now() >= kickoffMs + 1000;
+  if (!kickoffMs) return false;
+  const now = Date.now();
+  return now >= kickoffMs && now <= kickoffMs + 180 * 60 * 1000;
 }
 
 async function initFirebase() {
@@ -149,7 +151,15 @@ async function loadOfficialResults() {
     tools.getDocs(tools.query(tools.collection(db, COLLECTION), tools.where('status', '==', 'official')))
   ]);
   const fromMatches = matchSnap.docs
-    .map(doc => ({ id: doc.id, ...doc.data() }))
+    .map(doc => {
+      const row = { id: doc.id, ...doc.data() };
+      const isLive = !!(row.live === true || row.status === 'live');
+      if (isLive) {
+        row.homeGoals = row.homeGoalsLive ?? row.homeGoals ?? null;
+        row.awayGoals = row.awayGoalsLive ?? row.awayGoals ?? null;
+      }
+      return row;
+    })
     .filter(isTrackedMatchDoc)
     .map(row => [String(row.matchId ?? String(row.id).replace('match_', '')), row]);
   const legacy = legacySnap.docs

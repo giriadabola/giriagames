@@ -156,6 +156,9 @@
     return 'Empate';
   }
 
+  window.getSection2DocForPlayer = getSection2DocForPlayer;
+  window.resolveSection2OfficialTeam = resolveOfficialTeam;
+
   function predictedWinnerTeam(pred) {
     if (!pred) return '';
     if (pred.winnerTeam) return pred.winnerTeam;
@@ -507,142 +510,6 @@
     }
   }
 
-  renderPublicByGame = function(stage = publicViewerStage, filter = publicGameFilter) {
-    const now = new Date();
-    const stageMatches = data.matches.filter(match => match.stage === stage).filter(match => {
-      const official = getOfficialResult(match.id);
-      const matchDate = getMatchDateObj(match);
-      if (filter === 'played') return typeof isOfficialResultFinished === 'function' ? isOfficialResultFinished(official) : !!official;
-      if (filter === 'today') return sameLocalDay(matchDate, now);
-      if (filter === 'future') return !official && matchDate > now;
-      return true;
-    });
-
-    return `
-      <div class="viewer-stage-tabs">
-        ${Object.entries(STAGE_LABELS).map(([key, label]) => `<button type="button" class="viewer-stage-tab ${key === stage ? 'active' : ''}" data-view-stage="${key}">${escapeHtml(label)}</button>`).join('')}
-      </div>
-      <div class="viewer-filter-tabs">
-        <button type="button" class="viewer-filter-tab ${filter === 'played' ? 'active' : ''}" data-game-filter="played">Jogados</button>
-        <button type="button" class="viewer-filter-tab ${filter === 'today' ? 'active' : ''}" data-game-filter="today">Hoje</button>
-        <button type="button" class="viewer-filter-tab ${filter === 'future' ? 'active' : ''}" data-game-filter="future">Futuros</button>
-      </div>
-      <div class="viewer-games">
-        ${stageMatches.length ? stageMatches.map(match => {
-          const official = getOfficialResult(match.id);
-          const officialHome = official?.homeTeam || resolveOfficialTeam(match, 'home') || match.home;
-          const officialAway = official?.awayTeam || resolveOfficialTeam(match, 'away') || match.away;
-          const predictions = publicPredictions.map(item => ({
-            player: item.participantName || 'Participante',
-            item,
-            match: (item.matches || []).find(row => Number(row.id) === Number(match.id))
-          })).filter(row => row.match);
-          return `
-            <section class="viewer-game-card">
-              <div class="viewer-game-head">
-                <div>
-                  <h3>Jogo ${match.id} · ${escapeHtml(STAGE_LABELS[match.stage])}</h3>
-                  <p class="modal-muted">${escapeHtml(officialHome)} vs ${escapeHtml(officialAway)} · ${escapeHtml(match.date)} ${escapeHtml(match.time || '')}</p>
-                </div>
-                ${official ? `<strong class="official-chip">Oficial: ${escapeHtml(official.homeTeam || match.home)} ${official.homeGoals}-${official.awayGoals} ${escapeHtml(official.awayTeam || match.away)}</strong>` : '<span class="future-chip">Ainda por jogar</span>'}
-              </div>
-              <div class="viewer-picks">
-                ${predictions.length ? predictions.map(row => {
-                  const override = getSection2DocForPlayer(row.item, match.id);
-                  const score = official ? scoreOnePrediction(row.match, official, override) : null;
-                  const className = score ? (score.exact ? 'hit-exact' : score.points > 0 ? 'hit-outcome' : 'miss') : '';
-                  const badge = score ? `<b>${score.points} pts</b>` : '';
-                  const sec2 = override ? `<em class="section2-mini">${override.mode === 'replicate' ? 'manteve Secção 1' : 'reformulou'}</em>` : '';
-                  const text = override && override.mode === 'changed' ? `${escapeHtml(override.homeTeam)} ${override.homeGoals}-${override.awayGoals} ${escapeHtml(override.awayTeam)} · vence ${escapeHtml(override.winnerTeam)}` : predictionResultText(row.match);
-                  return `<div class="viewer-pick ${className}"><strong>${renderParticipantIdentity(row.player, row.item?.icon || row.item?.participantIcon || row.item?.playerIcon || '', 'participant-ident--compact')}</strong><span>${text}</span>${sec2}${badge}</div>`;
-                }).join('') : '<p class="modal-muted">Ainda não há prognósticos para este jogo.</p>'}
-              </div>
-            </section>
-          `;
-        }).join('') : `<div class="empty-state">Não há jogos nesta lista.</div>`}
-      </div>
-    `;
-  };
-
-  renderGiriaBattles = function(rows) {
-    if (rows.length < 2) return '<p class="modal-muted">Ainda não há confrontos suficientes.</p>';
-    const futureMatches = data.matches.filter(match => !getOfficialResult(match.id) && getMatchDateObj(match) >= new Date());
-    const cards = [];
-    for (let i = 0; i < rows.length - 1 && cards.length < 8; i++) {
-      const top = rows[i];
-      const below = rows[i + 1];
-      if (Math.abs(top.points - below.points) > 6) continue;
-      const p1 = publicPredictions.find(p => (p.participantKey || normalizeKey(p.participantName)) === top.participantKey) || publicPredictions.find(p => String(p.id) === String(top.id));
-      const p2 = publicPredictions.find(p => (p.participantKey || normalizeKey(p.participantName)) === below.participantKey) || publicPredictions.find(p => String(p.id) === String(below.id));
-      const nextMatch = futureMatches.find(match =>
-        (p1?.matches || []).some(pred => Number(pred.id) === Number(match.id)) &&
-        (p2?.matches || []).some(pred => Number(pred.id) === Number(match.id))
-      );
-      if (!nextMatch) continue;
-      const pred1 = (p1.matches || []).find(pred => Number(pred.id) === Number(nextMatch.id));
-      const pred2 = (p2.matches || []).find(pred => Number(pred.id) === Number(nextMatch.id));
-      const over1 = getSection2DocForPlayer(p1, nextMatch.id);
-      const over2 = getSection2DocForPlayer(p2, nextMatch.id);
-      cards.push(`
-        <div class="battle-card battle-card-horizontal">
-          <span class="battle-match">Jogo ${nextMatch.id} · ${escapeHtml(resolveOfficialTeam(nextMatch, 'home') || nextMatch.home)} vs ${escapeHtml(resolveOfficialTeam(nextMatch, 'away') || nextMatch.away)}</span>
-          <div class="battle-duel-row">
-            <div class="battle-player battle-player-a"><strong>${renderParticipantIdentity(`#${top.rank} ${top.name}`, p1?.icon || p1?.participantIcon || p1?.playerIcon || top.icon, 'participant-ident--compact')}</strong><span>${over1?.mode === 'changed' ? `${escapeHtml(over1.homeTeam)} ${over1.homeGoals}-${over1.awayGoals} ${escapeHtml(over1.awayTeam)}` : predictionResultText(pred1)}</span></div>
-            <b class="battle-versus">VS</b>
-            <div class="battle-player battle-player-b"><strong>${renderParticipantIdentity(`#${below.rank} ${below.name}`, p2?.icon || p2?.participantIcon || p2?.playerIcon || below.icon, 'participant-ident--compact')}</strong><span>${over2?.mode === 'changed' ? `${escapeHtml(over2.homeTeam)} ${over2.homeGoals}-${over2.awayGoals} ${escapeHtml(over2.awayTeam)}` : predictionResultText(pred2)}</span></div>
-          </div>
-        </div>
-      `);
-    }
-    return cards.join('') || '<p class="modal-muted">Ainda não há batalhas próximas.</p>';
-  };
-
-  renderPublicViewer = function(active = 'games') {
-    return `
-      <div class="modal-head">
-        <div>
-          <p class="eyebrow small">Prognósticos gravados</p>
-          <h2>Outros jogadores</h2>
-          <p class="modal-muted">Consulta os prognósticos por jogo, por jogador ou pela Tabela Ggames.</p>
-        </div>
-      </div>
-      <div class="viewer-tabs">
-        <button type="button" class="viewer-tab ${active === 'games' ? 'active' : ''}" data-view-tab="games">Por jogo</button>
-        <button type="button" class="viewer-tab ${active === 'players' ? 'active' : ''}" data-view-tab="players">Por jogador</button>
-        <button type="button" class="viewer-tab ${active === 'table' ? 'active' : ''}" data-view-tab="table">Tabela Ggames</button>
-      </div>
-      <div id="viewerBody">
-        ${active === 'players' ? renderPublicPlayerList() : active === 'table' ? renderGgamesTable() : renderPublicByGame(publicViewerStage, publicGameFilter)}
-      </div>
-    `;
-  };
-
-  renderClosedPublicView = async function() {
-    const container = $('#matchesContainer');
-    if (!container) return;
-    container.innerHTML = '';
-    if (!worldCupApi.loaded) {
-      Promise.allSettled([loadApiWorldCupData({ sync: true }), loadPublicPredictions()]).then(() => {
-        startLiveApiSync();
-      });
-    }
-  };
-
-  openPublicPredictionsModal = async function() {
-    if (isVotingClosed()) {
-      await openLiveResultsModal();
-      return;
-    }
-    openModal('<h2>Outros jogadores</h2><p class="modal-muted">A carregar prognósticos...</p>');
-    try {
-      await loadPublicPredictions();
-      openModal(renderPublicViewer('games'));
-    } catch (error) {
-      console.error(error);
-      openModal('<h2>Outros jogadores</h2><p class="modal-muted">Não foi possível carregar os prognósticos. Confirma as permissões de leitura.</p>');
-    }
-  };
-
   document.addEventListener('click', async (event) => {
     const loadBtn = event.target.closest('[data-section2-load]');
     if (loadBtn) {
@@ -675,60 +542,6 @@
     }
   });
 })();
-
-/*
-  CORREÇÃO FINAL DO MODO PÓS-VOTAÇÃO
-  - A Central Ggames fica no site principal.
-  - O botão "Vê prognósticos de outros jogadores" abre apenas o popup de consulta antiga/detalhada.
-  - Evita que fase2.js volte a abrir a Central dentro do popup.
-*/
-(function fixClosedModeDashboardAndPredictionsPopup() {
-  if (typeof renderClosedPublicView !== 'undefined') {
-    renderClosedPublicView = async function() {
-      const container = typeof $ === 'function' ? $('#matchesContainer') : document.querySelector('#matchesContainer');
-      if (container) container.innerHTML = '';
-
-      const dashboard = typeof $ === 'function' ? $('#closedLiveDashboard') : document.querySelector('#closedLiveDashboard');
-      if (dashboard) dashboard.innerHTML = '<div class="live-loading-card">A carregar a Central Ggames...</div>';
-
-      await Promise.allSettled([
-        typeof loadApiWorldCupData === 'function' ? loadApiWorldCupData({ sync: true }) : Promise.resolve(),
-        typeof loadPublicPredictions === 'function' ? loadPublicPredictions() : Promise.resolve()
-      ]);
-
-      if (dashboard && typeof renderLiveDashboard === 'function') {
-        dashboard.innerHTML = renderLiveDashboard();
-      }
-
-      if (typeof startLiveApiSync === 'function') startLiveApiSync();
-    };
-  }
-
-  if (typeof openPublicPredictionsModal !== 'undefined') {
-    openPublicPredictionsModal = async function() {
-      if (typeof openModal === 'function') {
-        openModal('<h2>Outros jogadores</h2><p class="modal-muted">A carregar prognósticos...</p>');
-      }
-
-      try {
-        await Promise.allSettled([
-          typeof loadApiWorldCupData === 'function' ? loadApiWorldCupData({ sync: false }) : Promise.resolve(),
-          typeof loadPublicPredictions === 'function' ? loadPublicPredictions() : Promise.resolve()
-        ]);
-
-        if (typeof openModal === 'function' && typeof renderPublicViewer === 'function') {
-          openModal(renderPublicViewer('games'));
-        }
-      } catch (error) {
-        console.error(error);
-        if (typeof openModal === 'function') {
-          openModal('<h2>Outros jogadores</h2><p class="modal-muted">Não foi possível carregar os prognósticos. Tenta novamente mais tarde.</p>');
-        }
-      }
-    };
-  }
-})();
-
 /* Secção 2 aprovada — janelas Firebase + dropdown de participante + PIN + gravação em worldcupextraReforms */
 (function approvedReformWindowsWithPin() {
   const REFORM_COLLECTION = 'worldcupextraReforms';
@@ -1137,7 +950,7 @@
   }
 
   async function openReformModal() {
-    openModal('<h2>Reformular prognósticos</h2><p class="modal-muted">A carregar jogadores, PIN e janelas...</p>');
+    openModal('<h2>Reformular prognósticos</h2><p class="modal-muted">A carregar jogadores, PIN e janelas<span class="loading-dots"><span>.</span><span>.</span><span>.</span></span></p>');
     await Promise.allSettled([
       loadApiWorldCupData({ sync: false }),
       loadPublicPredictions(),
