@@ -561,6 +561,8 @@ function mergeApiResultsIntoOfficialResults() {
     if (!hasScore) return;
     if (!game.live && !game.finished) return;
     const existing = officialResults[String(game.id)];
+    // Se o jogo já estiver na coleção segura, essa coleção manda sempre.
+    if (existing?._officialSource === 'secure-firestore') return;
     if (!existing || existing._officialSource !== 'firestore') {
       officialResults[String(game.id)] = {
         ...existing,
