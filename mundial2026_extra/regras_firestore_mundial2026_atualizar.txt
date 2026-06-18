@@ -169,7 +169,19 @@ match /worldcupextraMatches/{matchDocId} {
     matchDocId.matches('^match_[0-9]{3}$') ||
     (matchDocId.matches('^official-match-[0-9]+$') && request.resource.data.matchId is int && matchKickoffPassed(request.resource.data.matchId))
   );
-  allow update, delete: if isAdmin() && resource.data.matchId is int && matchKickoffPassed(resource.data.matchId);
+  // A API nunca deve editar homeGoals/awayGoals nesta coleção.
+  // Se existir sincronização automática, ela deve usar apenas campos como
+  // homeGoalsLive/awayGoalsLive e metadados de estado.
+allow update, delete: if isAdmin() && resource.data.matchId is int && matchKickoffPassed(resource.data.matchId);
+}
+
+match /WoldCupSecureHT/{matchDocId} {
+  allow read: if true;
+  allow create, update: if isAdmin()
+    && request.resource.data.matchId is int
+    && request.resource.data.status == 'finished'
+    && request.resource.data.finished == true;
+  allow delete: if isAdmin();
 }
 
 match /worldcupextraLiveBattles/{battleId} {
