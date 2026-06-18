@@ -120,6 +120,13 @@ function firebaseMatchDocId(matchId) {
   return `match_${String(matchId).padStart(3, '0')}`;
 }
 
+function getMatchDateObj(match) {
+  const date = String(match?.date || '').trim();
+  const time = String(match?.time || '12:00').trim() || '12:00';
+  if (!date) return new Date(NaN);
+  return new Date(`${date}T${time}:00+01:00`);
+}
+
 function resultHasScore(result) {
   return !!result && result.homeGoals != null && result.awayGoals != null;
 }
@@ -193,8 +200,9 @@ function normalizeMatchStateDoc(docId, raw = {}) {
     finished: effectiveFinished,
     live: isLive,
     status: effectiveFinished ? 'finished' : (isLive ? 'live' : raw.status),
-    homeGoals: isLive ? resolvedLiveHomeGoals : (raw.homeGoals ?? null),
-    awayGoals: isLive ? resolvedLiveAwayGoals : (raw.awayGoals ?? null)
+    // Se a API só atualizar campos live, mantemos fallback de leitura aqui sem promover o valor no documento.
+    homeGoals: isLive ? resolvedLiveHomeGoals : (raw.homeGoals ?? raw.homeGoalsLive ?? null),
+    awayGoals: isLive ? resolvedLiveAwayGoals : (raw.awayGoals ?? raw.awayGoalsLive ?? null)
   };
 }
 
@@ -248,7 +256,7 @@ function shouldMirrorMatchStateDocToSecure(docId, raw = {}) {
   const normalized = normalizeMatchStateDoc(docId, raw);
   if (!normalized.matchId || !isOfficialResultFinished(normalized)) return false;
   const kickoffMs = resolveMatchStateKickoffMs({ ...raw, matchId: normalized.matchId });
-  return kickoffMs != null && Date.now() >= kickoffMs + (5 * 60 * 60 * 1000);
+  return kickoffMs != null && Date.now() >= kickoffMs + (3 * 60 * 60 * 1000);
 }
 
 function buildSecureFinishedPayload(docId, raw = {}) {
@@ -287,9 +295,16 @@ function secureFinishedPayloadMatches(existing = {}, payload = {}) {
 
 const secureMirrorInFlight = new Set();
 
+function secureCollectionCanBeSeededFromMatchState(raw = {}) {
+  const origin = String(raw?.syncOrigin || '').trim().toLowerCase();
+  if (origin === 'api') return false;
+  return true;
+}
+
 async function syncMatchStateDocToSecureCollection(docId, raw = {}) {
   if (!firestoreDb || !firebaseTools || !firebaseTools.getDoc || !firebaseTools.setDoc) return;
   if (!shouldMirrorMatchStateDocToSecure(docId, raw)) return;
+  if (!secureCollectionCanBeSeededFromMatchState(raw)) return;
 
   const syncKey = String(docId);
   if (secureMirrorInFlight.has(syncKey)) return;
@@ -299,7 +314,8 @@ async function syncMatchStateDocToSecureCollection(docId, raw = {}) {
     const payload = buildSecureFinishedPayload(docId, raw);
     const ref = firebaseTools.doc(firestoreDb, FIREBASE_SECURE_FINISHED_COLLECTION, syncKey);
     const snap = await firebaseTools.getDoc(ref);
-    if (snap.exists() && secureFinishedPayloadMatches(snap.data(), payload)) return;
+    // WoldCupSecureHT é write-once: se o documento já existir, nunca mais o alteramos aqui.
+    if (snap.exists()) return;
     await firebaseTools.setDoc(ref, payload);
   } catch (error) {
     console.warn('Nao foi possivel espelhar o resultado final para a colecao segura.', error);

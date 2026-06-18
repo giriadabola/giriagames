@@ -252,7 +252,7 @@ function relevantDatesForLiveFetch() {
   const now = new Date();
   const dates = new Set();
   (data?.matches || []).forEach(match => {
-    const d = new Date(`${match.date}T${match.time || '12:00'}:00`);
+    const d = getMatchDateObj({ date: match.date, time: match.time || '12:00' });
     if (Math.abs(d.getTime() - now.getTime()) <= 36 * 60 * 60 * 1000) dates.add(match.date);
   });
   dates.add(now.toISOString().slice(0,10));
@@ -650,10 +650,6 @@ async function syncFinishedApiResultsToFirebase() {
 
       const targetHomeGoalsLive = game.homeGoals ?? null;
       const targetAwayGoalsLive = game.awayGoals ?? null;
-      const hasOfficialGoals = existing?.homeGoals != null && existing?.homeGoals !== '' && existing?.awayGoals != null && existing?.awayGoals !== '';
-      const shouldPromoteLiveResultOnce = nextFinished && !hasOfficialGoals && targetHomeGoalsLive != null && targetAwayGoalsLive != null;
-      const targetHomeGoals = shouldPromoteLiveResultOnce ? targetHomeGoalsLive : (existing?.homeGoals ?? null);
-      const targetAwayGoals = shouldPromoteLiveResultOnce ? targetAwayGoalsLive : (existing?.awayGoals ?? null);
 
       const sameCoreState =
         existing &&
@@ -662,8 +658,6 @@ async function syncFinishedApiResultsToFirebase() {
         !!existing.finished === nextFinished &&
         existing.homeGoalsLive === targetHomeGoalsLive &&
         existing.awayGoalsLive === targetAwayGoalsLive &&
-        existing.homeGoals === targetHomeGoals &&
-        existing.awayGoals === targetAwayGoals &&
         String(existing.timeElapsed || '') === String(game.timeElapsed || '');
         
       if (sameCoreState) return;
@@ -687,11 +681,6 @@ async function syncFinishedApiResultsToFirebase() {
         awayTeam: game.awayTeam,
         homeGoalsLive: targetHomeGoalsLive,
         awayGoalsLive: targetAwayGoalsLive,
-        homeGoals: targetHomeGoals,
-        awayGoals: targetAwayGoals,
-        winnerTeam: targetHomeGoals != null && targetAwayGoals != null
-          ? getWinnerTeamFromScore({ ...game, homeGoals: targetHomeGoals, awayGoals: targetAwayGoals })
-          : (existing?.winnerTeam ?? null),
         timeElapsed: game.timeElapsed || null,
         source: game.source || 'api',
         syncOrigin: 'api',

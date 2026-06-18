@@ -121,7 +121,7 @@ function isMatchBeforeKickoff(game) {
   const dateStr = game.date || local?.date;
   const timeStr = game.time || local?.time;
   if (!dateStr) return false;
-  const kickoff = new Date(`${dateStr}T${timeStr || '12:00'}:00`);
+  const kickoff = getMatchDateObj({ date: dateStr, time: timeStr || '12:00' });
   return new Date() < kickoff;
 }
 
@@ -130,7 +130,7 @@ function ggamesApiKickoffMs(game, fallbackMatch = null) {
   const dateStr = game?.date || local?.date;
   const timeStr = game?.time || local?.time || '12:00';
   if (!dateStr) return null;
-  const kickoff = new Date(`${dateStr}T${timeStr}:00`);
+  const kickoff = getMatchDateObj({ date: dateStr, time: timeStr });
   const kickoffMs = kickoff.getTime();
   return Number.isNaN(kickoffMs) ? null : kickoffMs;
 }

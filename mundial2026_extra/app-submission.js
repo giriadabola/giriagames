@@ -403,10 +403,6 @@ function getOfficialResult(matchId) {
   return officialResults[key] || null;
 }
 
-function getMatchDateObj(match) {
-  return new Date(`${match.date}T${match.time || '12:00'}:00+01:00`);
-}
-
 function sameLocalDay(a, b) {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
