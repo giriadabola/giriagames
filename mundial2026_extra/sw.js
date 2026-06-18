@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ggames-mundial-2026-v36-force-ios-app-clear';
+const CACHE_NAME = 'ggames-mundial-2026-v37-force-secure-firestore-refresh';
 
 self.addEventListener('install', event => {
   self.skipWaiting();
