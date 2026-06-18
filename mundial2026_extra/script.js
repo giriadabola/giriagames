@@ -23,6 +23,7 @@ const FIREBASE_CONFIG = {
 };
 const FIREBASE_COLLECTION = 'worldcupextra';
 const FIREBASE_MATCHES_COLLECTION = 'worldcupextraMatches';
+const FIREBASE_SECURE_FINISHED_COLLECTION = 'WoldCupSecureHT';
 const WORLD_CUP_API_BASE = 'https://worldcup26.ir';
 const SPORTSDB_API_BASE = 'https://www.thesportsdb.com/api/v1/json/123';
 const API_FOOTBALL_BASE = 'https://v3.football.api-sports.io';
@@ -102,6 +103,9 @@ let data = null;
 let squadsData = null;
 let publicPredictions = [];
 let officialResults = {};
+let legacyOfficialResults = {};
+let matchStateOfficialResults = {};
+let secureOfficialResults = {};
 let publicViewerStage = 'groups';
 let publicGameFilter = 'played';
 let closedMainTab = 'games';
@@ -212,12 +216,106 @@ function mergeLiveGameWithFirestore(game) {
   };
 }
 
+function rebuildOfficialResults() {
+  officialResults = Object.fromEntries([
+    ...Object.entries(legacyOfficialResults),
+    ...Object.entries(matchStateOfficialResults),
+    ...Object.entries(secureOfficialResults)
+  ]);
+}
+
+function applyLoadedOfficialSources(loaded = {}) {
+  legacyOfficialResults = loaded.legacyOfficialByMatchId || {};
+  matchStateOfficialResults = loaded.matchStateOfficialByMatchId || {};
+  secureOfficialResults = loaded.secureOfficialByMatchId || {};
+  rebuildOfficialResults();
+}
+
+function resolveMatchStateKickoffMs(matchDoc = {}) {
+  const kickoffMs = ggamesFirestoreTimestampToMillis(matchDoc.kickoff);
+  if (kickoffMs) return kickoffMs;
+  if (matchDoc.date) {
+    const dateMs = getMatchDateObj({ date: matchDoc.date, time: matchDoc.time || '12:00' }).getTime();
+    if (!Number.isNaN(dateMs)) return dateMs;
+  }
+  const local = (data?.matches || []).find(m => String(m.id) === String(matchDoc.matchId));
+  if (!local) return null;
+  const localMs = getMatchDateObj({ date: local.date, time: local.time || '12:00' }).getTime();
+  return Number.isNaN(localMs) ? null : localMs;
+}
+
+function shouldMirrorMatchStateDocToSecure(docId, raw = {}) {
+  const normalized = normalizeMatchStateDoc(docId, raw);
+  if (!normalized.matchId || !isOfficialResultFinished(normalized)) return false;
+  const kickoffMs = resolveMatchStateKickoffMs({ ...raw, matchId: normalized.matchId });
+  return kickoffMs != null && Date.now() >= kickoffMs + (5 * 60 * 60 * 1000);
+}
+
+function buildSecureFinishedPayload(docId, raw = {}) {
+  const normalized = normalizeMatchStateDoc(docId, raw);
+  return {
+    ...raw,
+    documentId: raw.documentId || raw.matchDocId || docId,
+    matchDocId: raw.matchDocId || docId,
+    matchId: normalized.matchId,
+    status: 'finished',
+    finished: true,
+    live: false,
+    homeGoals: normalized.homeGoals ?? raw.homeGoals ?? null,
+    awayGoals: normalized.awayGoals ?? raw.awayGoals ?? null
+  };
+}
+
+function secureFinishedPayloadMatches(existing = {}, payload = {}) {
+  const sameNumberOrNull = (a, b) => {
+    const left = a == null || a === '' ? null : Number(a);
+    const right = b == null || b === '' ? null : Number(b);
+    return left === right;
+  };
+  return (
+    String(existing.matchId || '') === String(payload.matchId || '') &&
+    String(existing.status || '') === String(payload.status || '') &&
+    !!existing.finished === !!payload.finished &&
+    !!existing.live === !!payload.live &&
+    sameNumberOrNull(existing.homeGoals, payload.homeGoals) &&
+    sameNumberOrNull(existing.awayGoals, payload.awayGoals) &&
+    sameNumberOrNull(existing.homeGoalsLive, payload.homeGoalsLive) &&
+    sameNumberOrNull(existing.awayGoalsLive, payload.awayGoalsLive) &&
+    String(existing.timeElapsed || '') === String(payload.timeElapsed || '')
+  );
+}
+
+const secureMirrorInFlight = new Set();
+
+async function syncMatchStateDocToSecureCollection(docId, raw = {}) {
+  if (!firestoreDb || !firebaseTools || !firebaseTools.getDoc || !firebaseTools.setDoc) return;
+  if (!shouldMirrorMatchStateDocToSecure(docId, raw)) return;
+
+  const syncKey = String(docId);
+  if (secureMirrorInFlight.has(syncKey)) return;
+  secureMirrorInFlight.add(syncKey);
+
+  try {
+    const payload = buildSecureFinishedPayload(docId, raw);
+    const ref = firebaseTools.doc(firestoreDb, FIREBASE_SECURE_FINISHED_COLLECTION, syncKey);
+    const snap = await firebaseTools.getDoc(ref);
+    if (snap.exists() && secureFinishedPayloadMatches(snap.data(), payload)) return;
+    await firebaseTools.setDoc(ref, payload);
+  } catch (error) {
+    console.warn('Nao foi possivel espelhar o resultado final para a colecao segura.', error);
+  } finally {
+    secureMirrorInFlight.delete(syncKey);
+  }
+}
+
 async function loadOfficialMatchStateDocs() {
   if (!firestoreDb || !firebaseTools) return {};
   const collectionRef = firebaseTools.collection(firestoreDb, FIREBASE_COLLECTION);
   const matchesCollectionRef = firebaseTools.collection(firestoreDb, FIREBASE_MATCHES_COLLECTION);
+  const secureCollectionRef = firebaseTools.collection(firestoreDb, FIREBASE_SECURE_FINISHED_COLLECTION);
   let legacySnapshot;
   let matchesSnapshot = null;
+  let secureSnapshot = null;
   try {
     legacySnapshot = await firebaseTools.getDocs(firebaseTools.query(collectionRef, firebaseTools.orderBy('clientTimestamp', 'desc')));
   } catch {
@@ -228,6 +326,11 @@ async function loadOfficialMatchStateDocs() {
   } catch (error) {
     console.warn('Nao foi possivel carregar worldcupextraMatches. A usar fallback legacy.', error);
   }
+  try {
+    secureSnapshot = await firebaseTools.getDocs(secureCollectionRef);
+  } catch (error) {
+    console.warn('Nao foi possivel carregar WoldCupSecureHT. A usar fallback de resultados finais.', error);
+  }
 
   const allDocs = legacySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   const legacyOfficialDocs = allDocs
@@ -235,12 +338,23 @@ async function loadOfficialMatchStateDocs() {
     .filter(doc => doc.matchId != null || doc.id?.startsWith?.('official-match-'))
     .map(doc => [String(doc.matchId ?? String(doc.id).replace('official-match-', '')), { ...doc, _officialSource: 'firestore' }]);
   const matchStateDocs = (matchesSnapshot?.docs || [])
-    .map(doc => normalizeMatchStateDoc(doc.id, doc.data()))
-    .filter(shouldTrackMatchDocAsOfficial)
-    .map(doc => [String(doc.matchId), { ...doc, _officialSource: 'firestore' }]);
+    .map(doc => {
+      const normalized = normalizeMatchStateDoc(doc.id, doc.data());
+      return [String(normalized.matchId), { ...normalized, _officialSource: 'firestore' }];
+    })
+    .filter(([, doc]) => shouldTrackMatchDocAsOfficial(doc));
+  const secureDocs = (secureSnapshot?.docs || [])
+    .map(doc => {
+      const normalized = normalizeMatchStateDoc(doc.id, doc.data());
+      return [String(normalized.matchId), { ...normalized, _officialSource: 'secure-firestore' }];
+    })
+    .filter(([, doc]) => shouldTrackMatchDocAsOfficial(doc));
   return {
     allDocs,
-    officialByMatchId: Object.fromEntries([...legacyOfficialDocs, ...matchStateDocs])
+    legacyOfficialByMatchId: Object.fromEntries(legacyOfficialDocs),
+    matchStateOfficialByMatchId: Object.fromEntries(matchStateDocs),
+    secureOfficialByMatchId: Object.fromEntries(secureDocs),
+    officialByMatchId: Object.fromEntries([...legacyOfficialDocs, ...matchStateDocs, ...secureDocs])
   };
 }
 
@@ -1640,7 +1754,7 @@ async function loadApiWorldCupData({ sync = false } = {}) {
     if (sync) {
       await syncFinishedApiResultsToFirebase();
       const loaded = await loadOfficialMatchStateDocs();
-      officialResults = loaded.officialByMatchId;
+      applyLoadedOfficialSources(loaded);
       mergeApiResultsIntoOfficialResults();
     }
     return worldCupApi;
@@ -3224,10 +3338,11 @@ function autoWinner(matchId) {
 
 
 let realtimeMatchesListener = null;
+let realtimeSecureMatchesListener = null;
 
 function startRealtimeMatchesListener() {
   if (!firestoreDb || !firebaseTools || !firebaseTools.onSnapshot) return;
-  if (realtimeMatchesListener) return;
+  if (realtimeMatchesListener || realtimeSecureMatchesListener) return;
 
   try {
     const matchesCollectionRef = firebaseTools.collection(firestoreDb, FIREBASE_MATCHES_COLLECTION);
@@ -3240,19 +3355,23 @@ function startRealtimeMatchesListener() {
         
         if (change.type === "added" || change.type === "modified") {
           if (shouldTrackMatchDocAsOfficial(normalized)) {
-            officialResults[String(normalized.matchId)] = normalized;
-            changed = true;
+            matchStateOfficialResults[String(normalized.matchId)] = normalized;
+          } else if (normalized.matchId && matchStateOfficialResults[String(normalized.matchId)]) {
+            delete matchStateOfficialResults[String(normalized.matchId)];
           }
+          syncMatchStateDocToSecureCollection(docId, rawData);
+          changed = true;
         } else if (change.type === "removed") {
           const matchId = normalized.matchId || String(docId).replace(/^match_/, '').replace(/^official-match-/, '');
-          if (matchId && officialResults[String(matchId)]) {
-            delete officialResults[String(matchId)];
+          if (matchId && matchStateOfficialResults[String(matchId)]) {
+            delete matchStateOfficialResults[String(matchId)];
             changed = true;
           }
         }
       });
 
       if (changed) {
+        rebuildOfficialResults();
         mergeApiResultsIntoOfficialResults();
         if (typeof refreshLiveDashboardView === 'function' && isVotingClosed()) {
           refreshLiveDashboardView();
@@ -3264,6 +3383,38 @@ function startRealtimeMatchesListener() {
     });
   } catch (error) {
     console.error('Não foi possível iniciar o listener real-time:', error);
+  }
+  try {
+    const secureCollectionRef = firebaseTools.collection(firestoreDb, FIREBASE_SECURE_FINISHED_COLLECTION);
+    realtimeSecureMatchesListener = firebaseTools.onSnapshot(secureCollectionRef, (snapshot) => {
+      let changed = false;
+      snapshot.docChanges().forEach((change) => {
+        const docId = change.doc.id;
+        const normalized = normalizeMatchStateDoc(docId, change.doc.data());
+        const matchId = normalized.matchId || String(docId).replace(/^match_/, '');
+
+        if ((change.type === 'added' || change.type === 'modified') && shouldTrackMatchDocAsOfficial(normalized)) {
+          secureOfficialResults[String(matchId)] = normalized;
+          changed = true;
+        } else if (change.type === 'removed' && secureOfficialResults[String(matchId)]) {
+          delete secureOfficialResults[String(matchId)];
+          changed = true;
+        }
+      });
+
+      if (changed) {
+        rebuildOfficialResults();
+        mergeApiResultsIntoOfficialResults();
+        if (typeof refreshLiveDashboardView === 'function' && isVotingClosed()) {
+          refreshLiveDashboardView();
+        }
+        window.dispatchEvent(new CustomEvent('ggames-live-updated', { detail: { updatedAt: new Date() } }));
+      }
+    }, (error) => {
+      console.warn('Erro no listener da colecao segura:', error);
+    });
+  } catch (error) {
+    console.error('Nao foi possivel iniciar o listener da colecao segura:', error);
   }
 }
 
@@ -3472,7 +3623,7 @@ async function loadPublicPredictions() {
   if (!firestoreDb || !firebaseTools) throw new Error('A ligaÃ§Ã£o ainda nÃ£o estÃ¡ pronta.');
   const loaded = await loadOfficialMatchStateDocs();
   publicPredictions = loaded.allDocs.filter(doc => doc.status !== 'official' && doc.type !== 'officialResult' && Array.isArray(doc.matches));
-  officialResults = loaded.officialByMatchId;
+  applyLoadedOfficialSources(loaded);
   mergeApiResultsIntoOfficialResults();
   return publicPredictions;
   if (!firestoreDb || !firebaseTools) throw new Error('A ligação ainda não está pronta.');
@@ -5681,7 +5832,7 @@ async function loadApiWorldCupData({ sync = false } = {}) {
     if (sync) {
       await syncFinishedApiResultsToFirebase();
       const loaded = await loadOfficialMatchStateDocs();
-      officialResults = loaded.officialByMatchId;
+      applyLoadedOfficialSources(loaded);
       mergeApiResultsIntoOfficialResults();
     }
     if (shouldShowLoadingNotice) {
