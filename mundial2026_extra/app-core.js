@@ -306,6 +306,7 @@ function shouldMirrorMatchStateDocToSecure(docId, raw = {}) {
   const normalized = normalizeMatchStateDoc(docId, raw);
   if (!normalized.matchId || !isOfficialResultFinished(normalized)) return false;
   const kickoffMs = resolveMatchStateKickoffMs({ ...raw, matchId: normalized.matchId });
+  // A partir das 3 horas de jogo em diante: se a app "acordar" mais tarde, ainda espelha.
   return kickoffMs != null && Date.now() >= kickoffMs + (3 * 60 * 60 * 1000);
 }
 
