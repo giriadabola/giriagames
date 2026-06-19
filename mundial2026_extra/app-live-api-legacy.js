@@ -635,6 +635,72 @@ async function syncFinishedApiResultsToFirebase() {
       const local = (data?.matches || []).find(m => String(m.id) === String(game.id));
       const kickoffMs = local ? getMatchDateObj({ date: local.date, time: local.time || '12:00' }).getTime() : null;
       const nowMs = Date.now();
+        type: 'officialResult',
+        source: 'api-live',
+        _live: game.live,
+        _finished: game.finished,
+        _officialSource: 'apiOverlay'
+      };
+    }
+  });
+}
+
+function ggamesFirestoreTimestampToMillis(value) {
+  if (!value) return null;
+  if (typeof value.toMillis === 'function') return value.toMillis();
+  if (typeof value.seconds === 'number') return (value.seconds * 1000) + Math.floor((value.nanoseconds || 0) / 1000000);
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+  return null;
+}
+
+function ggamesMatchKickoffStillFuture(existingData) {
+  const kickoffMs = ggamesFirestoreTimestampToMillis(existingData?.kickoff);
+  if (!kickoffMs) return false;
+  return Date.now() < kickoffMs;
+}
+
+function ggamesShouldSkipFootballDataDirectCors() {
+  try {
+    const host = String(window.location.hostname || '').toLowerCase();
+    // football-data.org responde com Access-Control-Allow-Origin: http://localhost.
+    // Em 127.0.0.1 o preflight rebenta antes de a app poder tratar o erro.
+    return host === '127.0.0.1';
+  } catch {
+    return false;
+  }
+}
+
+async function syncFinishedApiResultsToFirebase() {
+  if (!firestoreDb || !firebaseTools || !worldCupApi.games.length) return;
+  const trustedSources = new Set(['API-Football', 'football-data', 'Highlightly', 'AllSportsAPI', 'SofaScore', 'ESPN', 'worldcup26.ir', 'TheSportsDB v1 free', 'lineups', 'worldcup']);
+  const relevantGames = worldCupApi.games
+    .map(game => ggamesSanitizeAutomaticApiGame(game))
+    .filter(g =>
+      (g.live || g.finished) &&
+      trustedSources.has(g.source) &&
+      (g.finished ? !String(g.timeElapsed || '').startsWith('~') : true)
+    );
+  if (!relevantGames.length) return;
+  try {
+    const existingDocs = await Promise.all(relevantGames.map(async game => {
+      const ref = firebaseTools.doc(firestoreDb, FIREBASE_MATCHES_COLLECTION, firebaseMatchDocId(game.id));
+      const snap = await firebaseTools.getDoc(ref);
+      return [String(game.id), snap.exists() ? snap.data() : null];
+    }));
+    const existingByMatchId = Object.fromEntries(existingDocs);
+    const batch = firebaseTools.writeBatch(firestoreDb);
+    relevantGames.forEach(game => {
+      const existing = existingByMatchId[String(game.id)] || null;
+      
+      // Timing boundaries check
+      const local = (data?.matches || []).find(m => String(m.id) === String(game.id));
+      const kickoffMs = local ? getMatchDateObj({ date: local.date, time: local.time || '12:00' }).getTime() : null;
+      const nowMs = Date.now();
 
       // Rule 1: Kickoff has not arrived yet
       if (kickoffMs && nowMs < kickoffMs) return;
@@ -642,7 +708,13 @@ async function syncFinishedApiResultsToFirebase() {
       // Rule 2: 180 minutes have passed since kickoff
       if (kickoffMs && nowMs > kickoffMs + 180 * 60 * 1000) return;
 
-      if (existing?.status === 'finished') return;
+      if (existing?.status === 'finished' || existing?.finished === true) {
+        if (existing.homeGoalsLive != null && existing.awayGoalsLive != null && (existing.homeGoals == null || existing.awayGoals == null)) {
+          // Proceed to copy goals live
+        } else {
+          return;
+        }
+      }
       // Se o documento foi atualizado manualmente (pelo painel ou manualmente no DB), impede a reescrita automática da API
       if (existing && (existing.syncOrigin === 'manual-logic-panel' || existing.syncOrigin === 'manual')) return;
       
@@ -652,6 +724,15 @@ async function syncFinishedApiResultsToFirebase() {
 
       const targetHomeGoalsLive = game.homeGoals ?? null;
       const targetAwayGoalsLive = game.awayGoals ?? null;
+      const targetHomeGoals = nextFinished ? targetHomeGoalsLive : (existing?.homeGoals ?? null);
+      const targetAwayGoals = nextFinished ? targetAwayGoalsLive : (existing?.awayGoals ?? null);
+
+      let winnerTeam = existing?.winnerTeam ?? null;
+      if (nextFinished && targetHomeGoals !== null && targetAwayGoals !== null) {
+        if (targetHomeGoals > targetAwayGoals) winnerTeam = game.homeTeam || '';
+        else if (targetAwayGoals > targetHomeGoals) winnerTeam = game.awayTeam || '';
+        else winnerTeam = 'Empate';
+      }
 
       const sameCoreState =
         existing &&
@@ -660,6 +741,8 @@ async function syncFinishedApiResultsToFirebase() {
         !!existing.finished === nextFinished &&
         existing.homeGoalsLive === targetHomeGoalsLive &&
         existing.awayGoalsLive === targetAwayGoalsLive &&
+        existing.homeGoals === targetHomeGoals &&
+        existing.awayGoals === targetAwayGoals &&
         String(existing.timeElapsed || '') === String(game.timeElapsed || '');
         
       if (sameCoreState) return;
@@ -683,6 +766,9 @@ async function syncFinishedApiResultsToFirebase() {
         awayTeam: game.awayTeam,
         homeGoalsLive: targetHomeGoalsLive,
         awayGoalsLive: targetAwayGoalsLive,
+        homeGoals: targetHomeGoals,
+        awayGoals: targetAwayGoals,
+        winnerTeam,
         timeElapsed: game.timeElapsed || null,
         source: game.source || 'api',
         syncOrigin: 'api',
@@ -749,4 +835,3 @@ function startLiveApiSync() {
 
   liveSyncTimer = setInterval(tick, API_SYNC_INTERVAL_MS);
 }
-
