@@ -200,10 +200,22 @@ function normalizeMatchStateDoc(docId, raw = {}) {
     finished: effectiveFinished,
     live: isLive,
     status: effectiveFinished ? 'finished' : (isLive ? 'live' : raw.status),
-    // Se a API só atualizar campos live, mantemos fallback de leitura aqui sem promover o valor no documento.
     homeGoals: isLive ? resolvedLiveHomeGoals : (raw.homeGoals ?? raw.homeGoalsLive ?? null),
     awayGoals: isLive ? resolvedLiveAwayGoals : (raw.awayGoals ?? raw.awayGoalsLive ?? null)
   };
+}
+
+function ggamesFirestoreTimestampToMillis(value) {
+  if (!value) return null;
+  if (typeof value.toMillis === 'function') return value.toMillis();
+  if (typeof value.seconds === 'number') return (value.seconds * 1000) + Math.floor((value.nanoseconds || 0) / 1000000);
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+  return null;
 }
 
 function resolveOfficialResultKickoffMs(matchId, official = null) {
