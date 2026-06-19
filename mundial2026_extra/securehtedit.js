@@ -23,6 +23,29 @@ const STAGE_LABELS = {
 const $ = (selector) => document.querySelector(selector);
 const escapeHtml = (text) => String(text ?? '').replace(/[&<>'"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#039;', '"': '&quot;' }[c]));
 
+const SECUREHT_ALLOWED_HOSTS = new Set([
+  window.location.host,
+  'www.gstatic.com',
+  'identitytoolkit.googleapis.com',
+  'firestore.googleapis.com',
+  'securetoken.googleapis.com'
+]);
+
+const secureHtNativeFetch = window.fetch.bind(window);
+window.fetch = function secureHtIsolatedFetch(input, init) {
+  const url = typeof input === 'string' || input instanceof URL ? String(input) : String(input?.url || '');
+  try {
+    const parsed = new URL(url, window.location.href);
+    if (parsed.origin !== window.location.origin && !SECUREHT_ALLOWED_HOSTS.has(parsed.host)) {
+      console.warn('securehtedit bloqueou fetch externo:', parsed.href);
+      return Promise.reject(new Error(`securehtedit bloqueou fetch externo: ${parsed.host}`));
+    }
+  } catch {
+    // deixa passar URLs inválidos/relativos normais
+  }
+  return secureHtNativeFetch(input, init);
+};
+
 let auth = null;
 let db = null;
 let tools = null;
