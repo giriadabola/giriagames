@@ -30,6 +30,7 @@ let currentUser = null;
 let secureMatches = [];
 let activeStageFilter = 'all';
 let loginWatchdog = null;
+let authStateBusy = false;
 
 function firebaseTimestampToMillis(value) {
   if (!value) return null;
@@ -180,6 +181,8 @@ async function saveMatch(card) {
 }
 
 async function handleAuthState(user) {
+  if (authStateBusy) return;
+  authStateBusy = true;
   try {
     currentUser = user;
     if (loginWatchdog) {
@@ -216,6 +219,8 @@ async function handleAuthState(user) {
     $('#loginArea').hidden = false;
     $('#adminPanel').hidden = true;
     $('#logoutBtn').hidden = false;
+  } finally {
+    authStateBusy = false;
   }
 }
 
@@ -252,7 +257,13 @@ function bindEvents() {
       loginWatchdog = setTimeout(() => {
         $('#authStatus').textContent = 'Login pendente há demasiado tempo. Confirma internet, domínio autorizado e consola.';
       }, 12000);
-      await tools.signInWithEmailAndPassword(auth, email, pass);
+      const credential = await tools.signInWithEmailAndPassword(auth, email, pass);
+      if (loginWatchdog) {
+        clearTimeout(loginWatchdog);
+        loginWatchdog = null;
+      }
+      $('#authStatus').textContent = 'Login feito. A confirmar permissões...';
+      await handleAuthState(credential.user);
     } catch (error) {
       console.error(error);
       if (loginWatchdog) {
