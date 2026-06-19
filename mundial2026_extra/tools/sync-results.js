@@ -347,8 +347,12 @@ async function runSync() {
 
     // Regra 2: Status já é finished (não pode voltar a colocar live)
     if (existing?.status === 'finished' || existing?.finished === true) {
-      console.log(`Jogo ${game.id} saltado: Já está marcado como finalizado.`);
-      continue;
+      if (existing.homeGoalsLive != null && existing.awayGoalsLive != null && (existing.homeGoals == null || existing.awayGoals == null)) {
+        console.log(`Jogo ${game.id}: Já está finalizado mas sem golos. A copiar golos live...`);
+      } else {
+        console.log(`Jogo ${game.id} saltado: Já está marcado como finalizado.`);
+        continue;
+      }
     }
 
     // Regra 3: Documento foi atualizado de forma manual
@@ -366,8 +370,12 @@ async function runSync() {
     const targetHomeGoalsLive = sanitizedGame.homeGoals;
     const targetAwayGoalsLive = sanitizedGame.awayGoals;
     const protectedFields = buildApiProtectedMatchFields(existing);
-    const targetHomeGoals = protectedFields.homeGoals;
-    const targetAwayGoals = protectedFields.awayGoals;
+    let targetHomeGoals = protectedFields.homeGoals;
+    let targetAwayGoals = protectedFields.awayGoals;
+    if (nextFinished || (existing && (existing.status === 'finished' || existing.finished === true))) {
+      targetHomeGoals = targetHomeGoals ?? targetHomeGoalsLive ?? (existing ? existing.homeGoalsLive : null);
+      targetAwayGoals = targetAwayGoals ?? targetAwayGoalsLive ?? (existing ? existing.awayGoalsLive : null);
+    }
 
     // Check if change is needed
     const sameCoreState =
@@ -377,6 +385,8 @@ async function runSync() {
       !!existing.finished === nextFinished &&
       existing.homeGoalsLive === targetHomeGoalsLive &&
       existing.awayGoalsLive === targetAwayGoalsLive &&
+      existing.homeGoals === targetHomeGoals &&
+      existing.awayGoals === targetAwayGoals &&
       String(existing.timeElapsed || '') === String(sanitizedGame.timeElapsed || '');
 
     if (sameCoreState) {
@@ -385,9 +395,9 @@ async function runSync() {
 
     // Calculate winner if finished
     let winnerTeam = null;
-    if (nextFinished && sanitizedGame.homeGoals !== null && sanitizedGame.awayGoals !== null) {
-      if (sanitizedGame.homeGoals > sanitizedGame.awayGoals) winnerTeam = local?.home || '';
-      else if (sanitizedGame.awayGoals > sanitizedGame.homeGoals) winnerTeam = local?.away || '';
+    if (nextFinished && targetHomeGoals !== null && targetAwayGoals !== null) {
+      if (targetHomeGoals > targetAwayGoals) winnerTeam = local?.home || '';
+      else if (targetAwayGoals > targetHomeGoals) winnerTeam = local?.away || '';
       else winnerTeam = 'Empate';
     }
 
@@ -417,7 +427,7 @@ async function runSync() {
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
 
-    console.log(`Jogo ${game.id} (${local?.home} vs ${local?.away}): a agendar atualização -> ${game.homeGoals}-${game.awayGoals} (${nextStatus})`);
+    console.log(`Jogo ${game.id} (${local?.home} vs ${local?.away}): a agendar atualização -> ${targetHomeGoals}-${targetAwayGoals} (${nextStatus})`);
     updateCount++;
   }
 
