@@ -180,6 +180,7 @@ async function initFirebase() {
       setDoc: firestoreModule.setDoc,
       limit: firestoreModule.limit,
       writeBatch: firestoreModule.writeBatch,
+      runTransaction: firestoreModule.runTransaction,
       onSnapshot: firestoreModule.onSnapshot
     };
     updateSaveButton();

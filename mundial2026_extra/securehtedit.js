@@ -208,8 +208,8 @@ function renderMatches() {
       </div>
 
       <div class="secureht-actions">
-        <button type="button" class="primary" data-save-match>Gravar</button>
-        <span class="secureht-message" data-message></span>
+        <button type="button" class="primary" disabled>Selado</button>
+        <span class="secureht-message ok">Documento sem edicao.</span>
       </div>
     </article>
   `).join('');
@@ -225,9 +225,10 @@ async function loadSecureMatches() {
 }
 
 async function saveMatch(card) {
+  return;
   const docId = card.dataset.docId;
   const message = card.querySelector('[data-message]');
-  const btn = card.querySelector('[data-save-match]');
+  const btn = card.querySelector('[data-disabled-write]');
   const homeGoals = Number(card.querySelector('[data-field="homeGoals"]').value);
   const awayGoals = Number(card.querySelector('[data-field="awayGoals"]').value);
 
@@ -237,7 +238,7 @@ async function saveMatch(card) {
 
   try {
     const ref = tools.doc(db, SECURE_COLLECTION, docId);
-    await tools.setDoc(ref, {
+    await tools.disabledWrite(ref, {
       homeGoals,
       awayGoals,
       updatedAt: tools.serverTimestamp(),
@@ -381,7 +382,6 @@ async function initFirebase() {
     doc: firestoreModule.doc,
     getDoc: firestoreModule.getDoc,
     getDocs: firestoreModule.getDocs,
-    setDoc: firestoreModule.setDoc,
     serverTimestamp: firestoreModule.serverTimestamp,
     signInWithEmailAndPassword: authModule.signInWithEmailAndPassword,
     signOut: authModule.signOut,
@@ -431,11 +431,6 @@ function bindEvents() {
     renderMatches();
   });
 
-  $('#matchesList').addEventListener('click', (event) => {
-    const btn = event.target.closest('[data-save-match]');
-    if (!btn) return;
-    saveMatch(btn.closest('.secureht-match'));
-  });
 }
 
 async function init() {
