@@ -313,17 +313,29 @@ function shouldMirrorMatchStateDocToSecure(docId, raw = {}) {
 function buildSecureFinishedPayload(docId, raw = {}) {
   const normalized = normalizeMatchStateDoc(docId, raw);
   return {
-    ...raw,
     documentId: raw.documentId || raw.matchDocId || docId,
     matchDocId: raw.matchDocId || docId,
     matchId: normalized.matchId,
+    homeTeam: raw.homeTeam || normalized.homeTeam || null,
+    awayTeam: raw.awayTeam || normalized.awayTeam || null,
+    stage: raw.stage || normalized.stage || null,
+    stageLabel: raw.stageLabel || normalized.stageLabel || null,
+    group: raw.group || normalized.group || null,
+    date: raw.date || normalized.date || null,
+    time: raw.time || normalized.time || null,
+    timezone: raw.timezone || normalized.timezone || null,
+    city: raw.city || normalized.city || null,
+    country: raw.country || normalized.country || null,
+    venue: raw.venue || normalized.venue || null,
     kickoff: raw.kickoff || null,
     kickoffIso: raw.kickoffIso || null,
     status: 'finished',
     finished: true,
     live: false,
     homeGoals: normalized.homeGoals ?? raw.homeGoals ?? null,
-    awayGoals: normalized.awayGoals ?? raw.awayGoals ?? null
+    awayGoals: normalized.awayGoals ?? raw.awayGoals ?? null,
+    winnerTeam: raw.winnerTeam || normalized.winnerTeam || null,
+    timeElapsed: 'FT'
   };
 }
 
@@ -348,16 +360,9 @@ function secureFinishedPayloadMatches(existing = {}, payload = {}) {
 
 const secureMirrorInFlight = new Set();
 
-function secureCollectionCanBeSeededFromMatchState(raw = {}) {
-  const origin = String(raw?.syncOrigin || '').trim().toLowerCase();
-  if (origin === 'api') return false;
-  return true;
-}
-
 async function syncMatchStateDocToSecureCollection(docId, raw = {}) {
   if (!firestoreDb || !firebaseTools || !firebaseTools.getDoc || !firebaseTools.setDoc) return;
   if (!shouldMirrorMatchStateDocToSecure(docId, raw)) return;
-  if (!secureCollectionCanBeSeededFromMatchState(raw)) return;
 
   const syncKey = String(docId);
   if (secureMirrorInFlight.has(syncKey)) return;
