@@ -10,6 +10,7 @@ const FIREBASE_CONFIG = {
 
 const FIREBASE_SDK_VERSION = '10.14.1';
 const SECURE_COLLECTION = 'WoldCupSecureHT';
+const AUTO_LOGIN_STORAGE_KEY = 'mundial2026_secureht_autologin_v1';
 const STAGE_LABELS = {
   groups: 'Fase de grupos',
   round32: '16 avos',
@@ -21,7 +22,13 @@ const STAGE_LABELS = {
 };
 
 const $ = (selector) => document.querySelector(selector);
-const escapeHtml = (text) => String(text ?? '').replace(/[&<>'"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#039;', '"': '&quot;' }[c]));
+const escapeHtml = (text) => String(text ?? '').replace(/[&<>'"]/g, (char) => ({
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  "'": '&#039;',
+  '"': '&quot;'
+}[char]));
 
 const SECUREHT_ALLOWED_HOSTS = new Set([
   window.location.host,
@@ -41,7 +48,7 @@ window.fetch = function secureHtIsolatedFetch(input, init) {
       return Promise.reject(new Error(`securehtedit bloqueou fetch externo: ${parsed.host}`));
     }
   } catch {
-    // deixa passar URLs inválidos/relativos normais
+    // Mantém o comportamento normal para URLs relativas ou inválidas.
   }
   return secureHtNativeFetch(input, init);
 };
@@ -54,6 +61,7 @@ let secureMatches = [];
 let activeStageFilter = 'all';
 let loginWatchdog = null;
 let authStateBusy = false;
+let autoLoginAttempted = false;
 
 function firebaseTimestampToMillis(value) {
   if (!value) return null;
@@ -87,18 +95,69 @@ function numericOptions(selected) {
   return html;
 }
 
+function readStoredAutoLogin() {
+  try {
+    const raw = window.localStorage.getItem(AUTO_LOGIN_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed?.email || !parsed?.password) return null;
+    return {
+      email: String(parsed.email).trim(),
+      password: String(parsed.password)
+    };
+  } catch {
+    return null;
+  }
+}
+
+function saveStoredAutoLogin(email, password) {
+  if (!email || !password) return;
+  window.localStorage.setItem(AUTO_LOGIN_STORAGE_KEY, JSON.stringify({
+    email: String(email).trim(),
+    password: String(password)
+  }));
+}
+
+function clearStoredAutoLogin() {
+  window.localStorage.removeItem(AUTO_LOGIN_STORAGE_KEY);
+}
+
+function readAutoLoginFromQuery() {
+  const params = new URLSearchParams(window.location.search);
+  const email = (params.get('email') || '').trim();
+  const password = params.get('password') || '';
+  const autologin = (params.get('autologin') || '1').toLowerCase();
+  if (!email || !password) return null;
+  if (autologin === '0' || autologin === 'false' || autologin === 'no') return null;
+  return { email, password };
+}
+
+function getAutoLoginCredentials() {
+  const fromQuery = readAutoLoginFromQuery();
+  if (fromQuery) {
+    saveStoredAutoLogin(fromQuery.email, fromQuery.password);
+    return fromQuery;
+  }
+  return readStoredAutoLogin();
+}
+
+function fillLoginForm(email = '', password = '') {
+  $('#adminEmail').value = email;
+  $('#adminPassword').value = password;
+}
+
 function filteredMatches() {
   if (activeStageFilter === 'all') return secureMatches;
-  return secureMatches.filter(match => String(match.stage || '') === activeStageFilter);
+  return secureMatches.filter((match) => String(match.stage || '') === activeStageFilter);
 }
 
 function renderStageFilter() {
   const select = $('#stageFilter');
   if (!select) return;
-  const stages = [...new Set(secureMatches.map(match => String(match.stage || '')).filter(Boolean))];
+  const stages = [...new Set(secureMatches.map((match) => String(match.stage || '')).filter(Boolean))];
   select.innerHTML = [
     '<option value="all">Todas as fases</option>',
-    ...stages.map(stage => `<option value="${escapeHtml(stage)}">${escapeHtml(stageLabel(stage))}</option>`)
+    ...stages.map((stage) => `<option value="${escapeHtml(stage)}">${escapeHtml(stageLabel(stage))}</option>`)
   ].join('');
   select.value = stages.includes(activeStageFilter) || activeStageFilter === 'all' ? activeStageFilter : 'all';
 }
@@ -112,7 +171,7 @@ function renderMatches() {
     return;
   }
 
-  list.innerHTML = rows.map(row => `
+  list.innerHTML = rows.map((row) => `
     <article class="secureht-match" data-doc-id="${escapeHtml(row.id)}">
       <div class="secureht-match-head">
         <div>
@@ -153,7 +212,7 @@ function renderMatches() {
 async function loadSecureMatches() {
   const snap = await tools.getDocs(tools.collection(db, SECURE_COLLECTION));
   secureMatches = snap.docs
-    .map(doc => ({ id: doc.id, ...doc.data() }))
+    .map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }))
     .sort((a, b) => Number(a.matchId || 0) - Number(b.matchId || 0));
   renderStageFilter();
   renderMatches();
@@ -182,7 +241,7 @@ async function saveMatch(card) {
       updatedByEmail: currentUser?.email || null
     }, { merge: true });
 
-    const row = secureMatches.find(match => String(match.id) === String(docId));
+    const row = secureMatches.find((match) => String(match.id) === String(docId));
     if (row) {
       row.homeGoals = homeGoals;
       row.awayGoals = awayGoals;
@@ -203,17 +262,64 @@ async function saveMatch(card) {
   }
 }
 
+function startLoginWatchdog() {
+  if (loginWatchdog) clearTimeout(loginWatchdog);
+  loginWatchdog = setTimeout(() => {
+    $('#authStatus').textContent = 'Login pendente há demasiado tempo. Confirma internet, domínio autorizado e consola.';
+  }, 12000);
+}
+
+function stopLoginWatchdog() {
+  if (!loginWatchdog) return;
+  clearTimeout(loginWatchdog);
+  loginWatchdog = null;
+}
+
+async function loginWithEmail(email, password, options = {}) {
+  const automatic = options.automatic === true;
+  $('#authStatus').textContent = automatic ? 'A entrar automaticamente...' : 'A entrar...';
+  startLoginWatchdog();
+
+  try {
+    const credential = await tools.signInWithEmailAndPassword(auth, email, password);
+    saveStoredAutoLogin(email, password);
+    autoLoginAttempted = true;
+    stopLoginWatchdog();
+    $('#authStatus').textContent = 'Login feito. A confirmar permissões...';
+    await handleAuthState(credential.user);
+  } catch (error) {
+    console.error(error);
+    stopLoginWatchdog();
+    if (automatic) {
+      clearStoredAutoLogin();
+      $('#authStatus').textContent = `Falhou o login automático${error?.code ? ` (${error.code})` : ''}.`;
+    } else {
+      $('#authStatus').textContent = `Não foi possível entrar${error?.code ? ` (${error.code})` : ''}.`;
+    }
+  }
+}
+
 async function handleAuthState(user) {
   if (authStateBusy) return;
   authStateBusy = true;
+
   try {
     currentUser = user;
-    if (loginWatchdog) {
-      clearTimeout(loginWatchdog);
-      loginWatchdog = null;
-    }
+    stopLoginWatchdog();
 
     if (!user) {
+      const autoLogin = getAutoLoginCredentials();
+      fillLoginForm(autoLogin?.email || '', autoLogin?.password || '');
+
+      if (autoLogin && !autoLoginAttempted) {
+        autoLoginAttempted = true;
+        $('#loginArea').hidden = false;
+        $('#adminPanel').hidden = true;
+        $('#logoutBtn').hidden = true;
+        void loginWithEmail(autoLogin.email, autoLogin.password, { automatic: true });
+        return;
+      }
+
       $('#authStatus').textContent = 'Inicia sessão para continuar.';
       $('#loginArea').hidden = false;
       $('#adminPanel').hidden = true;
@@ -224,6 +330,7 @@ async function handleAuthState(user) {
     $('#authStatus').textContent = 'A confirmar permissões...';
     const userSnap = await tools.getDoc(tools.doc(db, 'users', user.uid));
     const estatuto = userSnap.exists() ? userSnap.data().estatuto : '';
+
     if (estatuto !== 'ruler') {
       $('#authStatus').innerHTML = '<span class="locked-note">Esta conta não tem permissão ruler.</span>';
       $('#loginArea').hidden = false;
@@ -255,6 +362,13 @@ async function initFirebase() {
   const app = appModule.initializeApp(FIREBASE_CONFIG, 'secureht-edit-app');
   auth = authModule.getAuth(app);
   db = firestoreModule.getFirestore(app);
+
+  try {
+    await authModule.setPersistence(auth, authModule.browserLocalPersistence);
+  } catch (error) {
+    console.warn('Não consegui ativar persistência local do login:', error);
+  }
+
   tools = {
     collection: firestoreModule.collection,
     doc: firestoreModule.doc,
@@ -272,32 +386,15 @@ async function initFirebase() {
 
 function bindEvents() {
   $('#loginBtn').addEventListener('click', async () => {
-    const email = $('#adminEmail').value.trim();
-    const pass = $('#adminPassword').value;
-    $('#authStatus').textContent = 'A entrar...';
-    try {
-      if (loginWatchdog) clearTimeout(loginWatchdog);
-      loginWatchdog = setTimeout(() => {
-        $('#authStatus').textContent = 'Login pendente há demasiado tempo. Confirma internet, domínio autorizado e consola.';
-      }, 12000);
-      const credential = await tools.signInWithEmailAndPassword(auth, email, pass);
-      if (loginWatchdog) {
-        clearTimeout(loginWatchdog);
-        loginWatchdog = null;
-      }
-      $('#authStatus').textContent = 'Login feito. A confirmar permissões...';
-      await handleAuthState(credential.user);
-    } catch (error) {
-      console.error(error);
-      if (loginWatchdog) {
-        clearTimeout(loginWatchdog);
-        loginWatchdog = null;
-      }
-      $('#authStatus').textContent = `Não foi possível entrar${error?.code ? ` (${error.code})` : ''}.`;
-    }
+    autoLoginAttempted = true;
+    await loginWithEmail($('#adminEmail').value.trim(), $('#adminPassword').value);
   });
 
-  $('#logoutBtn').addEventListener('click', () => tools.signOut(auth));
+  $('#logoutBtn').addEventListener('click', async () => {
+    clearStoredAutoLogin();
+    autoLoginAttempted = true;
+    await tools.signOut(auth);
+  });
 
   $('#refreshBtn').addEventListener('click', () => loadSecureMatches());
 
