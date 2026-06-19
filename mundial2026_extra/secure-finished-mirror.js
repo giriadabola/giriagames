@@ -1,7 +1,9 @@
 /* Secure HT: espelho imutavel de jogos terminados. */
 (() => {
 const SECURE_FINISHED_MIN_DELAY_MS = 3 * 60 * 60 * 1000;
+const SECURE_FINISHED_SWEEP_INTERVAL_MS = 5 * 60 * 1000;
 const secureMirrorInFlight = new Set();
+let secureFinishedSweepTimer = null;
 
 function resolveMatchStateKickoffMs(matchDoc = {}) {
   const kickoffMs = ggamesFirestoreTimestampToMillis(matchDoc.kickoff);
@@ -88,8 +90,28 @@ async function syncMatchStateDocToSecureCollection(docId, raw = {}) {
   }
 }
 
+async function scanMatchStateDocsToSecureCollection() {
+  if (!firestoreDb || !firebaseTools?.getDocs || !firebaseTools?.collection) return;
+  try {
+    const snap = await firebaseTools.getDocs(firebaseTools.collection(firestoreDb, FIREBASE_MATCHES_COLLECTION));
+    await Promise.all(
+      snap.docs.map((docSnap) => syncMatchStateDocToSecureCollection(docSnap.id, docSnap.data()))
+    );
+  } catch (error) {
+    console.warn('Nao foi possivel fazer a verificacao periodica da colecao segura.', error);
+  }
+}
+
+function startSecureFinishedMirrorSweep() {
+  if (secureFinishedSweepTimer) clearInterval(secureFinishedSweepTimer);
+  void scanMatchStateDocsToSecureCollection();
+  secureFinishedSweepTimer = setInterval(scanMatchStateDocsToSecureCollection, SECURE_FINISHED_SWEEP_INTERVAL_MS);
+}
+
 window.resolveMatchStateKickoffMs = resolveMatchStateKickoffMs;
 window.shouldMirrorMatchStateDocToSecure = shouldMirrorMatchStateDocToSecure;
 window.buildSecureFinishedPayload = buildSecureFinishedPayload;
 window.syncMatchStateDocToSecureCollection = syncMatchStateDocToSecureCollection;
+window.scanMatchStateDocsToSecureCollection = scanMatchStateDocsToSecureCollection;
+window.startSecureFinishedMirrorSweep = startSecureFinishedMirrorSweep;
 })();

@@ -187,6 +187,9 @@ async function initFirebase() {
     await loadScoringRules();
     await loadVotingDeadline();
     startRealtimeMatchesListener();
+    if (typeof startSecureFinishedMirrorSweep === 'function') {
+      startSecureFinishedMirrorSweep();
+    }
   } catch (error) {
     console.error('Erro ao preparar ligação:', error);
     const status = $('#firebaseStatus');
