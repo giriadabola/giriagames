@@ -62,6 +62,7 @@ let auth = null;
 let db = null;
 let tools = null;
 let currentUser = null;
+let googleProvider = null;
 let secureMatches = [];
 let activeStageFilter = 'all';
 let loginWatchdog = null;
@@ -364,9 +365,10 @@ async function initFirebase() {
   const authModule = await import(`https://www.gstatic.com/firebasejs/${FIREBASE_SDK_VERSION}/firebase-auth.js`);
   const firestoreModule = await import(`https://www.gstatic.com/firebasejs/${FIREBASE_SDK_VERSION}/firebase-firestore.js`);
 
-  const app = appModule.initializeApp(FIREBASE_CONFIG, 'secureht-edit-app');
+  const app = appModule.initializeApp(FIREBASE_CONFIG);
   auth = authModule.getAuth(app);
   db = firestoreModule.getFirestore(app);
+  googleProvider = new authModule.GoogleAuthProvider();
 
   try {
     await authModule.setPersistence(auth, authModule.browserLocalPersistence);
@@ -383,9 +385,13 @@ async function initFirebase() {
     serverTimestamp: firestoreModule.serverTimestamp,
     signInWithEmailAndPassword: authModule.signInWithEmailAndPassword,
     signOut: authModule.signOut,
-    onAuthStateChanged: authModule.onAuthStateChanged
+    onAuthStateChanged: authModule.onAuthStateChanged,
+    signInWithPopup: authModule.signInWithPopup,
+    signInWithRedirect: authModule.signInWithRedirect,
+    getRedirectResult: authModule.getRedirectResult
   };
 
+  tools.getRedirectResult(auth).catch(error => console.warn('Redirect login:', error));
   tools.onAuthStateChanged(auth, handleAuthState);
 }
 
@@ -393,6 +399,23 @@ function bindEvents() {
   $('#loginBtn').addEventListener('click', async () => {
     autoLoginAttempted = true;
     await loginWithEmail($('#adminEmail').value.trim(), $('#adminPassword').value);
+  });
+
+  $('#googleLoginBtn').addEventListener('click', async () => {
+    autoLoginAttempted = true;
+    $('#authStatus').textContent = 'A abrir login Google...';
+    try {
+      await tools.signInWithPopup(auth, googleProvider);
+    } catch (error) {
+      console.warn('Popup falhou. A tentar redirect:', error);
+      $('#authStatus').textContent = 'Popup bloqueado/fechado. A tentar login por redirecionamento...';
+      try {
+        await tools.signInWithRedirect(auth, googleProvider);
+      } catch (redirectError) {
+        console.error('Redirect login falhou:', redirectError);
+        $('#authStatus').textContent = `Erro no login: ${redirectError?.code || redirectError?.message || 'desconhecido'}`;
+      }
+    }
   });
 
   $('#logoutBtn').addEventListener('click', async () => {
