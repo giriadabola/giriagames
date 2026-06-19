@@ -117,6 +117,16 @@
       <div class="loading-spinner" aria-hidden="true"></div>
       <strong>A preparar o Mundial 2026...</strong>
       <span>A carregar jogos, prognósticos e classificação.</span>
+
+      <!-- Mini-jogo de embaixadinhas -->
+      <div class="juggling-game" style="margin-top: 15px; display: flex; flex-direction: column; align-items: center; gap: 8px; width: 100%;">
+        <div style="font-size: 0.85rem; color: var(--muted); display: flex; gap: 15px;">
+          <span>Toques: <strong id="juggleScore" style="color: var(--accent);">0</strong></span>
+          <span style="display: none;"><strong id="juggleHighScore">0</strong></span>
+        </div>
+        <canvas id="jugglingCanvas" width="200" height="140" style="background: rgba(255,255,255,0.03); border-radius: 12px; border: 1px solid rgba(255,255,255,0.08); cursor: pointer;"></canvas>
+        <button id="juggleBtn" type="button" class="primary" style="padding: 6px 20px; font-size: 0.9rem; margin-top: 5px; box-shadow: 0 4px 12px rgba(97,211,148,0.25);">Clicar</button>
+      </div>
     </div>
   </div>
   <header class="hero">
@@ -249,6 +259,275 @@
     }, error => {
       console.warn('Não foi possível ouvir o modo manutenção:', error);
     });
+  </script>
+
+  <script>
+    (function() {
+      const canvas = document.getElementById('jugglingCanvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      const btn = document.getElementById('juggleBtn');
+      const scoreEl = document.getElementById('juggleScore');
+      const highScoreEl = document.getElementById('juggleHighScore');
+
+      let ball = {
+        x: 100,
+        y: 120,
+        radius: 7,
+        vy: 0,
+        vx: 0,
+        gravity: 0.25,
+        bounce: -0.5
+      };
+
+      let playerX = 75;
+      let legAngle = 0;
+      let isKicking = false;
+      let kickTimer = 0;
+      
+      let isHeading = false;
+      let headingTimer = 0;
+      let headOffsetY = 0;
+
+      let score = 0;
+      let highScore = parseInt(localStorage.getItem('juggling_highscore') || '0', 10);
+      let gameStarted = false;
+      let floatingTexts = [];
+      
+      highScoreEl.textContent = highScore;
+
+      function updateScoreboard() {
+        scoreEl.textContent = score;
+        highScoreEl.textContent = highScore;
+      }
+
+      function addFloatingText(x, y, text, color) {
+        floatingTexts.push({ x, y, text, color, alpha: 1 });
+      }
+
+      function kick() {
+        if (!gameStarted || ball.y >= 120 - ball.radius - 2) {
+          gameStarted = true;
+          ball.vy = -5.8;
+          ball.vx = 0.5;
+          score = 1; // O chute inicial já conta como 1 toque!
+          isKicking = true;
+          kickTimer = 0;
+          updateScoreboard();
+          addFloatingText(ball.x, ball.y - 10, 'Pé! +1', '#61d394');
+          return;
+        }
+
+        // Se a bola estiver alta e score >= 3, permite cabeceio
+        if (score >= 3 && ball.y < 95) {
+          const headX = playerX;
+          const headY = 75;
+          const distHead = Math.hypot(ball.x - headX, ball.y - headY);
+
+          if (distHead < 28) { // Aumentado de 22 para 28
+            isHeading = true;
+            headingTimer = 0;
+            ball.vy = -3.8 - Math.random() * 1.2;
+            ball.vx = (ball.x - playerX) * 0.15 + (Math.random() - 0.5) * 0.6;
+            score++;
+            if (score > highScore) {
+              highScore = score;
+              localStorage.setItem('juggling_highscore', highScore);
+            }
+            updateScoreboard();
+            addFloatingText(ball.x, ball.y - 10, 'Cabeça! +1', '#f8c14a');
+            return;
+          }
+        }
+
+        // Caso contrário, tenta chutar com o pé
+        isKicking = true;
+        kickTimer = 0;
+        
+        const footX = playerX + 17;
+        const footY = 110;
+        const distFoot = Math.hypot(ball.x - footX, ball.y - footY);
+
+        if (distFoot < 32) { // Aumentado de 26 para 32
+          ball.vy = -5.2 - Math.random() * 1.5;
+          ball.vx = (ball.x - (playerX + 5)) * 0.18 + (Math.random() - 0.5) * 0.8;
+          score++;
+          if (score > highScore) {
+            highScore = score;
+            localStorage.setItem('juggling_highscore', highScore);
+          }
+          updateScoreboard();
+          addFloatingText(ball.x, ball.y - 10, 'Pé! +1', '#61d394');
+        }
+      }
+
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        kick();
+      });
+      canvas.addEventListener('click', (e) => {
+        e.stopPropagation();
+        kick();
+      });
+
+      function gameLoop() {
+        if (gameStarted) {
+          ball.vy += ball.gravity;
+          ball.x += ball.vx;
+          ball.y += ball.vy;
+
+          // Jogador segue a bola horizontalmente de forma suave
+          const targetPlayerX = ball.x - 12;
+          playerX += (targetPlayerX - playerX) * 0.12;
+
+          if (ball.x - ball.radius < 0) {
+            ball.x = ball.radius;
+            ball.vx = -ball.vx * 0.7;
+          }
+          if (ball.x + ball.radius > canvas.width) {
+            ball.x = canvas.width - ball.radius;
+            ball.vx = -ball.vx * 0.7;
+          }
+
+          const groundY = 120;
+          if (ball.y + ball.radius >= groundY) {
+            ball.y = groundY - ball.radius;
+            ball.vy = 0;
+            ball.vx = 0;
+            if (score > 0) {
+              score = 0;
+              updateScoreboard();
+              addFloatingText(ball.x, ball.y - 10, 'Ops! Chão 😢', '#ff6b6b');
+            }
+          }
+        } else {
+          playerX = 75;
+        }
+
+        // Animação de chute
+        if (isKicking) {
+          kickTimer += 0.2;
+          legAngle = -Math.sin(kickTimer * Math.PI) * 0.8;
+          if (kickTimer >= 1) {
+            isKicking = false;
+            legAngle = 0;
+          }
+        }
+
+        // Animação de cabeceio
+        if (isHeading) {
+          headingTimer += 0.2;
+          headOffsetY = -Math.sin(headingTimer * Math.PI) * 4;
+          if (headingTimer >= 1) {
+            isHeading = false;
+            headOffsetY = 0;
+          }
+        }
+
+        // Atualizar textos flutuantes
+        for (let i = floatingTexts.length - 1; i >= 0; i--) {
+          floatingTexts[i].y -= 0.5;
+          floatingTexts[i].alpha -= 0.02;
+          if (floatingTexts[i].alpha <= 0) {
+            floatingTexts.splice(i, 1);
+          }
+        }
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        const groundY = 120;
+
+        // Sombra da bola
+        const heightAboveGround = groundY - (ball.y + ball.radius);
+        const shadowScale = Math.max(0.2, 1 - heightAboveGround / 100);
+        const shadowOpacity = Math.max(0, 0.4 - heightAboveGround / 120);
+        ctx.fillStyle = `rgba(0, 0, 0, ${shadowOpacity})`;
+        ctx.beginPath();
+        ctx.ellipse(ball.x, groundY + 2, ball.radius * shadowScale * 1.5, ball.radius * shadowScale * 0.5, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Linha do chão
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(0, groundY);
+        ctx.lineTo(canvas.width, groundY);
+        ctx.stroke();
+
+        // Desenhar jogador
+        ctx.save();
+        
+        // Cabeça (com offset vertical do cabeceio)
+        ctx.fillStyle = '#eef4ff';
+        ctx.beginPath();
+        ctx.arc(playerX, 75 + headOffsetY, 8, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Corpo
+        ctx.strokeStyle = '#eef4ff';
+        ctx.lineWidth = 4;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(playerX, 83 + (isHeading ? headOffsetY * 0.5 : 0));
+        ctx.lineTo(playerX, 105);
+        ctx.stroke();
+
+        // Perna de apoio
+        ctx.lineWidth = 3.5;
+        ctx.beginPath();
+        ctx.moveTo(playerX, 105);
+        ctx.lineTo(playerX - 5, 120);
+        ctx.stroke();
+
+        // Perna de chute
+        ctx.save();
+        ctx.translate(playerX, 105);
+        ctx.rotate(legAngle);
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(10, 12);
+        ctx.lineTo(16, 10);
+        ctx.stroke();
+        ctx.restore();
+        
+        ctx.restore();
+
+        // Desenhar bola
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = '#07111f';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.strokeStyle = '#64748b';
+        ctx.beginPath();
+        ctx.moveTo(ball.x, ball.y - ball.radius);
+        ctx.lineTo(ball.x, ball.y + ball.radius);
+        ctx.moveTo(ball.x - ball.radius, ball.y);
+        ctx.lineTo(ball.x + ball.radius, ball.y);
+        ctx.stroke();
+
+        // Desenhar textos flutuantes
+        floatingTexts.forEach(t => {
+          ctx.save();
+          ctx.fillStyle = t.color;
+          ctx.globalAlpha = t.alpha;
+          ctx.font = 'bold 9px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText(t.text, t.x, t.y);
+          ctx.restore();
+        });
+
+        requestAnimationFrame(gameLoop);
+      }
+
+      gameLoop();
+    })();
   </script>
 
 </body>
