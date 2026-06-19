@@ -172,16 +172,44 @@ match /worldcupextraMatches/{matchDocId} {
   // A API nunca deve editar homeGoals/awayGoals nesta coleção.
   // Se existir sincronização automática, ela deve usar apenas campos como
   // homeGoalsLive/awayGoalsLive e metadados de estado.
-allow update, delete: if isAdmin() && resource.data.matchId is int && matchKickoffPassed(resource.data.matchId);
+  allow update: if
+    (
+      isAdmin() &&
+      resource.data.matchId is int &&
+      matchKickoffPassed(resource.data.matchId)
+    )
+    ||
+    (
+      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']) &&
+      request.resource.data.status == 'finished' &&
+      resource.data.finished == true &&
+      resource.data.kickoff is timestamp &&
+      request.time >= resource.data.kickoff + duration.value(3, 'h')
+    );
+  allow delete: if isAdmin() && resource.data.matchId is int && matchKickoffPassed(resource.data.matchId);
 }
 
 match /WoldCupSecureHT/{matchDocId} {
   allow read: if true;
-  allow create, update: if isAdmin()
-    && request.resource.data.matchId is int
+  allow create: if
+    !exists(/databases/$(database)/documents/WoldCupSecureHT/$(matchDocId))
+    && exists(/databases/$(database)/documents/worldcupextraMatches/$(matchDocId))
+    && get(/databases/$(database)/documents/worldcupextraMatches/$(matchDocId)).data.status == 'finished'
+    && get(/databases/$(database)/documents/worldcupextraMatches/$(matchDocId)).data.finished == true
+    && get(/databases/$(database)/documents/worldcupextraMatches/$(matchDocId)).data.kickoff is timestamp
+    && request.time >= get(/databases/$(database)/documents/worldcupextraMatches/$(matchDocId)).data.kickoff + duration.value(3, 'h')
+    && request.resource.data.documentId == matchDocId
+    && request.resource.data.matchDocId == matchDocId
+    && request.resource.data.matchId == get(/databases/$(database)/documents/worldcupextraMatches/$(matchDocId)).data.matchId
     && request.resource.data.status == 'finished'
-    && request.resource.data.finished == true;
-  allow delete: if isAdmin();
+    && request.resource.data.finished == true
+    && request.resource.data.live == false
+    && request.resource.data.kickoff == get(/databases/$(database)/documents/worldcupextraMatches/$(matchDocId)).data.kickoff
+    && request.resource.data.homeGoals == get(/databases/$(database)/documents/worldcupextraMatches/$(matchDocId)).data.homeGoals
+    && request.resource.data.awayGoals == get(/databases/$(database)/documents/worldcupextraMatches/$(matchDocId)).data.awayGoals
+    && request.resource.data.homeTeam == get(/databases/$(database)/documents/worldcupextraMatches/$(matchDocId)).data.homeTeam
+    && request.resource.data.awayTeam == get(/databases/$(database)/documents/worldcupextraMatches/$(matchDocId)).data.awayTeam;
+  allow update, delete: if false;
 }
 
 match /worldcupextraLiveBattles/{battleId} {
