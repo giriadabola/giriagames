@@ -25,6 +25,13 @@ function shouldMirrorMatchStateDocToSecure(docId, raw = {}) {
   return kickoffMs != null && Date.now() >= kickoffMs + SECURE_FINISHED_MIN_DELAY_MS;
 }
 
+function shouldFinalizeMissingMatchStatus(raw = {}) {
+  if (raw.status === 'finished') return false;
+  if (raw.finished !== true) return false;
+  const kickoffMs = ggamesFirestoreTimestampToMillis(raw.kickoff);
+  return kickoffMs != null && Date.now() >= kickoffMs + SECURE_FINISHED_MIN_DELAY_MS;
+}
+
 function buildSecureFinishedPayload(docId, raw = {}) {
   const normalized = normalizeMatchStateDoc(docId, raw);
   return {
@@ -53,6 +60,21 @@ function buildSecureFinishedPayload(docId, raw = {}) {
     timeElapsed: 'FT',
     sealedAt: firebaseTools?.serverTimestamp ? firebaseTools.serverTimestamp() : new Date().toISOString()
   };
+}
+
+async function ensureFinishedStatusOnMatchStateDoc(docId, raw = {}) {
+  if (!firestoreDb || !firebaseTools?.doc || !firebaseTools?.setDoc) return raw;
+  if (!shouldFinalizeMissingMatchStatus(raw)) return raw;
+
+  try {
+    const ref = firebaseTools.doc(firestoreDb, FIREBASE_MATCHES_COLLECTION, String(docId));
+    await firebaseTools.setDoc(ref, { status: 'finished' }, { merge: true });
+    console.info(`[SecureHT] Status finished gerado em ${docId}.`);
+    return { ...raw, status: 'finished' };
+  } catch (error) {
+    console.warn(`[SecureHT] Nao foi possivel gerar status finished em ${docId}.`, error);
+    return raw;
+  }
 }
 
 async function createSecureFinishedOnce(ref, payload) {
@@ -94,9 +116,12 @@ async function scanMatchStateDocsToSecureCollection() {
   if (!firestoreDb || !firebaseTools?.getDocs || !firebaseTools?.collection) return;
   try {
     const snap = await firebaseTools.getDocs(firebaseTools.collection(firestoreDb, FIREBASE_MATCHES_COLLECTION));
-    await Promise.all(
-      snap.docs.map((docSnap) => syncMatchStateDocToSecureCollection(docSnap.id, docSnap.data()))
-    );
+    console.info(`[SecureHT] A verificar ${snap.docs.length} jogos para selar.`);
+    await Promise.all(snap.docs.map(async (docSnap) => {
+      const raw = docSnap.data();
+      const repaired = await ensureFinishedStatusOnMatchStateDoc(docSnap.id, raw);
+      await syncMatchStateDocToSecureCollection(docSnap.id, repaired);
+    }));
   } catch (error) {
     console.warn('Nao foi possivel fazer a verificacao periodica da colecao segura.', error);
   }
@@ -110,7 +135,9 @@ function startSecureFinishedMirrorSweep() {
 
 window.resolveMatchStateKickoffMs = resolveMatchStateKickoffMs;
 window.shouldMirrorMatchStateDocToSecure = shouldMirrorMatchStateDocToSecure;
+window.shouldFinalizeMissingMatchStatus = shouldFinalizeMissingMatchStatus;
 window.buildSecureFinishedPayload = buildSecureFinishedPayload;
+window.ensureFinishedStatusOnMatchStateDoc = ensureFinishedStatusOnMatchStateDoc;
 window.syncMatchStateDocToSecureCollection = syncMatchStateDocToSecureCollection;
 window.scanMatchStateDocsToSecureCollection = scanMatchStateDocsToSecureCollection;
 window.startSecureFinishedMirrorSweep = startSecureFinishedMirrorSweep;
