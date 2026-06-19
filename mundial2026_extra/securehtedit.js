@@ -35,7 +35,9 @@ const SECUREHT_ALLOWED_HOSTS = new Set([
   'www.gstatic.com',
   'identitytoolkit.googleapis.com',
   'firestore.googleapis.com',
-  'securetoken.googleapis.com'
+  'securetoken.googleapis.com',
+  'firebaseinstallations.googleapis.com',
+  'g-games-8a8fc.firebaseapp.com'
 ]);
 
 const secureHtNativeFetch = window.fetch.bind(window);
@@ -43,7 +45,10 @@ window.fetch = function secureHtIsolatedFetch(input, init) {
   const url = typeof input === 'string' || input instanceof URL ? String(input) : String(input?.url || '');
   try {
     const parsed = new URL(url, window.location.href);
-    if (parsed.origin !== window.location.origin && !SECUREHT_ALLOWED_HOSTS.has(parsed.host)) {
+    const isAllowed = SECUREHT_ALLOWED_HOSTS.has(parsed.host) || 
+                     parsed.host.endsWith('.googleapis.com') || 
+                     parsed.host.endsWith('.firebaseapp.com');
+    if (parsed.origin !== window.location.origin && !isAllowed) {
       console.warn('securehtedit bloqueou fetch externo:', parsed.href);
       return Promise.reject(new Error(`securehtedit bloqueou fetch externo: ${parsed.host}`));
     }
