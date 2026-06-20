@@ -165,7 +165,16 @@ async function initFirebase() {
   try {
     const appModule = await import(`https://www.gstatic.com/firebasejs/${FIREBASE_SDK_VERSION}/firebase-app.js`);
     const firestoreModule = await import(`https://www.gstatic.com/firebasejs/${FIREBASE_SDK_VERSION}/firebase-firestore.js`);
+    const authModule = await import(`https://www.gstatic.com/firebasejs/${FIREBASE_SDK_VERSION}/firebase-auth.js`);
     const app = appModule.initializeApp(FIREBASE_CONFIG);
+    const auth = authModule.getAuth(app);
+    authModule.onAuthStateChanged(auth, (user) => {
+      if (user) {
+        console.log(`[Firebase Auth] Autenticado como ${user.email} (UID: ${user.uid})`);
+      } else {
+        console.log('[Firebase Auth] Sessão anónima / Não autenticado.');
+      }
+    });
     firestoreDb = firestoreModule.getFirestore(app);
     firebaseTools = {
       addDoc: firestoreModule.addDoc,
@@ -211,8 +220,6 @@ function resolvedWinner(match, pred, q) {
   if (!score.tied) return score.home > score.away ? resolveTeam(match, 'home', q) : resolveTeam(match, 'away', q);
   return pred.winner ? resolveTeam(match, pred.winner, q) : '';
 }
-
-
 
 async function hashPinForParticipant(participantKey, pin) {
   const text = `${participantKey}:${pin}`;
