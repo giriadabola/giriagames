@@ -257,14 +257,26 @@ function renderPublicViewerBody(tab) {
   if (tab === 'table') return renderGgamesTable();
   if (tab === 'minigames') {
     return `
-      <div class="games-tab-content" style="text-align: left; padding: 20px 10px;">
-        <div style="display: inline-block; position: relative; cursor: pointer; transition: transform 0.2s;" 
-             data-action="play-minigame"
+      <div class="games-tab-content" style="display: flex; flex-wrap: wrap; gap: 20px; padding: 20px 10px; justify-content: flex-start;">
+        <!-- Jogo 1: Não Explodas o Treinador -->
+        <div style="display: inline-block; position: relative; cursor: pointer; transition: transform 0.2s; border-radius: 12px; overflow: hidden; width: calc(50% - 10px); min-width: 140px; max-width: 200px;" 
+             data-action="play-minigame" data-game-url="nao-explodas-o-treinador.html"
              onmouseover="this.style.transform='scale(1.02)'; this.querySelector('.play-btn-overlay').style.opacity='1'; this.querySelector('.play-btn-overlay').style.transform='scale(1)';"
              onmouseout="this.style.transform='scale(1)'; this.querySelector('.play-btn-overlay').style.opacity='0'; this.querySelector('.play-btn-overlay').style.transform='scale(0.95)';">
-          <img src="nao_explodas.png" alt="Não Explodas o Treinador" style="max-width: 100%; display: block; max-height: 190px; object-fit: contain;">
-          <div class="play-btn-overlay" style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; opacity: 0; transform: scale(0.95); transition: opacity 0.3s ease, transform 0.3s ease; pointer-events: none; background: rgba(7, 26, 63, 0.45); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); border-radius: 35px;">
-            <span style="padding: 8px 16px; font-size: 0.72rem; font-family: 'Outfit', sans-serif; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; border-radius: 30px; border: 1px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.18); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); color: #fff; box-shadow: 0 6px 16px rgba(0,0,0,0.4); white-space: nowrap;">JOGAR AGORA</span>
+          <img src="nao_explodas.png" alt="Não Explodas o Treinador" style="width: 100%; display: block; height: 140px; object-fit: contain; border-radius: 12px;">
+          <div class="play-btn-overlay" style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; opacity: 0; transform: scale(0.95); transition: opacity 0.3s ease, transform 0.3s ease; pointer-events: none; background: rgba(7, 26, 63, 0.45); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); border-radius: 12px;">
+            <span style="padding: 6px 12px; font-size: 0.65rem; font-family: 'Outfit', sans-serif; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; border-radius: 30px; border: 1px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.18); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); color: #fff; box-shadow: 0 4px 12px rgba(0,0,0,0.4); white-space: nowrap;">JOGAR</span>
+          </div>
+        </div>
+
+        <!-- Jogo 2: Na Prancha do Pirata -->
+        <div style="display: inline-block; position: relative; cursor: pointer; transition: transform 0.2s; border-radius: 12px; overflow: hidden; width: calc(50% - 10px); min-width: 140px; max-width: 200px;" 
+             data-action="play-minigame" data-game-url="na-prancha-do-pirata-v2.html"
+             onmouseover="this.style.transform='scale(1.02)'; this.querySelector('.play-btn-overlay').style.opacity='1'; this.querySelector('.play-btn-overlay').style.transform='scale(1)';"
+             onmouseout="this.style.transform='scale(1)'; this.querySelector('.play-btn-overlay').style.opacity='0'; this.querySelector('.play-btn-overlay').style.transform='scale(0.95)';">
+          <img src="na_prancha.png" alt="Na Prancha do Pirata!" style="width: 100%; display: block; height: 140px; object-fit: contain; border-radius: 12px;">
+          <div class="play-btn-overlay" style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; opacity: 0; transform: scale(0.95); transition: opacity 0.3s ease, transform 0.3s ease; pointer-events: none; background: rgba(7, 26, 63, 0.45); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); border-radius: 12px;">
+            <span style="padding: 6px 12px; font-size: 0.65rem; font-family: 'Outfit', sans-serif; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; border-radius: 30px; border: 1px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.18); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); color: #fff; box-shadow: 0 4px 12px rgba(0,0,0,0.4); white-space: nowrap;">JOGAR</span>
           </div>
         </div>
       </div>
@@ -275,13 +287,15 @@ function renderPublicViewerBody(tab) {
 
 function renderPublicViewer(active = 'players') {
   if (active === 'minigames_play') {
+    const url = window.activeMinigameUrl || 'nao-explodas-o-treinador.html';
+    const title = window.activeMinigameTitle || 'Não Explodas o Treinador!';
     return `
       <div class="games-tab-content" style="width:100%; height: calc(100vh - 140px); display:flex; flex-direction:column; background:#000; overflow:hidden;">
         <div style="display:flex; justify-content:space-between; align-items:center; padding: 10px; background: #071a3f; border-bottom: 1px solid rgba(255,255,255,0.08);">
-          <strong style="color:#fff; font-size:1rem;">Não Explodas o Treinador!</strong>
+          <strong style="color:#fff; font-size:1rem;">${title}</strong>
           <button type="button" class="close-btn" onclick="window.closeMinigameMobile()" style="background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: bold;">Voltar</button>
         </div>
-        <iframe src="nao-explodas-o-treinador.html" style="width:100%; flex: 1; border:none;" allow="autoplay"></iframe>
+        <iframe src="${url}" style="width:100%; flex: 1; border:none;" allow="autoplay"></iframe>
       </div>
     `;
   }
@@ -507,13 +521,15 @@ async function openPublicPredictionsModal() {
   
     renderPublicViewer = function(active = 'games') {
       if (active === 'minigames_play') {
+        const url = window.activeMinigameUrl || 'nao-explodas-o-treinador.html';
+        const title = window.activeMinigameTitle || 'Não Explodas o Treinador!';
         return `
           <div class="games-tab-content" style="width:100%; height: calc(100vh - 140px); display:flex; flex-direction:column; background:#000; overflow:hidden;">
             <div style="display:flex; justify-content:space-between; align-items:center; padding: 10px; background: #071a3f; border-bottom: 1px solid rgba(255,255,255,0.08);">
-              <strong style="color:#fff; font-size:1rem;">Não Explodas o Treinador!</strong>
+              <strong style="color:#fff; font-size:1rem;">${title}</strong>
               <button type="button" class="close-btn" onclick="window.closeMinigameMobile()" style="background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: bold;">Voltar</button>
             </div>
-            <iframe src="nao-explodas-o-treinador.html" style="width:100%; flex: 1; border:none;" allow="autoplay"></iframe>
+            <iframe src="${url}" style="width:100%; flex: 1; border:none;" allow="autoplay"></iframe>
           </div>
         `;
       }
@@ -612,8 +628,17 @@ async function openPublicPredictionsModal() {
   }
 })();
 
-window.openMinigamePopup = function() {
-  window.location.href = 'nao-explodas-o-treinador.html';
+window.openMinigamePopup = function(gameUrl) {
+  const url = gameUrl || 'nao-explodas-o-treinador.html';
+  if (typeof mobileAppSection !== 'undefined' && mobileAppSection === 'prognostics') {
+    window.publicViewerActiveTab = 'minigames_play';
+    window.activeMinigameUrl = url;
+    window.activeMinigameTitle = url.includes('prancha') ? 'Na Prancha do Pirata!' : 'Não Explodas o Treinador!';
+    mobilePublicViewerHtml = renderPublicViewer('minigames_play');
+    refreshLiveDashboardView(true);
+  } else {
+    window.location.href = url;
+  }
 };
 
 window.closeMinigameMobile = function() {

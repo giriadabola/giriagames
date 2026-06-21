@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Na Prancha do Pirata!</title>
+  <style>
+    :root{
+      --bg:#06101b;
+      --bg2:#071727;
+      --ink:#f8fbff;
+      --muted:#b6c3d6;
+      --gold:#ffd36b;
+      --gold2:#a55f20;
+      --red:#ff5353;
+      --green:#72ff88;
+      --cyan:#35dfff;
+      --blue:#0d4662;
+      --blue2:#0c2741;
+      --panel:rgba(8,18,31,.82);
+      --panelBorder:rgba(255,255,255,.1);
+      --wood1:#b96d31;
+      --wood2:#7a431b;
+      --wood3:#46230f;
+      --sea:#0a4361;
+      --seaDark:#032337;
+      --purple:#9736d0;
+      --danger:#fd4949;
+      --success:#6cff85;
+      --shadow:0 14px 34px rgba(0,0,0,.45);
+    }
+
+    *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+    html,body{height:100%;overflow:hidden;background:radial-gradient(circle at 50% 15%,#173656 0%,#081624 58%,#02070e 100%);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:var(--ink)}
+    body{display:flex;align-items:center;justify-content:center}
+    button{font:inherit}
+
+    .game{
+      position:relative;
+      width:min(100vw,480px);
+      height:100svh;
+      max-height:940px;
+      overflow:hidden;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      padding:10px;
+      background:
+        radial-gradient(circle at 18% 17%,rgba(76,197,255,.16),transparent 18%),
+        radial-gradient(circle at 88% 14%,rgba(163,71,255,.18),transparent 22%),
+        linear-gradient(180deg,#0a1626 0%,#071422 40%,#04111d 100%);
+    }
+
+    .topbar{display:grid;grid-template-columns:46px 1fr 46px;gap:10px;align-items:center;flex:0 0 auto}
+    .roundBtn{
+      height:46px;width:46px;border-radius:14px;border:1px solid rgba(255,255,255,.12);
+      background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(255,255,255,.03));
+      color:#fff;font-size:22px;display:grid;place-items:center;box-shadow:var(--shadow);cursor:pointer
+    }
+    .roundBtn:active{transform:translateY(1px) scale(.98)}
+
+    .titleBox{
+      position:relative;height:64px;border-radius:18px;
+      background:linear-gradient(180deg,#3a220f 0%,#1e1209 100%);
+      border:2px solid #e4b45b;box-shadow:inset 0 0 0 2px rgba(0,0,0,.25),var(--shadow);
+      display:flex;align-items:center;justify-content:center;text-align:center;padding:0 16px
+    }
+    .titleBox:before,.titleBox:after{
+      content:"";position:absolute;top:50%;width:16px;height:16px;border-radius:50%;background:#1c1109;border:3px solid #d1a35b;transform:translateY(-50%);
+      box-shadow:inset 0 0 0 2px rgba(255,255,255,.08)
+    }
+    .titleBox:before{left:8px}.titleBox:after{right:8px}
+    .titleBox h1{font-family:Georgia,"Times New Roman",serif;font-size:19px;line-height:1;letter-spacing:.8px;text-transform:uppercase;color:#fff4d2;text-shadow:0 2px 0 #000,0 0 10px rgba(255,211,107,.22)}
+    .titleBox small{display:block;margin-top:5px;font-weight:900;color:var(--gold);font-size:10px;letter-spacing:1.5px;text-transform:uppercase}
+
+    .hud{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;flex:0 0 auto}
+    .hudCard{
+      height:52px;border-radius:16px;background:linear-gradient(180deg,rgba(12,31,51,.95),rgba(6,17,31,.95));
+      border:1px solid var(--panelBorder);box-shadow:var(--shadow);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px
+    }
+    .hudCard span{font-size:10px;font-weight:900;letter-spacing:1.1px;text-transform:uppercase;color:#8eb3ce}
+    .hudCard b{font-size:22px;line-height:1.05}
+    .hudCard.g b{color:var(--gold)}
+    .hudCard.f b{color:var(--red)}
+    .hudCard.p b{color:var(--cyan)}
+
+    .seaStage{
+      position:relative;flex:1;min-height:0;border-radius:26px;overflow:hidden;
+      border:2px solid rgba(255,255,255,.1);box-shadow:inset 0 0 40px rgba(0,0,0,.45),0 18px 40px rgba(0,0,0,.35);
+      background:linear-gradient(180deg,#0d2e4a 0%,#092541 36%,#0e4561 36.5%,#08344d 60%,#032236 100%);
+      transform: rotate(var(--camTilt, 0deg)) translateY(var(--camY, 0px));
+      transition: transform .08s linear;
+      filter: brightness(var(--stageBrightness, 1));
+    }
+    .seaStage:before{
+      content:"";position:absolute;inset:0;
+      background:radial-gradient(circle at 50% 20%,rgba(255,255,255,.08),transparent 25%),radial-gradient(circle at 20% 10%,rgba(255,255,255,.1),transparent 15%);
+      pointer-events:none
+    }
+
+    .sky{position:absolute;inset:0 0 44% 0;overflow:hidden}
+    .moon{position:absolute;right:26px;top:18px;width:38px;height:38px;border-radius:50%;background:#dbf4ff;box-shadow:0 0 24px rgba(219,244,255,.45)}
+    .cloud{position:absolute;width:120px;height:34px;border-radius:999px;background:rgba(255,255,255,.12);filter:blur(.2px)}
+    .cloud:before,.cloud:after{content:"";position:absolute;border-radius:50%;background:inherit}
+    .cloud:before{width:48px;height:48px;left:18px;top:-15px}
+    .cloud:after{width:65px;height:65px;right:8px;top:-28px}
+    .c1{left:-30px;top:70px}.c2{right:-40px;top:90px;transform:scale(.88)}
+
+    .sea{position:absolute;left:0;right:0;bottom:0;height:46%;overflow:hidden}
+    .wave{position:absolute;left:-28%;width:156%;height:46px;border-radius:50%;background:rgba(53,223,255,.14);animation:wave 5s linear infinite}
+    .w1{top:10%;animation-duration:5.8s}.w2{top:38%;animation-duration:4.3s;animation-direction:reverse}.w3{top:68%;animation-duration:6.3s}
+    @keyframes wave{from{transform:translateX(0)}to{transform:translateX(-18%)}}
+
+    .foam{position:absolute;left:0;right:0;top:0;height:14px;background:linear-gradient(180deg,rgba(255,255,255,.34),rgba(255,255,255,0));opacity:.55}
+
+    .tentacle{
+      position:absolute;bottom:26%;width:52px;height:190px;border-radius:60% 60% 28% 28%;
+      background:linear-gradient(90deg,#55207f 0%,#ad52e0 55%,#451368 100%);
+      box-shadow:0 0 22px rgba(173,82,224,.42);opacity:.1;transition:.35s;z-index:3;transform-origin:bottom center
+    }
+    .tentacle:after{
+      content:"";position:absolute;inset:12px 8px;background:repeating-radial-gradient(circle at 50% 18%,rgba(255,189,236,.95) 0 3px,transparent 4px 15px);
+      border-radius:inherit;opacity:.7
+    }
+    .t1{left:5%;transform:rotate(var(--tRot, -22deg)) translateY(72px);transition:transform .08s linear}
+    .t2{right:6%;transform:rotate(var(--tRot, 22deg)) translateY(72px);transition:transform .08s linear}
+    .kraken .tentacle{opacity:1}
+    .kraken .t1{transform:rotate(var(--tRot, -16deg)) translateY(0)}
+    .kraken .t2{transform:rotate(var(--tRot, 16deg)) translateY(0)}
+
+    .shipWrap{
+      position:absolute;left:50%;top:14%;width:min(94%,420px);height:44%;transform:translateX(-50%) rotate(var(--tilt,0deg));
+      transform-origin:50% 78%;transition:transform .08s linear;z-index:5
+    }
+    .mast{position:absolute;left:49.2%;top:0;width:10px;height:58%;border-radius:999px;background:linear-gradient(90deg,#51280f,#c67b3a,#4f260d);z-index:2}
+    .sail{
+      position:absolute;left:31%;top:0;width:38%;height:40%;clip-path:polygon(50% 0,0 100%,100% 100%);
+      background:linear-gradient(180deg,#121827,#02070f);border:2px solid rgba(255,255,255,.1);display:grid;place-items:center;
+      color:#fff;font-size:34px;text-shadow:0 2px 4px #000;opacity:.95;z-index:1
+    }
+    .rope{position:absolute;top:11%;height:2px;background:rgba(255,214,132,.5);z-index:1}
+    .rope.r1{left:19%;width:30%;transform:rotate(-10deg)}
+    .rope.r2{right:19%;width:30%;transform:rotate(10deg)}
+
+    .hull{
+      position:absolute;left:4%;right:4%;bottom:3%;height:56%;border-radius:26px 26px 64px 64px;
+      background:linear-gradient(180deg,#bc7335 0%,#8a4d21 34%,#5e3216 70%,#31180a 100%);
+      border:3px solid rgba(255,214,132,.32);box-shadow:inset 0 -18px 0 rgba(0,0,0,.18),0 22px 26px rgba(0,0,0,.3)
+    }
+    .hull:before{content:"";position:absolute;left:7%;right:7%;top:12%;height:16px;border-radius:99px;background:repeating-linear-gradient(90deg,rgba(255,255,255,.12) 0 2px,transparent 2px 30px)}
+    .hull:after{content:"☠";position:absolute;left:50%;bottom:8px;transform:translateX(-50%);font-size:26px;opacity:.8}
+    .rail{position:absolute;left:12%;right:12%;top:15%;height:28px;border-radius:16px;background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(0,0,0,.18));border:2px solid rgba(255,214,132,.22)}
+    .port{position:absolute;top:44%;width:30px;height:30px;border-radius:50%;background:#0d1117;border:5px solid #c78a42;box-shadow:inset 0 0 0 2px rgba(0,0,0,.3)}
+    .p1{left:12%}.p2{right:12%}
+    .lantern{position:absolute;top:26%;width:18px;height:26px;border-radius:6px;background:linear-gradient(180deg,#fff0ae,#ffb628);box-shadow:0 0 14px rgba(255,197,73,.6);border:2px solid #8f5a22}
+    .l1{left:13%}.l2{right:13%}
+
+    .goal{
+      position:absolute;left:50%;top:36%;width:64%;height:40%;transform:translateX(-50%);
+      border:6px solid #f9fbff;border-bottom:3px solid rgba(255,255,255,.55);border-radius:10px 10px 0 0;
+      background:
+        repeating-linear-gradient(45deg,rgba(255,255,255,.2) 0 2px,transparent 2px 12px),
+        repeating-linear-gradient(-45deg,rgba(255,255,255,.13) 0 2px,transparent 2px 12px);
+      z-index:6;
+      box-shadow:0 10px 12px rgba(0,0,0,.18)
+    }
+
+    .pirate{
+      position:absolute;left:50%;top:43%;width:90px;height:118px;transform:translateX(calc(-50% + var(--keeperX, 0px))) rotate(var(--keeperLean, 0deg)) scale(var(--keeperScale, 1));z-index:8;
+      filter:drop-shadow(0 10px 10px rgba(0,0,0,.45));transition:transform .08s linear
+    }
+    .pirate.save{animation:keeperSave .32s ease}
+    .pirate.angry{animation:keeperAngry .32s ease}
+    @keyframes keeperSave{
+      0%,100%{scale:1;filter:drop-shadow(0 10px 10px rgba(0,0,0,.45))}
+      50%{scale:1.15;filter:drop-shadow(0 0 18px rgba(255,50,50,0.9))}
+    }
+    @keyframes keeperAngry{
+      0%,100%{filter:drop-shadow(0 10px 10px rgba(0,0,0,.45))}
+      50%{filter:drop-shadow(0 0 15px rgba(255,255,255,0.4)) brightness(1.4)}
+    }
+
+    .pirate .head{position:absolute;left:23px;top:0;width:44px;height:44px;border-radius:50%;background:#d29369;border:2px solid rgba(255,255,255,.75)}
+    .pirate .band{position:absolute;left:16px;top:2px;width:58px;height:17px;border-radius:50% 50% 24% 24%;background:#c92121;z-index:2;box-shadow:0 2px 0 rgba(0,0,0,.25)}
+    .pirate .band:after{content:"☠";position:absolute;left:21px;top:0px;font-size:12px;color:#fff}
+    .pirate .eye{position:absolute;top:22px;width:7px;height:7px;border-radius:50%;background:#101318;z-index:3}.pirate .e1{left:34px}.pirate .e2{right:34px}
+    .pirate .beard{position:absolute;left:26px;top:29px;width:38px;height:24px;border-radius:0 0 52% 52%;background:#16110e;z-index:3}
+    .pirate .body{position:absolute;left:20px;top:46px;width:50px;height:50px;border-radius:14px;background:linear-gradient(180deg,#1d2735,#6c1f1f);border:2px solid #e1b469}
+    .pirate .belt{position:absolute;left:22px;top:74px;width:46px;height:10px;border-radius:8px;background:#20140c;border:2px solid #d3a150;z-index:4}
+    .pirate .arm{position:absolute;top:58px;width:36px;height:10px;background:#d29369;border-radius:999px;box-shadow:0 0 0 2px rgba(0,0,0,.04)}
+    .pirate .a1{left:-6px;transform:rotate(-24deg)}.pirate .a2{right:-6px;transform:rotate(24deg)}
+    .pirate .leg{position:absolute;top:95px;width:12px;height:18px;background:#141922;border-radius:0 0 8px 8px}.pirate .lg1{left:28px}.pirate .lg2{right:28px}
+
+    .insideScores{
+      position:absolute;left:12px;right:12px;bottom:16px;display:flex;justify-content:space-between;align-items:flex-end;pointer-events:none;z-index:15
+    }
+    .scoreBox{
+      min-width:98px;padding:10px 10px 8px;border-radius:18px;background:linear-gradient(180deg,rgba(11,33,54,.92),rgba(5,20,36,.92));
+      border:1px solid rgba(255,255,255,.1);box-shadow:0 10px 24px rgba(0,0,0,.28);text-align:center
+    }
+    .scoreBox span{display:block;font-size:11px;font-weight:900;letter-spacing:1px;text-transform:uppercase}
+    .scoreBox.ok span{color:var(--success)}.scoreBox.bad span{color:var(--danger)}
+    .scoreBox b{font-size:31px;line-height:1;color:#fff}
+
+    .ball{
+      position:absolute;left:calc(50% - 32px);bottom:18%;width:64px;height:64px;border-radius:50%;z-index:12;
+      background:radial-gradient(circle at 34% 28%,#ffffff 0 18%,#dce6f1 19% 54%,#fff 55%);
+      box-shadow:0 0 24px rgba(53,223,255,.52),0 12px 18px rgba(0,0,0,.35);
+      transform: translateX(var(--ballX, 0px));
+    }
+    .ball:before{content:"";position:absolute;left:22px;top:19px;width:20px;height:20px;background:#121827;clip-path:polygon(50% 0,100% 38%,82% 100%,18% 100%,0 38%)}
+    .ball:after{content:"";position:absolute;left:4px;right:4px;bottom:-14px;height:16px;background:radial-gradient(circle,rgba(53,223,255,.32) 0,rgba(53,223,255,.12) 45%,transparent 70%);filter:blur(3px)}
+
+    .aim{
+      position:absolute;left:50%;bottom:calc(18% + 58px);width:4px;height:162px;background:linear-gradient(to top,rgba(53,223,255,.98),rgba(53,223,255,.05));
+      transform-origin:bottom center;transform:translateX(calc(-50% + var(--ballX, 0px))) rotate(var(--aim,0deg));z-index:11;border-radius:999px;box-shadow:0 0 14px var(--cyan)
+    }
+    .aim:before{content:"";position:absolute;left:-5px;top:-8px;width:14px;height:14px;border-radius:50%;background:var(--cyan);box-shadow:0 0 18px var(--cyan)}
+
+    .shot{position:absolute;width:38px;height:38px;border-radius:50%;left:calc(50% - 19px);bottom:calc(18% + 12px);z-index:30;display:none;box-shadow:0 0 20px currentColor;background:#fff}
+    .shot.fire{background:radial-gradient(circle,#fff7b0 0 26%,#ff9400 27% 58%,#ff3400 59%);color:#ff6a00}
+    .shot.alga{background:radial-gradient(circle,#f1ffe9,#4fcd5a,#136a30);color:#60ff7e}
+    .shot.canhao{background:radial-gradient(circle,#6f6f6f,#171717);color:#b8b8b8}
+    .shot.fantasma{background:radial-gradient(circle,rgba(255,255,255,.95),rgba(121,233,255,.95),rgba(121,233,255,.25));color:#9ef3ff}
+    .shot.relampago{background:radial-gradient(circle,#ffffff,#b388ff,#5533ff);color:#bb9cff}
+    .shot.ancora{background:radial-gradient(circle,#f8f8f8,#aeb4bd,#545861);color:#d7dbe0}
+    .shot.kraken{background:radial-gradient(circle,#fce6ff,#d752ff,#7510a9);color:#f08cff}
+
+    /* Animações dos remates especiais */
+    @keyframes animNormal {
+      0% { transform: translate(var(--startX, 0px), 0) scale(1); }
+      100% { transform: translate(var(--destX), var(--destY)) scale(0.58); }
+    }
+    @keyframes animFire {
+      0% { transform: translate(var(--startX, 0px), 0) scale(1); filter: drop-shadow(0 0 8px #ff5353) brightness(1.2); }
+      30% { transform: translate(calc(var(--destX) * 0.3 + 18px), calc(var(--destY) * 0.3)) scale(1.2); filter: drop-shadow(0 0 25px #ff9400) brightness(1.5); }
+      70% { transform: translate(calc(var(--destX) * 0.7 - 18px), calc(var(--destY) * 0.7)) scale(0.9); filter: drop-shadow(0 0 35px #ff3400) brightness(1.7); }
+      100% { transform: translate(var(--destX), var(--destY)) scale(0.58); filter: drop-shadow(0 0 10px #ff5353); }
+    }
+    @keyframes animAlga {
+      0% { transform: translate(var(--startX, 0px), 0) scale(1); }
+      50% { transform: translate(calc(var(--destX) * 0.2 - 65px), calc(var(--destY) * 0.5)) scale(0.85); filter: drop-shadow(0 0 20px #72ff88); }
+      100% { transform: translate(var(--destX), var(--destY)) scale(0.58); }
+    }
+    @keyframes animCanhao {
+      0% { transform: translate(var(--startX, 0px), 0) rotate(0deg) scale(1.35); filter: drop-shadow(0 0 5px rgba(0,0,0,0.5)); }
+      100% { transform: translate(var(--destX), var(--destY)) rotate(720deg) scale(0.58); filter: drop-shadow(0 8px 15px rgba(0,0,0,0.8)); }
+    }
+    @keyframes animFantasma {
+      0% { transform: translate(var(--startX, 0px), 0) scale(1); opacity: 1; filter: blur(0px) drop-shadow(0 0 5px #35dfff); }
+      40% { transform: translate(calc(var(--destX) * 0.4), calc(var(--destY) * 0.4)) scale(1.3); opacity: 0.25; filter: blur(4px) drop-shadow(0 0 25px #35dfff); }
+      80% { transform: translate(calc(var(--destX) * 0.8), calc(var(--destY) * 0.8)) scale(0.7); opacity: 0.4; filter: blur(1px) drop-shadow(0 0 15px #35dfff); }
+      100% { transform: translate(var(--destX), var(--destY)) scale(0.58); opacity: 0.95; filter: blur(0px); }
+    }
+    @keyframes animRelampago {
+      0% { transform: translate(var(--startX, 0px), 0) scale(1); filter: drop-shadow(0 0 5px #bb9cff) brightness(1.5); }
+      25% { transform: translate(calc(var(--destX) * 0.3 - 22px), calc(var(--destY) * 0.3)) scale(0.9); filter: drop-shadow(0 0 30px #5533ff) brightness(2); }
+      50% { transform: translate(calc(var(--destX) * 0.6 + 22px), calc(var(--destY) * 0.6)) scale(1.1); filter: drop-shadow(0 0 30px #bb9cff) brightness(2); }
+      75% { transform: translate(calc(var(--destX) * 0.8 - 12px), calc(var(--destY) * 0.8)) scale(0.85); filter: drop-shadow(0 0 30px #5533ff) brightness(2); }
+      100% { transform: translate(var(--destX), var(--destY)) scale(0.58); filter: drop-shadow(0 0 10px #bb9cff); }
+    }
+    @keyframes animAncora {
+      0% { transform: translate(var(--startX, 0px), 0) scale(1) rotate(0deg); }
+      50% { transform: translate(calc(var(--destX) * 0.5), calc(var(--destY) - 55px)) scale(1.25) rotate(45deg); filter: drop-shadow(0 10px 20px rgba(0,0,0,0.4)); }
+      100% { transform: translate(var(--destX), var(--destY)) scale(0.58) rotate(90deg); }
+    }
+    @keyframes animKraken {
+      0% { transform: translate(var(--startX, 0px), 0) scale(1); filter: hue-rotate(0deg); }
+      50% { transform: translate(calc(var(--destX) * 0.5), calc(var(--destY) * 0.5)) scale(1.2); filter: drop-shadow(0 0 25px #d752ff) hue-rotate(180deg); }
+      100% { transform: translate(var(--destX), var(--destY)) scale(0.58); filter: drop-shadow(0 0 10px #7510a9) hue-rotate(360deg); }
+    }
+    @keyframes screenShake {
+      0%, 100% { transform: rotate(var(--camTilt, 0deg)) translateY(var(--camY, 0px)); }
+      10%, 50%, 90% { transform: rotate(calc(var(--camTilt, 0deg) + 1.5deg)) translateY(calc(var(--camY, 0px) + 3px)) translateX(-4px); }
+      30%, 70% { transform: rotate(calc(var(--camTilt, 0deg) - 1.5deg)) translateY(calc(var(--camY, 0px) - 3px)) translateX(4px); }
+    }
+    .shake {
+      animation: screenShake 0.35s ease-out;
+    }
+
+    /* Estilo do Papagaio */
+    .parrot {
+      position: absolute;
+      font-size: 26px;
+      bottom: calc(18% + 56px);
+      left: calc(50% - 13px);
+      transform: translateX(var(--ballX, 0px)) scaleX(var(--parrotFlip, 1));
+      z-index: 13;
+      display: none;
+      pointer-events: none;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+    }
+    .game.has-parrot .parrot {
+      display: block;
+    }
+
+    .message{
+      position:absolute;left:50%;bottom:96px;transform:translateX(-50%);z-index:20;white-space:nowrap;padding:10px 16px;border-radius:999px;
+      background:rgba(7,13,22,.82);border:1px solid rgba(255,255,255,.1);box-shadow:0 10px 26px rgba(0,0,0,.32);font-weight:900;color:#fff2c3;font-size:13px;letter-spacing:.2px;opacity:0;transition:.18s
+    }
+    .message.show{opacity:1}
+
+    .bottomPanel{
+      flex:0 0 auto;display:flex;flex-direction:column;gap:8px;padding-top:1px
+    }
+    .plank{
+      display:grid;grid-template-columns:94px 1fr;gap:8px;align-items:center;height:48px;padding:0 10px 0 8px;border-radius:18px;
+      background:linear-gradient(180deg,var(--wood1),var(--wood2) 58%,var(--wood3));border:2px solid rgba(255,214,132,.28);box-shadow:var(--shadow)
+    }
+    .plankLabel{font-family:Georgia,"Times New Roman",serif;font-weight:900;font-size:15px;letter-spacing:1px;text-transform:uppercase;color:#fff4d0;text-shadow:0 2px 0 #000;padding-left:4px}
+    .failDots{display:grid;grid-template-columns:repeat(15,1fr);gap:4px}
+    .failDot{height:20px;border-radius:999px;background:rgba(35,11,4,.75);border:2px solid rgba(0,0,0,.2);display:grid;place-items:center;font-size:11px;color:transparent}
+    .failDot.on{background:linear-gradient(180deg,#ff674d,#c51d1d);color:#fff;text-shadow:0 1px 0 #000}
+    .failDot.on::before{content:"✖"}
+
+    .powers{
+      display:grid;grid-template-columns:repeat(7,1fr);gap:4px
+    }
+    .power{
+      position:relative;height:70px;border:none;border-radius:18px;padding:6px 4px 5px;background:linear-gradient(180deg,rgba(13,34,55,.95),rgba(6,18,30,.96));
+      border:1px solid rgba(255,255,255,.1);box-shadow:0 10px 20px rgba(0,0,0,.26);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:#fff;cursor:pointer
+    }
+    .power:active{transform:scale(.98)}
+    .power .ico{
+      width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-size:20px;
+      background:radial-gradient(circle at 35% 30%,rgba(255,255,255,.95),rgba(255,255,255,.18) 30%,rgba(255,255,255,.06) 55%,rgba(255,255,255,.02) 100%);
+      box-shadow:0 0 0 2px rgba(255,255,255,.08),0 0 18px rgba(255,255,255,.08)
+    }
+    .power span{font-size:8px;font-weight:900;text-transform:uppercase;letter-spacing:.7px;line-height:1;text-align:center}
+    .power small{font-size:10px;color:var(--gold);font-weight:900;line-height:1}
+    .power.locked{opacity:.42;filter:grayscale(.25)}
+    .power.active{border-color:rgba(255,211,107,.7);box-shadow:0 0 0 2px rgba(255,211,107,.22),0 12px 22px rgba(0,0,0,.33)}
+
+    .actionRow{display:grid;grid-template-columns:46px 1fr 46px;gap:8px}
+    .shoot{
+      height:52px;border:none;border-radius:18px;cursor:pointer;font-family:Georgia,"Times New Roman",serif;font-size:28px;font-weight:900;letter-spacing:.8px;
+      text-transform:uppercase;color:#fff3d0;text-shadow:0 2px 0 #000;box-shadow:var(--shadow);
+      background:linear-gradient(180deg,#b72424 0%,#84161b 65%,#591015 100%);border:2px solid rgba(255,214,132,.34)
+    }
+    .shoot:active{transform:translateY(1px) scale(.99)}
+
+    .modal,.gameover{position:absolute;inset:0;background:rgba(0,0,0,.72);z-index:90;display:none;align-items:center;justify-content:center;padding:20px}
+    .modal.open,.gameover.show{display:flex}
+    .modalBox,.gameoverBox{
+      width:100%;max-width:400px;max-height:min(78svh,620px);overflow:auto;background:linear-gradient(180deg,rgba(17,27,42,.98),rgba(9,15,24,.98));
+      border:1px solid rgba(255,255,255,.14);border-radius:24px;padding:22px;box-shadow:0 24px 60px rgba(0,0,0,.5)
+    }
+    .modalBox h2,.gameoverBox h2{font-family:Georgia,"Times New Roman",serif;font-size:30px;color:#fff2c4;text-shadow:0 2px 0 #000;margin-bottom:12px}
+    .modalBox p,.modalBox li,.gameoverBox p{color:#deebfb;line-height:1.45}
+    .modalBox ul{padding-left:18px;margin:12px 0}.modalBox li+li{margin-top:7px}
+    .close,.restart{
+      margin-top:16px;height:50px;border:none;border-radius:16px;padding:0 20px;background:linear-gradient(180deg,#ffd978,#d99a34);color:#231306;font-weight:1000;cursor:pointer
+    }
+    .gameoverBox h2{color:#ff6258}
+    .gameoverBox p{margin:10px 0}
+
+    @media (max-height:740px){
+      .topbar{grid-template-columns:40px 1fr 40px}.roundBtn{width:40px;height:40px;font-size:20px;border-radius:12px}
+      .titleBox{height:54px}.titleBox h1{font-size:16px}.titleBox small{font-size:9px}
+      .hudCard{height:44px}.hudCard span{font-size:9px}.hudCard b{font-size:18px}
+      .plank{height:42px;grid-template-columns:82px 1fr}.plankLabel{font-size:13px}.failDot{height:18px}
+      .power{height:58px;border-radius:15px}.power .ico{width:28px;height:28px;font-size:17px}.power span{font-size:7px}.power small{font-size:9px}
+      .actionRow{grid-template-columns:40px 1fr 40px}.shoot{height:45px;font-size:23px}
+      .insideScores{bottom:10px}.scoreBox{min-width:88px;padding:8px 8px 6px}.scoreBox b{font-size:26px}.scoreBox span{font-size:10px}
+      .shipWrap{top:12%;height:42%}.ball{width:56px;height:56px;left:calc(50% - 28px);bottom:16%}.aim{bottom:calc(16% + 50px);height:138px}.message{bottom:76px;font-size:12px;padding:9px 13px}
+    }
+
+    .lightning-overlay {
+      position: absolute;
+      inset: 0;
+      background: #ffffff;
+      opacity: 0;
+      pointer-events: none;
+      z-index: 40;
+    }
+    .lightning-flash {
+      animation: flashAnim 0.4s ease-out;
+    }
+    @keyframes flashAnim {
+      0%, 100% { opacity: 0; }
+      15% { opacity: 0.85; }
+      30% { opacity: 0.25; }
+      40% { opacity: 0.8; }
+    }
+  </style>
+</head>
+<body>
+  <main class="game" id="game">
+    <div class="topbar">
+      <button class="roundBtn" id="helpBtn">☰</button>
+      <div class="titleBox">
+        <div>
+          <h1>Na Prancha do Pirata!</h1>
+          <small>Marca ou mergulha</small>
+        </div>
+      </div>
+      <button class="roundBtn" id="muteBtn">⚙</button>
+    </div>
+
+    <section class="hud">
+      <div class="hudCard g"><span>Golos</span><b id="goalsTop">0</b></div>
+      <div class="hudCard f"><span>Falhas</span><b><em id="failsTop" style="font-style:normal">0</em>/15</b></div>
+      <div class="hudCard p"><span>Poder</span><b id="powerTop">—</b></div>
+    </section>
+
+    <section class="seaStage" id="stage">
+      <div class="lightning-overlay" id="lightning"></div>
+      <div class="parrot" id="parrot">🦜</div>
+      <div class="sky">
+        <div class="moon"></div>
+        <div class="cloud c1"></div>
+        <div class="cloud c2"></div>
+      </div>
+      <div class="sea">
+        <div class="foam"></div>
+        <div class="wave w1"></div>
+        <div class="wave w2"></div>
+        <div class="wave w3"></div>
+      </div>
+      <div class="tentacle t1"></div>
+      <div class="tentacle t2"></div>
+
+      <div class="shipWrap" id="ship">
+        <div class="mast"></div>
+        <div class="sail">☠</div>
+        <div class="rope r1"></div>
+        <div class="rope r2"></div>
+        <div class="hull">
+          <div class="rail"></div>
+          <div class="port p1"></div>
+          <div class="port p2"></div>
+          <div class="lantern l1"></div>
+          <div class="lantern l2"></div>
+        </div>
+        <div class="goal" id="goal"></div>
+        <div class="pirate" id="pirate">
+          <div class="band"></div>
+          <div class="head"></div>
+          <div class="eye e1"></div>
+          <div class="eye e2"></div>
+          <div class="beard"></div>
+          <div class="body"></div>
+          <div class="belt"></div>
+          <div class="arm a1"></div>
+          <div class="arm a2"></div>
+          <div class="leg lg1"></div>
+          <div class="leg lg2"></div>
+        </div>
+      </div>
+
+      <div class="aim" id="aim"></div>
+      <div class="ball" id="ball"></div>
+      <div class="shot" id="shot"></div>
+
+      <div class="insideScores">
+        <div class="scoreBox ok"><span>Acertos</span><b id="goalsIn">0</b></div>
+        <div class="scoreBox bad"><span>Falhas</span><b><em id="failsIn" style="font-style:normal">0</em>/15</b></div>
+      </div>
+      <div class="message" id="msg">Marca ou vais para a prancha!</div>
+    </section>
+
+    <section class="bottomPanel">
+      <div class="plank">
+        <div class="plankLabel">Prancha</div>
+        <div class="failDots" id="failDots"></div>
+      </div>
+      <div class="powers" id="powers"></div>
+      <div class="actionRow">
+        <button class="roundBtn" id="resetBtn">↺</button>
+        <button class="shoot" id="shootBtn">Rematar!</button>
+        <button class="roundBtn" id="dummyBtn">🧰</button>
+      </div>
+    </section>
+
+    <div class="modal" id="modal">
+      <div class="modalBox">
+        <h2>Como jogar?</h2>
+        <p>A baliza está num navio pirata. O navio balança sempre, e vai balançando mais à medida que marcas.</p>
+        <ul>
+          <li>Toca em <b>REMATAR!</b> no momento certo.</li>
+          <li>Marca golos para desbloquear poderes especiais.</li>
+          <li>Depois de alguns golos, o pirata invoca o polvo do mar.</li>
+          <li>Se falhares <b>15 remates</b>, vais para a prancha e perdes.</li>
+        </ul>
+        <p><b>Poderes:</b> Fogo, Alga, Canhão, Sombra, Relâmpago, Âncora e Kraken.</p>
+        <button class="close" id="closeModal">Jogar</button>
+      </div>
+    </div>
+
+    <!-- Modal de Definições / Voltar ao Menu -->
+    <div class="modal" id="settingsModal">
+      <div class="modalBox">
+        <h2>Definições</h2>
+        <p>Gostarias de voltar à página principal?</p>
+        <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 15px; width: 100%;">
+          <button class="close" id="backToMenuBtn" style="background: linear-gradient(180deg,#ff5353,#c83b3b); color: #fff; margin-top: 10px;">Voltar para Trás</button>
+          <button class="close" id="closeSettingsModal" style="margin-top: 0;">Continuar a Jogar</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="gameover" id="gameover">
+      <div class="gameoverBox">
+        <h2>PARA A PRANCHA!</h2>
+        <p>O pirata empurrou-te para o mar.</p>
+        <p>Golos marcados: <b id="finalGoals">0</b></p>
+        <button class="restart" id="restartBtn">Tentar outra vez</button>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const state = { 
+      goals:0, fails:0, aim:0, dir:1, tilt:0, shipDir:1, keeperX:0, keeperDir:1, shooting:false, activePower:null, ballX:0, ballXDir:1,
+      powerUses: { fire: 5, alga: 5, canhao: 5, fantasma: 5, relampago: 5, ancora: 5, kraken: 5 },
+      tentacleAngle: 0
+    };
+    const powersData = [
+      {id:'fire',name:'Fogo',ico:'🔥',unlock:3,cls:'fire',msg:'Remate de Fogo: mais rápido!'},
+      {id:'alga',name:'Alga',ico:'🌿',unlock:6,cls:'alga',msg:'Remate Alga: curva no ar!'},
+      {id:'canhao',name:'Canhão',ico:'💣',unlock:10,cls:'canhao',msg:'Remate Canhão: força bruta!'},
+      {id:'fantasma',name:'Sombra',ico:'👻',unlock:15,cls:'fantasma',msg:'Remate Sombra: atravessa obstáculos!'},
+      {id:'relampago',name:'Relâmpago',ico:'⚡',unlock:20,cls:'relampago',msg:'Remate Relâmpago: quase instantâneo!'},
+      {id:'ancora',name:'Âncora',ico:'⚓',unlock:25,cls:'ancora',msg:'Remate Âncora: ignora o balanço!'},
+      {id:'kraken',name:'Kraken',ico:'🐙',unlock:30,cls:'kraken',msg:'Remate Kraken: o polvo ajuda-te!'}
+    ];
+
+    const $ = id => document.getElementById(id);
+    const game = $('game');
+    const stage = $('stage');
+    const ship = $('ship');
+    const pirate = $('pirate');
+    const ball = $('ball');
+    const parrot = $('parrot');
+    const aim = $('aim');
+    const msg = $('msg');
+    const shot = $('shot');
+
+    function init(){
+      $('failDots').innerHTML = Array.from({length:15}, () => `<div class="failDot"></div>`).join('');
+      renderPowers();
+      updateHud();
+      showMsg('Marca ou vais para a prancha!');
+      checkLightning();
+      loop();
+    }
+
+    function checkLightning() {
+      if (state.goals >= 35) {
+        const lightning = $('lightning');
+        if (lightning) {
+          lightning.classList.add('lightning-flash');
+          setTimeout(() => lightning.classList.remove('lightning-flash'), 450);
+        }
+      }
+      const nextDelay = 1800 + Math.random() * 2500;
+      setTimeout(checkLightning, nextDelay);
+    }
+
+    function renderPowers(){
+      $('powers').innerHTML = powersData.map(p => {
+        const unlocked = state.goals >= p.unlock;
+        const usesLeft = state.powerUses[p.id];
+        const isSelectable = unlocked && usesLeft > 0;
+        return `
+          <button class="power ${isSelectable ? '' : 'locked'} ${state.activePower === p.id ? 'active' : ''}" data-power="${p.id}">
+            <div class="ico">${p.ico}</div>
+            <span>${p.name}</span>
+            <small>${unlocked ? (usesLeft > 0 ? usesLeft : '0') : '🔒'}</small>
+          </button>
+        `;
+      }).join('');
+      document.querySelectorAll('.power').forEach(btn => btn.onclick = () => selectPower(btn.dataset.power));
+    }
+
+    function selectPower(id){
+      const p = powersData.find(x => x.id === id);
+      if(state.goals < p.unlock){
+        showMsg(`Desbloqueia aos ${p.unlock} golos`);
+        return;
+      }
+      if(state.powerUses[id] <= 0){
+        showMsg('Poder esgotado!');
+        return;
+      }
+      state.activePower = state.activePower === id ? null : id;
+      showMsg(state.activePower ? p.msg : 'Remate normal selecionado');
+      renderPowers();
+      updateHud();
+    }
+
+    function updateHud(){
+      $('goalsTop').textContent = state.goals;
+      $('goalsIn').textContent = state.goals;
+      $('failsTop').textContent = state.fails;
+      $('failsIn').textContent = state.fails;
+      $('powerTop').textContent = state.activePower ? powersData.find(p => p.id === state.activePower).ico : '—';
+      document.querySelectorAll('.failDot').forEach((dot, i) => dot.classList.toggle('on', i < state.fails));
+      game.classList.toggle('kraken', state.goals >= 8);
+      game.classList.toggle('has-parrot', state.goals >= 50);
+
+      // Tamanho progressivo do guarda-redes a partir dos 35 golos
+      const keeperScale = 1 + Math.max(0, state.goals - 34) * 0.08;
+      pirate.style.setProperty('--keeperScale', keeperScale);
+
+      // Visibilidade reduzida (brilho) a partir dos 40 golos
+      const stageBrightness = Math.max(0.2, 1 - Math.max(0, state.goals - 39) * 0.05);
+      stage.style.setProperty('--stageBrightness', stageBrightness);
+
+      renderPowers();
+    }
+
+    function difficulty(){ return Math.min(1 + state.goals * 0.08, 4.2); }
+
+    function loop(){
+      const d = difficulty();
+      
+      // Limite dinâmico da mira: a partir dos 20 golos, começa a balançar fora da baliza
+      const maxAimAngle = 32 + Math.max(0, state.goals - 20) * 1.6;
+      state.aim += state.dir * (0.55 + d * 0.22);
+      if(state.aim > maxAimAngle){ state.aim = maxAimAngle; state.dir = -1; }
+      if(state.aim < -maxAimAngle){ state.aim = -maxAimAngle; state.dir = 1; }
+
+      // Velocidade do barco: a partir dos 15 golos, fica progressivamente mais rápido (caos)
+      let shipSpeedFactor = 0.08 + d * 0.03;
+      if (state.goals >= 15) {
+        shipSpeedFactor += (state.goals - 14) * 0.02;
+      }
+      if (state.goals >= 70) {
+        shipSpeedFactor += (state.goals - 69) * 0.045; // aceleração extrema do balanço
+      }
+      state.tilt += state.shipDir * shipSpeedFactor;
+      
+      const maxTilt = state.goals >= 70 ? Math.min(12 + (state.goals - 69) * 1.2, 28) : Math.min(3 + state.goals * 0.22, 12);
+      if(state.tilt > maxTilt){ state.tilt = maxTilt; state.shipDir = -1; }
+      if(state.tilt < -maxTilt){ state.tilt = -maxTilt; state.shipDir = 1; }
+
+      aim.style.setProperty('--aim', state.aim + 'deg');
+      ship.style.setProperty('--tilt', state.tilt + 'deg');
+
+      const camTilt = state.tilt * -0.25; // camera sways in response to ship tilt
+      const camY = Math.abs(state.tilt) * -0.5; // camera dips down slightly as the boat tilts to the extreme
+      stage.style.setProperty('--camTilt', camTilt + 'deg');
+      stage.style.setProperty('--camY', camY + 'px');
+
+      // Movimento do papagaio e da bola: a partir dos 50 golos, move-se de um lado para o outro
+      if (state.goals >= 50) {
+        state.ballX += state.ballXDir * (1.1 + d * 0.4);
+        const maxBallX = 110;
+        if(state.ballX > maxBallX){ state.ballX = maxBallX; state.ballXDir = -1; }
+        if(state.ballX < -maxBallX){ state.ballX = -maxBallX; state.ballXDir = 1; }
+        
+        if (!state.shooting) {
+          ball.style.setProperty('--ballX', state.ballX + 'px');
+          aim.style.setProperty('--ballX', state.ballX + 'px');
+        }
+        parrot.style.setProperty('--ballX', state.ballX + 'px');
+        parrot.style.setProperty('--parrotFlip', state.ballXDir);
+      } else {
+        state.ballX = 0;
+        ball.style.setProperty('--ballX', '0px');
+        aim.style.setProperty('--ballX', '0px');
+      }
+
+      // Movimento do guarda-redes (pirata)
+      state.keeperX += state.keeperDir * (0.65 + d * 0.35);
+      const maxKeeperX = 65; // limite lateral de movimento na baliza
+      if(state.keeperX > maxKeeperX){ state.keeperX = maxKeeperX; state.keeperDir = -1; }
+      if(state.keeperX < -maxKeeperX){ state.keeperX = -maxKeeperX; state.keeperDir = 1; }
+      pirate.style.setProperty('--keeperX', state.keeperX + 'px');
+      pirate.style.setProperty('--keeperLean', (state.keeperDir * 4) + 'deg'); // inclina ligeiramente ao mover-se
+
+      // Movimento dos tentáculos: a partir dos 60 golos balançam e defendem
+      const t1El = document.querySelector('.t1');
+      const t2El = document.querySelector('.t2');
+      if (state.goals >= 60) {
+        state.tentacleAngle = Math.sin(Date.now() / 320) * 12;
+        if (t1El && t2El) {
+          t1El.style.setProperty('--tRot', (-16 + state.tentacleAngle) + 'deg');
+          t2El.style.setProperty('--tRot', (16 - state.tentacleAngle) + 'deg');
+        }
+      } else if (state.goals >= 8) {
+        state.tentacleAngle = 0;
+        if (t1El && t2El) {
+          t1El.style.setProperty('--tRot', '-16deg');
+          t2El.style.setProperty('--tRot', '16deg');
+        }
+      }
+
+      requestAnimationFrame(loop);
+    }
+
+    function shoot(){
+      if(state.shooting || state.fails >= 15) return;
+      state.shooting = true;
+      ball.style.visibility = 'hidden';
+      const currentPower = powersData.find(x => x.id === state.activePower);
+      if (currentPower) {
+        state.powerUses[currentPower.id]--;
+      }
+      shot.className = 'shot ' + (currentPower ? currentPower.cls : '');
+      shot.style.display = 'block';
+      shot.style.animation = 'none';
+      void shot.offsetWidth; // reset animation
+      shot.style.left = 'calc(50% - 19px)';
+      shot.style.bottom = 'calc(18% + 12px)';
+
+      const offset = state.aim + (state.activePower === 'ancora' ? 0 : state.tilt * 0.9);
+      const ballX = state.ballX + (offset * 2.1);
+      
+      // Cálculo dinâmico das posições na tela para garantir precisão visual em qualquer tamanho de ecrã
+      const goalRect = $('goal').getBoundingClientRect();
+      const ballRect = $('ball').getBoundingClientRect();
+
+      const goalCenterX = goalRect.left + goalRect.width / 2;
+      const ballCenterX = ballRect.left + ballRect.width / 2;
+      const relativeCenter = goalCenterX - ballCenterX;
+      
+      // Limite dos postes da baliza
+      const maxOffset = (goalRect.width / 2) - 22;
+      const clampedBallX = Math.max(-maxOffset, Math.min(maxOffset, ballX));
+      
+      // Se a mira estiver fora dos limites dos postes, o remate vai para fora
+      const onTarget = Math.abs(ballX) <= maxOffset;
+      
+      // A bola viaja para o poste respetivo se for para fora, ou enquadrada se for golo
+      const destX = onTarget ? (relativeCenter + clampedBallX) : (relativeCenter + ballX);
+      const destY = onTarget ? ((goalRect.top + goalRect.height * 0.55) - ballRect.top) : ((goalRect.top + goalRect.height * 0.1) - ballRect.top);
+
+      const speed = state.activePower === 'relampago' ? 180 : state.activePower === 'fire' ? 230 : state.activePower === 'canhao' ? 330 : 420;
+
+      // Define variáveis CSS para a animação
+      shot.style.setProperty('--startX', state.ballX + 'px');
+      shot.style.setProperty('--destX', destX + 'px');
+      shot.style.setProperty('--destY', destY + 'px');
+
+      requestAnimationFrame(() => {
+        const animName = currentPower ? `anim${currentPower.id.charAt(0).toUpperCase() + currentPower.id.slice(1)}` : 'animNormal';
+        shot.style.animation = `${animName} ${speed}ms cubic-bezier(.15,.9,.22,1) forwards`;
+      });
+
+      setTimeout(() => {
+        // A decisão é tomada no exato momento do impacto (quando a bola chega à baliza)
+        const keeperScale = 1 + Math.max(0, state.goals - 34) * 0.08;
+        const keeperBlocks = state.activePower === 'fantasma' ? false : (Math.abs(clampedBallX - state.keeperX) < (30 * keeperScale));
+        
+        // Posições estimadas das pontas dos tentáculos
+        const t1X = -80 + state.tentacleAngle * 2.0;
+        const t2X = 80 - state.tentacleAngle * 2.0;
+        const t1Blocks = state.activePower === 'fantasma' ? false : (state.goals >= 60 && Math.abs(clampedBallX - t1X) < 26);
+        const t2Blocks = state.activePower === 'fantasma' ? false : (state.goals >= 60 && Math.abs(clampedBallX - t2X) < 26);
+        
+        const success = onTarget && !keeperBlocks && !t1Blocks && !t2Blocks;
+
+        // Se for o remate de Canhão, treme o ecrã/câmara no impacto!
+        if (currentPower && currentPower.id === 'canhao') {
+          stage.classList.add('shake');
+          setTimeout(() => stage.classList.remove('shake'), 350);
+        }
+
+        shot.style.display = 'none';
+        shot.style.animation = 'none';
+        ball.style.visibility = 'visible';
+        pirate.classList.remove('save','angry');
+        void pirate.offsetWidth;
+        if(success){
+          pirate.classList.add('angry');
+          state.goals++;
+          if([3,6,10,15,20,25,30].includes(state.goals)) showMsg('Novo poder desbloqueado!');
+          else if(state.goals === 8) showMsg('O pirata invocou o polvo do mar!');
+          else showMsg(['Golo!','Na gaveta!','O pirata ficou furioso!','Que remate!'][Math.floor(Math.random()*4)]);
+        } else {
+          pirate.classList.add('save');
+          state.fails++;
+          if(state.fails >= 15) {
+            showMsg('PARA A PRANCHA!');
+            setTimeout(gameOver, 550);
+          } else {
+            if (!onTarget) {
+              showMsg(['Fora!','Quase!','Falhaste o alvo!','Por cima!'][Math.floor(Math.random()*4)] + ' Mais um passo na prancha...');
+            } else if (t1Blocks || t2Blocks) {
+              showMsg('O tentáculo do polvo bloqueou! Mais um passo na prancha...');
+            } else {
+              showMsg('O pirata defendeu! Mais um passo na prancha...');
+            }
+          }
+        }
+        state.activePower = null;
+        state.shooting = false;
+        updateHud();
+      }, speed);
+    }
+
+    function showMsg(text){
+      msg.textContent = text;
+      msg.classList.add('show');
+      clearTimeout(showMsg.t);
+      showMsg.t = setTimeout(() => msg.classList.remove('show'), 1700);
+    }
+
+    function gameOver(){
+      $('finalGoals').textContent = state.goals;
+      $('gameover').classList.add('show');
+    }
+
+    function reset(){
+      state.goals = 0;
+      state.fails = 0;
+      state.activePower = null;
+      state.keeperX = 0;
+      state.keeperDir = 1;
+      state.shooting = false;
+      state.powerUses = { fire: 5, alga: 5, canhao: 5, fantasma: 5, relampago: 5, ancora: 5, kraken: 5 };
+      $('gameover').classList.remove('show');
+      updateHud();
+      showMsg('Novo embarque!');
+    }
+
+    $('shootBtn').onclick = shoot;
+    $('resetBtn').onclick = reset;
+    $('restartBtn').onclick = reset;
+    $('helpBtn').onclick = () => $('modal').classList.add('open');
+    $('closeModal').onclick = () => $('modal').classList.remove('open');
+    $('muteBtn').onclick = () => $('settingsModal').classList.add('open');
+    $('closeSettingsModal').onclick = () => $('settingsModal').classList.remove('open');
+    $('backToMenuBtn').onclick = () => {
+      window.location.href = 'index.html';
+    };
+    $('dummyBtn').onclick = () => showMsg('Mais extras em breve!');
+
+    init();
+  </script>
+</body>
+</html>

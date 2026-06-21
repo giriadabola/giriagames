@@ -199,7 +199,8 @@ function bindEvents() {
     const playMinigame = event.target.closest('[data-action="play-minigame"]');
     if (playMinigame) {
       event.stopPropagation();
-      openMinigamePopup();
+      const gameUrl = playMinigame.dataset.gameUrl || 'nao-explodas-o-treinador.html';
+      openMinigamePopup(gameUrl);
       return;
     }
 
