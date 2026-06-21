@@ -251,6 +251,28 @@ function renderGiriaBattles(rows) {
 }
 
 
+function renderPublicViewerBody(tab) {
+  if (tab === 'players') return renderPublicPlayerList();
+  if (tab === 'games') return renderPublicByGame(publicViewerStage, publicGameFilter);
+  if (tab === 'table') return renderGgamesTable();
+  if (tab === 'minigames') {
+    return `
+      <div class="games-tab-content" style="text-align: left; padding: 20px 10px;">
+        <div style="display: inline-block; position: relative; cursor: pointer; transition: transform 0.2s;" 
+             onclick="openMinigamePopup()"
+             onmouseover="this.style.transform='scale(1.02)'; this.querySelector('.play-btn-overlay').style.opacity='1'; this.querySelector('.play-btn-overlay').style.transform='scale(1)';"
+             onmouseout="this.style.transform='scale(1)'; this.querySelector('.play-btn-overlay').style.opacity='0'; this.querySelector('.play-btn-overlay').style.transform='scale(0.95)';">
+          <img src="nao_explodas.png" alt="Não Explodas o Treinador" style="max-width: 100%; display: block; max-height: 190px; object-fit: contain;">
+          <div class="play-btn-overlay" style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; opacity: 0; transform: scale(0.95); transition: opacity 0.3s ease, transform 0.3s ease; pointer-events: none; background: rgba(7, 26, 63, 0.45); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); border-radius: 35px;">
+            <span style="padding: 8px 16px; font-size: 0.72rem; font-family: 'Outfit', sans-serif; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; border-radius: 30px; border: 1px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.18); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); color: #fff; box-shadow: 0 6px 16px rgba(0,0,0,0.4); white-space: nowrap;">JOGAR AGORA</span>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+  return '';
+}
+
 function renderPublicViewer(active = 'players') {
   return `
     <div class="modal-head">
@@ -264,9 +286,10 @@ function renderPublicViewer(active = 'players') {
       <button type="button" class="viewer-tab ${active === 'players' ? 'active' : ''}" data-view-tab="players">Por jogador</button>
       <button type="button" class="viewer-tab ${active === 'games' ? 'active' : ''}" data-view-tab="games">Por jogo</button>
       <button type="button" class="viewer-tab ${active === 'table' ? 'active' : ''}" data-view-tab="table">Tabela Ggames</button>
+      <button type="button" class="viewer-tab ${active === 'minigames' ? 'active' : ''}" data-view-tab="minigames">Gaming</button>
     </div>
     <div id="viewerBody">
-      ${active === 'players' ? renderPublicPlayerList() : active === 'games' ? renderPublicByGame(publicViewerStage, publicGameFilter) : renderGgamesTable()}
+      ${renderPublicViewerBody(active)}
     </div>
   `;
 }
@@ -483,9 +506,10 @@ async function openPublicPredictionsModal() {
           <button type="button" class="viewer-tab ${active === 'games' ? 'active' : ''}" data-view-tab="games">Por jogo</button>
           <button type="button" class="viewer-tab ${active === 'players' ? 'active' : ''}" data-view-tab="players">Por jogador</button>
           <button type="button" class="viewer-tab ${active === 'table' ? 'active' : ''}" data-view-tab="table">Tabela Ggames</button>
+          <button type="button" class="viewer-tab ${active === 'minigames' ? 'active' : ''}" data-view-tab="minigames">Gaming</button>
         </div>
         <div id="viewerBody">
-          ${active === 'players' ? renderPublicPlayerList() : active === 'table' ? renderGgamesTable() : renderPublicByGame(publicViewerStage, publicGameFilter)}
+          ${renderPublicViewerBody(active)}
         </div>
       `;
     };
@@ -501,7 +525,7 @@ async function openPublicPredictionsModal() {
       }
     };
   
-    openPublicPredictionsModal = async function() {
+    openPublicPredictionsModal = async function(activeTab = 'games') {
       if (isVotingClosed()) {
         await openLiveResultsModal();
         return;
@@ -509,7 +533,7 @@ async function openPublicPredictionsModal() {
       openModal('<h2>Outros jogadores</h2><p class="modal-muted">A carregar prognósticos<span class="loading-dots"><span>.</span><span>.</span><span>.</span></span></p>');
       try {
         await loadPublicPredictions();
-        openModal(renderPublicViewer('games'));
+        openModal(renderPublicViewer(activeTab));
       } catch (error) {
         console.error(error);
         openModal('<h2>Outros jogadores</h2><p class="modal-muted">Não foi possível carregar os prognósticos. Confirma as permissões de leitura.</p>');
@@ -541,7 +565,7 @@ async function openPublicPredictionsModal() {
   }
 
   if (typeof openPublicPredictionsModal !== 'undefined') {
-    openPublicPredictionsModal = async function() {
+    openPublicPredictionsModal = async function(activeTab = 'games') {
       if (typeof openModal === 'function') {
         openModal('<h2>Outros jogadores</h2><p class="modal-muted">A carregar prognósticos<span class="loading-dots"><span>.</span><span>.</span><span>.</span></span></p>');
       }
@@ -553,7 +577,7 @@ async function openPublicPredictionsModal() {
         ]);
 
         if (typeof openModal === 'function' && typeof renderPublicViewer === 'function') {
-          openModal(renderPublicViewer('games'));
+          openModal(renderPublicViewer(activeTab));
         }
       } catch (error) {
         console.error(error);
@@ -564,3 +588,22 @@ async function openPublicPredictionsModal() {
     };
   }
 })();
+
+window.openMinigamePopup = function() {
+  const goBackAction = isMobileClosedView() 
+    ? "openMobilePublicPredictionsPage('minigames')" 
+    : "openPublicPredictionsModal('minigames')";
+
+  openModal(`
+    <div class="modal-head">
+      <div>
+        <p class="eyebrow small">Giria Games</p>
+        <h2>Não Explodas o Treinador!</h2>
+      </div>
+      <button type="button" class="close-btn" onclick="${goBackAction}" style="background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: bold;">Voltar</button>
+    </div>
+    <div style="width:100%; height:80vh; max-height: 800px; display:flex; justify-content:center; align-items:center; background:#000; border-radius:12px; overflow:hidden;">
+      <iframe src="nao-explodas-o-treinador.html" style="width:100%; height:100%; border:none;" allow="autoplay"></iframe>
+    </div>
+  `);
+};

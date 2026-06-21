@@ -201,7 +201,7 @@ function bindEvents() {
       event.stopPropagation();
       const tab = viewerTab.dataset.viewTab;
       window.publicViewerActiveTab = tab;
-      $('#viewerBody').innerHTML = tab === 'players' ? renderPublicPlayerList() : tab === 'games' ? renderPublicByGame(publicViewerStage, publicGameFilter) : renderGgamesTable();
+      $('#viewerBody').innerHTML = renderPublicViewerBody(tab);
       document.querySelectorAll('.viewer-tab').forEach(btn => btn.classList.toggle('active', btn === viewerTab));
       return;
     }
