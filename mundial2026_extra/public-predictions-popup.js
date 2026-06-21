@@ -282,7 +282,7 @@ function renderPublicViewerBody(tab) {
 
         <!-- Jogo 3: Defende a Fama -->
         <div style="display: inline-block; position: relative; cursor: pointer; transition: transform 0.2s; border-radius: 12px; overflow: hidden; width: calc(50% - 10px); min-width: 140px; max-width: 200px;" 
-             data-action="play-minigame" data-game-url="defende-a-fama-v10-seguidores-2min.html"
+             data-action="play-minigame" data-game-url="defende-a-fama.html"
              onmouseover="this.style.transform='scale(1.02)'; this.querySelector('.play-btn-overlay').style.opacity='1'; this.querySelector('.play-btn-overlay').style.transform='scale(1)';"
              onmouseout="this.style.transform='scale(1)'; this.querySelector('.play-btn-overlay').style.opacity='0'; this.querySelector('.play-btn-overlay').style.transform='scale(0.95)';">
           <img src="defende_fama.png" alt="Defende a Fama!" style="width: 100%; display: block; height: 140px; object-fit: contain; border-radius: 12px;">
