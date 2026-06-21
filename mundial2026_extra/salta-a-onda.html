@@ -1,0 +1,1019 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Salta a Onda!</title>
+  <style>
+    :root{
+      --bg:#071122;
+      --panel:rgba(8,18,38,.82);
+      --line:rgba(255,255,255,.15);
+      --blue:#23d8ff;
+      --gold:#ffd447;
+      --green:#60ff86;
+      --red:#ff4d57;
+      --purple:#b15cff;
+      --white:#f8fbff;
+      --grass:#18753d;
+      --grass2:#0e4f2c;
+      --shadow:0 14px 34px rgba(0,0,0,.42);
+    }
+    *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+    html,body{height:100%;overflow:hidden;background:#020611;color:var(--white);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+    body{display:flex;align-items:center;justify-content:center}
+    button{font:inherit;color:inherit}
+
+    .game{
+      width:min(100vw,480px);
+      height:100svh;
+      max-height:940px;
+      position:relative;
+      overflow:hidden;
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+      padding:8px;
+      background:
+        radial-gradient(circle at 18% 8%,rgba(35,216,255,.2),transparent 22%),
+        radial-gradient(circle at 92% 16%,rgba(177,92,255,.22),transparent 24%),
+        linear-gradient(180deg,#081535 0%,#071126 38%,#05101d 100%);
+      user-select:none;
+    }
+
+    .title{
+      height:58px;
+      border-radius:20px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      position:relative;
+      border:1px solid rgba(255,212,71,.7);
+      background:linear-gradient(180deg,rgba(12,25,60,.96),rgba(5,13,31,.96));
+      box-shadow:0 0 24px rgba(35,216,255,.15),var(--shadow);
+      flex:0 0 auto;
+    }
+    .title h1{
+      font-size:29px;
+      line-height:1;
+      font-weight:1000;
+      letter-spacing:1px;
+      text-transform:uppercase;
+      text-shadow:0 3px 0 #000,0 0 14px rgba(35,216,255,.28);
+    }
+    .title h1 span{color:var(--gold)}
+    .title:before,.title:after{content:"★";position:absolute;top:50%;transform:translateY(-50%);color:var(--gold);font-size:16px}
+    .title:before{left:14px}.title:after{right:14px}
+
+    .hud{
+      display:grid;
+      grid-template-columns:1fr 1fr 1fr;
+      gap:7px;
+      flex:0 0 auto;
+    }
+    .hudCard{
+      min-height:58px;
+      border-radius:17px;
+      border:1px solid var(--line);
+      box-shadow:var(--shadow);
+      background:linear-gradient(180deg,rgba(14,31,64,.94),rgba(6,15,34,.94));
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      padding:6px;
+      text-align:center;
+    }
+    .hudCard small{
+      font-size:9px;
+      font-weight:1000;
+      letter-spacing:1px;
+      text-transform:uppercase;
+      color:#a8c9e7;
+    }
+    .hudCard b{
+      font-size:24px;
+      line-height:1.05;
+      font-weight:1000;
+    }
+    .hudCard.time b{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#fff}
+    .hudCard.fans b{color:var(--green)}
+    .hudCard.score b{color:var(--gold)}
+
+    .tips{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:7px;
+      flex:0 0 auto;
+    }
+    .tip{
+      min-height:40px;
+      border-radius:14px;
+      border:1px solid rgba(255,255,255,.12);
+      background:rgba(5,13,31,.72);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:7px;
+      padding:6px 8px;
+      box-shadow:0 10px 22px rgba(0,0,0,.24);
+      text-align:center;
+      font-size:11px;
+      font-weight:900;
+      color:#dff3ff;
+    }
+    .tip span{font-size:19px}
+    .tip.warn{color:#ffe89e;border-color:rgba(255,212,71,.25)}
+
+    .stage{
+      flex:1;
+      min-height:0;
+      position:relative;
+      overflow:hidden;
+      border-radius:24px;
+      border:1px solid rgba(255,255,255,.12);
+      box-shadow:inset 0 0 42px rgba(0,0,0,.42),var(--shadow);
+      background:
+        linear-gradient(180deg,#091a3c 0%,#0a1838 12%,#11355b 13%,#0c1834 18%,#163f27 18.5%,#18753d 100%);
+      touch-action:none;
+    }
+    .stadiumLights{
+      position:absolute;inset:0 0 auto 0;height:18%;
+      background:
+        radial-gradient(circle at 5% 26%,rgba(255,255,255,.9),transparent 6%),
+        radial-gradient(circle at 95% 26%,rgba(255,255,255,.9),transparent 6%),
+        radial-gradient(circle at 22% 6%,rgba(35,216,255,.28),transparent 18%),
+        radial-gradient(circle at 78% 6%,rgba(177,92,255,.25),transparent 18%);
+      opacity:.9;z-index:1;pointer-events:none;
+    }
+    .standTop{
+      position:absolute;
+      left:0;right:0;top:12%;
+      height:9%;
+      background:linear-gradient(180deg,#506078,#1a2a41);
+      border-top:2px solid rgba(255,255,255,.2);
+      border-bottom:3px solid rgba(0,0,0,.35);
+      z-index:4;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      overflow:visible;
+    }
+    .standTop:before{
+      content:"JUNTOS SOMOS MAIS FORTES!";
+      position:absolute;
+      bottom:-18px;
+      left:0;right:0;
+      text-align:center;
+      font-weight:1000;
+      font-size:16px;
+      letter-spacing:1px;
+      color:rgba(255,255,255,.55);
+      text-shadow:0 2px 0 #000;
+      z-index:2;
+    }
+    .flags{position:absolute;inset:0;z-index:1;pointer-events:none}
+    .flag{position:absolute;top:-26px;width:44px;height:28px;background:linear-gradient(90deg,#0e3e92,#0b79c9);border-left:3px solid #cdd8e8;filter:drop-shadow(0 4px 4px rgba(0,0,0,.35));transform:skewY(-7deg)}
+    .f1{left:8%}.f2{right:10%}.f3{left:31%}.f4{right:34%}
+
+    .receiver{
+      position:absolute;
+      left:50%;
+      top:-34px;
+      width:58px;height:92px;
+      transform:translateX(-50%) translateX(var(--rx,0px));
+      z-index:12;
+      filter:drop-shadow(0 10px 10px rgba(0,0,0,.45));
+      transition:transform 1.4s cubic-bezier(.2,.85,.2,1);
+    }
+    .receiver:after{
+      content:"";
+      position:absolute;left:50%;bottom:-8px;width:84px;height:20px;border-radius:50%;
+      transform:translateX(-50%);
+      border:3px solid rgba(35,216,255,.85);
+      box-shadow:0 0 22px rgba(35,216,255,.8),inset 0 0 18px rgba(35,216,255,.35);
+      background:rgba(35,216,255,.08);
+    }
+    .player .head,.receiver .head{
+      position:absolute;left:50%;top:0;width:28px;height:30px;border-radius:50%;
+      transform:translateX(-50%);
+      background:#d8a071;border:2px solid rgba(255,255,255,.65);z-index:4;
+    }
+    .player .hair,.receiver .hair{
+      position:absolute;left:50%;top:-5px;width:36px;height:16px;transform:translateX(-50%);
+      background:#6a421e;border-radius:55% 55% 20% 20%;z-index:5;
+    }
+    .player .body,.receiver .body{
+      position:absolute;left:50%;top:29px;width:38px;height:42px;transform:translateX(-50%);
+      border-radius:13px 13px 15px 15px;
+      background:repeating-linear-gradient(90deg,#1c60c9 0 8px,#f3f7ff 8px 15px);
+      border:2px solid rgba(255,255,255,.25);
+      box-shadow:inset 0 0 10px rgba(0,0,0,.18);
+      z-index:3;
+    }
+    .receiver .body:after{content:"✓";position:absolute;left:50%;top:8px;transform:translateX(-50%);font-weight:1000;color:#0c1a30;text-shadow:0 1px 0 #fff}
+    .player .arm,.receiver .arm{position:absolute;top:39px;width:28px;height:8px;border-radius:999px;background:#d8a071;z-index:2}
+    .player .a1,.receiver .a1{left:4px;transform:rotate(24deg)}.player .a2,.receiver .a2{right:4px;transform:rotate(-24deg)}
+    .player .leg,.receiver .leg{position:absolute;top:68px;width:10px;height:25px;background:#f3f7ff;border-radius:0 0 8px 8px;z-index:2}
+    .player .l1,.receiver .l1{left:19px;transform:rotate(8deg)}.player .l2,.receiver .l2{right:19px;transform:rotate(-8deg)}
+
+    .stands{
+      position:absolute;
+      left:0;right:0;top:21%;height:46%;
+      background:
+        repeating-linear-gradient(0deg,rgba(255,255,255,.08) 0 2px,transparent 2px 42px),
+        linear-gradient(180deg,#22324f,#192844);
+      border-bottom:4px solid #485463;
+      z-index:3;
+      overflow:hidden;
+    }
+    .stands:before{
+      content:"";
+      position:absolute;inset:0;
+      background:radial-gradient(circle at 50% 30%,rgba(35,216,255,.12),transparent 32%);
+      pointer-events:none;
+    }
+    .fans{
+      position:absolute;
+      inset:8px 8px 6px 8px;
+      display:grid;
+      grid-template-columns:repeat(10,1fr);
+      grid-template-rows:repeat(5,1fr);
+      gap:3px;
+      z-index:5;
+    }
+    .fan{
+      position:relative;
+      display:flex;
+      align-items:flex-end;
+      justify-content:center;
+      min-width:0;
+      transition:opacity .22s ease, transform .18s ease, filter .18s ease;
+      transform:translateY(var(--rise,0px));
+    }
+    .fan.out{
+      opacity:0;
+      transform:translateY(22px) scale(.35);
+      filter:grayscale(1);
+      pointer-events:none;
+    }
+    .person{
+      position:relative;
+      width:25px;height:42px;
+      filter:drop-shadow(0 4px 3px rgba(0,0,0,.35));
+    }
+    .person .fh{
+      position:absolute;left:7px;top:0;width:12px;height:12px;border-radius:50%;
+      background:var(--skin,#d79a73);
+    }
+    .person .fb{
+      position:absolute;left:5px;top:12px;width:16px;height:20px;border-radius:7px 7px 4px 4px;
+      background:var(--shirt,#1d68d6);
+      border:1px solid rgba(255,255,255,.16);
+    }
+    .person .fa{
+      position:absolute;top:15px;width:7px;height:19px;border-radius:999px;background:var(--skin,#d79a73);
+      transform-origin:50% 100%;
+    }
+    .person .al{left:1px;transform:rotate(var(--armL,35deg))}
+    .person .ar{right:1px;transform:rotate(var(--armR,-35deg))}
+    .person .fl{
+      position:absolute;bottom:0;width:6px;height:12px;border-radius:0 0 6px 6px;background:#101827;
+    }
+    .person .ll{left:7px}.person .lr{right:7px}
+    .fan.wave{
+      --rise:-18px;
+      filter:drop-shadow(0 0 8px rgba(35,216,255,.75));
+    }
+    .fan.wave .fa{height:25px;top:2px}
+    .fan.wave .al{transform:rotate(-155deg)}
+    .fan.wave .ar{transform:rotate(155deg)}
+    .fan.danger{
+      filter:drop-shadow(0 0 14px rgba(255,212,71,.95));
+    }
+    .waveLine{
+      position:absolute;
+      left:-20%;
+      top:50%;
+      width:35%;
+      height:6px;
+      background:linear-gradient(90deg,transparent,rgba(35,216,255,.2),rgba(35,216,255,.95),rgba(35,216,255,.2),transparent);
+      border-radius:999px;
+      box-shadow:0 0 18px rgba(35,216,255,.9);
+      transform:translateX(var(--waveX,0%)) translateY(var(--waveY,0px));
+      z-index:8;
+      opacity:.9;
+      transition:height .2s ease;
+      pointer-events:none;
+    }
+    .waveLine.tall{height:11px;box-shadow:0 0 26px rgba(255,212,71,.9)}
+
+    .pitch{
+      position:absolute;
+      left:0;right:0;bottom:0;height:38%;
+      background:
+        radial-gradient(ellipse at 50% 0%,rgba(255,255,255,.16),transparent 28%),
+        repeating-linear-gradient(90deg,rgba(255,255,255,.02) 0 40px,rgba(255,255,255,.05) 40px 80px),
+        linear-gradient(180deg,var(--grass),var(--grass2));
+      z-index:2;
+      overflow:hidden;
+    }
+    .pitch:before{
+      content:"";
+      position:absolute;left:-15%;right:-15%;top:14%;height:56%;
+      border:2px solid rgba(255,255,255,.32);
+      border-radius:50%;
+      transform:perspective(500px) rotateX(64deg);
+    }
+    .player{
+      position:absolute;
+      left:24%;
+      bottom:36px;
+      width:76px;height:116px;
+      transform:translateX(-50%);
+      z-index:10;
+      filter:drop-shadow(0 12px 10px rgba(0,0,0,.42));
+    }
+    .player .head{width:34px;height:36px;top:0}
+    .player .hair{width:44px;height:18px}
+    .player .body{top:36px;width:48px;height:54px}
+    .player .body:after{
+      content:"10";position:absolute;left:50%;top:10px;transform:translateX(-50%);
+      font-size:22px;font-weight:1000;color:#fff;text-shadow:0 2px 0 #174c9a;
+    }
+    .player .arm{top:48px;width:34px;height:9px}.player .a1{left:2px}.player .a2{right:2px}
+    .player .leg{top:88px;height:28px;width:12px}.player .l1{left:25px}.player .l2{right:25px}
+
+    .ball{
+      position:absolute;
+      left:30%;
+      bottom:38px;
+      width:36px;height:36px;
+      border-radius:50%;
+      background:radial-gradient(circle at 35% 30%,#fff 0 19%,#dce5ee 20% 56%,#fff 57%);
+      box-shadow:0 0 16px rgba(255,255,255,.45),0 8px 10px rgba(0,0,0,.34);
+      z-index:15;
+      transform:translate(-50%,-50%) scale(var(--ballScale,1));
+      display:block;
+    }
+    .ball:before{
+      content:"";
+      position:absolute;left:12px;top:10px;width:12px;height:12px;background:#111827;
+      clip-path:polygon(50% 0,100% 38%,82% 100%,18% 100%,0 38%);
+    }
+    .ball.flying{
+      transition:none;
+      box-shadow:0 0 22px rgba(35,216,255,.86),0 8px 12px rgba(0,0,0,.36);
+    }
+    .trajectory{
+      position:absolute;
+      left:30%;
+      bottom:38px;
+      width:0;
+      height:0;
+      z-index:11;
+      pointer-events:none;
+    }
+    .trailDot{
+      position:absolute;
+      width:7px;height:7px;border-radius:50%;
+      background:rgba(35,216,255,.92);
+      box-shadow:0 0 12px rgba(35,216,255,.88);
+      transform:translate(-50%,-50%);
+      opacity:.9;
+    }
+    .aimArc{
+      display:none !important;
+      position:absolute;
+      left:30%;
+      bottom:38px;
+      width:150px;height:95px;
+      border-top:4px solid rgba(35,216,255,.75);
+      border-right:4px solid rgba(35,216,255,.45);
+      border-radius:100% 100% 0 0;
+      transform-origin:0 100%;
+      transform:rotate(var(--aimRot,-18deg)) scale(var(--aimScale,1));
+      box-shadow:0 -6px 18px rgba(35,216,255,.38);
+      z-index:9;
+      opacity:.82;
+      pointer-events:none;
+    }
+    .aimArc:after{
+      content:"";
+      position:absolute;right:-7px;top:42px;width:22px;height:22px;
+      border-right:5px solid rgba(35,216,255,.9);
+      border-top:5px solid rgba(35,216,255,.9);
+      transform:rotate(34deg);
+    }
+
+    .passPad{
+      position:absolute;
+      left:50%;
+      bottom:12px;
+      width:min(70%,330px);
+      height:80px;
+      transform:translateX(-50%);
+      border-radius:24px;
+      border:1px solid rgba(255,255,255,.18);
+      background:rgba(5,14,32,.72);
+      backdrop-filter:blur(8px);
+      box-shadow:var(--shadow);
+      z-index:20;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:10px;
+      text-align:center;
+      touch-action:none;
+    }
+    .passPad .hand{font-size:32px;filter:drop-shadow(0 0 10px rgba(35,216,255,.55))}
+    .passPad b{
+      font-size:14px;line-height:1.25;text-transform:uppercase;letter-spacing:.5px;
+    }
+    .passPad b span{color:var(--gold)}
+.toast{
+      position:absolute;
+      left:50%;
+      top:54%;
+      transform:translate(-50%,-50%);
+      z-index:40;
+      min-width:160px;
+      padding:10px 14px;
+      border-radius:999px;
+      background:rgba(5,13,31,.84);
+      border:1px solid rgba(255,255,255,.14);
+      box-shadow:0 12px 28px rgba(0,0,0,.38);
+      text-align:center;
+      font-weight:1000;
+      color:#fff3b0;
+      opacity:0;
+      pointer-events:none;
+      transition:.2s;
+    }
+    .toast.show{opacity:1;top:50%}
+
+    .overlay{
+      position:absolute;inset:0;z-index:100;
+      display:flex;align-items:center;justify-content:center;
+      background:rgba(2,6,17,.78);
+      backdrop-filter:blur(8px);
+      padding:20px;
+    }
+    .overlay.hide{display:none}
+    .panel{
+      width:100%;max-width:400px;
+      border-radius:28px;
+      background:linear-gradient(180deg,rgba(14,31,64,.98),rgba(5,13,31,.98));
+      border:1px solid rgba(255,255,255,.15);
+      box-shadow:0 26px 70px rgba(0,0,0,.55);
+      padding:22px;
+      text-align:center;
+    }
+    .panel h2{
+      font-size:38px;
+      line-height:.95;
+      text-transform:uppercase;
+      font-weight:1000;
+      margin-bottom:10px;
+      text-shadow:0 3px 0 #000;
+    }
+    .panel h2 span{color:var(--gold)}
+    .panel p{color:#d9e9fb;line-height:1.45;margin:8px 0}
+    .primary{
+      width:100%;height:52px;margin-top:14px;
+      border:none;border-radius:17px;
+      background:linear-gradient(180deg,#ffe37b,#f59e0b);
+      color:#1b1002;font-weight:1000;text-transform:uppercase;
+      box-shadow:var(--shadow);
+      cursor:pointer;
+    }
+
+    @media(max-height:760px){
+      .title{height:48px}.title h1{font-size:23px}
+      .hudCard{min-height:48px}.hudCard b{font-size:19px}.hudCard small{font-size:8px}
+      .tips{display:none}
+      .standTop{top:10%;height:8%}.stands{top:18%;height:46%}.pitch{height:40%}
+      .player{bottom:28px;scale:.86}.ball{bottom:34px}
+      .passPad{height:62px}.passPad b{font-size:11px}.passPad .hand{font-size:25px}
+    }
+  
+    /* V4: HUD compacto — sem painel azul gigante a tapar o jogo */
+    .hud{
+      position:absolute !important;
+      top:74px !important;
+      left:12px !important;
+      right:12px !important;
+      z-index:30 !important;
+      display:flex !important;
+      justify-content:space-between !important;
+      gap:6px !important;
+      pointer-events:none !important;
+      flex:0 0 auto !important;
+    }
+    .hudCard{
+      min-height:34px !important;
+      height:34px !important;
+      width:auto !important;
+      flex:1 1 0 !important;
+      border-radius:12px !important;
+      padding:3px 6px !important;
+      background:rgba(5,12,28,.58) !important;
+      border:1px solid rgba(255,255,255,.12) !important;
+      box-shadow:0 6px 14px rgba(0,0,0,.24) !important;
+      backdrop-filter:blur(5px) !important;
+      display:flex !important;
+      flex-direction:row !important;
+      align-items:center !important;
+      justify-content:center !important;
+      gap:4px !important;
+    }
+    .hudCard small{
+      font-size:7px !important;
+      letter-spacing:.7px !important;
+      opacity:.82 !important;
+      white-space:nowrap !important;
+    }
+    .hudCard b{
+      font-size:15px !important;
+      line-height:1 !important;
+      white-space:nowrap !important;
+    }
+    .hudCard.fans{
+      background:rgba(5,28,16,.58) !important;
+      border-color:rgba(96,255,134,.18) !important;
+    }
+    .hudCard.time{
+      background:rgba(6,18,40,.58) !important;
+    }
+    .hudCard.score{
+      background:rgba(35,20,5,.52) !important;
+      border-color:rgba(255,212,71,.18) !important;
+    }
+
+    /* como o HUD agora está por cima, baixamos um pouco os avisos */
+    .tips{
+      margin-top:0 !important;
+      position:absolute !important;
+      top:112px !important;
+      left:12px !important;
+      right:12px !important;
+      z-index:29 !important;
+      pointer-events:none !important;
+    }
+
+  </style>
+</head>
+<body>
+  <main class="game" id="game">
+    <div class="title"><h1>Salta a <span>Onda!</span></h1></div>
+
+    <section class="hud">
+      <div class="hudCard time"><small>Tempo</small><b id="time">03:00</b></div>
+      <div class="hudCard fans"><small>Adeptos</small><b><span id="fansCount">50</span>/50</b></div>
+      <div class="hudCard score"><small>Passes certos</small><b id="score">0</b></div>
+    </section>
+
+    <section class="tips">
+      <div class="tip"><span>🌊</span> Onda mais frequente a cada 10s</div>
+      <div class="tip warn"><span>⬆️</span> Último 1:00 = onda mais alta</div>
+    </section>
+
+    <section class="stage" id="stage">
+      <div class="stadiumLights"></div>
+
+      <div class="standTop">
+        <div class="flags">
+          <div class="flag f1"></div><div class="flag f2"></div><div class="flag f3"></div><div class="flag f4"></div>
+        </div>
+        <div class="receiver" id="receiver">
+          <div class="hair"></div><div class="head"></div><div class="body"></div>
+          <div class="arm a1"></div><div class="arm a2"></div>
+          <div class="leg l1"></div><div class="leg l2"></div>
+        </div>
+      </div>
+
+      <div class="stands" id="stands">
+        <div class="waveLine" id="waveLine"></div>
+        <div class="fans" id="fans"></div>
+      </div>
+
+      <div class="pitch">
+        <div class="player">
+          <div class="hair"></div><div class="head"></div><div class="body"></div>
+          <div class="arm a1"></div><div class="arm a2"></div>
+          <div class="leg l1"></div><div class="leg l2"></div>
+        </div>
+        <div class="aimArc" id="aimArc"></div>
+        <div class="trajectory" id="trajectory"></div>
+
+        <div class="passPad" id="passPad">
+          <div class="hand">👆</div>
+          <b>Desliza para cima para passar a bola</b>
+        </div>
+      </div>
+      <div class="ball" id="ball"></div>
+      <div class="toast" id="toast">Passe perfeito!</div>
+    </section>
+
+    <div class="overlay hide" id="startOverlay">
+      <div class="panel">
+        <h2>Salta a <span>Onda!</span></h2>
+        <p>Passa a bola ao teu colega no topo da bancada. Os adeptos fazem a onda — se a bola bater nela ou se falhares o colega, 3 adeptos saem do estádio.</p>
+        <p>A cada 10 segundos a onda fica mais frequente. No último minuto fica mais alta. Se falhares o colega, também perdes 3 adeptos por desilusão.</p>
+        <button class="primary" id="startBtn">Começar jogo</button>
+      </div>
+    </div>
+
+    <div class="overlay hide" id="endOverlay">
+      <div class="panel">
+        <h2 id="endTitle">A claque sobreviveu!</h2>
+        <p id="endText"></p>
+        <button class="primary" id="againBtn">Jogar outra vez</button>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const $ = id => document.getElementById(id);
+    const state = {
+      running:false,
+      timeLeft:180,
+      fans:50,
+      score:0,
+      combo:0,
+      elapsed:0,
+      wavePhase:0,
+      waveActive:false,
+      waveIndex:-4,
+      waveWidth:2,
+      waveHeight:18,
+      waveCooldown:2.2,
+      last:0,
+      ballFlying:false,
+      pass:{power:.55,height:.55,dx:0},
+      receiverX:0,
+      receiverTarget:0,
+      receiverMoveTimer:0
+    };
+
+    const fansEl = $('fans');
+    const waveLine = $('waveLine');
+    const receiver = $('receiver');
+    const ball = $('ball');
+    const trajectory = $('trajectory');
+    const aimArc = $('aimArc');
+    const toast = $('toast');
+
+    const fanSkins = ['#d7a178','#8b5a3c','#e0b28b','#6b3f25','#c88760'];
+    const fanShirts = ['#1d68d6','#f3f7ff','#153d8a','#0c1c36','#ffd447','#1aa36f'];
+
+    function createFans(){
+      fansEl.innerHTML = '';
+      for(let i=0;i<50;i++){
+        const fan = document.createElement('div');
+        fan.className = 'fan';
+        fan.dataset.index = i;
+        const skin = fanSkins[i % fanSkins.length];
+        const shirt = fanShirts[(i*3) % fanShirts.length];
+        fan.innerHTML = `
+          <div class="person" style="--skin:${skin};--shirt:${shirt}">
+            <div class="fh"></div><div class="fb"></div>
+            <div class="fa al"></div><div class="fa ar"></div>
+            <div class="fl ll"></div><div class="fl lr"></div>
+          </div>`;
+        fansEl.appendChild(fan);
+      }
+    }
+
+    function fmtTime(s){
+      const m = Math.floor(Math.max(0,s)/60);
+      const sec = Math.floor(Math.max(0,s)%60);
+      return `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+    }
+
+    function updateHud(){
+      $('time').textContent = fmtTime(state.timeLeft);
+      $('fansCount').textContent = Math.max(0, state.fans);
+      $('score').textContent = state.score;
+    }
+
+    function showToast(text, bad=false){
+      toast.textContent = text;
+      toast.style.color = bad ? '#ffb8bd' : '#fff3b0';
+      toast.classList.add('show');
+      clearTimeout(showToast.t);
+      showToast.t = setTimeout(()=>toast.classList.remove('show'), 1200);
+    }
+
+    function difficulty(){
+      // A cada 10s, a onda fica mais frequente.
+      const step = Math.floor(state.elapsed / 10);
+      const cooldown = Math.max(.42, 2.3 - step * .13);
+      const speed = Math.min(12, 4.2 + step * .42);
+      const width = state.timeLeft <= 60 ? 3 : 2;
+      const height = state.timeLeft <= 60 ? 34 : 18;
+      return {cooldown, speed, width, height};
+    }
+
+    function startWave(){
+      const d = difficulty();
+      state.waveActive = true;
+      state.waveIndex = -d.width;
+      state.waveWidth = d.width;
+      state.waveHeight = d.height;
+      waveLine.classList.toggle('tall', state.timeLeft <= 60);
+    }
+
+    function updateWave(dt){
+      const d = difficulty();
+      if(!state.waveActive){
+        state.waveCooldown -= dt;
+        if(state.waveCooldown <= 0){
+          startWave();
+        }
+      } else {
+        state.waveIndex += d.speed * dt;
+        if(state.waveIndex > 54){
+          state.waveActive = false;
+          state.waveCooldown = d.cooldown + Math.random()*.55;
+          clearWave();
+        }
+      }
+      renderWave();
+    }
+
+    function clearWave(){
+      document.querySelectorAll('.fan').forEach(f=>{
+        f.classList.remove('wave','danger');
+        f.style.setProperty('--rise','0px');
+      });
+    }
+
+    function renderWave(){
+      clearWave();
+      if(!state.waveActive){
+        waveLine.style.opacity = '0';
+        return;
+      }
+      waveLine.style.opacity = '.95';
+      const idx = state.waveIndex;
+      const centerCol = Math.round(idx % 10);
+      const percentX = (idx / 50) * 140;
+      const yWave = state.timeLeft <= 60 ? -9 : 0;
+      waveLine.style.setProperty('--waveX', percentX + '%');
+      waveLine.style.setProperty('--waveY', yWave + 'px');
+
+      document.querySelectorAll('.fan:not(.out)').forEach(f=>{
+        const i = +f.dataset.index;
+        const col = i % 10;
+        const row = Math.floor(i / 10);
+        const dist = Math.abs(col - centerCol);
+        if(dist <= state.waveWidth){
+          const rowBoost = state.timeLeft <= 60 ? (4-row)*4 : (4-row)*2;
+          const rise = -state.waveHeight + dist*6 - rowBoost;
+          f.classList.add('wave');
+          f.style.setProperty('--rise', rise + 'px');
+          if(dist <= .8) f.classList.add('danger');
+        }
+      });
+    }
+
+    function updateReceiver(dt){
+      state.receiverMoveTimer -= dt;
+      if(state.receiverMoveTimer <= 0){
+        state.receiverTarget = (Math.random()*2-1) * 130;
+        state.receiverMoveTimer = 3 + Math.random()*3.8;
+      }
+      state.receiverX += (state.receiverTarget - state.receiverX) * Math.min(1, dt*1.2);
+      receiver.style.setProperty('--rx', state.receiverX + 'px');
+    }
+
+    function getWaveCollision(x, y){
+      if(!state.waveActive) return false;
+      // A bancada ocupa do topo 21% a 67% do stage. A bola atravessa o ecrã absoluto.
+      const stage = $('stage').getBoundingClientRect();
+      const stand = $('stands').getBoundingClientRect();
+      const relX = (x - stand.left) / stand.width;
+      const relY = (y - stand.top) / stand.height;
+      if(relX < 0 || relX > 1 || relY < 0 || relY > 1) return false;
+
+      const ballCol = relX * 10;
+      const centerCol = Math.round(state.waveIndex % 10);
+      const dist = Math.abs(ballCol - centerCol);
+
+      // Último minuto: onda mais alta, por isso apanha bola mesmo mais acima.
+      const highZone = state.timeLeft <= 60 ? .15 : .28;
+      const lowZone = state.timeLeft <= 60 ? .88 : .78;
+      return dist <= state.waveWidth + .25 && relY > highZone && relY < lowZone;
+    }
+
+    function removeFans(n=3){
+      const alive = Array.from(document.querySelectorAll('.fan:not(.out)'));
+      for(let i=0;i<n && alive.length;i++){
+        const victim = alive.splice(Math.floor(Math.random()*alive.length),1)[0];
+        victim.classList.add('out');
+      }
+      state.fans = Math.max(0, state.fans - n);
+      updateHud();
+      if(state.fans <= 0) end(false, 'Estádio vazio! Ficaste sem adeptos.');
+    }
+
+    function passTarget(){
+      const stage = $('stage').getBoundingClientRect();
+      const player = ball.getBoundingClientRect();
+      const receiverRect = receiver.getBoundingClientRect();
+      return {
+        sx: player.left + player.width/2 - stage.left,
+        sy: player.top + player.height/2 - stage.top,
+        tx: receiverRect.left + receiverRect.width/2 - stage.left,
+        ty: receiverRect.top + receiverRect.height*.55 - stage.top
+      };
+    }
+
+    function kick(){
+      if(state.ballFlying || !state.running) return;
+      state.ballFlying = true;
+      ball.classList.add('flying');
+      aimArc.style.opacity = '0';
+
+      const {sx, sy, tx, ty} = passTarget();
+      const stageWidth = $('stage').getBoundingClientRect().width;
+      // Mira horizontal relativa à posição de partida do jogador (sx) com sensibilidade aumentada (4.5)
+      const aimX = Math.max(25, Math.min(stageWidth - 25, sx + state.pass.dx * 4.5));
+
+      const power = state.pass.power;
+      const height = state.pass.height;
+
+      const duration = 850 + (1-power)*650;
+      const arcLift = 150 + height*320;
+      const start = performance.now();
+      let collided = false;
+
+      function anim(now){
+        const t = Math.min(1, (now-start)/duration);
+        const ease = t<.5 ? 2*t*t : 1 - Math.pow(-2*t+2,2)/2;
+        const x = sx + (aimX-sx)*ease;
+        const baseY = sy + (ty-sy)*ease;
+        const y = baseY - Math.sin(Math.PI*ease)*arcLift;
+        const scale = 1 - ease*.28;
+
+        ball.style.left = x + 'px';
+        ball.style.top = y + 'px';
+        ball.style.bottom = 'auto';
+        ball.style.setProperty('--ballScale', scale);
+
+        if(!collided && getWaveCollision(x + $('stage').getBoundingClientRect().left, y + $('stage').getBoundingClientRect().top)){
+          collided = true;
+          removeFans(3);
+          showToast('-3 adeptos! Bateu na onda!', true);
+          resetBall();
+          return;
+        }
+
+        if(t < 1){
+          requestAnimationFrame(anim);
+        } else {
+          // Obtém a posição exata do recetor no momento em que a bola aterra
+          const stageRect = $('stage').getBoundingClientRect();
+          const recRect = receiver.getBoundingClientRect();
+          const curTx = recRect.left + recRect.width/2 - stageRect.left;
+          const curTy = recRect.top + recRect.height*.55 - stageRect.top;
+
+          // Caixa de colisão mais generosa (55px de largura horizontal, 65px de altura)
+          const receiverHit = Math.abs(x - curTx) < 55 && Math.abs(y - curTy) < 65;
+          if(receiverHit){
+            state.score++;
+            state.combo++;
+            showToast(state.combo >= 5 ? `Combo x${state.combo}!` : 'Passe certo!');
+          } else {
+            state.combo = 0;
+            removeFans(3);
+            showToast('-3 adeptos! Falhaste o colega!', true);
+          }
+          updateHud();
+          resetBall();
+        }
+      }
+      requestAnimationFrame(anim);
+    }
+
+    function resetBall(){
+      state.ballFlying = false;
+      ball.classList.remove('flying');
+      ball.style.left = '30%';
+      ball.style.bottom = '38px';
+      ball.style.top = 'auto';
+      ball.style.setProperty('--ballScale', 1);
+      aimArc.style.opacity = '.82';
+      updateAimArc();
+    }
+
+    function updateAimArc(){
+      const h = state.pass.height;
+      const p = state.pass.power;
+      const rot = -34 + p*28;
+      const scale = .75 + h*.75;
+      aimArc.style.setProperty('--aimRot', rot+'deg');
+      aimArc.style.setProperty('--aimScale', scale);
+    }
+
+    let drag = null;
+    const passPad = $('passPad');
+
+    function updateDrag(e){
+      if(!drag) return;
+      const dx = e.clientX - drag.x;
+      const dy = drag.y - e.clientY;
+      state.pass.dx = dx;
+      state.pass.power = Math.max(.2, Math.min(1, dy / 120 + .2));
+      state.pass.height = Math.max(.2, Math.min(1, dy / 100 + .2));
+      updateAimArc();
+    }
+
+    passPad.addEventListener('pointerdown', e=>{
+      drag = {x:e.clientX,y:e.clientY};
+      state.pass.dx = 0;
+      passPad.setPointerCapture(e.pointerId);
+      updateDrag(e);
+    });
+    passPad.addEventListener('pointermove', updateDrag);
+    passPad.addEventListener('pointerup', e=>{
+      updateDrag(e);
+      drag = null;
+      kick();
+    });
+    passPad.addEventListener('pointercancel', ()=>drag=null);
+
+    // Também permite arrastar a partir da bola/campo.
+    $('stage').addEventListener('pointerdown', e=>{
+      if(e.target.closest('.passPad') || state.ballFlying || !state.running) return;
+      drag = {x:e.clientX,y:e.clientY};
+      state.pass.dx = 0;
+    });
+    $('stage').addEventListener('pointermove', updateDrag);
+    $('stage').addEventListener('pointerup', e=>{
+      if(!drag || e.target.closest('.passPad')) return;
+      updateDrag(e);
+      drag = null;
+      kick();
+    });
+
+    function end(won, text){
+      state.running = false;
+      $('endTitle').innerHTML = won ? 'A claque <span>sobreviveu!</span>' : '<span>Estádio vazio!</span>';
+      $('endText').textContent = text || `Fizeste ${state.score} passes certos com ${state.fans} adeptos na bancada.`;
+      $('endOverlay').classList.remove('hide');
+    }
+
+    function start(){
+      state.running = true;
+      state.timeLeft = 180;
+      state.elapsed = 0;
+      state.fans = 50;
+      state.score = 0;
+      state.combo = 0;
+      state.waveActive = false;
+      state.waveCooldown = 1.4;
+      state.receiverX = 0;
+      state.receiverTarget = 0;
+      state.receiverMoveTimer = 1.8;
+      document.querySelectorAll('.fan').forEach(f=>f.classList.remove('out','wave','danger'));
+      $('startOverlay').classList.add('hide');
+      $('endOverlay').classList.add('hide');
+      resetBall();
+      updateHud();
+      showToast('Passa para o colega no topo!');
+    }
+
+    function loop(ts){
+      if(!state.last) state.last = ts;
+      const dt = Math.min(50, ts-state.last)/1000;
+      state.last = ts;
+
+      if(state.running){
+        state.timeLeft -= dt;
+        state.elapsed += dt;
+        if(state.timeLeft <= 0){
+          end(true);
+        } else {
+          updateWave(dt);
+          updateReceiver(dt);
+          updateHud();
+        }
+      }
+      requestAnimationFrame(loop);
+    }
+
+    $('startBtn').onclick = start;
+    $('againBtn').onclick = start;
+
+    createFans();
+    updateHud();
+    updateAimArc();
+    requestAnimationFrame(loop);
+
+    // Começa logo o jogo. Assim não há ecrã escuro a bloquear a jogabilidade.
+    start();
+  </script>
+</body>
+</html>
