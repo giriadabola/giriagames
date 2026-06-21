@@ -259,7 +259,7 @@ function renderPublicViewerBody(tab) {
     return `
       <div class="games-tab-content" style="text-align: left; padding: 20px 10px;">
         <div style="display: inline-block; position: relative; cursor: pointer; transition: transform 0.2s;" 
-             onclick="openMinigamePopup()"
+             data-action="play-minigame"
              onmouseover="this.style.transform='scale(1.02)'; this.querySelector('.play-btn-overlay').style.opacity='1'; this.querySelector('.play-btn-overlay').style.transform='scale(1)';"
              onmouseout="this.style.transform='scale(1)'; this.querySelector('.play-btn-overlay').style.opacity='0'; this.querySelector('.play-btn-overlay').style.transform='scale(0.95)';">
           <img src="nao_explodas.png" alt="Não Explodas o Treinador" style="max-width: 100%; display: block; max-height: 190px; object-fit: contain;">
@@ -274,6 +274,17 @@ function renderPublicViewerBody(tab) {
 }
 
 function renderPublicViewer(active = 'players') {
+  if (active === 'minigames_play') {
+    return `
+      <div class="games-tab-content" style="width:100%; height: calc(100vh - 140px); display:flex; flex-direction:column; background:#000; overflow:hidden;">
+        <div style="display:flex; justify-content:space-between; align-items:center; padding: 10px; background: #071a3f; border-bottom: 1px solid rgba(255,255,255,0.08);">
+          <strong style="color:#fff; font-size:1rem;">Não Explodas o Treinador!</strong>
+          <button type="button" class="close-btn" onclick="window.closeMinigameMobile()" style="background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: bold;">Voltar</button>
+        </div>
+        <iframe src="nao-explodas-o-treinador.html" style="width:100%; flex: 1; border:none;" allow="autoplay"></iframe>
+      </div>
+    `;
+  }
   return `
     <div class="modal-head">
       <div>
@@ -328,6 +339,7 @@ async function openMobilePublicPredictionsPage(active = 'games') {
   try {
     await loadPublicPredictions();
     await loadApiWorldCupData({ sync: false });
+    window.publicViewerActiveTab = active;
     mobilePublicViewerHtml = renderPublicViewer(active);
   } catch (error) {
     console.error(error);
@@ -494,6 +506,17 @@ async function openPublicPredictionsModal() {
     };
   
     renderPublicViewer = function(active = 'games') {
+      if (active === 'minigames_play') {
+        return `
+          <div class="games-tab-content" style="width:100%; height: calc(100vh - 140px); display:flex; flex-direction:column; background:#000; overflow:hidden;">
+            <div style="display:flex; justify-content:space-between; align-items:center; padding: 10px; background: #071a3f; border-bottom: 1px solid rgba(255,255,255,0.08);">
+              <strong style="color:#fff; font-size:1rem;">Não Explodas o Treinador!</strong>
+              <button type="button" class="close-btn" onclick="window.closeMinigameMobile()" style="background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: bold;">Voltar</button>
+            </div>
+            <iframe src="nao-explodas-o-treinador.html" style="width:100%; flex: 1; border:none;" allow="autoplay"></iframe>
+          </div>
+        `;
+      }
       return `
         <div class="modal-head">
           <div>
@@ -590,20 +613,11 @@ async function openPublicPredictionsModal() {
 })();
 
 window.openMinigamePopup = function() {
-  const goBackAction = isMobileClosedView() 
-    ? "openMobilePublicPredictionsPage('minigames')" 
-    : "openPublicPredictionsModal('minigames')";
+  window.location.href = 'nao-explodas-o-treinador.html';
+};
 
-  openModal(`
-    <div class="modal-head">
-      <div>
-        <p class="eyebrow small">Giria Games</p>
-        <h2>Não Explodas o Treinador!</h2>
-      </div>
-      <button type="button" class="close-btn" onclick="${goBackAction}" style="background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: bold;">Voltar</button>
-    </div>
-    <div style="width:100%; height:80vh; max-height: 800px; display:flex; justify-content:center; align-items:center; background:#000; border-radius:12px; overflow:hidden;">
-      <iframe src="nao-explodas-o-treinador.html" style="width:100%; height:100%; border:none;" allow="autoplay"></iframe>
-    </div>
-  `);
+window.closeMinigameMobile = function() {
+  window.publicViewerActiveTab = 'minigames';
+  mobilePublicViewerHtml = renderPublicViewer('minigames');
+  refreshLiveDashboardView(true);
 };
