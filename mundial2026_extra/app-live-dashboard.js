@@ -21,6 +21,20 @@ function hasAnyLiveMatch() {
   return false;
 }
 
+function refreshLiveDashboardView(force = false) {
+  if (!force && window.publicViewerActiveTab === 'minigames_play') {
+    // Prevent the live sync from re-rendering and resetting the active minigame iframe
+    return;
+  }
+  const body = $('#liveViewerBody') || $('#closedLiveDashboard') || $('#closedViewerBody');
+  if (body) {
+    const scrollState = captureLiveDashboardScrollState(body);
+    body.innerHTML = renderLiveDashboard();
+    restoreLiveDashboardScrollState(body, scrollState);
+  }
+  updateMobileAppNav();
+}
+
 function renderLiveDashboard() {
   if (!window.liveRightTabUserOverride) {
     liveRightTab = hasAnyLiveMatch() ? 'battles' : 'table';

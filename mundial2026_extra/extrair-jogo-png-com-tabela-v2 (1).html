@@ -822,6 +822,7 @@
 
     const FIREBASE_COLLECTION = 'worldcupextra';
     const FIREBASE_MATCHES_COLLECTION = 'worldcupextraMatches';
+    const FIREBASE_SECURE_FINISHED_COLLECTION = 'WoldCupSecureHT';
     const FIREBASE_BATTLES_COLLECTION = 'worldcupextraLiveBattles';
     const DEFAULT_SCORING_RULES = {
       groupExact: 3,
@@ -830,7 +831,9 @@
       knockoutInitialWinner: 2,
       finalInitialExact: 8,
       finalInitialWinner: 4,
-      finalInitialMethod: 2
+      finalInitialMethod: 2,
+      knockoutReformExact: 2,
+      finalReformExact: 3
     };
 
     const CUSTOM_PLAYER_ICONS = {
@@ -1154,8 +1157,10 @@
       const { db, collection, query, orderBy, getDocs } = state.firebase;
       const collectionRef = collection(db, FIREBASE_COLLECTION);
       const matchesCollectionRef = collection(db, FIREBASE_MATCHES_COLLECTION);
+      const secureCollectionRef = collection(db, FIREBASE_SECURE_FINISHED_COLLECTION);
       let legacySnapshot;
       let matchesSnapshot = null;
+      let secureSnapshot = null;
 
       try {
         legacySnapshot = await getDocs(query(collectionRef, orderBy('clientTimestamp', 'desc')));
@@ -1166,6 +1171,11 @@
         matchesSnapshot = await getDocs(matchesCollectionRef);
       } catch (error) {
         console.warn('Não foi possível carregar worldcupextraMatches. A usar fallback legacy.', error);
+      }
+      try {
+        secureSnapshot = await getDocs(secureCollectionRef);
+      } catch (error) {
+        console.warn('Não foi possível carregar WoldCupSecureHT. A usar fallback de resultados finais.', error);
       }
 
       const allDocs = legacySnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
@@ -1179,9 +1189,14 @@
         .filter(shouldTrackMatchDocAsOfficial)
         .map(doc => [String(doc.matchId), doc]);
 
+      const secureDocs = (secureSnapshot?.docs || [])
+        .map(docSnap => normalizeMatchStateDoc(docSnap.id, docSnap.data()))
+        .filter(shouldTrackMatchDocAsOfficial)
+        .map(doc => [String(doc.matchId), doc]);
+
       return {
         allDocs,
-        officialByMatchId: Object.fromEntries([...legacyOfficialDocs, ...matchStateDocs])
+        officialByMatchId: Object.fromEntries([...legacyOfficialDocs, ...matchStateDocs, ...secureDocs])
       };
     }
 
@@ -1516,8 +1531,8 @@
           pillText = `${item.score.points} pts provisórios`;
           resultLabel = item.score.points > 0 ? 'A acertar por agora' : 'Ainda sem pontuar';
         } else if (status.key === 'finished' && item.score) {
-          cardClass = item.score.points > 0 ? 'ok' : 'bad';
-          pillClass = item.score.points > 0 ? 'ok' : 'bad';
+          cardClass = item.score.points === 1 ? 'live' : (item.score.points > 0 ? 'ok' : 'bad');
+          pillClass = item.score.points === 1 ? 'live' : (item.score.points > 0 ? 'ok' : 'bad');
           pillText = `${item.score.points} pts`;
           if (item.score.exact) resultLabel = 'Acertou no resultado exato';
           else if (item.score.outcomeHit) resultLabel = 'Acertou no vencedor / desfecho';

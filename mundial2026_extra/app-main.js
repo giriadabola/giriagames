@@ -196,6 +196,13 @@ function bindEvents() {
       return;
     }
 
+    const playMinigame = event.target.closest('[data-action="play-minigame"]');
+    if (playMinigame) {
+      event.stopPropagation();
+      openMinigamePopup();
+      return;
+    }
+
     const viewerTab = event.target.closest('[data-view-tab]');
     if (viewerTab) {
       event.stopPropagation();

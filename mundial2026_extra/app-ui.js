@@ -441,6 +441,10 @@ async function openLiveResultsModal() {
 }
 
 function refreshLiveDashboardView() {
+  if (window.publicViewerActiveTab === 'minigames_play') {
+    // Prevent the live sync from re-rendering and resetting the active minigame iframe
+    return;
+  }
   const body = $('#liveViewerBody') || $('#closedLiveDashboard') || $('#closedViewerBody');
   if (body) {
     const scrollState = captureLiveDashboardScrollState(body);

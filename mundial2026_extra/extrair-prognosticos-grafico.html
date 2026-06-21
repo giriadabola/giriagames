@@ -107,9 +107,71 @@
 
     .form-row {
       display: grid;
-      grid-template-columns: minmax(280px, 1fr);
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
       gap: 14px;
       align-items: end;
+    }
+
+    .predictions-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-width: 850px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .prediction-row {
+      display: grid;
+      grid-template-columns: 280px 100px 1fr;
+      align-items: center;
+      gap: 16px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 16px;
+      padding: 10px 16px;
+      white-space: nowrap;
+    }
+
+    .prediction-player {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .prediction-player-name {
+      font-size: 1.05rem;
+      color: var(--text);
+      white-space: nowrap;
+    }
+
+    .prediction-stats-badge {
+      white-space: nowrap;
+    }
+
+    .prediction-score {
+      font-size: 1.15rem;
+      font-weight: 900;
+      color: var(--accent-2);
+      background: rgba(119, 226, 122, 0.12);
+      padding: 6px 16px;
+      border-radius: 12px;
+      border: 1px solid rgba(119, 226, 122, 0.2);
+      white-space: nowrap;
+    }
+
+    .segment-stats {
+      font-size: 0.72rem;
+      opacity: 0.85;
+      margin-left: auto;
+      background: rgba(0,0,0,0.25);
+      border: 1px solid rgba(255,255,255,0.08);
+      padding: 2px 6px;
+      border-radius: 6px;
+      font-weight: 600;
+      color: var(--muted);
     }
 
     .field { display: grid; gap: 8px; }
@@ -566,6 +628,21 @@
             <option value="">A carregar jogos...</option>
           </select>
         </div>
+        <div class="field">
+          <label for="layoutSelect">Visualização</label>
+          <select id="layoutSelect">
+            <option value="columns">Colunas</option>
+            <option value="column">Coluna</option>
+          </select>
+        </div>
+        <div class="field" style="display: flex; align-items: center; gap: 8px; height: 50px; flex-direction: row;">
+          <input type="checkbox" id="showStatsToggle" style="width: 20px; height: 20px; cursor: pointer; margin: 0;">
+          <label for="showStatsToggle" style="cursor: pointer; font-weight: 700; margin: 0; user-select: none;">Média do Resultado</label>
+        </div>
+        <div class="field" style="display: flex; align-items: center; gap: 8px; height: 50px; flex-direction: row;">
+          <input type="checkbox" id="showSelectionStatsToggle" style="width: 20px; height: 20px; cursor: pointer; margin: 0;">
+          <label for="showSelectionStatsToggle" style="cursor: pointer; font-weight: 700; margin: 0; user-select: none;">Média Vencedor/Empate</label>
+        </div>
       </div>
 
       <p id="statusText" class="status-text" style="margin-top:14px;">A carregar dados do Mundial e do Firebase...</p>
@@ -643,14 +720,102 @@
       officialResults: {},
       predictions: [],
       selectedMatchId: '',
+      selectedLayout: 'columns',
+      showStats: false,
+      showSelectionStats: false,
       firebaseReady: false
     };
 
     const matchSelect = document.querySelector('#matchSelect');
+    const layoutSelect = document.querySelector('#layoutSelect');
+    const showStatsToggle = document.querySelector('#showStatsToggle');
+    const showSelectionStatsToggle = document.querySelector('#showSelectionStatsToggle');
     const statusText = document.querySelector('#statusText');
     const captureArea = document.querySelector('#captureArea');
     const downloadBtn = document.querySelector('#downloadBtn');
     const refreshBtn = document.querySelector('#refreshBtn');
+
+    function outcome(home, away) {
+      return Number(home) > Number(away) ? 'home' : Number(away) > Number(home) ? 'away' : 'draw';
+    }
+
+    function getPlayerScoreStats(player, currentMatchId, predHome, predAway) {
+      let total = 0;
+      let correct = 0;
+      (player.matches || []).forEach(pred => {
+        if (String(pred.id) === String(currentMatchId)) return;
+        if (pred.homeGoals != null && pred.awayGoals != null && pred.homeGoals !== '' && pred.awayGoals !== '') {
+          const ph = Number(pred.homeGoals);
+          const pa = Number(pred.awayGoals);
+          if (ph === Number(predHome) && pa === Number(predAway)) {
+            const official = getOfficialResult(pred.id);
+            if (official && resultHasScore(official) && isOfficialResultFinished(official)) {
+              total++;
+              if (Number(official.homeGoals) === ph && Number(official.awayGoals) === pa) {
+                correct++;
+              }
+            }
+          }
+        }
+      });
+      return { total, correct };
+    }
+
+    function getPlayerSelectionStats(player, currentMatch, predHome, predAway) {
+      const ph = Number(predHome);
+      const pa = Number(predAway);
+      const isHomeWin = ph > pa;
+      const isAwayWin = ph < pa;
+      const isDraw = ph === pa;
+      
+      const targetTeam = isHomeWin ? currentMatch.home : (isAwayWin ? currentMatch.away : null);
+      
+      let total = 0;
+      let correct = 0;
+      
+      (player.matches || []).forEach(pred => {
+        if (String(pred.id) === String(currentMatch.id)) return;
+        if (pred.homeGoals != null && pred.awayGoals != null && pred.homeGoals !== '' && pred.awayGoals !== '') {
+          const otherMatch = state.matches.find(m => String(m.id) === String(pred.id));
+          if (!otherMatch) return;
+          
+          const oph = Number(pred.homeGoals);
+          const opa = Number(pred.awayGoals);
+          
+          let matchesSelection = false;
+          if (isDraw) {
+            matchesSelection = (oph === opa);
+          } else {
+            const otherMatchHomeWinner = normalizeTeamName(otherMatch.home) === normalizeTeamName(targetTeam) && (oph > opa);
+            const otherMatchAwayWinner = normalizeTeamName(otherMatch.away) === normalizeTeamName(targetTeam) && (opa > oph);
+            matchesSelection = otherMatchHomeWinner || otherMatchAwayWinner;
+          }
+          
+          if (matchesSelection) {
+            const official = getOfficialResult(pred.id);
+            if (official && resultHasScore(official) && isOfficialResultFinished(official)) {
+              total++;
+              const oh = Number(official.homeGoals);
+              const oa = Number(official.awayGoals);
+              
+              if (isDraw) {
+                if (oh === oa) correct++;
+              } else {
+                const homeWon = normalizeTeamName(otherMatch.home) === normalizeTeamName(targetTeam) && (oh > oa);
+                const awayWon = normalizeTeamName(otherMatch.away) === normalizeTeamName(targetTeam) && (oa > oh);
+                if (homeWon || awayWon) correct++;
+              }
+            }
+          }
+        }
+      });
+      
+      return { 
+        total, 
+        correct, 
+        label: isDraw ? 'no Empate' : `em ${targetTeam}`
+      };
+    }
 
     function escapeHtml(text) {
       return String(text ?? '').replace(/[&<>"']/g, char => ({
@@ -921,17 +1086,50 @@
       // Agrupar palpites por resultado
       const resultGroups = {}; // key: "homeGoals-awayGoals", value: array de players
       let totalPicksCount = 0;
+      const allPlayerPicks = [];
 
       state.predictions.forEach(player => {
         const pred = getPredictionForMatch(player, match.id);
         if (pred && pred.homeGoals != null && pred.awayGoals != null && pred.homeGoals !== '' && pred.awayGoals !== '') {
           const key = `${Number(pred.homeGoals)} - ${Number(pred.awayGoals)}`;
+          
+          let statsText = '';
+          if (state.showStats) {
+            const stats = getPlayerScoreStats(player, match.id, pred.homeGoals, pred.awayGoals);
+            const pct = stats.total > 0 ? Math.round((stats.correct / stats.total) * 100) : null;
+            statsText = pct !== null ? `${pct}% (${stats.correct}/${stats.total})` : `-% (0/0)`;
+          }
+
+          let selStatsText = '';
+          let selLabel = '';
+          let selLabelShort = '';
+          if (state.showSelectionStats) {
+            const stats = getPlayerSelectionStats(player, match, pred.homeGoals, pred.awayGoals);
+            const pct = stats.total > 0 ? Math.round((stats.correct / stats.total) * 100) : null;
+            selStatsText = pct !== null ? `${pct}% (${stats.correct}/${stats.total})` : `-% (0/0)`;
+            selLabel = stats.label;
+            selLabelShort = (pred.homeGoals === pred.awayGoals) ? 'Emp' : 'Sel';
+          }
+
           if (!resultGroups[key]) {
             resultGroups[key] = [];
           }
           resultGroups[key].push({
             name: player.participantName,
-            icon: player.icon
+            icon: player.icon,
+            statsText: statsText,
+            selStatsText: selStatsText,
+            selLabel: selLabel,
+            selLabelShort: selLabelShort
+          });
+          allPlayerPicks.push({
+            name: player.participantName,
+            icon: player.icon,
+            score: key,
+            statsText: statsText,
+            selStatsText: selStatsText,
+            selLabel: selLabel,
+            selLabelShort: selLabelShort
           });
           totalPicksCount++;
         }
@@ -945,47 +1143,113 @@
         };
       }).sort((a, b) => b.players.length - a.players.length || a.score.localeCompare(b.score));
 
+      // Ordenar palpites individuais por nome de jogador
+      allPlayerPicks.sort((a, b) => a.name.localeCompare(b.name, 'pt-PT'));
+
       // Construção do Gráfico
       let chartHtml = '';
-      if (sortedResults.length > 0) {
-        const maxPicks = Math.max(...sortedResults.map(r => r.players.length));
-        
-        // Eixo Y
-        let yTicksHtml = '';
-        for (let i = maxPicks; i >= 1; i--) {
-          yTicksHtml += `<div class="chart-y-tick"><span>${i}</span></div>`;
-        }
+      if (totalPicksCount > 0) {
+        if (state.selectedLayout === 'column') {
+          // Lista de palpites numa única coluna
+          const listRowsHtml = allPlayerPicks.map(p => {
+            let statsHtml = '';
+            if (state.showStats && state.showSelectionStats) {
+              statsHtml = `
+                <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 4px;">
+                  <span class="prediction-stats-badge" style="font-size: 0.8rem; background: rgba(255,255,255,0.06); padding: 4px 8px; border-radius: 8px; color: var(--muted); border: 1px solid rgba(255,255,255,0.08); font-weight: 600;">Acerto no Resultado: ${escapeHtml(p.statsText)}</span>
+                  <span class="prediction-stats-badge" style="font-size: 0.8rem; background: rgba(255,255,255,0.06); padding: 4px 8px; border-radius: 8px; color: var(--muted); border: 1px solid rgba(255,255,255,0.08); font-weight: 600;">Acerto ${escapeHtml(p.selLabel)}: ${escapeHtml(p.selStatsText)}</span>
+                </div>
+              `;
+            } else if (state.showStats) {
+              statsHtml = `
+                <span class="prediction-stats-badge" style="font-size: 0.8rem; background: rgba(255,255,255,0.06); padding: 4px 8px; border-radius: 8px; color: var(--muted); border: 1px solid rgba(255,255,255,0.08); font-weight: 600; width: fit-content;">Acerto no Resultado: ${escapeHtml(p.statsText)}</span>
+              `;
+            } else if (state.showSelectionStats) {
+              statsHtml = `
+                <span class="prediction-stats-badge" style="font-size: 0.8rem; background: rgba(255,255,255,0.06); padding: 4px 8px; border-radius: 8px; color: var(--muted); border: 1px solid rgba(255,255,255,0.08); font-weight: 600; width: fit-content;">Acerto ${escapeHtml(p.selLabel)}: ${escapeHtml(p.selStatsText)}</span>
+              `;
+            }
 
-        // Barras
-        const barsHtml = sortedResults.map(res => {
-          const segmentsHtml = res.players.map(p => `
-            <div class="chart-segment" title="${escapeHtml(p.name)}">
-              ${renderParticipantIcon(p.icon)}
-              <span class="chart-segment-name">${escapeHtml(p.name)}</span>
-            </div>
-          `).join('');
-
-          return `
-            <div class="chart-bar-container">
-              <span class="chart-bar-total">${res.players.length} ${res.players.length === 1 ? 'palpite' : 'palpites'}</span>
-              <div class="chart-bar">
-                ${segmentsHtml}
+            return `
+              <div class="prediction-row">
+                <div class="prediction-player">
+                  ${renderParticipantIcon(p.icon)}
+                  <span class="prediction-player-name">${escapeHtml(p.name)}</span>
+                </div>
+                <span class="prediction-score" style="justify-self: start;">${escapeHtml(p.score)}</span>
+                ${statsHtml}
               </div>
-              <span class="chart-bar-label">${escapeHtml(res.score)}</span>
+            `;
+          }).join('');
+
+          chartHtml = `
+            <div class="predictions-list">
+              ${listRowsHtml}
             </div>
           `;
-        }).join('');
+        } else {
+          // Colunas (original)
+          const maxPicks = Math.max(...sortedResults.map(r => r.players.length));
+          
+          // Eixo Y
+          let yTicksHtml = '';
+          for (let i = maxPicks; i >= 1; i--) {
+            yTicksHtml += `<div class="chart-y-tick"><span>${i}</span></div>`;
+          }
 
-        chartHtml = `
-          <div class="chart-wrapper">
-            <div class="chart-y-axis">
-              ${yTicksHtml}
+          // Barras
+          const barsHtml = sortedResults.map(res => {
+            const segmentsHtml = res.players.map(p => {
+              let segmentInnerStats = '';
+              let segmentTitle = escapeHtml(p.name);
+              
+              if (state.showStats && state.showSelectionStats) {
+                segmentTitle += ` (Resultado: ${escapeHtml(p.statsText)} | Acerto ${escapeHtml(p.selLabel)}: ${escapeHtml(p.selStatsText)})`;
+                segmentInnerStats = `
+                  <div style="display: flex; flex-direction: column; align-items: flex-end; margin-left: auto; gap: 2px; line-height: 1;">
+                    <span class="segment-stats" style="font-size: 0.65rem; padding: 1px 3px;">R: ${escapeHtml(p.statsText.split(' ')[0])}</span>
+                    <span class="segment-stats" style="font-size: 0.65rem; padding: 1px 3px;">${escapeHtml(p.selLabelShort)}: ${escapeHtml(p.selStatsText.split(' ')[0])}</span>
+                  </div>
+                `;
+              } else if (state.showStats) {
+                segmentTitle += ` (${escapeHtml(p.statsText)})`;
+                segmentInnerStats = `<span class="segment-stats">${escapeHtml(p.statsText)}</span>`;
+              } else if (state.showSelectionStats) {
+                segmentTitle += ` (Acerto ${escapeHtml(p.selLabel)}: ${escapeHtml(p.selStatsText)})`;
+                segmentInnerStats = `<span class="segment-stats">${escapeHtml(p.selLabelShort)}: ${escapeHtml(p.selStatsText)}</span>`;
+              }
+
+              return `
+                <div class="chart-segment" title="${segmentTitle}">
+                  ${renderParticipantIcon(p.icon)}
+                  <span class="chart-segment-name">${escapeHtml(p.name)}</span>
+                  ${segmentInnerStats}
+                </div>
+              `;
+            }).join('');
+
+            return `
+              <div class="chart-bar-container">
+                <span class="chart-bar-total">${res.players.length} ${res.players.length === 1 ? 'palpite' : 'palpites'}</span>
+                <div class="chart-bar">
+                  ${segmentsHtml}
+                </div>
+                <span class="chart-bar-label">${escapeHtml(res.score)}</span>
+              </div>
+            `;
+          }).join('');
+
+          chartHtml = `
+            <div class="chart-wrapper">
+              <div class="chart-y-axis">
+                ${yTicksHtml}
+              </div>
+              <div class="chart-bars-area">
+                ${barsHtml}
+              </div>
             </div>
-            <div class="chart-bars-area">
-              ${barsHtml}
-            </div>
-          </div>
-        `;
+          `;
+        }
       } else {
         chartHtml = '<div class="muted-card">Ainda não existem prognósticos gravados para este jogo.</div>';
       }
@@ -1033,7 +1297,7 @@
           <section class="section">
             <div class="section-header">
               <div>
-                <h3 class="section-title">Resultados mais frequentes</h3>
+                <h3 class="section-title">Pré-Match</h3>
                 <p class="section-subtitle">${totalPicksCount} prognóstico(s) registado(s) para este encontro.</p>
               </div>
             </div>
@@ -1093,6 +1357,21 @@
 
     matchSelect.addEventListener('change', async event => {
       state.selectedMatchId = event.target.value;
+      await renderSelectedMatch();
+    });
+
+    layoutSelect.addEventListener('change', async event => {
+      state.selectedLayout = event.target.value;
+      await renderSelectedMatch();
+    });
+
+    showStatsToggle.addEventListener('change', async event => {
+      state.showStats = event.target.checked;
+      await renderSelectedMatch();
+    });
+
+    showSelectionStatsToggle.addEventListener('change', async event => {
+      state.showSelectionStats = event.target.checked;
       await renderSelectedMatch();
     });
 
