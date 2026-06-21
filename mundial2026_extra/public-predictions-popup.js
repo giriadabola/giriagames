@@ -279,6 +279,17 @@ function renderPublicViewerBody(tab) {
             <span style="padding: 6px 12px; font-size: 0.65rem; font-family: 'Outfit', sans-serif; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; border-radius: 30px; border: 1px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.18); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); color: #fff; box-shadow: 0 4px 12px rgba(0,0,0,0.4); white-space: nowrap;">JOGAR</span>
           </div>
         </div>
+
+        <!-- Jogo 3: Defende a Fama -->
+        <div style="display: inline-block; position: relative; cursor: pointer; transition: transform 0.2s; border-radius: 12px; overflow: hidden; width: calc(50% - 10px); min-width: 140px; max-width: 200px;" 
+             data-action="play-minigame" data-game-url="defende-a-fama-v10-seguidores-2min.html"
+             onmouseover="this.style.transform='scale(1.02)'; this.querySelector('.play-btn-overlay').style.opacity='1'; this.querySelector('.play-btn-overlay').style.transform='scale(1)';"
+             onmouseout="this.style.transform='scale(1)'; this.querySelector('.play-btn-overlay').style.opacity='0'; this.querySelector('.play-btn-overlay').style.transform='scale(0.95)';">
+          <img src="defende_fama.png" alt="Defende a Fama!" style="width: 100%; display: block; height: 140px; object-fit: contain; border-radius: 12px;">
+          <div class="play-btn-overlay" style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; opacity: 0; transform: scale(0.95); transition: opacity 0.3s ease, transform 0.3s ease; pointer-events: none; background: rgba(7, 26, 63, 0.45); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); border-radius: 12px;">
+            <span style="padding: 6px 12px; font-size: 0.65rem; font-family: 'Outfit', sans-serif; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; border-radius: 30px; border: 1px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.18); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); color: #fff; box-shadow: 0 4px 12px rgba(0,0,0,0.4); white-space: nowrap;">JOGAR</span>
+          </div>
+        </div>
       </div>
     `;
   }
@@ -633,7 +644,11 @@ window.openMinigamePopup = function(gameUrl) {
   if (typeof mobileAppSection !== 'undefined' && mobileAppSection === 'prognostics') {
     window.publicViewerActiveTab = 'minigames_play';
     window.activeMinigameUrl = url;
-    window.activeMinigameTitle = url.includes('prancha') ? 'Na Prancha do Pirata!' : 'Não Explodas o Treinador!';
+    window.activeMinigameTitle = url.includes('prancha') 
+      ? 'Na Prancha do Pirata!' 
+      : url.includes('defende') 
+        ? 'Defende a Fama!' 
+        : 'Não Explodas o Treinador!';
     mobilePublicViewerHtml = renderPublicViewer('minigames_play');
     refreshLiveDashboardView(true);
   } else {
