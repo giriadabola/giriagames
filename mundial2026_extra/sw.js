@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ggames-mundial-2026-v37-force-secure-firestore-refresh';
+const CACHE_NAME = 'ggames-mundial-2026-v39-live-game-empty-state-banner-small';
 
 self.addEventListener('install', event => {
   self.skipWaiting();

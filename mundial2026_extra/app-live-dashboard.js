@@ -707,7 +707,22 @@ function renderLiveApiGames() {
       }));
   }
 
-  if (!games.length) return '<div class="empty-state">Neste momento não há jogos em direto.</div>';
+  if (!games.length) {
+    return `
+      <div class="empty-state" style="display: flex; flex-direction: column; align-items: flex-start; gap: 20px; text-align: left;">
+        <div>Neste momento não há jogos em direto.</div>
+        <div style="display: inline-block; position: relative; cursor: pointer; transition: transform 0.2s; border-radius: 12px; overflow: hidden;" 
+             data-action="play-minigame"
+             onmouseover="this.style.transform='scale(1.02)'; this.querySelector('.play-btn-overlay').style.opacity='1'; this.querySelector('.play-btn-overlay').style.transform='scale(1)';"
+             onmouseout="this.style.transform='scale(1)'; this.querySelector('.play-btn-overlay').style.opacity='0'; this.querySelector('.play-btn-overlay').style.transform='scale(0.95)';">
+          <img src="nao_explodas.png" alt="Não Explodas o Treinador" style="max-width: 100%; display: block; max-height: 161px; object-fit: contain; border-radius: 12px;">
+          <div class="play-btn-overlay" style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; opacity: 0; transform: scale(0.95); transition: opacity 0.3s ease, transform 0.3s ease; pointer-events: none; background: rgba(7, 26, 63, 0.45); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); border-radius: 12px;">
+            <span style="padding: 8px 16px; font-size: 0.72rem; font-family: 'Outfit', sans-serif; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; border-radius: 30px; border: 1px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.18); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); color: #fff; box-shadow: 0 6px 16px rgba(0,0,0,0.4); white-space: nowrap;">JOGAR AGORA</span>
+          </div>
+        </div>
+      </div>
+    `;
+  }
   return `
     <div class="api-games-list">
       ${games.map(g => `
