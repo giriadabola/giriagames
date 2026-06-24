@@ -165,13 +165,15 @@
     const official = officialWithApi(battle.matchId);
     const playerA = playerByKey(battle.playerAKey);
     const playerB = playerByKey(battle.playerBKey);
-    if (!official || official.homeGoals == null || official.awayGoals == null || !playerA || !playerB) {
+    const isFinished = !!official && (typeof isOfficialResultFinished === 'function' ? isOfficialResultFinished(official) : (official.finished || official._finished));
+
+    if (!isFinished || !official || official.homeGoals == null || official.awayGoals == null || !playerA || !playerB) {
       return {
-        status: battle.status || 'pending',
+        status: 'pending',
         playerAFactors: battle.playerAFactors ?? 0,
         playerBFactors: battle.playerBFactors ?? 0,
-        winnerKey: battle.winnerKey || '',
-        draw: !!battle.draw
+        winnerKey: '',
+        draw: false
       };
     }
 
@@ -179,7 +181,7 @@
     const b = battleFactors(playerB, battle, official);
     const winnerKey = a.total > b.total ? battle.playerAKey : b.total > a.total ? battle.playerBKey : '';
     return {
-      status: (typeof isOfficialResultFinished === 'function' ? isOfficialResultFinished(official) : (official.finished || official._finished)) || battle.status === 'finished' ? 'finished' : (battle.status || 'pending'),
+      status: 'finished',
       playerAFactors: a.total,
       playerBFactors: b.total,
       playerADetails: a,
