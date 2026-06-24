@@ -13,7 +13,14 @@
   let ggamesBattleDocs = [];
       window.ggamesBattleDocs = ggamesBattleDocs;
   let ggamesBattleScorerPicks = [];
+  let flagsData = {};
   const liveBattlePersistInFlight = new Set();
+
+  function getTeamFlagUrl(teamName) {
+    if (!teamName) return '';
+    const key = teamName.toLowerCase().trim();
+    return flagsData[key]?.flagRound || '';
+  }
 
 
   async function hashPinForBattle(participantKey, pin) {
@@ -72,6 +79,7 @@
   }
 
   function canPersistLiveBattleMatch(match) {
+    if (match?.source === 'future') return true;
     return !!match?.id && !match.finished && isMatchInLiveWindow(match);
   }
 
@@ -243,6 +251,24 @@
     } catch (error) {
       console.warn('Não foi possível carregar as escolhas de marcador.', error);
       ggamesBattleScorerPicks = [];
+    }
+
+    try {
+      const flagsRes = await fetch('./mundial2026_bandeiras_redondas.json').catch(() => null);
+      if (flagsRes) {
+        const flagsJson = await flagsRes.json();
+        flagsJson.teams.forEach(t => {
+          flagsData[t.nome.toLowerCase()] = t;
+          flagsData[t.name.toLowerCase()] = t;
+          if (t.aliases) {
+            t.aliases.forEach(alias => {
+              flagsData[alias.toLowerCase()] = t;
+            });
+          }
+        });
+      }
+    } catch (e) {
+      console.warn('Não foi possível carregar as bandeiras redondas.', e);
     }
   }
 
@@ -579,6 +605,34 @@
           source: 'matches.json'
         });
       });
+
+    if (matches.length === 0) {
+      const now = new Date();
+      const source = (worldCupApi?.games && worldCupApi.games.length)
+        ? worldCupApi.games
+        : (data?.matches || []).map(m => ({...m, id: String(m.id), homeTeam: m.home, awayTeam: m.away, homeGoals: null, awayGoals: null, finished: false, live: false}));
+      const futureMatches = source.filter(g => !g.finished && !g.live && getMatchDateObj({ date: g.date, time: g.time }) >= now);
+      if (futureMatches.length) {
+        const nextFuture = futureMatches[0];
+        const nextStage = nextFuture.stage || localMatch(nextFuture.id)?.stage || '';
+        if (BATTLE_KO_STAGES.includes(nextStage)) {
+          addMatch({
+            id: String(nextFuture.id),
+            matchId: String(nextFuture.id),
+            stage: nextStage,
+            group: nextFuture.group || null,
+            date: nextFuture.date,
+            time: nextFuture.time,
+            homeTeam: nextFuture.homeTeam || nextFuture.home,
+            awayTeam: nextFuture.awayTeam || nextFuture.away,
+            live: false,
+            finished: false,
+            timeElapsed: 'Pre-jogo',
+            source: 'future'
+          });
+        }
+      }
+    }
 
     return matches.sort((a, b) => Number(a.id) - Number(b.id));
   }
@@ -990,14 +1044,26 @@
     const futureMatches = source.filter(g => !g.finished && !g.live && getMatchDateObj({ date: g.date, time: g.time }) >= now);
 
     if (futureMatches.length) {
-      const nextMatchId = Number(futureMatches[0].id);
-      const prevMatchesBattles = ggamesBattleDocs.filter(b => Number(b.matchId) < nextMatchId);
-      if (prevMatchesBattles.length) {
-        const maxPrevMatchId = Math.max(...prevMatchesBattles.map(b => Number(b.matchId)));
-        return ggamesBattleDocs
-          .filter(b => Number(b.matchId) === maxPrevMatchId)
-          .sort((a, b) => Number(a.createdOrder || 0) - Number(b.createdOrder || 0))
-          .slice(0, 12);
+      const nextFuture = futureMatches[0];
+      const nextStage = nextFuture.stage || localMatch(nextFuture.id)?.stage || '';
+      const nextMatchId = Number(nextFuture.id);
+
+      if (BATTLE_KO_STAGES.includes(nextStage)) {
+        const nextBattles = ggamesBattleDocs.filter(b => Number(b.matchId) === nextMatchId);
+        if (nextBattles.length) {
+          return nextBattles
+            .sort((a, b) => Number(a.createdOrder || 0) - Number(b.createdOrder || 0))
+            .slice(0, 12);
+        }
+      } else {
+        const prevMatchesBattles = ggamesBattleDocs.filter(b => Number(b.matchId) < nextMatchId);
+        if (prevMatchesBattles.length) {
+          const maxPrevMatchId = Math.max(...prevMatchesBattles.map(b => Number(b.matchId)));
+          return ggamesBattleDocs
+            .filter(b => Number(b.matchId) === maxPrevMatchId)
+            .sort((a, b) => Number(a.createdOrder || 0) - Number(b.createdOrder || 0))
+            .slice(0, 12);
+        }
       }
     }
 
@@ -1251,42 +1317,203 @@
         return;
       }
 
+      const homeTeam = match?.home || battle.homeTeam;
+      const awayTeam = match?.away || battle.awayTeam;
+
+      // Inject style for scorer selection
+      const styleId = 'ggames-battle-scorer-styles';
+      if (!document.getElementById(styleId)) {
+        const style = document.createElement('style');
+        style.id = styleId;
+        style.textContent = `
+          .battle-scorer-countries-lines {
+            margin-top: 15px;
+          }
+          .battle-scorer-country-line-btn {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            width: 100%;
+            padding: 14px 20px;
+            margin-bottom: 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            color: #fff;
+            font-size: 1.1rem;
+            font-weight: 600;
+            text-align: left;
+            cursor: pointer;
+            transition: all 0.2s ease;
+          }
+          .battle-scorer-country-line-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.2);
+            transform: translateY(-2px);
+          }
+          .battle-scorer-flag {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+          }
+          .battle-scorer-player-popup-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(2, 8, 23, 0.85);
+            backdrop-filter: blur(8px);
+            z-index: 100000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            animation: ggamesFadeIn 0.2s ease-out;
+          }
+          .battle-scorer-player-popup-content {
+            background: linear-gradient(135deg, #071a3f 0%, #020817 100%);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            width: 100%;
+            max-width: 500px;
+            max-height: 85vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+            animation: ggamesSlideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+          }
+          .battle-scorer-player-popup-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+          }
+          .battle-scorer-player-popup-header h3 {
+            margin: 0;
+            flex-grow: 1;
+            font-size: 1.2rem;
+            color: #fff;
+          }
+          .battle-scorer-popup-close {
+            background: none;
+            border: none;
+            color: #94a3b8;
+            font-size: 1.8rem;
+            cursor: pointer;
+            line-height: 1;
+            padding: 0;
+            transition: color 0.2s;
+          }
+          .battle-scorer-popup-close:hover {
+            color: #fff;
+          }
+          .battle-scorer-player-popup-body {
+            padding: 20px;
+            overflow-y: auto;
+            flex-grow: 1;
+          }
+          .battle-scorer-player-popup-footer {
+            padding: 16px 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            display: flex;
+            justify-content: flex-end;
+          }
+          @keyframes ggamesFadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+          }
+          @keyframes ggamesSlideUp {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+          }
+        `;
+        document.head.appendChild(style);
+      }
+
       body.innerHTML = `
-        <div class="battle-scorer-list">
-          ${renderScorerPlayers(match?.home || battle.homeTeam)}
-          ${renderScorerPlayers(match?.away || battle.awayTeam)}
+        <div class="battle-scorer-countries-lines">
+          <button type="button" class="battle-scorer-country-line-btn" data-team="${escapeHtml(homeTeam)}">
+            <img src="${escapeHtml(getTeamFlagUrl(homeTeam))}" alt="" class="battle-scorer-flag">
+            <span>${escapeHtml(homeTeam)}</span>
+          </button>
+          <button type="button" class="battle-scorer-country-line-btn" data-team="${escapeHtml(awayTeam)}">
+            <img src="${escapeHtml(getTeamFlagUrl(awayTeam))}" alt="" class="battle-scorer-flag">
+            <span>${escapeHtml(awayTeam)}</span>
+          </button>
         </div>
-        <button id="battleScorerSave" type="button">Gravar marcador</button>
       `;
-      $('#battleScorerSave')?.addEventListener('click', async () => {
-        const selected = document.querySelector('input[name="battleScorerPick"]:checked');
-        if (!selected) {
-          body.insertAdjacentHTML('beforeend', '<p class="error-text">Escolhe um jogador.</p>');
-          return;
-        }
-        const pickedPlayerName = selected.value;
-        const pickedPlayerTeam = selected.dataset.team;
-        const payload = {
-          matchDocId: matchDocId(battle.matchId),
-          matchId: Number(battle.matchId),
-          battleId: battle.id,
-          participantKey,
-          participantName: snap.data()?.participantName || '',
-          pinHash,
-          pickedPlayerName,
-          pickedPlayerTeam,
-          stage,
-          createdAt: firebaseTools.serverTimestamp(),
-          updatedAt: firebaseTools.serverTimestamp()
-        };
-        try {
-          await firebaseTools.setDoc(firebaseTools.doc(firestoreDb, BATTLE_SCORERS_COLLECTION, pickId(battle.id, participantKey)), payload);
-          await loadGgamesBattlesData();
-          body.innerHTML = `<p class="success-text">Marcador gravado: <strong>${escapeHtml(pickedPlayerName)}</strong>.</p>`;
-          refreshLiveDashboardView();
-        } catch (error) {
-          body.insertAdjacentHTML('beforeend', `<p class="error-text">Não foi possível gravar: ${escapeHtml(error.message)}</p>`);
-        }
+
+      body.querySelectorAll('.battle-scorer-country-line-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const teamName = btn.dataset.team;
+
+          // Remove existing popup if any
+          document.getElementById('battleScorerPlayerPopup')?.remove();
+
+          const popupHtml = `
+            <div id="battleScorerPlayerPopup" class="battle-scorer-player-popup-overlay">
+              <div class="battle-scorer-player-popup-content">
+                <div class="battle-scorer-player-popup-header">
+                  <img src="${escapeHtml(getTeamFlagUrl(teamName))}" class="battle-scorer-flag" alt="">
+                  <h3>Jogadores de ${escapeHtml(teamName)}</h3>
+                  <button type="button" class="battle-scorer-popup-close" id="closeScorerPlayerPopup">&times;</button>
+                </div>
+                <div class="battle-scorer-player-popup-body">
+                  ${renderScorerPlayers(teamName)}
+                </div>
+                <div class="battle-scorer-player-popup-footer">
+                  <button id="battleScorerSave" type="button" class="primary">Gravar escolha</button>
+                </div>
+              </div>
+            </div>
+          `;
+          document.body.insertAdjacentHTML('beforeend', popupHtml);
+
+          const closePopup = () => {
+            document.getElementById('battleScorerPlayerPopup')?.remove();
+          };
+
+          document.getElementById('closeScorerPlayerPopup')?.addEventListener('click', closePopup);
+          document.getElementById('battleScorerPlayerPopup')?.addEventListener('click', (e) => {
+            if (e.target.id === 'battleScorerPlayerPopup') closePopup();
+          });
+
+          document.getElementById('battleScorerSave')?.addEventListener('click', async () => {
+            const selected = document.querySelector('input[name="battleScorerPick"]:checked');
+            if (!selected) {
+              alert('Escolhe um jogador antes de gravar.');
+              return;
+            }
+            const pickedPlayerName = selected.value;
+            const pickedPlayerTeam = selected.dataset.team;
+            const payload = {
+              matchDocId: matchDocId(battle.matchId),
+              matchId: Number(battle.matchId),
+              battleId: battle.id,
+              participantKey,
+              participantName: snap.data()?.participantName || '',
+              pinHash,
+              pickedPlayerName,
+              pickedPlayerTeam,
+              stage,
+              createdAt: firebaseTools.serverTimestamp(),
+              updatedAt: firebaseTools.serverTimestamp()
+            };
+            try {
+              await firebaseTools.setDoc(firebaseTools.doc(firestoreDb, BATTLE_SCORERS_COLLECTION, pickId(battle.id, participantKey)), payload);
+              await loadGgamesBattlesData();
+              closePopup();
+              body.innerHTML = `<p class="success-text">Marcador gravado: <strong>${escapeHtml(pickedPlayerName)}</strong>.</p>`;
+              refreshLiveDashboardView();
+            } catch (error) {
+              alert(`Não foi possível gravar: ${error.message}`);
+            }
+          });
+        });
       });
     });
   }

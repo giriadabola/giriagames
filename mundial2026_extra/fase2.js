@@ -7,6 +7,7 @@
   const SECTION2_NAME_KEY = 'worldcup2026_section2_name';
   let section2Docs = [];
   let section2ActiveStage = 'round32';
+  let endateworldConfig = null;
 
   const normalizeKey = (name) => normalizeParticipantName(name || '');
   const teamKey = (name) => String(name || '')
@@ -22,11 +23,63 @@
     if (!matches.length) return null;
     return matches.map(matchKickoff).sort((a, b) => a - b)[0];
   };
+
+  const STAGE_DATE_PREFIX = {
+    'round32': 'dezasseisAvos',
+    'round16': 'oitavos',
+    'quarterfinals': 'quartos',
+    'semifinals': 'meias',
+    'third_place': 'final',
+    'final': 'final'
+  };
+
   const hasStageStarted = (stage) => {
+    if (endateworldConfig) {
+      const prefix = STAGE_DATE_PREFIX[stage];
+      if (prefix) {
+        const openVal = endateworldConfig[`${prefix}Open`];
+        if (openVal) {
+          const openDate = openVal.toDate ? openVal.toDate() : new Date(openVal);
+          return new Date() >= openDate;
+        }
+      }
+    }
     const start = stageStart(stage);
     return !!start && new Date() >= start;
   };
-  const matchStillOpen = (match) => !getOfficialResult(match.id) && new Date() < matchKickoff(match);
+
+  const isStageClosed = (stage) => {
+    if (endateworldConfig) {
+      const prefix = STAGE_DATE_PREFIX[stage];
+      if (prefix) {
+        const closeVal = endateworldConfig[`${prefix}Close`];
+        if (closeVal) {
+          const closeDate = closeVal.toDate ? closeVal.toDate() : new Date(closeVal);
+          return new Date() > closeDate;
+        }
+      }
+    }
+    return false;
+  };
+
+  const matchStillOpen = (match) => {
+    if (getOfficialResult(match.id)) return false;
+    if (isStageClosed(match.stage)) return false;
+    return new Date() < matchKickoff(match);
+  };
+
+  async function loadEndateworldConfig() {
+    if (!firestoreDb || !firebaseTools) return;
+    try {
+      const ref = firebaseTools.doc(firestoreDb, 'settings', 'endateworld');
+      const snap = await firebaseTools.getDoc(ref);
+      if (snap.exists()) {
+        endateworldConfig = snap.data();
+      }
+    } catch (e) {
+      console.warn('Erro ao carregar endateworld no fase2.js:', e);
+    }
+  }
 
   function getOfficialGroupTables() {
     if (!data) return {};
@@ -246,6 +299,7 @@
   const SECTION2_COLLECTION = 'worldcupextraReforms';
   const baseLoadPublicPredictions = loadPublicPredictions;
   loadPublicPredictions = async function() {
+    await loadEndateworldConfig();
     await baseLoadPublicPredictions();
 
     const legacyRef = firebaseTools.collection(firestoreDb, FIREBASE_COLLECTION);
@@ -546,7 +600,7 @@
 (function approvedReformWindowsWithPin() {
   const REFORM_COLLECTION = 'worldcupextraReforms';
   const REFORM_SETTINGS_COLLECTION = 'settings';
-  const REFORM_SETTINGS_DOC = 'worldcupReformWindows';
+  const REFORM_SETTINGS_DOC = 'endateworld';
   const REFORM_STAGES = ['round32', 'round16', 'quarterfinals', 'semifinals', 'third_place', 'final'];
   const REFORM_STAGE_FIELDS = {
     round32: [
@@ -847,6 +901,37 @@
     const windowInfo = findWindowPair(stage);
     const matches = (data?.matches || []).filter(match => match.stage === stage);
 
+    const correctMatchups = matches.filter(match => {
+      const home = resolveOfficialTeamLocal(match, 'home');
+      const away = resolveOfficialTeamLocal(match, 'away');
+      const unresolved = /Grupo|Vencedor Jogo|Perdedor Jogo/.test(`${home} ${away}`);
+      if (unresolved) return false;
+      const initialPred = (item.matches || []).find(row => Number(row.id) === Number(match.id));
+      return initialPred && sameMatchupAnySideLocal(initialPred, { homeTeam: home, awayTeam: away });
+    });
+
+    let correctMatchesSummaryHtml = '';
+    if (correctMatchups.length > 0) {
+      correctMatchesSummaryHtml = `
+        <div style="background: rgba(34, 197, 94, 0.08); border: 1px solid rgba(34, 197, 94, 0.3); border-radius: 16px; padding: 14px 18px; margin-bottom: 20px; font-size: 0.9rem; text-align: left;">
+          <strong style="color: #4ade80; display: block; margin-bottom: 6px; font-weight: 800;">✅ Confrontos que acertaste no prognóstico inicial (${correctMatchups.length}):</strong>
+          <ul style="margin: 0; padding-left: 18px; line-height: 1.6; color: #a8b7cf; font-weight: 600;">
+            ${correctMatchups.map(match => {
+              const home = resolveOfficialTeamLocal(match, 'home');
+              const away = resolveOfficialTeamLocal(match, 'away');
+              return `<li>Jogo ${match.id}: <strong>${escapeHtml(home)} vs ${escapeHtml(away)}</strong></li>`;
+            }).join('')}
+          </ul>
+        </div>
+      `;
+    } else {
+      correctMatchesSummaryHtml = `
+        <div style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 16px; padding: 14px 18px; margin-bottom: 20px; font-size: 0.9rem; text-align: left;">
+          <strong style="color: #f87171; display: block; font-weight: 800;">❌ Não acertaste nenhum confronto inicial para esta fase.</strong>
+        </div>
+      `;
+    }
+
     return `
       <div class="modal-head">
         <div>
@@ -856,6 +941,7 @@
         </div>
       </div>
       <section class="reform-box">
+        ${correctMatchesSummaryHtml}
         <div class="reform-window-note">
           <strong>${escapeHtml(STAGE_LABELS[stage])}</strong>
           <span>Fecha em ${formatDateTime(windowInfo?.close)}</span>
@@ -864,7 +950,9 @@
           ${activeStages.map(s => `<button type="button" class="section2-stage-tab ${s === stage ? 'active' : ''}" data-reform-stage="${escapeHtml(s)}">${escapeHtml(STAGE_LABELS[s])}</button>`).join('')}
         </div>
         <div class="section2-games">
-          ${matches.map(match => renderReformMatch(match, item)).join('') || '<p class="modal-muted">Não há jogos nesta fase.</p>'}
+          ${stage === 'round32'
+            ? (matches.map(match => renderReformMatch(match, item)).join('') || '<p class="modal-muted">Não há jogos nesta fase.</p>')
+            : '<p class="modal-muted" style="text-align: center; padding: 20px 0; color: var(--muted);">Acima dos 16 avos, apenas o resumo dos confrontos acertados é exibido.</p>'}
         </div>
       </section>
     `;
