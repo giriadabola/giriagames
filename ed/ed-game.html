@@ -259,6 +259,7 @@
       transition:.18s ease;
     }
     .switch input:checked + .slider { background: linear-gradient(135deg, #dc2626, #991b1b); border-color: rgba(255,255,255,.32); }
+    .switch.purple input:checked + .slider { background: linear-gradient(135deg, #a855f7, #6b21a8); border-color: rgba(255,255,255,.32); }
     .switch input:checked + .slider:before { transform: translateX(36px); }
 
     .auth-card {
@@ -334,6 +335,20 @@
         <span class="toggle-label" id="maintenanceToggleLabel">OFF</span>
         <label class="switch" id="maintenanceSwitch" title="Ativar/desativar manutenção">
           <input id="maintenanceToggle" type="checkbox">
+          <span class="slider" aria-hidden="true"></span>
+        </label>
+      </div>
+    </section>
+
+    <section class="maintenance-card" style="border-color: rgba(168, 85, 247, 0.34); background: rgba(88, 28, 135, 0.18);" aria-live="polite">
+      <div>
+        <strong>Acesso Restrito ao Site Principal (Apenas Rulers)</strong>
+        <span>Quando está ON, o index.html fica bloqueado para todos os utilizadores sem estatuto ruler.</span>
+      </div>
+      <div class="toggle-wrap">
+        <span class="toggle-label" id="rulerOnlyToggleLabel" style="color: #c084fc;">OFF</span>
+        <label class="switch purple" id="rulerOnlySwitch" title="Ativar/desativar restrição ruler">
+          <input id="rulerOnlyToggle" type="checkbox">
           <span class="slider" aria-hidden="true"></span>
         </label>
       </div>
@@ -504,6 +519,7 @@
     const FIREBASE_SETTINGS_COLLECTION = 'settings';
     const FIREBASE_MAINTENANCE_DOC = 'worldcupScoringRules';
     const FIREBASE_MAINTENANCE_FIELD = 'bugs';
+    const FIREBASE_RULERONLY_FIELD = 'rulerOnlyIndex';
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
     import { getFirestore, collection, getDocs, doc, getDoc, setDoc, updateDoc, deleteField, serverTimestamp, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
     import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signOut, signInWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
@@ -795,9 +811,13 @@
     }
 
     function buildPayload(deleteStatesOnly = false) {
+      const finishedVal = els.finished.value === 'true';
+      const homeGoalsVal = finishedVal ? Number(els.homeGoalsLive.value) : Number(els.homeGoals.value);
+      const awayGoalsVal = finishedVal ? Number(els.awayGoalsLive.value) : Number(els.awayGoals.value);
+
       const payload = {
-        homeGoals: Number(els.homeGoals.value),
-        awayGoals: Number(els.awayGoals.value),
+        homeGoals: homeGoalsVal,
+        awayGoals: awayGoalsVal,
         HomeEdit: Number(els.homeEdit.value),
         AwayEdit: Number(els.awayEdit.value),
         homeGoalsLive: Number(els.homeGoalsLive.value),
@@ -916,11 +936,23 @@
       els.maintenanceToggleLabel.style.color = active ? '#fecaca' : '#a8b7cf';
     }
 
+    function setRulerOnlyUi(active) {
+      const toggle = document.getElementById('rulerOnlyToggle');
+      const label = document.getElementById('rulerOnlyToggleLabel');
+      if (toggle) toggle.checked = !!active;
+      if (label) {
+        label.textContent = active ? 'ON' : 'OFF';
+        label.style.color = active ? '#c084fc' : '#a8b7cf';
+      }
+    }
+
     const maintenanceRef = doc(db, FIREBASE_SETTINGS_COLLECTION, FIREBASE_MAINTENANCE_DOC);
     onSnapshot(maintenanceRef, snapshot => {
-      setMaintenanceUi(snapshot.exists() && snapshot.data()?.[FIREBASE_MAINTENANCE_FIELD] === 'on');
+      const data = snapshot.exists() ? snapshot.data() : null;
+      setMaintenanceUi(data?.[FIREBASE_MAINTENANCE_FIELD] === 'on');
+      setRulerOnlyUi(data?.[FIREBASE_RULERONLY_FIELD] === 'on');
     }, error => {
-      console.warn('Não foi possível ouvir o modo manutenção:', error);
+      console.warn('Não foi possível ouvir as configurações:', error);
     });
 
     async function requestMaintenanceChange(active) {
@@ -944,8 +976,40 @@
       }
     }
 
+    async function requestRulerOnlyChange(active) {
+      if (!isAdmin) {
+        setRulerOnlyUi(!active);
+        setMessage('Tens de estar autenticado com estatuto ruler para alterar a restrição.', 'err');
+        return;
+      }
+      setRulerOnlyUi(active);
+      try {
+        await setDoc(maintenanceRef, {
+          [FIREBASE_RULERONLY_FIELD]: active ? 'on' : 'off',
+          updatedAt: serverTimestamp(),
+          manualUpdatedAt: new Date().toISOString(),
+          syncOrigin: 'manual-ed-game'
+        }, { merge: true });
+      } catch (error) {
+        console.error(error);
+        setRulerOnlyUi(!active);
+        setMessage('Erro ao alterar a restrição ruler. Confirma as permissões de escrita no Firebase.', 'err');
+      }
+    }
+
     els.maintenanceToggle.addEventListener('change', async () => {
       await requestMaintenanceChange(els.maintenanceToggle.checked);
+    });
+
+    document.getElementById('rulerOnlyToggle').addEventListener('change', async () => {
+      await requestRulerOnlyChange(document.getElementById('rulerOnlyToggle').checked);
+    });
+
+    els.finished.addEventListener('change', () => {
+      if (els.finished.value === 'true') {
+        els.homeGoals.value = els.homeGoalsLive.value;
+        els.awayGoals.value = els.awayGoalsLive.value;
+      }
     });
 
 
