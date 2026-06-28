@@ -132,9 +132,54 @@
 
   function buildThirdAssignments() {
     const qualified = getOfficialQualified();
-    const used = new Set();
     const assignments = {};
     const bestThirds = qualified.bestThirds || [];
+    const groups = bestThirds.map(t => t.group);
+    const sortedGroupsStr = [...groups].sort().join('');
+
+    // Override for the official qualified third-placed groups combination (B, D, E, F, H, I, J, K)
+    if (sortedGroupsStr === 'BDEFHIJK') {
+      const teamByGroup = Object.fromEntries(bestThirds.map(t => [t.group, t.team]));
+      const mapping = {
+        '74:away': 'D', // Paraguai
+        '77:away': 'F', // Suécia
+        '79:away': 'E', // Equador
+        '80:away': 'K', // RD Congo
+        '81:away': 'I', // Senegal
+        '82:away': 'B', // Bósnia
+        '85:away': 'J', // Argélia
+        '87:away': 'H'  // Cabo Verde
+      };
+      for (const [key, grp] of Object.entries(mapping)) {
+        if (teamByGroup[grp]) {
+          assignments[key] = teamByGroup[grp];
+        }
+      }
+      return assignments;
+    }
+
+    // Override for the alternative combination with Group L (B, D, E, F, I, J, K, L)
+    if (sortedGroupsStr === 'BDEFIJKL') {
+      const teamByGroup = Object.fromEntries(bestThirds.map(t => [t.group, t.team]));
+      const mapping = {
+        '74:away': 'D', // Paraguai
+        '77:away': 'F', // Suécia
+        '79:away': 'E', // Equador
+        '80:away': 'K', // RD Congo
+        '81:away': 'I', // Senegal
+        '82:away': 'B', // Bósnia
+        '85:away': 'J', // Argélia
+        '84:away': 'L'  // Croácia
+      };
+      for (const [key, grp] of Object.entries(mapping)) {
+        if (teamByGroup[grp]) {
+          assignments[key] = teamByGroup[grp];
+        }
+      }
+      return assignments;
+    }
+
+    const used = new Set();
     (data?.matches || [])
       .filter(m => m.stage === 'round32')
       .sort((a, b) => Number(a.id) - Number(b.id))
