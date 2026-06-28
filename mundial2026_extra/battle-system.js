@@ -1119,6 +1119,7 @@
     const match = localMatch(battle.matchId);
     const predA = predictionFor(pA, battle.matchId);
     const predB = predictionFor(pB, battle.matchId);
+    if (!predA || !predB) return '';
     const result = calculateBattleResult(battle);
     const stage = battleStage(battle);
     const canPick = isKnockoutStage(stage) && isBeforeKickoff(battle.matchId);

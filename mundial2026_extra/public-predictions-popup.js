@@ -244,10 +244,13 @@ function renderGiriaBattles(rows) {
       (p2?.matches || []).some(pred => Number(pred.id) === Number(match.id))
     );
     if (!nextMatch) continue;
-    const pred1 = (p1.matches || []).find(pred => Number(pred.id) === Number(nextMatch.id));
-    const pred2 = (p2.matches || []).find(pred => Number(pred.id) === Number(nextMatch.id));
+    const isKnockout = nextMatch.stage !== 'groups';
     const over1 = getSection2DocForPlayer(p1, nextMatch.id);
     const over2 = getSection2DocForPlayer(p2, nextMatch.id);
+    if (isKnockout && (!over1 || !over2)) continue;
+
+    const pred1 = (p1.matches || []).find(pred => Number(pred.id) === Number(nextMatch.id));
+    const pred2 = (p2.matches || []).find(pred => Number(pred.id) === Number(nextMatch.id));
     const finalPred1 = over1 && over1.mode === 'changed' ? { ...pred1, homeGoals: over1.homeGoals, awayGoals: over1.awayGoals, winnerTeam: over1.winnerTeam, method: over1.method } : pred1;
     const finalPred2 = over2 && over2.mode === 'changed' ? { ...pred2, homeGoals: over2.homeGoals, awayGoals: over2.awayGoals, winnerTeam: over2.winnerTeam, method: over2.method } : pred2;
     cards.push(`
@@ -526,10 +529,13 @@ async function openPublicPredictionsModal() {
           (p2?.matches || []).some(pred => Number(pred.id) === Number(match.id))
         );
         if (!nextMatch) continue;
-        const pred1 = (p1.matches || []).find(pred => Number(pred.id) === Number(nextMatch.id));
-        const pred2 = (p2.matches || []).find(pred => Number(pred.id) === Number(nextMatch.id));
+        const isKnockout = nextMatch.stage !== 'groups';
         const over1 = getSection2DocForPlayer(p1, nextMatch.id);
         const over2 = getSection2DocForPlayer(p2, nextMatch.id);
+        if (isKnockout && (!over1 || !over2)) continue;
+
+        const pred1 = (p1.matches || []).find(pred => Number(pred.id) === Number(nextMatch.id));
+        const pred2 = (p2.matches || []).find(pred => Number(pred.id) === Number(nextMatch.id));
         const finalPred1 = over1 && over1.mode === 'changed' ? { ...pred1, homeGoals: over1.homeGoals, awayGoals: over1.awayGoals, winnerTeam: over1.winnerTeam, method: over1.method } : pred1;
         const finalPred2 = over2 && over2.mode === 'changed' ? { ...pred2, homeGoals: over2.homeGoals, awayGoals: over2.awayGoals, winnerTeam: over2.winnerTeam, method: over2.method } : pred2;
         cards.push(`
