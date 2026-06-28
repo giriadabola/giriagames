@@ -390,6 +390,18 @@
           </ul>
         </div>
       </div>
+      <div id="usersPredictionsCollapsible" style="border-bottom: 1px solid var(--line); background: rgba(168,85,247,.04);">
+        <button type="button" id="toggleUsersPredsBtn" style="width: 100%; text-align: left; padding: 14px 18px; background: transparent; border: 0; font-weight: 800; color: #c084fc; display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
+          <span>📋 Ver Estado dos Prognósticos dos Jogadores</span>
+          <span id="usersPredsToggleArrow">▼</span>
+        </button>
+        <div id="usersPredsListContainer" style="display: none; padding: 18px; max-height: 400px; overflow-y: auto;">
+          <div id="usersPredsStats" style="margin-bottom: 12px; font-weight: bold; font-size: 0.95rem; color: var(--muted);"></div>
+          <div id="usersPredsList" style="display: grid; gap: 8px;">
+            <p class="empty" style="margin: 0; padding: 0;">A carregar dados dos jogadores...</p>
+          </div>
+        </div>
+      </div>
       <div class="list" id="matchesList">
         <div class="empty">A carregar jogos...</div>
       </div>
@@ -930,6 +942,103 @@
       }
     });
 
+    async function loadUsersPredictions() {
+      const container = document.getElementById('usersPredsList');
+      const statsEl = document.getElementById('usersPredsStats');
+      if (!container) return;
+      container.innerHTML = '<div style="color: var(--muted); padding: 10px;">A carregar dados das reformulações...</div>';
+      try {
+        const snap = await getDocs(collection(db, 'worldcupextraReforms'));
+        
+        // Find how many round32 matches exist in our loaded matches list
+        const r32Matches = matches.filter(m => m.data && m.data.stage === 'round32');
+        const totalR32 = r32Matches.length || 16;
+
+        // We group the reform docs by participant key/name
+        const usersMap = {};
+
+        snap.forEach(docSnap => {
+          const u = docSnap.data();
+          if (u.stage !== 'round32') return;
+
+          const key = u.participantKey || docSnap.id.split('_')[0];
+          const name = u.participantName || key;
+
+          if (!usersMap[key]) {
+            usersMap[key] = {
+              name,
+              predictedMatches: new Set()
+            };
+          }
+          if (u.matchId != null) {
+            usersMap[key].predictedMatches.add(Number(u.matchId));
+          }
+        });
+
+        const usersList = Object.keys(usersMap).map(key => {
+          const u = usersMap[key];
+          const predictedCount = u.predictedMatches.size;
+          const remaining = Math.max(0, totalR32 - predictedCount);
+          return {
+            key,
+            name: u.name,
+            predicted: predictedCount,
+            remaining
+          };
+        });
+
+        usersList.sort((a, b) => a.name.localeCompare(b.name, 'pt-PT'));
+
+        let totalUsers = usersList.length;
+        let completeUsers = usersList.filter(u => u.remaining === 0).length;
+
+        if (statsEl) {
+          statsEl.innerHTML = `Reformulações (16 avos): ${totalUsers} jogadores | Concluídos (16/16): ${completeUsers} | Pendentes: ${totalUsers - completeUsers}`;
+        }
+
+        if (usersList.length === 0) {
+          container.innerHTML = '<div style="color: var(--muted); padding: 10px;">Nenhuma reformulação de 16 avos encontrada em worldcupextraReforms.</div>';
+          return;
+        }
+
+        container.innerHTML = usersList.map(u => {
+          const isComplete = u.remaining === 0;
+          const statusText = isComplete ? 'Concluído' : `Faltam ${u.remaining} jogos`;
+          const badgeClass = isComplete ? 'badge green' : (u.predicted > 0 ? 'badge' : 'badge red');
+          const badgeStyle = isComplete ? '' : (u.predicted > 0 ? 'background: rgba(250, 204, 21, 0.16); border: 1px solid rgba(250, 204, 21, 0.35); color: #facc15;' : '');
+          
+          return `
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border: 1px solid var(--line); border-radius: 14px; background: rgba(15,23,42,.35);">
+              <div>
+                <strong style="font-size: 0.95rem;">${escapeHtml(u.name)}</strong>
+                <div style="font-size: 0.8rem; color: var(--muted); margin-top: 3px;">
+                  Reformulou: ${u.predicted} / ${totalR32} jogos dos 16 avos
+                </div>
+              </div>
+              <span class="${badgeClass}" style="${badgeStyle}">${statusText}</span>
+            </div>
+          `;
+        }).join('');
+
+      } catch (error) {
+        console.error(error);
+        container.innerHTML = '<div style="color: #fecaca; padding: 10px;">Erro ao carregar dados do Firebase (worldcupextraReforms).</div>';
+      }
+    }
+
+    document.getElementById('toggleUsersPredsBtn').addEventListener('click', () => {
+      const container = document.getElementById('usersPredsListContainer');
+      const arrow = document.getElementById('usersPredsToggleArrow');
+      if (container.style.display === 'none') {
+        container.style.display = 'block';
+        arrow.textContent = '▲';
+        loadUsersPredictions();
+      } else {
+        container.style.display = 'none';
+        arrow.textContent = '▼';
+      }
+    });
+
     function setMaintenanceUi(active) {
       els.maintenanceToggle.checked = !!active;
       els.maintenanceToggleLabel.textContent = active ? 'ON' : 'OFF';
@@ -1061,6 +1170,6 @@
 
     loadMatches();
   </script>
-  <script defer src="ed-game-pwa.js?v=20260615togglefix3"></script>
+  <script defer src="ed-game-pwa.js?v=20260628togglefix5"></script>
 </body>
 </html>
