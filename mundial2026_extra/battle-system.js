@@ -88,7 +88,31 @@
   }
 
   function predictionFor(player, matchId) {
-    return (player?.matches || []).find(pred => Number(pred.id) === Number(matchId)) || null;
+    const match = localMatch(matchId);
+    const isKnockout = match ? match.stage !== 'groups' : true;
+    const initialPred = (player?.matches || []).find(pred => Number(pred.id) === Number(matchId)) || null;
+    
+    if (isKnockout) {
+      const override = typeof getSection2DocForPlayer === 'function' ? getSection2DocForPlayer(player, matchId) : null;
+      if (!override) return null;
+      
+      if (override.mode === 'changed') {
+        return {
+          ...initialPred,
+          homeGoals: override.homeGoals,
+          awayGoals: override.awayGoals,
+          winnerTeam: override.winnerTeam,
+          method: override.method,
+          homeTeam: override.homeTeam,
+          awayTeam: override.awayTeam
+        };
+      } else if (override.mode === 'replicate' && initialPred) {
+        return initialPred;
+      }
+      return null;
+    }
+    
+    return initialPred;
   }
 
   function pickId(battleId, participantKey) {
@@ -1153,6 +1177,9 @@
       const pA = playerByKey(a.id);
       const pB = playerByKey(b.id);
       if (!pA || !pB) continue;
+      const predA = predictionFor(pA, match.id);
+      const predB = predictionFor(pB, match.id);
+      if (!predA || !predB) continue;
       battles.push({
         id: `preview_${match.id}_${i}`,
         matchId: match.id,
