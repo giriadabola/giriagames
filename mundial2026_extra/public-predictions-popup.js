@@ -33,7 +33,11 @@ function renderPublicPlayerDetails(publicId) {
     return `
       <section class="viewer-stage-block">
         <h3>${escapeHtml(STAGE_LABELS[stage])}</h3>
-        ${rows.map(match => `<div class="viewer-result"><span>Jogo ${match.id}</span><strong>${predictionResultText(match)}</strong></div>`).join('')}
+        ${rows.map(match => {
+          const override = getSection2DocForPlayer(item, match.id);
+          const finalPred = override && override.mode === 'changed' ? { ...match, homeGoals: override.homeGoals, awayGoals: override.awayGoals, winnerTeam: override.winnerTeam, method: override.method } : match;
+          return `<div class="viewer-result"><span>Jogo ${match.id}</span><strong>${predictionResultText(finalPred)}</strong></div>`;
+        }).join('')}
       </section>
     `;
   }).join('');
@@ -96,10 +100,12 @@ function renderPublicByGame(stage = publicViewerStage, filter = publicGameFilter
             </div>
             <div class="viewer-picks" style="display: none; margin-top: 12px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 8px;">
               ${predictions.length ? predictions.map(row => {
-                const score = official ? scoreOnePrediction(row.match, official) : null;
-                const className = score ? (score.points === 3 ? 'hit-exact' : score.points === 1 ? 'hit-outcome' : 'miss') : '';
+                const override = getSection2DocForPlayer(row.item, match.id);
+                const score = official ? scoreOnePrediction(row.match, official, override) : null;
+                const className = score ? (score.exact ? 'hit-exact' : score.points > 0 ? 'hit-outcome' : 'miss') : '';
                 const badge = score ? `<b>${score.points} pts</b>` : '';
-                return `<div class="viewer-pick ${className}"><strong>${renderParticipantIdentity(row.player, row.item?.icon || row.item?.participantIcon || row.item?.playerIcon || '', 'participant-ident--compact')}</strong><span>${predictionResultText(row.match)}</span>${badge}</div>`;
+                const finalPred = override && override.mode === 'changed' ? { ...row.match, homeGoals: override.homeGoals, awayGoals: override.awayGoals, winnerTeam: override.winnerTeam, method: override.method } : row.match;
+                return `<div class="viewer-pick ${className}"><strong>${renderParticipantIdentity(row.player, row.item?.icon || row.item?.participantIcon || row.item?.playerIcon || '', 'participant-ident--compact')}</strong><span>${predictionResultText(finalPred)}</span>${badge}</div>`;
               }).join('') : '<p class="modal-muted">Ainda não há prognósticos para este jogo.</p>'}
             </div>
           </section>
@@ -240,13 +246,17 @@ function renderGiriaBattles(rows) {
     if (!nextMatch) continue;
     const pred1 = (p1.matches || []).find(pred => Number(pred.id) === Number(nextMatch.id));
     const pred2 = (p2.matches || []).find(pred => Number(pred.id) === Number(nextMatch.id));
+    const over1 = getSection2DocForPlayer(p1, nextMatch.id);
+    const over2 = getSection2DocForPlayer(p2, nextMatch.id);
+    const finalPred1 = over1 && over1.mode === 'changed' ? { ...pred1, homeGoals: over1.homeGoals, awayGoals: over1.awayGoals, winnerTeam: over1.winnerTeam, method: over1.method } : pred1;
+    const finalPred2 = over2 && over2.mode === 'changed' ? { ...pred2, homeGoals: over2.homeGoals, awayGoals: over2.awayGoals, winnerTeam: over2.winnerTeam, method: over2.method } : pred2;
     cards.push(`
       <div class="battle-card battle-card-horizontal">
         <span class="battle-match">Jogo ${nextMatch.id} · ${escapeHtml(nextMatch.home)} vs ${escapeHtml(nextMatch.away)}</span>
         <div class="battle-duel-row">
-          <div class="battle-player battle-player-a"><strong>${renderParticipantIdentity(`#${top.rank} ${top.name}`, p1?.icon || p1?.participantIcon || p1?.playerIcon || top.icon, 'participant-ident--compact')}</strong><span>${predictionResultText(pred1)}</span></div>
+          <div class="battle-player battle-player-a"><strong>${renderParticipantIdentity(`#${top.rank} ${top.name}`, p1?.icon || p1?.participantIcon || p1?.playerIcon || top.icon, 'participant-ident--compact')}</strong><span>${predictionResultText(finalPred1)}</span></div>
           <b class="battle-versus">VS</b>
-          <div class="battle-player battle-player-b"><strong>${renderParticipantIdentity(`#${below.rank} ${below.name}`, p2?.icon || p2?.participantIcon || p2?.playerIcon || below.icon, 'participant-ident--compact')}</strong><span>${predictionResultText(pred2)}</span></div>
+          <div class="battle-player battle-player-b"><strong>${renderParticipantIdentity(`#${below.rank} ${below.name}`, p2?.icon || p2?.participantIcon || p2?.playerIcon || below.icon, 'participant-ident--compact')}</strong><span>${predictionResultText(finalPred2)}</span></div>
         </div>
       </div>
     `);
@@ -490,8 +500,8 @@ async function openPublicPredictionsModal() {
                     const className = score ? (score.exact ? 'hit-exact' : score.points > 0 ? 'hit-outcome' : 'miss') : '';
                     const badge = score ? `<b>${score.points} pts</b>` : '';
                     const sec2 = override ? `<em class="section2-mini">${override.mode === 'replicate' ? 'manteve Secção 1' : 'reformulou'}</em>` : '';
-                    const text = override && override.mode === 'changed' ? `${escapeHtml(override.homeTeam)} ${override.homeGoals}-${override.awayGoals} ${escapeHtml(override.awayTeam)} · vence ${escapeHtml(override.winnerTeam)}` : predictionResultText(row.match);
-                    return `<div class="viewer-pick ${className}"><strong>${renderParticipantIdentity(row.player, row.item?.icon || row.item?.participantIcon || row.item?.playerIcon || '', 'participant-ident--compact')}</strong><span>${text}</span>${sec2}${badge}</div>`;
+                    const finalPred = override && override.mode === 'changed' ? { ...row.match, homeGoals: override.homeGoals, awayGoals: override.awayGoals, winnerTeam: override.winnerTeam, method: override.method } : row.match;
+                    return `<div class="viewer-pick ${className}"><strong>${renderParticipantIdentity(row.player, row.item?.icon || row.item?.participantIcon || row.item?.playerIcon || '', 'participant-ident--compact')}</strong><span>${predictionResultText(finalPred)}</span>${sec2}${badge}</div>`;
                   }).join('') : '<p class="modal-muted">Ainda não há prognósticos para este jogo.</p>'}
                 </div>
               </section>
@@ -520,13 +530,15 @@ async function openPublicPredictionsModal() {
         const pred2 = (p2.matches || []).find(pred => Number(pred.id) === Number(nextMatch.id));
         const over1 = getSection2DocForPlayer(p1, nextMatch.id);
         const over2 = getSection2DocForPlayer(p2, nextMatch.id);
+        const finalPred1 = over1 && over1.mode === 'changed' ? { ...pred1, homeGoals: over1.homeGoals, awayGoals: over1.awayGoals, winnerTeam: over1.winnerTeam, method: over1.method } : pred1;
+        const finalPred2 = over2 && over2.mode === 'changed' ? { ...pred2, homeGoals: over2.homeGoals, awayGoals: over2.awayGoals, winnerTeam: over2.winnerTeam, method: over2.method } : pred2;
         cards.push(`
           <div class="battle-card battle-card-horizontal">
             <span class="battle-match">Jogo ${nextMatch.id} · ${escapeHtml(resolveOfficialTeam(nextMatch, 'home') || nextMatch.home)} vs ${escapeHtml(resolveOfficialTeam(nextMatch, 'away') || nextMatch.away)}</span>
             <div class="battle-duel-row">
-              <div class="battle-player battle-player-a"><strong>${renderParticipantIdentity(`#${top.rank} ${top.name}`, p1?.icon || p1?.participantIcon || p1?.playerIcon || top.icon, 'participant-ident--compact')}</strong><span>${over1?.mode === 'changed' ? `${escapeHtml(over1.homeTeam)} ${over1.homeGoals}-${over1.awayGoals} ${escapeHtml(over1.awayTeam)}` : predictionResultText(pred1)}</span></div>
+              <div class="battle-player battle-player-a"><strong>${renderParticipantIdentity(`#${top.rank} ${top.name}`, p1?.icon || p1?.participantIcon || p1?.playerIcon || top.icon, 'participant-ident--compact')}</strong><span>${predictionResultText(finalPred1)}</span></div>
               <b class="battle-versus">VS</b>
-              <div class="battle-player battle-player-b"><strong>${renderParticipantIdentity(`#${below.rank} ${below.name}`, p2?.icon || p2?.participantIcon || p2?.playerIcon || below.icon, 'participant-ident--compact')}</strong><span>${over2?.mode === 'changed' ? `${escapeHtml(over2.homeTeam)} ${over2.homeGoals}-${over2.awayGoals} ${escapeHtml(over2.awayTeam)}` : predictionResultText(pred2)}</span></div>
+              <div class="battle-player battle-player-b"><strong>${renderParticipantIdentity(`#${below.rank} ${below.name}`, p2?.icon || p2?.participantIcon || p2?.playerIcon || below.icon, 'participant-ident--compact')}</strong><span>${predictionResultText(finalPred2)}</span></div>
             </div>
           </div>
         `);
