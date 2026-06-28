@@ -416,6 +416,7 @@
   function calculateBattleEnhancedRows(options = {}) {
     const includeLive = options.includeLive !== false;
     const showBw = window.ggamesShowBwBonus !== false;
+    const showPp = window.ggamesShowPp !== false;
     const originalOfficialResults = officialResults;
     if (!includeLive) {
       officialResults = Object.fromEntries(
@@ -437,7 +438,7 @@
           battleDraws: b.battleDraws || 0,
           battleLosses: b.battleLosses || 0,
           battleBonusPoints: b.battleBonusPoints || 0,
-          points: (row.points || 0) + (showBw ? (b.battleBonusPoints || 0) : 0)
+          points: (row.points || 0) - (showPp ? 0 : (row.matchupPoints || 0)) + (showBw ? (b.battleBonusPoints || 0) : 0)
         };
       });
 
@@ -480,6 +481,7 @@
     if (!rows.length) return '<div class="empty-state">Ainda não há jogadores para mostrar.</div>';
     
     const showBw = window.ggamesShowBwBonus !== false;
+    const showPp = window.ggamesShowPp !== false;
 
     return `
       <div class="leaderboard-layout">
@@ -488,7 +490,11 @@
             <h3 style="margin:0;">Tabela Ggames ${liveMode ? '<span class="table-live-badge">AO VIVO</span>' : ''}</h3>
             <label style="display:inline-flex; align-items:center; gap:6px; font-size:0.82rem; color:var(--muted); cursor:pointer; font-weight:normal; user-select:none; margin-left: 10px;">
               <input type="checkbox" id="ggamesBwToggle" ${showBw ? 'checked' : ''} style="cursor:pointer; margin:0; width:14px; height:14px;">
-              Exibir bónus BW
+              BW
+            </label>
+            <label style="display:inline-flex; align-items:center; gap:6px; font-size:0.82rem; color:var(--muted); cursor:pointer; font-weight:normal; user-select:none; margin-left: 10px;">
+              <input type="checkbox" id="ggamesPpToggle" ${showPp ? 'checked' : ''} style="cursor:pointer; margin:0; width:14px; height:14px;">
+              PP
             </label>
           </div>
           <div class="table-scroll">
@@ -1542,11 +1548,24 @@
   window.finalizeBattlesIfMatchFinished = finalizeBattlesIfMatchFinished;
 
   window.ggamesShowBwBonus = localStorage.getItem('ggames_show_bw_bonus') !== 'false';
+  window.ggamesShowPp = localStorage.getItem('ggames_show_pp') !== 'false';
 
   document.addEventListener('change', event => {
     if (event.target && event.target.id === 'ggamesBwToggle') {
       window.ggamesShowBwBonus = event.target.checked;
       localStorage.setItem('ggames_show_bw_bonus', event.target.checked ? 'true' : 'false');
+      
+      if (typeof refreshLiveDashboardView === 'function') {
+        refreshLiveDashboardView();
+      }
+      
+      const viewerBody = document.querySelector('#viewerBody');
+      if (viewerBody && document.querySelector('.viewer-tab[data-view-tab="table"].active')) {
+        viewerBody.innerHTML = renderGgamesTable();
+      }
+    } else if (event.target && event.target.id === 'ggamesPpToggle') {
+      window.ggamesShowPp = event.target.checked;
+      localStorage.setItem('ggames_show_pp', event.target.checked ? 'true' : 'false');
       
       if (typeof refreshLiveDashboardView === 'function') {
         refreshLiveDashboardView();
