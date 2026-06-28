@@ -239,10 +239,27 @@
     const final = stage === 'final';
 
     let points = 0;
-    if (exact) points = group ? numericRule('groupExact') : final ? numericRule('finalInitialExact') : numericRule('knockoutInitialExact');
-    else if (final && winnerHit) points = numericRule('finalInitialWinner');
-    else if (group) points = sidesOk && predictionOutcome(pred) === actualOutcome(official) ? numericRule('groupOutcome') : 0;
-    else points = winnerHit ? numericRule('knockoutInitialWinner') : 0;
+    if (group) {
+      points = exact ? numericRule('groupExact') : (sidesOk && predictionOutcome(pred) === actualOutcome(official) ? numericRule('groupOutcome') : 0);
+    } else {
+      if (exact) {
+        if (stage === 'round32') points = numericRule('initialExact32');
+        else if (stage === 'round16') points = numericRule('initialExact16');
+        else if (stage === 'quarterfinals') points = numericRule('initialExact8');
+        else if (stage === 'semifinals') points = numericRule('initialExact4');
+        else if (stage === 'third_place') points = numericRule('initialExact3rd');
+        else if (stage === 'final') points = numericRule('initialExactFinal');
+        else points = final ? numericRule('finalInitialExact') : numericRule('knockoutInitialExact');
+      } else if (winnerHit) {
+        if (stage === 'round32') points = numericRule('initialWinner32');
+        else if (stage === 'round16') points = numericRule('initialWinner16');
+        else if (stage === 'quarterfinals') points = numericRule('initialWinner8');
+        else if (stage === 'semifinals') points = numericRule('initialWinner4');
+        else if (stage === 'third_place') points = numericRule('initialWinner3rd');
+        else if (stage === 'final') points = numericRule('initialWinnerFinal');
+        else points = final ? numericRule('finalInitialWinner') : numericRule('knockoutInitialWinner');
+      }
+    }
 
     const goalsHit = (sidesOk && ph === oh ? oh : 0) + (sidesOk && pa === oa ? oa : 0);
     const goalsMissed = sidesOk ? Math.abs(ph - oh) + Math.abs(pa - oa) : oh + oa;

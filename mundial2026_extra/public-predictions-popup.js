@@ -188,11 +188,12 @@ function openGgamesRulesModal() {
       </div>
     </div>
     <section class="rules-modal-content">
-      <h3>Secção 1 — prognóstico inicial</h3>
+      <h3>Secção 1 — prognóstico inicial (mantido)</h3>
       <ul>
         <li><strong>Fase de grupos:</strong> resultado exato = ${numericRule('groupExact')} pontos; acertar vencedor/empate = ${numericRule('groupOutcome')} ponto(s).</li>
-        <li><strong>16 avos até meias/3.º lugar:</strong> resultado exato = ${numericRule('knockoutInitialExact')} pontos; acertar vencedor/apurado = ${numericRule('knockoutInitialWinner')} ponto(s). Acertar no confronto dos 16 avos dá +2 pontos extra.</li>
-        <li><strong>Final:</strong> resultado exato = ${numericRule('finalInitialExact')} pontos; acertar o campeão/vencedor = ${numericRule('finalInitialWinner')} pontos; acertar apenas o desfecho = ${numericRule('finalInitialMethod')} ponto(s).</li>
+        <li><strong>16 avos, Oitavos e Quartos de final:</strong> resultado exato = ${numericRule('initialExact32')} pontos; acertar vencedor/apurado = ${numericRule('initialWinner32')} pontos. Acertar no confronto dos 16 avos dá +2 pontos extra.</li>
+        <li><strong>Meias-finais e 3.º lugar:</strong> resultado exato = ${numericRule('initialExact4')} pontos; acertar vencedor/apurado = ${numericRule('initialWinner4')} pontos.</li>
+        <li><strong>Final:</strong> resultado exato = ${numericRule('initialExactFinal')} pontos; acertar o campeão/vencedor = ${numericRule('initialWinnerFinal')} pontos; acertar apenas o desfecho = ${numericRule('finalInitialMethod')} ponto(s).</li>
       </ul>
       <h3>Secção 2 — reformulações nas eliminatórias</h3>
       <ul>

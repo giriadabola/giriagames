@@ -76,7 +76,19 @@ const DEFAULT_SCORING_RULES = {
   reformWinner4: 2,
   reformExact3rd: 5,
   reformWinner3rd: 2,
-  reformWinnerFinal: 2
+  reformWinnerFinal: 2,
+  initialExact32: 7,
+  initialWinner32: 2,
+  initialExact16: 7,
+  initialWinner16: 2,
+  initialExact8: 7,
+  initialWinner8: 2,
+  initialExact4: 9,
+  initialWinner4: 3,
+  initialExact3rd: 9,
+  initialWinner3rd: 3,
+  initialExactFinal: 11,
+  initialWinnerFinal: 5
 };
 let scoringRules = { ...DEFAULT_SCORING_RULES };
 
