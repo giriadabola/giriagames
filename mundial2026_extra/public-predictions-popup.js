@@ -191,13 +191,14 @@ function openGgamesRulesModal() {
       <h3>Secção 1 — prognóstico inicial</h3>
       <ul>
         <li><strong>Fase de grupos:</strong> resultado exato = ${numericRule('groupExact')} pontos; acertar vencedor/empate = ${numericRule('groupOutcome')} ponto(s).</li>
-        <li><strong>16 avos até meias/3.º lugar:</strong> resultado exato = ${numericRule('knockoutInitialExact')} pontos; acertar vencedor/apurado = ${numericRule('knockoutInitialWinner')} ponto(s).</li>
+        <li><strong>16 avos até meias/3.º lugar:</strong> resultado exato = ${numericRule('knockoutInitialExact')} pontos; acertar vencedor/apurado = ${numericRule('knockoutInitialWinner')} ponto(s). Acertar no confronto dos 16 avos dá +2 pontos extra.</li>
         <li><strong>Final:</strong> resultado exato = ${numericRule('finalInitialExact')} pontos; acertar o campeão/vencedor = ${numericRule('finalInitialWinner')} pontos; acertar apenas o desfecho = ${numericRule('finalInitialMethod')} ponto(s).</li>
       </ul>
       <h3>Secção 2 — reformulações nas eliminatórias</h3>
       <ul>
-        <li>Se o jogador reformular um jogo dos 16 avos em diante, o resultado reformulado vale ${numericRule('knockoutReformExact')} ponto(s) se estiver exato.</li>
-        <li>Na final, uma reformulação certa vale ${numericRule('finalReformExact')} ponto(s).</li>
+        <li><strong>16 avos, Oitavos e Quartos de final:</strong> resultado exato = 4 pontos; apenas vencedor/apurado = 1 ponto.</li>
+        <li><strong>Meias-finais e 3.º lugar:</strong> resultado exato = 5 pontos; apenas vencedor/apurado = 2 pontos.</li>
+        <li><strong>Final:</strong> resultado exato = ${numericRule('finalReformExact')} pontos; apenas vencedor/apurado = 2 pontos.</li>
         <li>As regras são lidas do Firebase em <strong>settings/worldcupScoringRules</strong>. Se o documento não existir, o site usa os valores padrão.</li>
       </ul>
       <h3>Estatísticas da tabela</h3>

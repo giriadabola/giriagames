@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ggames-mundial-2026-v39-live-game-empty-state-banner-small';
+const CACHE_NAME = 'ggames-mundial-2026-v40-live-game-ordered-matches';
 
 self.addEventListener('install', event => {
   self.skipWaiting();

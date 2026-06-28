@@ -474,6 +474,15 @@ function scoreOnePrediction(pred, official) {
     points = exact ? numericRule('knockoutInitialExact') : outcomeHit ? numericRule('knockoutInitialWinner') : 0;
   }
 
+  if (stage === 'round32' && pred && official) {
+    const tk = (n) => String(n || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    const a = [tk(pred.homeTeam), tk(pred.awayTeam)].sort().join('|');
+    const b = [tk(official.homeTeam), tk(official.awayTeam)].sort().join('|');
+    if (a && a === b) {
+      points += 2;
+    }
+  }
+
   const goalsHit = (ph === oh ? oh : 0) + (pa === oa ? oa : 0);
   const goalsMissed = Math.abs(ph - oh) + Math.abs(pa - oa);
   return {

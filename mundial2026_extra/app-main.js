@@ -417,7 +417,7 @@ async function init() {
       updateCountdownMsg(baseMsg);
     }, 1000);
 
-    const [matchesResponse, squadsResponse] = await Promise.all([fetch('matches.json'), fetch('squads.json')]);
+    const [matchesResponse, squadsResponse] = await Promise.all([fetch('matches.json?v=20260628matches2'), fetch('squads.json')]);
     data = await matchesResponse.json();
     squadsData = await squadsResponse.json();
     loadState();

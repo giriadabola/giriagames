@@ -36,8 +36,8 @@ const ALLSPORTS_BASE = 'https://apiv2.allsportsapi.com/football/';
 const ALLSPORTS_KEY = 'dade46c3d79174fc03a9cc1e58b0cbcd0cef90cd9806260b407eaa645f8a042f';
 const ZAFRONIX_WC_BASE = 'https://api.zafronix.com/fifa/worldcup/v1';
 const ZAFRONIX_WC_KEY = 'zwc_free_4408ccc66492ac311b28addc';
-const SOFASCORE_PROXY_URL = ''; // opcional: proxy teu para evitar CORS, ex: https://teusite.com/api/sofascore
-const ESPN_PROXY_URL = ''; // opcional: proxy teu para evitar CORS, ex: https://teusite.com/api/espn
+const SOFASCORE_PROXY_URL = '';
+const ESPN_PROXY_URL = '';
 const API_SYNC_INTERVAL_MS = 30000;
 const API_FOOTBALL_MIN_INTERVAL_MS = 90000;
 const EXTRA_LIVE_API_MIN_INTERVAL_MS = 120000;
@@ -65,7 +65,18 @@ const DEFAULT_SCORING_RULES = {
   finalInitialWinner: 4,
   finalInitialMethod: 2,
   knockoutReformExact: 2,
-  finalReformExact: 3
+  finalReformExact: 3,
+  reformExact32: 4,
+  reformWinner32: 1,
+  reformExact16: 4,
+  reformWinner16: 1,
+  reformExact8: 4,
+  reformWinner8: 1,
+  reformExact4: 5,
+  reformWinner4: 2,
+  reformExact3rd: 5,
+  reformWinner3rd: 2,
+  reformWinnerFinal: 2
 };
 let scoringRules = { ...DEFAULT_SCORING_RULES };
 
@@ -731,8 +742,38 @@ function thirdSlotsFromMatches() {
 }
 
 function assignThirdSlots(qualifiedThirds) {
-  const thirdByGroup = Object.fromEntries(qualifiedThirds.map(t => [t.group, t]));
   const groups = qualifiedThirds.map(t => t.group);
+  const sortedGroupsStr = [...groups].sort().join('');
+
+  // Override for the official qualified third-placed groups combination (B, D, E, F, H, I, J, K)
+  if (sortedGroupsStr === 'BDEFHIJK') {
+    return {
+      '74:away': 'D', // Paraguai
+      '77:away': 'F', // Suécia
+      '79:away': 'E', // Equador
+      '80:away': 'K', // RD Congo
+      '81:away': 'I', // Senegal
+      '82:away': 'B', // Bósnia
+      '85:away': 'J', // Argélia
+      '87:away': 'H'  // Cabo Verde
+    };
+  }
+
+  // Override for the alternative combination with Group L (B, D, E, F, I, J, K, L)
+  if (sortedGroupsStr === 'BDEFIJKL') {
+    return {
+      '74:away': 'D', // Paraguai
+      '77:away': 'F', // Suécia
+      '79:away': 'E', // Equador
+      '80:away': 'K', // RD Congo
+      '81:away': 'I', // Senegal
+      '82:away': 'B', // Bósnia
+      '85:away': 'J', // Argélia
+      '84:away': 'L'  // Croácia
+    };
+  }
+
+  const thirdByGroup = Object.fromEntries(qualifiedThirds.map(t => [t.group, t]));
   const slots = thirdSlotsFromMatches().map(slot => ({
     ...slot,
     candidates: slot.allowed.filter(group => groups.includes(group))
