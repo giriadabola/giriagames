@@ -191,27 +191,27 @@ function ggamesSanitizeAutomaticApiGame(game, fallbackMatch = null, options = {}
 function renderLiveGameCard(game, mode = 'live') {
   const status = renderLiveStatusText(game);
   const isFuture = isMatchBeforeKickoff(game);
-  const score = isFuture ? 'vs' : (game.homeGoals !== null && game.awayGoals !== null ? `${game.homeGoals} - ${game.awayGoals}` : 'vs');
+  const actualScore = isFuture ? 'vs' : (game.homeGoals !== null && game.awayGoals !== null ? `${game.homeGoals} - ${game.awayGoals}` : 'vs');
   const local = localMatchById(game.id);
   const homeScorers = isFuture ? '' : compactScorersForCard(scorerValueForSide(game, 'home'));
   const awayScorers = isFuture ? '' : compactScorersForCard(scorerValueForSide(game, 'away'));
 
   return `
-    <button type="button" class="api-game-card ${game.live ? 'is-live' : ''} ${game.finished ? 'is-finished' : ''}" data-live-match="${escapeHtml(game.id)}">
+    <div class="api-game-card ${game.live ? 'is-live' : ''} ${game.finished ? 'is-finished' : ''}" data-live-match="${escapeHtml(game.id)}">
       <div class="api-game-top"><span>Jogo ${escapeHtml(game.id)} · ${escapeHtml(STAGE_LABELS[game.stage] || game.stage)}</span><b>${status}</b></div>
       <div class="api-score-line api-score-line-with-scorers">
         <div class="api-team-score-side">
           <strong>${escapeHtml(game.homeTeam || local?.home || 'A definir')}</strong>
           ${homeScorers}
         </div>
-        <span>${score}</span>
+        <span>${actualScore}</span>
         <div class="api-team-score-side api-team-score-side-away">
           <strong>${escapeHtml(game.awayTeam || local?.away || 'A definir')}</strong>
           ${awayScorers}
         </div>
       </div>
       <p class="modal-muted">${escapeHtml(game.date || local?.date || '')} ${escapeHtml(game.time || local?.time || '')}${game.venue ? ` · ${escapeHtml(game.venue)}` : ''}</p>
-    </button>
+    </div>
   `;
 }
 
@@ -235,10 +235,10 @@ function apiScorerList(value) {
   if (value == null) return [];
 
   const clean = item => String(item || '')
-    .replace(/[{}[\]"]/g, '') // Limpa chavetas, parênteses retos e aspas residuais de JSON
+    .replace(/[{}[\]"]/g, '')
     .replace(/\s+/g, ' ')
     .replace(/^\d+\s*[:.'’-]\s*/, '')
-    .replace(/\b\d{1,3}(?:\+\d+)?['’]?/g, '') // Remove o número do minuto e o apóstrofo
+    .replace(/\b\d{1,3}(?:\+\d+)?['’]?/g, '')
     .trim();
 
   const fromObject = obj => {
@@ -296,7 +296,6 @@ function renderScorersBlock(game) {
     <section><h3>${escapeHtml(game.awayTeam || 'Fora')}</h3>${away.length ? `<ul>${away.map(s => `<li>⚽ ${escapeHtml(s)}</li>`).join('')}</ul>` : '<p class="modal-muted">Sem marcadores.</p>'}</section>
   </div>`;
 }
-
 
 function findSportsDbEventIdForGame(game, local) {
   return game?.apiEventId || game?.externalEventId || game?.idEvent || getOfficialResult(game?.id || local?.id)?.apiEventId || local?.apiEventId || null;
@@ -605,13 +604,53 @@ function renderLiveGameUserPredictions(gameId) {
   }
 
   const gamePredictions = [];
+  const official = getOfficialResult(gameId) || worldCupApi.games.find(g => String(g.id) === String(gameId)) || null;
+  const isKnockout = official ? official.stage !== 'groups' : true;
+
   publicPredictions.forEach(player => {
-    const pred = (player.matches || []).find(m => String(m.id) === String(gameId));
-    if (pred && pred.homeGoals !== '' && pred.awayGoals !== '' && pred.homeGoals !== null && pred.awayGoals !== null) {
-      gamePredictions.push({
-        player,
-        pred
-      });
+    const initialPred = typeof findInitialPredictionForMatch === 'function'
+      ? findInitialPredictionForMatch(player, official || { id: gameId })
+      : (player.matches || []).find(m => String(m.id) === String(gameId));
+
+    const override = typeof getSection2DocForPlayer === 'function' ? getSection2DocForPlayer(player, gameId) : null;
+
+    if (isKnockout) {
+      if (!override) return;
+      let finalPred = null;
+      if (override.mode === 'changed') {
+        finalPred = {
+          homeGoals: override.homeGoals,
+          awayGoals: override.awayGoals,
+          winnerTeam: override.winnerTeam,
+          method: override.method,
+          homeTeam: override.homeTeam,
+          awayTeam: override.awayTeam
+        };
+      } else if (override.mode === 'replicate' && initialPred) {
+        finalPred = {
+          homeGoals: initialPred.homeGoals,
+          awayGoals: initialPred.awayGoals,
+          winnerTeam: initialPred.winnerTeam,
+          method: initialPred.method,
+          homeTeam: initialPred.homeTeam,
+          awayTeam: initialPred.awayTeam
+        };
+      }
+      if (finalPred && finalPred.homeGoals !== '' && finalPred.awayGoals !== '' && finalPred.homeGoals !== null && finalPred.awayGoals !== null) {
+        gamePredictions.push({
+          player,
+          pred: finalPred,
+          override
+        });
+      }
+    } else {
+      if (initialPred && initialPred.homeGoals !== '' && initialPred.awayGoals !== '' && initialPred.homeGoals !== null && initialPred.awayGoals !== null) {
+        gamePredictions.push({
+          player,
+          pred: initialPred,
+          override: null
+        });
+      }
     }
   });
 
@@ -626,7 +665,6 @@ function renderLiveGameUserPredictions(gameId) {
     return nameA.localeCompare(nameB, 'pt-PT');
   });
 
-  const official = getOfficialResult(gameId) || worldCupApi.games.find(g => String(g.id) === String(gameId)) || null;
   const filterOptions = livePredictionFilterOptions(gamePredictions, official);
   const activeFilter = filterOptions.some(option => option.key === livePredictionFilters[String(gameId)])
     ? livePredictionFilters[String(gameId)]
@@ -658,12 +696,12 @@ function renderLiveGameUserPredictions(gameId) {
             const methodLabel = item.pred.method === 'et' ? 'prolongamento' : 'penáltis';
             extra = ` (${methodLabel})`;
           }
-          const predText = `${escapeHtml(item.pred.homeTeam)} ${item.pred.homeGoals}-${item.pred.awayGoals} ${escapeHtml(item.pred.awayTeam)}${extra}`;
+          const predText = `${item.pred.homeGoals}-${item.pred.awayGoals}${extra}`;
           
           // Verificar se está a ganhar em direto (resultado exato)
           let isWinning = false;
           if (official && official.homeGoals !== null && official.awayGoals !== null) {
-            const evaluation = scoreOnePrediction(item.pred, official);
+            const evaluation = typeof scoreOnePrediction === 'function' ? scoreOnePrediction(item.pred, official, item.override) : null;
             if (evaluation && evaluation.exact === true) {
               isWinning = true;
             }
@@ -881,7 +919,7 @@ function buildDiverseLiveBattlePairs(rows, game, limit = 10) {
         String(p.id) === String(row.id) ||
         participantKeyForLiveBattle(p) === (row.participantKey || participantKeyForLiveBattle(row))
       );
-      const pred = (player?.matches || []).find(match => Number(match.id) === Number(game.id));
+      const pred = typeof findInitialPredictionForMatch === 'function' ? findInitialPredictionForMatch(player, game) : (player?.matches || []).find(match => Number(match.id) === Number(game.id));
       return player && pred ? { row, player, pred, index } : null;
     })
     .filter(Boolean);

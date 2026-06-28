@@ -25,6 +25,17 @@ function localMatchById(id) {
   return data?.matches?.find(m => String(m.id) === String(id)) || null;
 }
 
+function isMatchBeforeKickoff(game) {
+  if (!game) return false;
+  const local = localMatchById(game.id || game.matchId);
+  const dateStr = game.date || local?.date;
+  const timeStr = game.time || local?.time;
+  if (!dateStr) return false;
+  const kickoff = getMatchDateObj({ date: dateStr, time: timeStr || '12:00' });
+  return new Date() < kickoff;
+}
+window.isMatchBeforeKickoff = isMatchBeforeKickoff;
+
 function normalizeTeamForApi(name) {
   return String(name || '')
     .toLowerCase()
