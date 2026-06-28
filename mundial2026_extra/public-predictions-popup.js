@@ -68,7 +68,7 @@ function renderPublicByGame(stage = publicViewerStage, filter = publicGameFilter
         const predictions = publicPredictions.map(item => ({
           player: item.participantName || 'Participante',
           item,
-          match: (item.matches || []).find(row => Number(row.id) === Number(match.id))
+          match: (typeof findInitialPredictionForMatch === "function" ? findInitialPredictionForMatch(item, match) : (item.matches || []).find(row => Number(row.id) === Number(match.id)))
         })).filter(row => {
           if (!row.match) return false;
           if (filter === 'points3' || filter === 'points1') {
@@ -204,6 +204,8 @@ function openGgamesRulesModal() {
       </ul>
       <h3>Estatísticas da tabela</h3>
       <ul>
+        <li><strong>BW:</strong> Battle Wins — Vitórias obtidas nos Battles (confrontos diretos com outros jogadores). Cada 2 vitórias de Battle concedem +1 ponto extra na classificação.</li>
+        <li><strong>PP:</strong> Prognósticos Pontos — Pontos ganhos ao acertar nos confrontos corretos das eliminatórias (por exemplo, +2 pontos por cada confronto correto nos 16 avos do prognóstico inicial).</li>
         <li><strong>Acertados:</strong> prognósticos que deram pontos.</li>
         <li><strong>Falhados:</strong> prognósticos de jogos já disputados que não deram pontos.</li>
         <li><strong>GM:</strong> golos marcados — golos que o jogador acertou no prognóstico.</li>
@@ -438,7 +440,7 @@ async function openPublicPredictionsModal() {
             const predictions = publicPredictions.map(item => ({
               player: item.participantName || 'Participante',
               item,
-              match: (item.matches || []).find(row => Number(row.id) === Number(match.id))
+              match: (typeof findInitialPredictionForMatch === "function" ? findInitialPredictionForMatch(item, match) : (item.matches || []).find(row => Number(row.id) === Number(match.id)))
             })).filter(row => {
               if (!row.match) return false;
               if (filter === 'points3' || filter === 'points1') {
