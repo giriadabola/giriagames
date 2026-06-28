@@ -23,6 +23,7 @@
     if (!clean || clean === 'none' || clean === 'tbd' || clean === 'tbc' || clean === 'a definir' || clean === 'a confirmar' || clean === '?') return true;
     return /grupo|vencedor|perdedor|jogo|venc\.|perd\./i.test(clean);
   }
+  window.isTeamUnresolved = isTeamUnresolved;
 
   const matchKickoff = (match) => new Date(`${match.date}T${match.time || '12:00'}:00`);
   const stageStart = (stage) => {
@@ -737,6 +738,7 @@
 })();
 /* Secção 2 aprovada — janelas Firebase + dropdown de participante + PIN + gravação em worldcupextraReforms */
 (function approvedReformWindowsWithPin() {
+  const isTeamUnresolved = window.isTeamUnresolved;
   const REFORM_COLLECTION = 'worldcupextraReforms';
   const REFORM_SETTINGS_COLLECTION = 'settings';
   const REFORM_SETTINGS_DOC = 'endateworld';
