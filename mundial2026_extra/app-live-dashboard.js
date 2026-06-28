@@ -1121,7 +1121,11 @@ function openGgamesPlayerHistory(playerId) {
     const match = data?.matches?.find(m => String(m.id) === String(pred.id)) || {};
     const official = getOfficialResult(pred.id);
     const isLive = !!official && isOfficialResultLive(official) && !isOfficialResultFinished(official);
-    const score = official && isOfficialResultFinished(official) ? scoreOnePrediction(pred, official) : null;
+    
+    // FETCH THE SECTION 2 REFORMULATION OVERRIDE DOC
+    const override = typeof getSection2DocForPlayer === 'function' ? getSection2DocForPlayer(playerDoc, pred.id) : null;
+    const score = official && isOfficialResultFinished(official) ? scoreOnePrediction(pred, official, override) : null;
+    
     const status = official
       ? (isLive ? 'Live' : (score?.points > 0 ? 'Acertou' : 'Falhou'))
       : 'Por jogar';
@@ -1137,11 +1141,22 @@ function openGgamesPlayerHistory(playerId) {
     const resultCell = isFinished
       ? `<td class="history-result-cell-clickable" data-match-id="${pred.id}" onclick="handleHistoryResultClick(this.dataset.matchId)" style="cursor: pointer; text-decoration: underline; color: var(--accent); font-weight: bold;">${officialText}</td>`
       : `<td>${officialText}</td>`;
+      
+    let predText = predictionResultText(pred);
+    if (override && override.mode === 'changed') {
+      predText = `${escapeHtml(override.homeTeam)} ${override.homeGoals}-${override.awayGoals} ${escapeHtml(override.awayTeam)}`;
+      if (override.winnerTeam) {
+        predText += ` <span style="font-size:0.75rem; opacity:0.85;">(vence ${escapeHtml(override.winnerTeam)})</span>`;
+      }
+    } else if (override && override.mode === 'replicate') {
+      predText += ` <small style="opacity: 0.65; font-size: 0.72rem;">(Mantido)</small>`;
+    }
+
     return `
       <tr>
         <td>${escapeHtml(pred.id)}</td>
         <td><span class="history-pill ${statusClass}">${status}${score ? ` · ${score.points} pts` : ''}</span></td>
-        <td>${predictionResultText(pred)}</td>
+        <td>${predText}</td>
         ${resultCell}
         <td>${escapeHtml(match.stageLabel || STAGE_LABELS[match.stage] || match.stage || 'Jogo')}</td>
       </tr>`;
