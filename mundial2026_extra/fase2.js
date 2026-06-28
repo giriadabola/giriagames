@@ -299,8 +299,14 @@
     const oh = Number(official.homeGoals);
     const oa = Number(official.awayGoals);
     const sidesOk = sameTeamsSameSides(pred, official);
-    const exact = sidesOk && ph === oh && pa === oa;
     const winnerHit = teamKey(predictedWinnerTeam(pred)) === teamKey(officialWinnerTeam(official));
+    let exact = sidesOk && ph === oh && pa === oa;
+    if (!exact && sidesOk && ph === pa && pred.method === 'et' && official.method === 'et' && winnerHit) {
+      const implied90 = Math.min(oh, oa);
+      if (ph === implied90 && pa === implied90) {
+        exact = true;
+      }
+    }
     const group = stage === 'groups';
     const final = stage === 'final';
 

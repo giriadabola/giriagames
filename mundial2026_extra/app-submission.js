@@ -459,11 +459,17 @@ function scoreOnePrediction(pred, official) {
   const oa = Number(official.awayGoals);
   const stage = pred.stage || official.stage || 'groups';
   const teamsMatch = teamsMatchPrediction(pred, official);
-  const exact = teamsMatch && ph === oh && pa === oa;
   const actual = actualOutcome(official);
   const predicted = predictionOutcome(pred);
   const outcomeHit = teamsMatch && actual === predicted;
   const winnerHit = pred.winnerTeam && officialWinnerTeam(official) !== 'Empate' && sameTeamName(pred.winnerTeam, officialWinnerTeam(official));
+  let exact = teamsMatch && ph === oh && pa === oa;
+  if (!exact && teamsMatch && ph === pa && pred.method === 'et' && official.method === 'et' && winnerHit) {
+    const implied90 = Math.min(oh, oa);
+    if (ph === implied90 && pa === implied90) {
+      exact = true;
+    }
+  }
 
   let points = 0;
   if (stage === 'groups') {
