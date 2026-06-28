@@ -211,6 +211,19 @@
 
   window.getSection2DocForPlayer = getSection2DocForPlayer;
   window.resolveSection2OfficialTeam = resolveOfficialTeam;
+  
+  function findInitialPredictionForMatch(item, match, home = null, away = null) {
+    if (!item || !match) return null;
+    const matches = item.matches || [];
+    if (match.stage && match.stage !== 'groups') {
+      const h = home || resolveOfficialTeam(match, 'home');
+      const a = away || resolveOfficialTeam(match, 'away');
+      const matchupPred = matches.find(p => p.stage === match.stage && sameMatchupAnySide(p, { homeTeam: h, awayTeam: a }));
+      if (matchupPred) return matchupPred;
+    }
+    return matches.find(row => Number(row.id) === Number(match.id || match.matchId));
+  }
+  window.findInitialPredictionForMatch = findInitialPredictionForMatch;
 
   function predictedWinnerTeam(pred) {
     if (!pred) return '';
@@ -331,6 +344,11 @@
     let result;
     if (!override || override.mode === 'replicate') {
       result = scoreInitialPrediction(pred, official);
+      if (official.stage && official.stage !== 'groups') {
+        const isFinal = official.stage === 'final';
+        const matchupBonus = sameMatchupAnySide(pred, official) ? (isFinal ? numericRule('finalInitialWinner') : numericRule('knockoutInitialWinner')) : 0;
+        result.points += matchupBonus;
+      }
     } else {
       result = scoreSection2Changed(pred, override, official);
     }
@@ -386,10 +404,12 @@
         lossesHit: 0,
         exactResults: 0
       };
-      (item.matches || []).forEach(pred => {
-        const official = getOfficialResult(pred.id);
+      (data?.matches || []).forEach(match => {
+        const official = getOfficialResult(match.id);
         if (!official) return;
-        const override = getSection2DocForPlayer(item, pred.id);
+        const pred = findInitialPredictionForMatch(item, match);
+        if (!pred) return;
+        const override = getSection2DocForPlayer(item, match.id);
         const score = scoreOnePrediction(pred, official, override);
         stats.points += score.points;
         stats.correctPredictions += score.points > 0 ? 1 : 0;
@@ -998,7 +1018,7 @@
       const away = resolveOfficialTeamLocal(match, 'away');
       const unresolved = /Grupo|Vencedor Jogo|Perdedor Jogo/.test(`${home} ${away}`);
       if (unresolved) return false;
-      const initialPred = (item.matches || []).find(row => Number(row.id) === Number(match.id));
+      const initialPred = findInitialPredictionForMatch(item, match, home, away);
       return initialPred && sameMatchupAnySideLocal(initialPred, { homeTeam: home, awayTeam: away });
     });
 
@@ -1071,7 +1091,7 @@
     const away = resolveOfficialTeamLocal(match, 'away');
     const unresolved = /Grupo|Vencedor Jogo|Perdedor Jogo/.test(`${home} ${away}`);
     const open = isStageWindowOpen(match.stage) && !unresolved && new Date() < matchKickoffLocal(match);
-    const initialPred = (item.matches || []).find(row => Number(row.id) === Number(match.id));
+    const initialPred = findInitialPredictionForMatch(item, match, home, away);
     const initialMatchupOk = initialPred && sameMatchupAnySideLocal(initialPred, { homeTeam: home, awayTeam: away });
     const saved = findSavedReform(item, match.id);
     const mode = saved?.mode || (initialMatchupOk ? 'replicate' : 'changed');
@@ -1185,7 +1205,7 @@
     }
 
     const participantKey = getParticipantKey(item);
-    const initialPred = (item.matches || []).find(row => Number(row.id) === Number(match.id));
+    const initialPred = findInitialPredictionForMatch(item, match, homeTeam, awayTeam);
     const initialMatchupOk = initialPred && sameMatchupAnySideLocal(initialPred, { homeTeam, awayTeam });
     const selectedMode = card.querySelector(`input[name="reform-mode-${match.id}"]:checked`)?.value || (initialMatchupOk ? 'replicate' : 'changed');
     const mode = initialMatchupOk ? selectedMode : 'changed';
