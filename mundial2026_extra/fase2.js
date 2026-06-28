@@ -17,6 +17,13 @@
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/g, '');
 
+  function isTeamUnresolved(name) {
+    if (!name) return true;
+    const clean = String(name).trim().toLowerCase();
+    if (!clean || clean === 'none' || clean === 'tbd' || clean === 'tbc' || clean === 'a definir' || clean === 'a confirmar' || clean === '?') return true;
+    return /grupo|vencedor|perdedor|jogo|venc\.|perd\./i.test(clean);
+  }
+
   const matchKickoff = (match) => new Date(`${match.date}T${match.time || '12:00'}:00`);
   const stageStart = (stage) => {
     const matches = data?.matches?.filter(m => m.stage === stage) || [];
@@ -402,16 +409,36 @@
         winsHit: 0,
         drawsHit: 0,
         lossesHit: 0,
-        exactResults: 0
+        exactResults: 0,
+        matchupPoints: 0
       };
       (data?.matches || []).forEach(match => {
+        const home = resolveOfficialTeam(match, 'home');
+        const away = resolveOfficialTeam(match, 'away');
+        const unresolved = isTeamUnresolved(home) || isTeamUnresolved(away);
+        
+        const pred = findInitialPredictionForMatch(item, match, home, away);
+        
+        let matchupBonus = 0;
+        if (!unresolved && match.stage === 'round32' && pred) {
+          if (sameMatchupAnySide(pred, { homeTeam: home, awayTeam: away })) {
+            matchupBonus = numericRule('knockoutInitialWinner');
+            stats.matchupPoints += matchupBonus;
+            stats.points += matchupBonus;
+          }
+        }
+
         const official = getOfficialResult(match.id);
         if (!official) return;
-        const pred = findInitialPredictionForMatch(item, match);
         if (!pred) return;
+
         const override = getSection2DocForPlayer(item, match.id);
         const score = scoreOnePrediction(pred, official, override);
-        stats.points += score.points;
+        
+        // Remove double-counted matchupBonus from score.points since we already added it above
+        const resultPoints = score.points - (score.matchupBonus || 0);
+        stats.points += resultPoints;
+        
         stats.correctPredictions += score.points > 0 ? 1 : 0;
         stats.failedPredictions += score.points === 0 ? 1 : 0;
         stats.goalsHit += score.goalsHit;
@@ -1016,7 +1043,7 @@
     const correctMatchups = matches.filter(match => {
       const home = resolveOfficialTeamLocal(match, 'home');
       const away = resolveOfficialTeamLocal(match, 'away');
-      const unresolved = /Grupo|Vencedor Jogo|Perdedor Jogo/.test(`${home} ${away}`);
+      const unresolved = isTeamUnresolved(home) || isTeamUnresolved(away);
       if (unresolved) return false;
       const initialPred = findInitialPredictionForMatch(item, match, home, away);
       return initialPred && sameMatchupAnySideLocal(initialPred, { homeTeam: home, awayTeam: away });
@@ -1089,7 +1116,7 @@
   function renderReformMatch(match, item) {
     const home = resolveOfficialTeamLocal(match, 'home');
     const away = resolveOfficialTeamLocal(match, 'away');
-    const unresolved = /Grupo|Vencedor Jogo|Perdedor Jogo/.test(`${home} ${away}`);
+    const unresolved = isTeamUnresolved(home) || isTeamUnresolved(away);
     const open = isStageWindowOpen(match.stage) && !unresolved && new Date() < matchKickoffLocal(match);
     const initialPred = findInitialPredictionForMatch(item, match, home, away);
     const initialMatchupOk = initialPred && sameMatchupAnySideLocal(initialPred, { homeTeam: home, awayTeam: away });
@@ -1199,7 +1226,7 @@
     }
     const homeTeam = resolveOfficialTeamLocal(match, 'home');
     const awayTeam = resolveOfficialTeamLocal(match, 'away');
-    if (/Grupo|Vencedor Jogo|Perdedor Jogo/.test(`${homeTeam} ${awayTeam}`)) {
+    if (isTeamUnresolved(homeTeam) || isTeamUnresolved(awayTeam)) {
       alert('Ainda falta definir oficialmente as seleções deste jogo.');
       return;
     }

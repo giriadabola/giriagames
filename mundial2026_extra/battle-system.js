@@ -499,6 +499,7 @@
                   <th>Jogador</th>
                   ${ggamesSortHeaderSafe('points', 'Pontos')}
                   ${ggamesSortHeaderSafe('battleWins', 'BW', 'Battle Wins')}
+                  ${ggamesSortHeaderSafe('matchupPoints', 'PP', 'Prognósticos Pontos (Confrontos certos)')}
                   ${ggamesSortHeaderSafe('correctPredictions', 'A', 'Acertados')}
                   ${ggamesSortHeaderSafe('failedPredictions', 'E', 'Errados')}
                   ${ggamesSortHeaderSafe('goalsHit', 'GM', 'Golos marcados')}
@@ -518,6 +519,7 @@
                     <td><button type="button" class="ggames-player-link" data-live-player="${escapeHtml(row.id)}"><strong>${renderParticipantIdentity(row.name, row.icon, 'participant-ident--compact')}</strong></button></td>
                     <td><strong>${row.points}</strong>${showBw && row.battleBonusPoints ? `<small class="battle-bonus-note">+${row.battleBonusPoints} BW</small>` : ''}${liveMode && liveDelta > 0 ? `<small class="live-points-note">+${liveDelta} live</small>` : ''}</td>
                     <td title="Battle Wins">${showBw ? (row.battleWins || 0) : 0}</td>
+                    <td title="Prognósticos Pontos (Confrontos certos)">${row.matchupPoints || 0}</td>
                     <td>${row.correctPredictions}</td>
                     <td>${row.failedPredictions}</td>
                     <td title="Golos marcados">${row.goalsHit}</td>

@@ -16,7 +16,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <script>
     (() => {
-      const CACHE_CLEAR_VERSION = '20260628-index-restrict-24';
+      const CACHE_CLEAR_VERSION = '20260628-index-restrict-28';
       const CACHE_CLEAR_KEY = 'ggames-index-cache-clear-version';
       const RELOAD_FLAG_KEY = 'ggames-index-cache-clear-reloaded';
       const IOS_STANDALONE_KEY = 'ggames-ios-standalone-cache-clear-version';
@@ -76,9 +76,9 @@
   <script defer src="app-submission.js?v=20260628cacheforce3"></script>
   <script defer src="ggames-api-fallback.js?v=20260618modular2"></script>
   <script defer src="live-index.js?v=20260617cachefix5"></script>
-  <script defer src="fase2.js?v=20260628fase2fix7"></script>
+  <script defer src="fase2.js?v=20260628fase2fix10"></script>
   <script defer src="public-predictions-popup.js?v=20260628cacheforce5"></script>
-  <script defer src="battle-system.js?v=20260624battlefix2"></script>
+  <script defer src="battle-system.js?v=20260628battlefix3"></script>
   <script defer src="pwa-install.js?v=20260628pwa1"></script>
   <script defer src="app-main.js?v=20260628modular4"></script>
 
@@ -132,7 +132,10 @@
           <span style="display: none;"><strong id="juggleHighScore">0</strong></span>
         </div>
         <canvas id="jugglingCanvas" width="200" height="140" style="background: rgba(255,255,255,0.03); border-radius: 12px; border: 1px solid rgba(255,255,255,0.08); cursor: pointer;"></canvas>
-        <button id="juggleBtn" type="button" class="primary" style="padding: 6px 20px; font-size: 0.9rem; margin-top: 5px; box-shadow: 0 4px 12px rgba(97,211,148,0.25);">Clicar</button>
+        <div style="display: flex; gap: 10px; margin-top: 5px;">
+          <button id="headBtn" type="button" class="primary" style="padding: 6px 20px; font-size: 0.9rem; background-color: #f8c14a; border-color: #f8c14a; color: #07111f; box-shadow: 0 4px 12px rgba(248,193,74,0.25);">Cabeça</button>
+          <button id="footBtn" type="button" class="primary" style="padding: 6px 20px; font-size: 0.9rem; background-color: #61d394; border-color: #61d394; color: #07111f; box-shadow: 0 4px 12px rgba(97,211,148,0.25);">Pé</button>
+        </div>
       </div>
     </div>
   </div>
@@ -627,7 +630,8 @@
       const canvas = document.getElementById('jugglingCanvas');
       if (!canvas) return;
       const ctx = canvas.getContext('2d');
-      const btn = document.getElementById('juggleBtn');
+      const headBtn = document.getElementById('headBtn');
+      const footBtn = document.getElementById('footBtn');
       const scoreEl = document.getElementById('juggleScore');
       const highScoreEl = document.getElementById('juggleHighScore');
 
@@ -637,11 +641,13 @@
         radius: 7,
         vy: 0,
         vx: 0,
-        gravity: 0.25,
+        gravity: 0.21,
         bounce: -0.5
       };
 
       let playerX = 75;
+      let playerDirection = 1; // 1 for right, -1 for left
+      let playerSpeed = 0.8; // velocity of pacing
       let legAngle = 0;
       let isKicking = false;
       let kickTimer = 0;
@@ -666,30 +672,46 @@
         floatingTexts.push({ x, y, text, color, alpha: 1 });
       }
 
-      function kick() {
-        if (!gameStarted || ball.y >= 120 - ball.radius - 2) {
+      function kick(actionType) {
+        if (!gameStarted) {
           gameStarted = true;
-          ball.vy = -5.8;
-          ball.vx = 0.5;
-          score = 1; // O chute inicial já conta como 1 toque!
-          isKicking = true;
-          kickTimer = 0;
-          updateScoreboard();
-          addFloatingText(ball.x, ball.y - 10, 'Pé! +1', '#61d394');
+          playerDirection = playerX > canvas.width / 2 ? -1 : 1;
+          const vxDir = playerX > canvas.width / 2 ? -0.5 : 0.5;
+          if (actionType === 'head') {
+            ball.x = playerX;
+            ball.y = 80;
+            ball.vy = -3.8;
+            ball.vx = vxDir;
+            score = 1;
+            isHeading = true;
+            headingTimer = 0;
+            updateScoreboard();
+            addFloatingText(ball.x, ball.y - 10, 'Cabeça! +1', '#f8c14a');
+          } else {
+            ball.x = playerX + (playerDirection * 10);
+            ball.y = 110;
+            ball.vy = -5.8;
+            ball.vx = vxDir;
+            score = 1;
+            isKicking = true;
+            kickTimer = 0;
+            updateScoreboard();
+            addFloatingText(ball.x, ball.y - 10, 'Pé! +1', '#61d394');
+          }
           return;
         }
 
-        // Se a bola estiver alta e score >= 3, permite cabeceio
-        if (score >= 3 && ball.y < 95) {
-          const headX = playerX;
-          const headY = 75;
-          const distHead = Math.hypot(ball.x - headX, ball.y - headY);
+        if (actionType === 'head') {
+          // Permite cabeceio (com tolerância horizontal e vertical maiores)
+          const xDiff = Math.abs(ball.x - playerX);
+          const yDiff = Math.abs(ball.y - 75);
 
-          if (distHead < 28) { // Aumentado de 22 para 28
+          if (xDiff < 38 && yDiff < 28) {
             isHeading = true;
             headingTimer = 0;
-            ball.vy = -3.8 - Math.random() * 1.2;
-            ball.vx = (ball.x - playerX) * 0.15 + (Math.random() - 0.5) * 0.6;
+            ball.vy = -3.5 - Math.random() * 1.0;
+            ball.vx = (ball.x - playerX) * 0.1 + (Math.random() - 0.5) * 0.3;
+            ball.vx = Math.max(-1.2, Math.min(1.2, ball.vx));
             score++;
             if (score > highScore) {
               highScore = score;
@@ -697,49 +719,71 @@
             }
             updateScoreboard();
             addFloatingText(ball.x, ball.y - 10, 'Cabeça! +1', '#f8c14a');
-            return;
           }
-        }
+        } else if (actionType === 'foot') {
+          // Tenta chutar com o pé (com tolerância horizontal e vertical maiores)
+          isKicking = true;
+          kickTimer = 0;
+          
+          const footX = playerX + (playerDirection * 17);
+          const xDiff = Math.abs(ball.x - footX);
+          const yDiff = Math.abs(ball.y - 110);
 
-        // Caso contrário, tenta chutar com o pé
-        isKicking = true;
-        kickTimer = 0;
-        
-        const footX = playerX + 17;
-        const footY = 110;
-        const distFoot = Math.hypot(ball.x - footX, ball.y - footY);
-
-        if (distFoot < 32) { // Aumentado de 26 para 32
-          ball.vy = -5.2 - Math.random() * 1.5;
-          ball.vx = (ball.x - (playerX + 5)) * 0.18 + (Math.random() - 0.5) * 0.8;
-          score++;
-          if (score > highScore) {
-            highScore = score;
-            localStorage.setItem('juggling_highscore', highScore);
+          if (xDiff < 45 && yDiff < 34) {
+            ball.vy = -4.8 - Math.random() * 1.2;
+            ball.vx = (ball.x - (playerX + playerDirection * 5)) * 0.1 + (Math.random() - 0.5) * 0.4;
+            ball.vx = Math.max(-1.5, Math.min(1.5, ball.vx));
+            score++;
+            if (score > highScore) {
+              highScore = score;
+              localStorage.setItem('juggling_highscore', highScore);
+            }
+            updateScoreboard();
+            addFloatingText(ball.x, ball.y - 10, 'Pé! +1', '#61d394');
           }
-          updateScoreboard();
-          addFloatingText(ball.x, ball.y - 10, 'Pé! +1', '#61d394');
         }
       }
 
-      function handleAction(e) {
+      function handleHeadAction(e) {
         e.preventDefault();
         e.stopPropagation();
-        kick();
+        kick('head');
       }
 
-      btn.addEventListener('touchstart', handleAction, { passive: false });
-      btn.addEventListener('click', (e) => {
+      function handleFootAction(e) {
         e.preventDefault();
         e.stopPropagation();
-        kick();
-      });
+        kick('foot');
+      }
 
-      canvas.addEventListener('touchstart', handleAction, { passive: false });
+      headBtn.addEventListener('touchstart', handleHeadAction, { passive: false });
+      headBtn.addEventListener('click', handleHeadAction);
+
+      footBtn.addEventListener('touchstart', handleFootAction, { passive: false });
+      footBtn.addEventListener('click', handleFootAction);
+
+      canvas.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const rect = canvas.getBoundingClientRect();
+        const touchY = e.touches[0].clientY - rect.top;
+        if (touchY < rect.height / 2) {
+          kick('head');
+        } else {
+          kick('foot');
+        }
+      }, { passive: false });
+
       canvas.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        kick();
+        const rect = canvas.getBoundingClientRect();
+        const clickY = e.clientY - rect.top;
+        if (clickY < rect.height / 2) {
+          kick('head');
+        } else {
+          kick('foot');
+        }
       });
 
       function gameLoop() {
@@ -750,7 +794,11 @@
 
           // Jogador segue a bola horizontalmente de forma suave
           const targetPlayerX = ball.x - 12;
-          playerX += (targetPlayerX - playerX) * 0.12;
+          const diff = targetPlayerX - playerX;
+          if (Math.abs(diff) > 1) {
+            playerDirection = diff > 0 ? 1 : -1;
+          }
+          playerX += diff * 0.35;
 
           if (ball.x - ball.radius < 0) {
             ball.x = ball.radius;
@@ -771,9 +819,10 @@
               updateScoreboard();
               addFloatingText(ball.x, ball.y - 10, 'Ops! Chão 😢', '#ff6b6b');
             }
+            gameStarted = false; // Parar o jogo ao bater no chão
           }
         } else {
-          playerX = 75;
+          // Mantém a posição do jogador onde estava
         }
 
         // Animação de chute
@@ -828,11 +877,13 @@
 
         // Desenhar jogador
         ctx.save();
+        ctx.translate(playerX, 0);
+        ctx.scale(playerDirection, 1);
         
         // Cabeça (com offset vertical do cabeceio)
         ctx.fillStyle = '#eef4ff';
         ctx.beginPath();
-        ctx.arc(playerX, 75 + headOffsetY, 8, 0, Math.PI * 2);
+        ctx.arc(0, 75 + headOffsetY, 8, 0, Math.PI * 2);
         ctx.fill();
 
         // Corpo
@@ -840,20 +891,20 @@
         ctx.lineWidth = 4;
         ctx.lineCap = 'round';
         ctx.beginPath();
-        ctx.moveTo(playerX, 83 + (isHeading ? headOffsetY * 0.5 : 0));
-        ctx.lineTo(playerX, 105);
+        ctx.moveTo(0, 83 + (isHeading ? headOffsetY * 0.5 : 0));
+        ctx.lineTo(0, 105);
         ctx.stroke();
 
         // Perna de apoio
         ctx.lineWidth = 3.5;
         ctx.beginPath();
-        ctx.moveTo(playerX, 105);
-        ctx.lineTo(playerX - 5, 120);
+        ctx.moveTo(0, 105);
+        ctx.lineTo(-5, 120);
         ctx.stroke();
 
         // Perna de chute
         ctx.save();
-        ctx.translate(playerX, 105);
+        ctx.translate(0, 105);
         ctx.rotate(legAngle);
         ctx.beginPath();
         ctx.moveTo(0, 0);
