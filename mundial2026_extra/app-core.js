@@ -760,8 +760,8 @@ function assignThirdSlots(qualifiedThirds) {
   // Override for the official qualified third-placed groups combination (B, D, E, F, H, I, J, K)
   if (sortedGroupsStr === 'BDEFHIJK') {
     return {
-      '74:away': 'D', // Paraguai
-      '77:away': 'F', // Suécia
+      '75:away': 'D', // Paraguai
+      '78:away': 'F', // Suécia
       '79:away': 'E', // Equador
       '80:away': 'K', // RD Congo
       '81:away': 'I', // Senegal
@@ -774,8 +774,8 @@ function assignThirdSlots(qualifiedThirds) {
   // Override for the alternative combination with Group L (B, D, E, F, I, J, K, L)
   if (sortedGroupsStr === 'BDEFIJKL') {
     return {
-      '74:away': 'D', // Paraguai
-      '77:away': 'F', // Suécia
+      '75:away': 'D', // Paraguai
+      '78:away': 'F', // Suécia
       '79:away': 'E', // Equador
       '80:away': 'K', // RD Congo
       '81:away': 'I', // Senegal
