@@ -431,18 +431,8 @@
     let result;
     if (!override || override.mode === 'replicate') {
       result = scoreInitialPrediction(pred, official);
-      if (official.stage && official.stage !== 'groups') {
-        const isFinal = official.stage === 'final';
-        const matchupBonus = sameMatchupAnySide(pred, official) ? (isFinal ? numericRule('finalInitialWinner') : numericRule('knockoutInitialWinner')) : 0;
-        result.points += matchupBonus;
-      }
     } else {
       result = scoreSection2Changed(pred, override, official);
-    }
-
-    const stage = official?.stage || pred?.stage;
-    if (stage === 'round32' && pred && official && sameMatchupAnySide(pred, official)) {
-      result.points += 2;
     }
 
     return result;
@@ -499,8 +489,10 @@
         
         const pred = findInitialPredictionForMatch(item, match, home, away);
         
+        const override = getSection2DocForPlayer(item, match.id);
+
         let matchupBonus = 0;
-        if (!unresolved && match.stage === 'round32' && pred) {
+        if (!unresolved && match.stage === 'round32' && pred && override?.mode === 'changed') {
           if (sameMatchupAnySide(pred, { homeTeam: home, awayTeam: away })) {
             matchupBonus = numericRule('knockoutInitialWinner');
             stats.matchupPoints += matchupBonus;
@@ -512,7 +504,6 @@
         if (!official) return;
         if (!pred) return;
 
-        const override = getSection2DocForPlayer(item, match.id);
         const score = scoreOnePrediction(pred, official, override);
         
         // Remove double-counted matchupBonus from score.points since we already added it above
