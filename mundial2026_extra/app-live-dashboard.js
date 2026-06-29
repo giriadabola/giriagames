@@ -1185,8 +1185,8 @@ function openGgamesPlayerHistory(playerId) {
       : '';
     const isFinished = official && isOfficialResultFinished(official);
     const resultCell = isFinished
-      ? `<td class="history-result-cell-clickable" data-match-id="${match.id}" onclick="handleHistoryResultClick(this.dataset.matchId)" style="cursor: pointer; text-decoration: underline; color: var(--accent); font-weight: bold;">${officialText}</td>`
-      : `<td>${officialText}</td>`;
+      ? `<td data-label="Resultado" class="history-result-cell-clickable" data-match-id="${match.id}" onclick="handleHistoryResultClick(this.dataset.matchId)" style="cursor: pointer; text-decoration: underline; color: var(--accent); font-weight: bold;">${officialText}</td>`
+      : `<td data-label="Resultado">${officialText}</td>`;
       
     let predText = predictionResultText(pred);
     if (override && override.mode === 'changed') {
@@ -1206,11 +1206,11 @@ function openGgamesPlayerHistory(playerId) {
 
     return `
       <tr>
-        <td>${escapeHtml(match.id)}</td>
+        <td data-label="Jogo">${escapeHtml(match.id)}</td>
         <td><span class="history-pill ${statusClass}">${status}${score ? ` · ${score.points} pts` : ''}</span></td>
-        <td>${predText}</td>
+        <td data-label="Prognóstico">${predText}</td>
         ${resultCell}
-        <td>${escapeHtml(match.stageLabel || STAGE_LABELS[match.stage] || match.stage || 'Jogo')}</td>
+        <td data-label="Fase">${escapeHtml(match.stageLabel || STAGE_LABELS[match.stage] || match.stage || 'Jogo')}</td>
       </tr>`;
   }).join('');
 
