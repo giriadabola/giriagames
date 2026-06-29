@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Migração de IDs de Jogos (74, 75, 76) — Mundial 2026</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #061120;
+      --panel: #0b1b31;
+      --panel2: #10233d;
+      --line: rgba(148, 163, 184, 0.25);
+      --text: #ecfdf5;
+      --muted: #9fb2ca;
+      --accent: #61d394;
+      --danger: #fb7185;
+      --warn: #fbbf24;
+      --primary: #3b82f6;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, Segoe UI, sans-serif;
+      background: radial-gradient(circle at 0 0, rgba(59, 130, 246, 0.15), transparent 35%),
+                  radial-gradient(circle at 100% 100%, rgba(97, 211, 148, 0.15), transparent 35%),
+                  var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .container {
+      width: min(650px, 100%);
+      background: linear-gradient(180deg, rgba(16, 35, 61, 0.95), rgba(8, 20, 39, 0.95));
+      border: 1px solid var(--line);
+      border-radius: 28px;
+      padding: 32px;
+      box-shadow: 0 25px 70px rgba(0, 0, 0, 0.4);
+      backdrop-filter: blur(10px);
+    }
+    h1 {
+      margin: 0 0 10px;
+      font-size: 1.8rem;
+      background: linear-gradient(135deg, #61d394, #3b82f6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      font-weight: 800;
+      text-align: center;
+    }
+    p {
+      color: var(--muted);
+      line-height: 1.6;
+      font-size: 0.95rem;
+      margin-top: 0;
+      margin-bottom: 24px;
+      text-align: center;
+    }
+    .form-group {
+      margin-bottom: 16px;
+    }
+    .form-group label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--muted);
+    }
+    input {
+      width: 100%;
+      font: inherit;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: #071529;
+      color: var(--text);
+      padding: 12px;
+      transition: all 0.2s ease;
+    }
+    input:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
+    }
+    .btn-group {
+      margin-top: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    button {
+      font: inherit;
+      border-radius: 14px;
+      border: 0;
+      cursor: pointer;
+      font-weight: 800;
+      padding: 14px;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    button.primary {
+      background: linear-gradient(135deg, #3b82f6, #61d394);
+      color: #041021;
+    }
+    button.primary:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(59, 130, 246, 0.35);
+    }
+    button.secondary {
+      background: #122642;
+      color: var(--text);
+      border: 1px solid var(--line);
+    }
+    button.secondary:hover:not(:disabled) {
+      background: #183256;
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none !important;
+      box-shadow: none !important;
+    }
+    .log-box {
+      margin-top: 28px;
+      background: #040d1a;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 16px;
+      font-family: monospace;
+      font-size: 0.85rem;
+      max-height: 250px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      color: var(--muted);
+      display: none;
+      text-align: left;
+    }
+    .good { color: var(--accent); }
+    .bad { color: var(--danger); }
+    .warn { color: var(--warn); }
+    .auth-card {
+      margin-bottom: 20px;
+    }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h1>Migração de IDs de Jogos (74, 75, 76)</h1>
+  <p>Esta ferramenta corrige a rotação de IDs nos prognósticos dos utilizadores e ajusta as informações de Alemanha vs Paraguai (ID 74), Países Baixos vs Marrocos (ID 75) e Brasil vs Japão (ID 76) para coincidir com a numeração oficial da FIFA.</p>
+
+  <!-- Login Form -->
+  <div id="authArea" class="auth-card">
+    <div class="form-group">
+      <label for="adminEmail">Email de Administrador</label>
+      <input type="email" id="adminEmail" placeholder="admin@gmail.com" required>
+    </div>
+    <div class="form-group">
+      <label for="adminPassword">Palavra-passe</label>
+      <input type="password" id="adminPassword" placeholder="••••••••" required>
+    </div>
+    <div class="btn-group">
+      <button type="button" id="loginBtn" class="primary">Iniciar Sessão</button>
+    </div>
+  </div>
+
+  <!-- Action Area -->
+  <div id="actionArea" class="hidden">
+    <div class="btn-group">
+      <button type="button" id="migrateBtn" class="primary">Executar Migração Geral</button>
+      <button type="button" id="logoutBtn" class="secondary">Terminar Sessão</button>
+    </div>
+  </div>
+
+  <!-- Console Log Box -->
+  <div id="logBox" class="log-box">Console do Processo de Migração:</div>
+</div>
+
+<script src="app-core.js"></script>
+<script>
+  let app, db, auth;
+  let tools = {};
+  let currentUser = null;
+
+  const authArea = document.getElementById('authArea');
+  const actionArea = document.getElementById('actionArea');
+  const loginBtn = document.getElementById('loginBtn');
+  const logoutBtn = document.getElementById('logoutBtn');
+  const migrateBtn = document.getElementById('migrateBtn');
+  const logBox = document.getElementById('logBox');
+
+  function log(message, type = '') {
+    logBox.style.display = 'block';
+    const prefix = type === 'bad' ? '❌ ' : type === 'good' ? '✅ ' : type === 'warn' ? '⚠️ ' : '• ';
+    const span = document.createElement('span');
+    if (type) span.className = type;
+    span.textContent = `\n${prefix}${message}`;
+    logBox.appendChild(span);
+    logBox.scrollTop = logBox.scrollHeight;
+  }
+
+  async function initFirebase() {
+    try {
+      const appModule = await import(`https://www.gstatic.com/firebasejs/${FIREBASE_SDK_VERSION}/firebase-app.js`);
+      const firestoreModule = await import(`https://www.gstatic.com/firebasejs/${FIREBASE_SDK_VERSION}/firebase-firestore.js`);
+      const authModule = await import(`https://www.gstatic.com/firebasejs/${FIREBASE_SDK_VERSION}/firebase-auth.js`);
+
+      app = appModule.initializeApp(FIREBASE_CONFIG);
+      db = firestoreModule.getFirestore(app);
+      auth = authModule.getAuth(app);
+
+      tools = {
+        doc: firestoreModule.doc,
+        getDoc: firestoreModule.getDoc,
+        getDocs: firestoreModule.getDocs,
+        setDoc: firestoreModule.setDoc,
+        updateDoc: firestoreModule.updateDoc,
+        deleteDoc: firestoreModule.deleteDoc,
+        collection: firestoreModule.collection,
+        query: firestoreModule.query,
+        serverTimestamp: firestoreModule.serverTimestamp,
+        Timestamp: firestoreModule.Timestamp,
+        orderBy: firestoreModule.orderBy
+      };
+
+      authModule.onAuthStateChanged(auth, (user) => {
+        currentUser = user;
+        if (user) {
+          log(`Sessão iniciada como: ${user.email}`, 'good');
+          authArea.classList.add('hidden');
+          actionArea.classList.remove('hidden');
+        } else {
+          log('Sem sessão ativa. Por favor, faz login.');
+          authArea.classList.remove('hidden');
+          actionArea.classList.add('hidden');
+        }
+      });
+    } catch (err) {
+      log(`Erro ao inicializar Firebase: ${err.message}`, 'bad');
+    }
+  }
+
+  loginBtn.addEventListener('click', async () => {
+    const email = document.getElementById('adminEmail').value.trim();
+    const password = document.getElementById('adminPassword').value;
+    if (!email || !password) {
+      log('Preenche todos os campos.', 'warn');
+      return;
+    }
+    loginBtn.disabled = true;
+    try {
+      const authModule = await import(`https://www.gstatic.com/firebasejs/${FIREBASE_SDK_VERSION}/firebase-auth.js`);
+      await authModule.signInWithEmailAndPassword(auth, email, password);
+    } catch (err) {
+      log(`Erro de autenticação: ${err.message}`, 'bad');
+    } finally {
+      loginBtn.disabled = false;
+    }
+  });
+
+  logoutBtn.addEventListener('click', async () => {
+    try {
+      const authModule = await import(`https://www.gstatic.com/firebasejs/${FIREBASE_SDK_VERSION}/firebase-auth.js`);
+      await authModule.signOut(auth);
+    } catch (err) {
+      log(`Erro ao sair: ${err.message}`, 'bad');
+    }
+  });
+
+  migrateBtn.addEventListener('click', async () => {
+    if (!confirm('Tens a certeza que queres executar a migração geral de IDs de jogos? Esta operação vai atualizar os documentos no Firestore.')) {
+      return;
+    }
+    migrateBtn.disabled = true;
+    try {
+      await runMigration();
+    } catch (err) {
+      log(`Erro na migração: ${err.message}`, 'bad');
+    } finally {
+      migrateBtn.disabled = false;
+    }
+  });
+
+  async function runMigration() {
+    log('A iniciar migração geral...', 'warn');
+
+    // 1. Migrate user predictions (worldcupextra)
+    log('--- Migração da coleção [worldcupextra] (prognósticos) ---');
+    const userCol = tools.collection(db, 'worldcupextra');
+    const userSnapshot = await tools.getDocs(userCol);
+    let userCount = 0;
+
+    for (const docSnap of userSnapshot.docs) {
+      const data = docSnap.data();
+      if (!data.matches || !Array.isArray(data.matches)) continue;
+
+      let modified = false;
+      const newMatches = data.matches.map(m => {
+        const matchId = Number(m.id);
+        if (matchId === 74) {
+          modified = true;
+          return { ...m, id: 76 };
+        } else if (matchId === 75) {
+          modified = true;
+          return { ...m, id: 74 };
+        } else if (matchId === 76) {
+          modified = true;
+          return { ...m, id: 75 };
+        }
+        return m;
+      });
+
+      if (modified) {
+        await tools.updateDoc(docSnap.ref, { matches: newMatches });
+        userCount++;
+        log(`Prognósticos atualizados para: ${data.participantName}`);
+      }
+    }
+    log(`Concluído: ${userCount} utilizadores migrados.`, 'good');
+
+    // 2. Migrate worldcupextraMatches
+    log('--- Migração da coleção [worldcupextraMatches] (schedules) ---');
+    
+    // Germany vs Paraguay (Match 74)
+    const paraguayKickoff = new Date('2026-06-29T21:30:00+01:00');
+    const match74Ref = tools.doc(db, 'worldcupextraMatches', 'match_074');
+    await tools.setDoc(match74Ref, {
+      matchId: 74,
+      documentId: 'match_074',
+      matchDocId: 'match_074',
+      homeTeam: 'Alemanha',
+      awayTeam: 'Paraguai',
+      date: '2026-06-29',
+      time: '21:30',
+      kickoff: tools.Timestamp.fromDate(paraguayKickoff),
+      kickoffIso: paraguayKickoff.toISOString(),
+      stage: 'round32',
+      stageLabel: '16 avos',
+      group: '',
+      source: 'matches.json',
+      timezone: 'Europe/Lisbon',
+      updatedAt: tools.serverTimestamp()
+    });
+    log('Match 74 atualizado (Alemanha vs Paraguai)');
+
+    // Países Baixos vs Marrocos (Match 75)
+    const netherlandsKickoff = new Date('2026-06-30T02:00:00+01:00');
+    const match75Ref = tools.doc(db, 'worldcupextraMatches', 'match_075');
+    await tools.setDoc(match75Ref, {
+      matchId: 75,
+      documentId: 'match_075',
+      matchDocId: 'match_075',
+      homeTeam: 'Países Baixos',
+      awayTeam: 'Marrocos',
+      date: '2026-06-30',
+      time: '02:00',
+      kickoff: tools.Timestamp.fromDate(netherlandsKickoff),
+      kickoffIso: netherlandsKickoff.toISOString(),
+      stage: 'round32',
+      stageLabel: '16 avos',
+      group: '',
+      source: 'matches.json',
+      timezone: 'Europe/Lisbon',
+      updatedAt: tools.serverTimestamp()
+    });
+    log('Match 75 atualizado (Países Baixos vs Marrocos)');
+
+    // Brasil vs Japão (Match 76)
+    const brazilKickoff = new Date('2026-06-29T18:00:00+01:00');
+    const match76Ref = tools.doc(db, 'worldcupextraMatches', 'match_076');
+    await tools.setDoc(match76Ref, {
+      matchId: 76,
+      documentId: 'match_076',
+      matchDocId: 'match_076',
+      homeTeam: 'Brasil',
+      awayTeam: 'Japão',
+      date: '2026-06-29',
+      time: '18:00',
+      kickoff: tools.Timestamp.fromDate(brazilKickoff),
+      kickoffIso: brazilKickoff.toISOString(),
+      stage: 'round32',
+      stageLabel: '16 avos',
+      group: '',
+      timezone: 'Europe/Lisbon',
+      status: 'finished',
+      finished: true,
+      live: false,
+      homeGoals: 2,
+      awayGoals: 1,
+      homeGoalsLive: 2,
+      awayGoalsLive: 1,
+      winnerTeam: 'Brasil',
+      timeElapsed: 'finished',
+      source: 'worldcup',
+      syncOrigin: 'api',
+      apiUpdatedAt: new Date().toISOString(),
+      updatedAt: tools.serverTimestamp()
+    });
+    log('Match 76 atualizado (Brasil vs Japão - Terminado 2-1)');
+
+    // 3. Migrate SofaScore (worldcupSofa)
+    log('--- Migração da coleção [worldcupSofa] (sofascore) ---');
+    const sofa74Ref = tools.doc(db, 'worldcupSofa', 'match_074');
+    const sofa74Snap = await tools.getDoc(sofa74Ref);
+    if (sofa74Snap.exists()) {
+      const sofaData = sofa74Snap.data();
+      const sofa76Ref = tools.doc(db, 'worldcupSofa', 'match_076');
+      await tools.setDoc(sofa76Ref, {
+        ...sofaData,
+        matchId: 76,
+        documentId: 'match_076',
+        matchDocId: 'match_076',
+        updatedAt: tools.serverTimestamp()
+      });
+      await tools.deleteDoc(sofa74Ref);
+      log('Registo SofaScore do jogo 74 migrado para o jogo 76.', 'good');
+    } else {
+      log('Sem registo de SofaScore no jogo 74 para migrar.');
+    }
+
+    log('=== Migração Concluída com Sucesso! ===', 'good');
+  }
+
+  // Start initialization
+  initFirebase();
+</script>
+</body>
+</html>

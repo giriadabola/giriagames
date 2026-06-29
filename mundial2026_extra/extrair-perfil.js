@@ -1,6 +1,6 @@
-import { loadProfileData } from './extrair-perfil-data.js';
-import { buildProfile, computeFullPlayerRanking } from './extrair-perfil-stats.js';
-import { escapeHtml, renderProfile, renderVsProfile } from './extrair-perfil-render.js';
+import { loadProfileData } from './extrair-perfil-data.js?v=20260629perfil4';
+import { buildProfile, computeFullPlayerRanking } from './extrair-perfil-stats.js?v=20260629perfil4';
+import { escapeHtml, renderProfile, renderVsProfile } from './extrair-perfil-render.js?v=20260629perfil4';
 
 const state = {
   data: null,
@@ -47,24 +47,106 @@ function selectedFilters() {
   return [...filterGrid.querySelectorAll('input[type="checkbox"]:checked')].map((input) => input.value);
 }
 
-function populateScopeSelect() {
+function normalizeKey(str) {
+  return String(str || '').toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]/g, '');
+}
+
+function getSection2DocForPlayer(player, matchId) {
+  if (!state.data?.reformDocs) return null;
+  const playerKeys = [player.id, player.participantKey, player.participantName, player.name].map(k => normalizeKey(k)).filter(Boolean);
+  
+  const match = state.data.matches.find(m => Number(m.id) === Number(matchId));
+  const homeTeam = match ? (match.home || match.homeTeam || '') : '';
+  const awayTeam = match ? (match.away || match.awayTeam || '') : '';
+  const matchStage = match ? (match.stage || '') : '';
+
+  return state.data.reformDocs.find(doc => {
+    const docKeys = [doc.participantKey, doc.playerName, doc.name, doc.participantName].map(k => normalizeKey(k)).filter(Boolean);
+    const isPlayer = playerKeys.some(pk => docKeys.includes(pk));
+    if (!isPlayer) return false;
+
+    const idMatches = Number(doc.matchId) === Number(matchId);
+    
+    const stageMatches = doc.stage && matchStage && 
+      (doc.stage.toLowerCase().trim() === matchStage.toLowerCase().trim());
+
+    const teamsMatch = homeTeam && awayTeam && doc.homeTeam && doc.awayTeam && stageMatches &&
+      (doc.homeTeam.toLowerCase().trim() === homeTeam.toLowerCase().trim()) &&
+      (doc.awayTeam.toLowerCase().trim() === awayTeam.toLowerCase().trim());
+
+    return idMatches || teamsMatch;
+  }) || null;
+}
+
+function isMatchKnockout(matchId) {
+  const match = state.data?.matches?.find(m => Number(m.id) === Number(matchId));
+  return match ? match.stage !== 'groups' : true;
+}
+
+let isUpdatingDropdowns = false;
+function updatePlayerDropdowns() {
+  if (isUpdatingDropdowns) return;
+  isUpdatingDropdowns = true;
+
+  const predictionActive = state.activeFilters.includes('prediction');
+  const leaderboardActive = state.activeFilters.includes('leaderboard');
+  const showMatches = predictionActive || leaderboardActive;
+  const matchId = showMatches ? (matchSelect?.value || '') : '';
+  const isKO = matchId ? isMatchKnockout(matchId) : false;
+
+  const currentScope = scopeSelect.value;
+  const currentLeft = vsLeftSelect.value;
+  const currentRight = vsRightSelect.value;
+
   const options = ['<option value="total">Total</option>'];
   const playerOptions = [];
+
   state.data.players.forEach((player) => {
+    if (isKO && matchId) {
+      if (!getSection2DocForPlayer(player, matchId)) {
+        return; // skip player since they haven't predicted this knockout match
+      }
+    }
     const option = `<option value="${escapeHtml(player.id)}">${escapeHtml(player.participantName)}</option>`;
     options.push(option);
     playerOptions.push(option);
   });
+
   scopeSelect.innerHTML = options.join('');
   vsLeftSelect.innerHTML = playerOptions.join('');
   vsRightSelect.innerHTML = playerOptions.join('');
-  if (state.data.players[1]) vsRightSelect.value = state.data.players[1].id;
 
+  if ([...scopeSelect.options].some(o => o.value === currentScope)) {
+    scopeSelect.value = currentScope;
+  } else {
+    scopeSelect.value = 'total';
+  }
+
+  if ([...vsLeftSelect.options].some(o => o.value === currentLeft)) {
+    vsLeftSelect.value = currentLeft;
+  } else if (vsLeftSelect.options[0]) {
+    vsLeftSelect.value = vsLeftSelect.options[0].value;
+  }
+
+  if ([...vsRightSelect.options].some(o => o.value === currentRight)) {
+    vsRightSelect.value = currentRight;
+  } else if (vsRightSelect.options[1]) {
+    vsRightSelect.value = vsRightSelect.options[1].value;
+  } else if (vsRightSelect.options[0]) {
+    vsRightSelect.value = vsRightSelect.options[0].value;
+  }
+
+  isUpdatingDropdowns = false;
+}
+
+function populateScopeSelect() {
   populateSelectionSelect();
   populateStadiumSelect();
   populateMatchSelect();
+  updatePlayerDropdowns();
 }
-
 function populateStadiumSelect() {
   if (!stadiumSelect || !state.data) return;
   const venues = new Set();
@@ -140,6 +222,7 @@ function populateSelectionSelect() {
 function render() {
   if (!state.data) return;
   state.activeFilters = selectedFilters();
+  updatePlayerDropdowns();
   const groupByPlayer = !state.vsMode && scopeSelect.value === 'total' && totalByPlayerToggle.checked;
   if (totalByPlayerWrap) {
     totalByPlayerWrap.style.display = (state.vsMode || scopeSelect.value !== 'total') ? 'none' : 'flex';

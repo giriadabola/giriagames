@@ -11,23 +11,73 @@ export const FIREBASE_CONFIG = {
 export const DEFAULT_SCORING_RULES = {
   groupExact: 3,
   groupOutcome: 1,
-  knockoutInitialExact: 5,
-  knockoutInitialWinner: 3,
-  finalInitialExact: 6,
+  knockoutInitialExact: 6,
+  knockoutInitialWinner: 2,
+  finalInitialExact: 8,
   finalInitialWinner: 4,
-  finalInitialMethod: 2
+  finalInitialMethod: 2,
+  initialExact32: 7,
+  initialWinner32: 2,
+  initialExact16: 7,
+  initialWinner16: 2,
+  initialExact8: 7,
+  initialWinner8: 2,
+  initialExact4: 9,
+  initialWinner4: 3,
+  initialExact3rd: 9,
+  initialWinner3rd: 3,
+  initialExactFinal: 10,
+  initialWinnerFinal: 4
 };
 
 let firebaseTools = null;
 
+async function loadCollectionSafe(firebase, name) {
+  try {
+    return await loadCollection(firebase, name);
+  } catch (err) {
+    console.warn(`Failed to load collection ${name}:`, err);
+    return [];
+  }
+}
+
+async function loadFlags() {
+  try {
+    const response = await fetch('./mundial2026_bandeiras_redondas.json');
+    if (response.ok) {
+      const flagsJson = await response.json();
+      const flagsMap = {};
+      if (Array.isArray(flagsJson.teams)) {
+        flagsJson.teams.forEach(t => {
+          flagsMap[t.nome.toLowerCase().trim()] = t.flagRound;
+          flagsMap[t.name.toLowerCase().trim()] = t.flagRound;
+          if (t.aliases) {
+            t.aliases.forEach(alias => {
+              flagsMap[alias.toLowerCase().trim()] = t.flagRound;
+            });
+          }
+        });
+      }
+      return flagsMap;
+    }
+  } catch (e) {
+    console.warn('Falha ao carregar bandeiras', e);
+  }
+  return {};
+}
+
 export async function loadProfileData() {
   const [matches, firebase] = await Promise.all([loadMatches(), initFirebase()]);
-  const [rules, docs, matchDocs, secureDocs, sofaDocs] = await Promise.all([
+  const [rules, docs, matchDocs, secureDocs, sofaDocs, battleDocs, pickDocs, reformDocs, flags] = await Promise.all([
     loadScoringRules(firebase),
-    loadCollection(firebase, 'worldcupextra'),
-    loadCollection(firebase, 'worldcupextraMatches'),
-    loadCollection(firebase, 'WoldCupSecureHT'),
-    loadCollection(firebase, 'worldcupSofa')
+    loadCollectionSafe(firebase, 'worldcupextra'),
+    loadCollectionSafe(firebase, 'worldcupextraMatches'),
+    loadCollectionSafe(firebase, 'WoldCupSecureHT'),
+    loadCollectionSafe(firebase, 'worldcupSofa'),
+    loadCollectionSafe(firebase, 'worldcupextraLiveBattles'),
+    loadCollectionSafe(firebase, 'worldcupextraBattleScorers'),
+    loadCollectionSafe(firebase, 'worldcupextraReforms'),
+    loadFlags()
   ]);
 
   const officialByMatchId = {};
@@ -61,6 +111,7 @@ export async function loadProfileData() {
     .map((doc) => ({
       id: doc.id,
       participantName: doc.participantName || doc.name || 'Participante',
+      participantKey: doc.participantKey || '',
       icon: doc.icon || doc.participantIcon || doc.playerIcon || '',
       matches: doc.matches
     }))
@@ -73,7 +124,31 @@ export async function loadProfileData() {
     })
   );
 
-  return { matches, players, officialByMatchId, sofaByMatchId, scoringRules: rules };
+  // Align matches.json IDs with worldcupextraReforms matchId for knockout matches
+  const isSameTeam = (name1, name2) => {
+    if (!name1 || !name2) return false;
+    return name1.toLowerCase().trim() === name2.toLowerCase().trim();
+  };
+
+  matches.forEach(m => {
+    if (m.stage && m.stage !== 'groups') {
+      const home = m.home || m.homeTeam || '';
+      const away = m.away || m.awayTeam || '';
+      const stage = m.stage || '';
+      const reform = reformDocs.find(doc => {
+        const stageMatches = doc.stage && stage && (doc.stage.toLowerCase().trim() === stage.toLowerCase().trim());
+        return isSameTeam(doc.homeTeam, home) && isSameTeam(doc.awayTeam, away) && stageMatches;
+      });
+      if (reform && reform.matchId != null) {
+        m.id = Number(reform.matchId);
+      }
+    }
+  });
+
+  // Sort matches by ID so they are in correct numeric order
+  matches.sort((a, b) => Number(a.id) - Number(b.id));
+
+  return { matches, players, officialByMatchId, sofaByMatchId, scoringRules: rules, battleDocs, pickDocs, reformDocs, flags };
 }
 
 async function loadMatches() {

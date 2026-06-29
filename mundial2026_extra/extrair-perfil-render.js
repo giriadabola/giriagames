@@ -1,4 +1,4 @@
-import { FILTERS } from './extrair-perfil-stats.js';
+import { FILTERS } from './extrair-perfil-stats.js?v=20260629perfil4';
 
 const PLAYER_ICONS = {
   lion: { bg1: '#f59e0b', bg2: '#7c2d12', glyph: '<path d="M26 25l7-9 9 5 9-5 7 9-4 27H30z"/><path d="M31 33c2-7 7-11 11-11s9 4 11 11"/><circle cx="37" cy="38" r="2.2"/><circle cx="47" cy="38" r="2.2"/><path d="M39 44l3 3 3-3"/><path d="M36 49c4 2 8 2 12 0"/>' },
@@ -100,7 +100,7 @@ function renderSelectionsData(summary) {
         <div style="background: rgba(255,255,255,0.03); padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06); display: flex; flex-direction: column; justify-content: space-between; min-height: 84px;">
           <div>
             <strong style="display: block; font-size: 0.85rem; margin-bottom: 2px;">Prognósticos Certos / Errados</strong>
-            <span style="font-size: 0.7rem; opacity: 0.6; display: block; line-height: 1.2;">Certeiros (3 pts) vs Falhas (0 pts)</span>
+            <span style="font-size: 0.7rem; opacity: 0.6; display: block; line-height: 1.2;">Com pontos vs Falhas (0 pts)</span>
           </div>
           <span style="font-size: 1.2rem; font-weight: bold; color: #f8fafc; margin-top: 6px;">
             <span style="color: #10b981;">${summary.correctPredictionsCount} certas</span><br><span style="color: #ef4444;">${summary.wrongPredictionsCount} erradas</span>
@@ -233,7 +233,7 @@ function renderStadiumsData(summary, isVs = false) {
         <div style="background: rgba(255,255,255,0.03); padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06); display: flex; flex-direction: column; justify-content: space-between; min-height: 84px;">
           <div>
             <strong style="display: block; font-size: 0.85rem; margin-bottom: 2px;">Prognósticos Certos / Errados</strong>
-            <span style="font-size: 0.7rem; opacity: 0.6; display: block; line-height: 1.2;">Certeiros (3 pts) vs Falhas (0 pts)</span>
+            <span style="font-size: 0.7rem; opacity: 0.6; display: block; line-height: 1.2;">Com pontos vs Falhas (0 pts)</span>
           </div>
           <span style="font-size: 1.2rem; font-weight: bold; color: #f8fafc; margin-top: 6px;">
             <span style="color: #10b981;">${summary.correctPredictionsCount} certas</span><br><span style="color: #ef4444;">${summary.wrongPredictionsCount} erradas</span>
@@ -244,14 +244,14 @@ function renderStadiumsData(summary, isVs = false) {
   `;
 }
 
-export function renderProfile(profile, activeFilters, chartViews = {}) {
+export function renderProfile(profile, activeFilters, chartViews = {}, excludedMatches = new Set()) {
   if (!activeFilters.length) {
     return '<div class="empty">Escolhe uma ou mais opções para gerar o perfil.</div>';
   }
 
   const selectedPlayer = profile.selectedPlayers.length === 1 ? profile.selectedPlayers[0] : null;
   const sections = activeFilters
-    .map((key) => renderSection(key, profile.summaries[key], selectedPlayer?.participantName || '', chartViews))
+    .map((key) => renderSection(key, profile.summaries[key], selectedPlayer?.participantName || '', chartViews, excludedMatches))
     .join('');
   const titleIcon = selectedPlayer ? renderParticipantIcon(selectedPlayer.icon, selectedPlayer.participantName) : '';
   return `
@@ -267,12 +267,12 @@ export function renderProfile(profile, activeFilters, chartViews = {}) {
   `;
 }
 
-export function renderVsProfile(leftProfile, rightProfile, activeFilters, chartViews = {}) {
+export function renderVsProfile(leftProfile, rightProfile, activeFilters, chartViews = {}, excludedMatches = new Set()) {
   if (!activeFilters.length) {
     return '<div class="empty">Escolhe uma ou mais opções para gerar o VS.</div>';
   }
 
-  const sections = activeFilters.map((key) => renderVsSection(key, leftProfile.summaries[key], rightProfile.summaries[key], chartViews)).join('');
+  const sections = activeFilters.map((key) => renderVsSection(key, leftProfile.summaries[key], rightProfile.summaries[key], chartViews, excludedMatches)).join('');
   const leftPlayer = leftProfile.selectedPlayers[0];
   const rightPlayer = rightProfile.selectedPlayers[0];
   return `
@@ -299,7 +299,7 @@ export function renderVsProfile(leftProfile, rightProfile, activeFilters, chartV
   `;
 }
 
-function renderSection(key, summary, hiddenPlayerName = '', chartViews = {}) {
+function renderSection(key, summary, hiddenPlayerName = '', chartViews = {}, excludedMatches = new Set()) {
   const config = FILTERS[key];
   if (key === 'selections') {
     const selectionName = summary?.selectedSelection === 'all' ? 'Todas as Seleções' : summary?.selectedSelection;
@@ -325,6 +325,74 @@ function renderSection(key, summary, hiddenPlayerName = '', chartViews = {}) {
       </article>
     `;
   }
+  if (key === 'starsPath') {
+    return `
+      <article class="stat-card tone-good" style="grid-column: span 2;">
+        <h3>
+          <span>${escapeHtml(config.title)}</span>
+        </h3>
+        <p class="muted">${escapeHtml(config.text)}</p>
+        ${renderStarsPathChart(summary)}
+      </article>
+    `;
+  }
+  if (key === 'leaderboard') {
+    return `
+      <article class="stat-card tone-good" style="grid-column: span 2;">
+        <h3>
+          <span>${escapeHtml(config.title)}</span>
+        </h3>
+        <p class="muted">${escapeHtml(config.text)}</p>
+        ${renderLeaderboardTable(summary)}
+      </article>
+    `;
+  }
+  if (key === 'sequence') {
+    return renderSequenceSection(summary, hiddenPlayerName, chartViews, excludedMatches);
+  }
+  if (key === 'prediction') {
+    const currentView = chartViews['prediction'] || 'table';
+    const btnTable = `<button class="btn-toggle-chart ${currentView === 'table' ? 'active' : ''}" data-filter="prediction" data-view="table" type="button" data-html2canvas-ignore="true">📋 Tabela</button>`;
+    const btnRadar = `<button class="btn-toggle-chart ${currentView === 'radar' ? 'active' : ''}" data-filter="prediction" data-view="radar" type="button" data-html2canvas-ignore="true">📊 Radar</button>`;
+    const btnScatter = `<button class="btn-toggle-chart ${currentView === 'scatter' ? 'active' : ''}" data-filter="prediction" data-view="scatter" type="button" data-html2canvas-ignore="true">🎯 Dispersão</button>`;
+    const btnProfile = `<button class="btn-toggle-chart ${currentView === 'profile' ? 'active' : ''}" data-filter="prediction" data-view="profile" type="button" data-html2canvas-ignore="true">👥 Perfil</button>`;
+    const btnPitch = `<button class="btn-toggle-chart ${currentView === 'pitch' ? 'active' : ''}" data-filter="prediction" data-view="pitch" type="button" data-html2canvas-ignore="true">🏟️ Relvado</button>`;
+    
+    const navHtml = `<div class="chart-tab-group" style="display: inline-flex; background: rgba(255, 255, 255, 0.04); padding: 3px; border-radius: 8px; gap: 4px;">
+      ${btnTable}
+      ${btnRadar}
+      ${btnScatter}
+      ${btnProfile}
+      ${btnPitch}
+    </div>`;
+
+    let contentHtml = '';
+    if (currentView === 'radar') {
+      contentHtml = renderPredictionRadar(summary);
+    } else if (currentView === 'scatter') {
+      contentHtml = renderPredictionScatter(summary);
+    } else if (currentView === 'profile') {
+      contentHtml = renderPredictionProfile(summary);
+    } else if (currentView === 'pitch') {
+      contentHtml = renderPredictionPitch(summary);
+    } else {
+      contentHtml = renderPredictionData(summary);
+    }
+
+    return `
+      <article class="stat-card tone-good" style="grid-column: span 2;">
+        <h3>
+          <span>Prognóstico</span>
+          <span style="display: flex; align-items: center; gap: 8px;">
+            ${navHtml}
+          </span>
+        </h3>
+        <p class="muted">${escapeHtml(config.text)}</p>
+        ${contentHtml}
+      </article>
+    `;
+  }
+
   const rows = summary?.rows || [];
   const tone = summary?.tone || 'warn';
   const isCircularFilter = ['lost', 'dramaticLost', 'gains', 'lateGains', 'aloneInFame', 'wonWithStyle'].includes(key);
@@ -361,10 +429,11 @@ function renderSection(key, summary, hiddenPlayerName = '', chartViews = {}) {
 function renderVsSection(key, leftSummary, rightSummary, chartViews = {}) {
   const config = FILTERS[key];
   if (key === 'selections') {
+    const selectionName = leftSummary?.selectedSelection === 'all' ? 'Todas as Seleções' : leftSummary?.selectedSelection;
     return `
       <article class="stat-card vs-card" style="grid-column: span 2;">
         <h3>
-          <span>Seleções</span>
+          <span>Seleções: ${escapeHtml(selectionName)}</span>
         </h3>
         <p class="muted">${escapeHtml(config.text)}</p>
         <div class="vs-columns">
@@ -375,10 +444,11 @@ function renderVsSection(key, leftSummary, rightSummary, chartViews = {}) {
     `;
   }
   if (key === 'stadiums') {
+    const stadiumName = leftSummary?.selectedStadium === 'all' ? 'Todos os Estádios' : leftSummary?.selectedStadium;
     return `
       <article class="stat-card vs-card" style="grid-column: span 2;">
         <h3>
-          <span>Estádios</span>
+          <span>Estádios: ${escapeHtml(stadiumName)}</span>
         </h3>
         <p class="muted">${escapeHtml(config.text)}</p>
         <div class="vs-columns">
@@ -388,6 +458,94 @@ function renderVsSection(key, leftSummary, rightSummary, chartViews = {}) {
       </article>
     `;
   }
+  if (key === 'starsPath') {
+    return `
+      <article class="stat-card vs-card" style="grid-column: span 2;">
+        <h3>
+          <span>${escapeHtml(config.title)}</span>
+        </h3>
+        <p class="muted">${escapeHtml(config.text)}</p>
+        ${renderStarsPathChart(leftSummary, rightSummary)}
+      </article>
+    `;
+  }
+  if (key === 'leaderboard') {
+    return `
+      <article class="stat-card vs-card" style="grid-column: span 2;">
+        <h3>
+          <span>${escapeHtml(config.title)}</span>
+        </h3>
+        <p class="muted">${escapeHtml(config.text)}</p>
+        ${renderLeaderboardTable(leftSummary)}
+      </article>
+    `;
+  }
+  if (key === 'sequence') {
+    return `
+      <article class="stat-card vs-card" style="grid-column: span 2;">
+        <h3>
+          <span>Sequência</span>
+        </h3>
+        <p class="muted">A visualização de Sequência é recomendada apenas para a vista individual de jogador (Perfil).</p>
+      </article>
+    `;
+  }
+  if (key === 'prediction') {
+    const leftPlayerId = leftSummary.predictions?.find(p => p.isSelected)?.player?.id;
+    const rightPlayerId = rightSummary.predictions?.find(p => p.isSelected)?.player?.id;
+    
+    const combinedPredictions = (leftSummary.predictions || [])
+      .filter(p => p.player.id === leftPlayerId || p.player.id === rightPlayerId)
+      .map(p => ({
+        ...p,
+        isSelected: true
+      }));
+    
+    const combinedSummary = {
+      ...leftSummary,
+      predictions: combinedPredictions
+    };
+    const currentView = chartViews['prediction'] || 'table';
+    const btnTable = `<button class="btn-toggle-chart ${currentView === 'table' ? 'active' : ''}" data-filter="prediction" data-view="table" type="button" data-html2canvas-ignore="true">📋 Tabela</button>`;
+    const btnRadar = `<button class="btn-toggle-chart ${currentView === 'radar' ? 'active' : ''}" data-filter="prediction" data-view="radar" type="button" data-html2canvas-ignore="true">📊 Radar</button>`;
+    const btnScatter = `<button class="btn-toggle-chart ${currentView === 'scatter' ? 'active' : ''}" data-filter="prediction" data-view="scatter" type="button" data-html2canvas-ignore="true">🎯 Dispersão</button>`;
+    const btnProfile = `<button class="btn-toggle-chart ${currentView === 'profile' ? 'active' : ''}" data-filter="prediction" data-view="profile" type="button" data-html2canvas-ignore="true">👥 Perfil</button>`;
+    const btnPitch = `<button class="btn-toggle-chart ${currentView === 'pitch' ? 'active' : ''}" data-filter="prediction" data-view="pitch" type="button" data-html2canvas-ignore="true">🏟️ Relvado</button>`;
+    
+    const navHtml = `<div class="chart-tab-group" style="display: inline-flex; background: rgba(255, 255, 255, 0.04); padding: 3px; border-radius: 8px; gap: 4px;">
+      ${btnTable}
+      ${btnRadar}
+      ${btnScatter}
+      ${btnProfile}
+      ${btnPitch}
+    </div>`;
+
+    let contentHtml = '';
+    if (currentView === 'radar') {
+      contentHtml = renderPredictionRadar(combinedSummary);
+    } else if (currentView === 'scatter') {
+      contentHtml = renderPredictionScatter(combinedSummary);
+    } else if (currentView === 'profile') {
+      contentHtml = renderPredictionProfile(combinedSummary);
+    } else if (currentView === 'pitch') {
+      contentHtml = renderPredictionPitch(combinedSummary);
+    } else {
+      contentHtml = renderPredictionData(combinedSummary);
+    }
+    return `
+      <article class="stat-card vs-card" style="grid-column: span 2;">
+        <h3>
+          <span>Prognósticos do Jogo</span>
+          <span style="display: flex; align-items: center; gap: 8px;">
+            ${navHtml}
+          </span>
+        </h3>
+        <p class="muted">${escapeHtml(config.text)}</p>
+        ${contentHtml}
+      </article>
+    `;
+  }
+
   const isCircularFilter = ['lost', 'dramaticLost', 'gains', 'lateGains', 'aloneInFame', 'wonWithStyle'].includes(key);
   const showCircular = isCircularFilter && !!chartViews[key];
 
@@ -638,6 +796,1460 @@ function renderDoughnut(rows, tone, hiddenPlayerName = '') {
       </div>
       <div class="doughnut-legend">
         ${legendHtml}
+      </div>
+    </div>
+  `;
+}
+
+export function renderStarsPathChart(summary, vsSummary = null) {
+  const { playedMatches, selectedIds, allHistories, totalPlayers } = summary;
+  if (!playedMatches || playedMatches.length === 0) {
+    return '<div class="empty">Nenhum jogo oficial realizado ainda.</div>';
+  }
+
+  const activeSelectedIds = new Set(selectedIds);
+  if (vsSummary && vsSummary.selectedIds) {
+    vsSummary.selectedIds.forEach(id => activeSelectedIds.add(id));
+  }
+
+  const width = 900;
+  const height = 450;
+  const paddingLeft = 60;
+  const paddingRight = 40;
+  const paddingTop = 30;
+  const paddingBottom = 60;
+  const chartWidth = width - paddingLeft - paddingRight;
+  const chartHeight = height - paddingTop - paddingBottom;
+
+  const getX = (index) => paddingLeft + (playedMatches.length > 1 ? (index / (playedMatches.length - 1)) * chartWidth : chartWidth / 2);
+  const getY = (rank) => paddingTop + (totalPlayers > 1 ? ((rank - 1) / (totalPlayers - 1)) * chartHeight : 0);
+
+  const yTicks = [];
+  const tickStep = totalPlayers <= 10 ? 1 : totalPlayers <= 20 ? 2 : 5;
+  for (let r = 1; r <= totalPlayers; r++) {
+    if (r === 1 || r === totalPlayers || r % tickStep === 0) {
+      if (!yTicks.includes(r)) yTicks.push(r);
+    }
+  }
+  yTicks.sort((a, b) => a - b);
+
+  let yAxisHtml = yTicks.map(rank => {
+    const y = getY(rank);
+    return `
+      <line x1="${paddingLeft}" y1="${y}" x2="${width - paddingRight}" y2="${y}" stroke="rgba(255,255,255,0.06)" stroke-width="1" />
+      <text x="${paddingLeft - 15}" y="${y + 4}" fill="#a9b2c2" font-size="11" text-anchor="end">${rank}º</text>
+    `;
+  }).join('');
+
+  const labelInterval = Math.max(1, Math.ceil(playedMatches.length / 12));
+  let xAxisHtml = playedMatches.map((m, index) => {
+    const x = getX(index);
+    const showLabel = index === 0 || index === playedMatches.length - 1 || index % labelInterval === 0;
+    return `
+      <line x1="${x}" y1="${paddingTop}" x2="${x}" y2="${height - paddingBottom}" stroke="rgba(255,255,255,0.04)" stroke-dasharray="2,2" stroke-width="1" />
+      ${showLabel ? `
+        <text x="${x}" y="${height - paddingBottom + 20}" fill="#a9b2c2" font-size="10" text-anchor="middle" transform="rotate(-30, ${x}, ${height - paddingBottom + 20})">J${m.id}</text>
+      ` : ''}
+    `;
+  }).join('');
+
+  let backgroundLinesHtml = '';
+  let foregroundLinesHtml = '';
+  let legendHtml = [];
+
+  const colors = ['#38bdf8', '#10b981', '#f59e0b', '#ec4899', '#a855f7', '#f97316', '#06b6d4', '#14b8a6'];
+  let colorIndex = 0;
+
+  allHistories.forEach((pHist) => {
+    const isSelected = activeSelectedIds.has(pHist.id);
+    const points = pHist.history.map((h, idx) => `${getX(idx)},${getY(h.position)}`).join(' ');
+
+    if (!points) return;
+
+    if (isSelected) {
+      const color = colors[colorIndex % colors.length];
+      colorIndex++;
+      const currentPos = pHist.history[pHist.history.length - 1]?.position || '-';
+      legendHtml.push(`
+        <div style="display: flex; align-items: center; gap: 6px; font-size: 0.85rem; background: rgba(255,255,255,0.03); padding: 4px 10px; border-radius: 99px; border: 1px solid rgba(255,255,255,0.06);">
+          <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: ${color}; box-shadow: 0 0 6px ${color};"></span>
+          <strong>${escapeHtml(pHist.name)}</strong>
+          <span class="muted" style="font-size: 0.75rem;">(Atual: ${currentPos}º)</span>
+        </div>
+      `);
+
+      foregroundLinesHtml += `
+        <polyline points="${points}" fill="none" stroke="${color}" stroke-width="3" filter="url(#glow)" stroke-linecap="round" stroke-linejoin="round" />
+        <polyline points="${points}" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+        ${pHist.history.map((h, idx) => `
+          <circle cx="${getX(idx)}" cy="${getY(h.position)}" r="4.5" fill="#090b10" stroke="${color}" stroke-width="2" class="chart-marker">
+            <title>${escapeHtml(pHist.name)}&#10;Jogo ${h.matchId}&#10;Posição: ${h.position}º&#10;Pontos: ${h.accumulated} pts</title>
+          </circle>
+        `).join('')}
+      `;
+    } else if (activeSelectedIds.size > 0) {
+      backgroundLinesHtml += `
+        <polyline points="${points}" fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" />
+      `;
+    } else {
+      const color = 'rgba(56, 189, 248, 0.2)';
+      backgroundLinesHtml += `
+        <polyline points="${points}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+      `;
+    }
+  });
+
+  return `
+    <div class="stars-path-wrapper" style="margin-top: 16px;">
+      ${legendHtml.length ? `<div class="stars-path-legend" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;">${legendHtml.join('')}</div>` : ''}
+      <div class="stars-path-scroll-container" style="overflow-x: auto; width: 100%; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; background: rgba(18,23,34,0.3); padding: 12px 6px;">
+        <svg viewBox="0 0 ${width} ${height}" style="width: 100%; min-width: 750px; height: auto; display: block;">
+          <defs>
+            <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="3" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+          </defs>
+          <g class="grid-y">${yAxisHtml}</g>
+          <g class="grid-x">${xAxisHtml}</g>
+          <line x1="${paddingLeft}" y1="${paddingTop}" x2="${paddingLeft}" y2="${height - paddingBottom}" stroke="rgba(255,255,255,0.15)" stroke-width="1.5" />
+          <line x1="${paddingLeft}" y1="${height - paddingBottom}" x2="${width - paddingRight}" y2="${height - paddingBottom}" stroke="rgba(255,255,255,0.15)" stroke-width="1.5" />
+          <g class="background-paths">${backgroundLinesHtml}</g>
+          <g class="foreground-paths">${foregroundLinesHtml}</g>
+        </svg>
+      </div>
+    </div>
+  `;
+}
+
+export function renderSequenceSection(summary, playerName, chartViews, excludedMatches = new Set()) {
+  if (!summary || !summary.rows || summary.rows.length === 0) {
+    return `
+      <article class="stat-card tone-warn" style="grid-column: span 2;">
+        <h3><span>Sequência</span></h3>
+        <p class="muted">Nenhum jogo oficial realizado ainda para este jogador.</p>
+      </article>
+    `;
+  }
+
+  if (!playerName) {
+    return `
+      <article class="stat-card tone-warn" style="grid-column: span 2;">
+        <h3><span>Sequência de Prognósticos</span></h3>
+        <div class="empty" style="padding: 24px; text-align: center;">
+          <p>Por favor, selecione um jogador específico no menu de Perfil para visualizar a sequência de prognósticos.</p>
+        </div>
+      </article>
+    `;
+  }
+
+  const allRows = summary.rows;
+  const visibleRows = allRows.filter(r => !excludedMatches.has(r.matchId));
+
+  const restoreAllBtn = excludedMatches.size > 0 
+    ? `<button class="btn-restore-sequence" style="background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #fff; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; cursor: pointer;" data-html2canvas-ignore="true">Repor Todos</button>` 
+    : '';
+
+  const removeAllBtn = visibleRows.length > 0
+    ? `<button class="btn-remove-all-sequence" style="background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #fff; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; cursor: pointer;" data-html2canvas-ignore="true">Remover Tudo</button>`
+    : '';
+
+  const quickSelectorHtml = `
+    <div class="sequence-quick-selector" style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.06); align-items: center;" data-html2canvas-ignore="true">
+      <span style="font-size: 0.8rem; color: var(--muted); display: flex; align-items: center; margin-right: 4px;">Selecionar jogos:</span>
+      ${allRows.map(r => {
+        const isChecked = !excludedMatches.has(r.matchId);
+        const bg = isChecked ? 'rgba(56, 189, 248, 0.15)' : 'rgba(255, 255, 255, 0.03)';
+        const border = isChecked ? '1px solid rgba(56, 189, 248, 0.35)' : '1px solid rgba(255,255,255,0.06)';
+        const color = isChecked ? '#38bdf8' : '#a9b2c2';
+        return `
+          <button class="btn-toggle-match" data-match-id="${r.matchId}" style="background: ${bg}; border: ${border}; color: ${color}; padding: 4px 8px; border-radius: 6px; font-size: 0.72rem; cursor: pointer; transition: all 0.15s ease;" type="button">
+            J${r.matchId}
+          </button>
+        `;
+      }).join('')}
+      ${restoreAllBtn}
+      ${removeAllBtn}
+    </div>
+  `;
+
+  const cardsHtml = visibleRows.map(r => {
+    let toneClass = 'warn';
+    let pointsColor = 'var(--warn)';
+    
+    if (r.points === 0) {
+      toneClass = 'bad';
+      pointsColor = 'var(--bad)';
+    } else if (r.exact) {
+      toneClass = 'good';
+      pointsColor = 'var(--good)';
+    } else {
+      toneClass = 'warn';
+      pointsColor = 'var(--warn)';
+    }
+
+    const homeTeam = r.match.home || r.match.homeTeam || 'Casa';
+    const awayTeam = r.match.away || r.match.awayTeam || 'Fora';
+    const stageLabel = {
+      groups: 'Grupos',
+      round32: '16 avos',
+      round16: 'Oitavos',
+      quarterfinals: 'Quartos',
+      semifinals: 'Meias',
+      third_place: '3º Lugar',
+      final: 'Final'
+    }[r.match.stage] || r.match.stage || 'Jogo';
+
+    const cardBorderColor = r.points === 0 
+      ? 'rgba(239, 68, 68, 0.25)' 
+      : r.exact 
+        ? 'rgba(22, 163, 74, 0.25)' 
+        : 'rgba(217, 119, 6, 0.25)';
+
+    const cardBgColor = r.points === 0 
+      ? 'rgba(239, 68, 68, 0.04)' 
+      : r.exact 
+        ? 'rgba(22, 163, 74, 0.04)' 
+        : 'rgba(217, 119, 6, 0.04)';
+
+    return `
+      <div class="sequence-card tone-${toneClass}" style="position: relative; border-radius: 12px; border: 1px solid ${cardBorderColor}; padding: 12px 14px; display: flex; flex-direction: column; justify-content: space-between; background: ${cardBgColor}; min-width: 140px; flex: 1 1 180px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.15); transition: transform 0.2s ease;">
+        <button class="btn-remove-card" data-match-id="${r.matchId}" style="position: absolute; top: 6px; right: 6px; background: transparent; border: none; color: rgba(255,255,255,0.4); font-size: 1.1rem; cursor: pointer; padding: 2px 6px; line-height: 1;" title="Remover este jogo" type="button" data-html2canvas-ignore="true">
+          &times;
+        </button>
+        
+        <div style="font-size: 0.72rem; text-transform: uppercase; color: var(--muted); opacity: 0.8; margin-bottom: 6px; font-weight: bold; letter-spacing: 0.03em;">
+          ${stageLabel} · J${r.matchId}
+        </div>
+        
+        <div style="font-weight: bold; font-size: 0.88rem; display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px;">
+          <span style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 130px;">${escapeHtml(homeTeam)}</span>
+            <span style="opacity: 0.8; font-weight: bold; margin-left: 6px;">${r.prediction.homeGoals}</span>
+          </span>
+          <span style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 130px;">${escapeHtml(awayTeam)}</span>
+            <span style="opacity: 0.8; font-weight: bold; margin-left: 6px;">${r.prediction.awayGoals}</span>
+          </span>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: auto; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 8px; font-size: 0.78rem;">
+          <div style="opacity: 0.75;">
+            Res: <strong style="color: #fff;">${r.official.homeGoals}-${r.official.awayGoals}</strong>
+          </div>
+          <div style="color: ${pointsColor}; font-weight: 800; font-size: 0.88rem;">
+            +${r.points} Pts
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  return `
+    <article class="stat-card tone-warn" style="grid-column: span 2;">
+      <h3>
+        <span>Sequência de Prognósticos</span>
+      </h3>
+      <p class="muted">Desempenho obtido jogo a jogo.</p>
+      
+      ${quickSelectorHtml}
+      
+      <div class="sequence-cards-container" style="display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px;">
+        ${cardsHtml || '<div class="empty" style="width: 100%; text-align: center; padding: 24px;">Nenhum jogo selecionado para exibição.</div>'}
+      </div>
+    </article>
+  `;
+}
+
+function renderPredictionData(summary) {
+  if (!summary || !summary.match) return '<div class="empty">Sem dados.</div>';
+
+  const m = summary.match;
+  const official = summary.official;
+  const home = m.home || m.homeTeam || 'Casa';
+  const away = m.away || m.awayTeam || 'Fora';
+  const officialScore = official && official.homeGoals != null && official.awayGoals != null
+    ? `${official.homeGoals} - ${official.awayGoals}`
+    : 'Pendente';
+
+  const stageLabel = {
+    groups: 'Fase de grupos',
+    round32: '16 avos',
+    round16: 'Oitavos',
+    quarterfinals: 'Quartos',
+    semifinals: 'Meias-finais',
+    third_place: '3º Lugar',
+    final: 'Final'
+  }[m.stage] || m.stage || 'Jogo';
+
+  const predictionsList = summary.predictions || [];
+  
+  const selectedList = predictionsList.filter(p => p.isSelected);
+  const othersList = predictionsList.filter(p => !p.isSelected);
+
+  const renderPredictionRow = (item) => {
+    const p = item.prediction;
+    const score = item.score;
+    const name = item.player.participantName;
+    const icon = renderParticipantIcon(item.player.icon, name);
+    
+    let predText = '-';
+    let ptsText = '-';
+    let rowStyle = '';
+    
+    if (p && p.homeGoals != null && p.awayGoals != null) {
+      predText = `${p.homeGoals} - ${p.awayGoals}`;
+      if (score) {
+        ptsText = `+${score.points} Pts`;
+        rowStyle = score.exact ? 'color: #facc15;' : (score.points > 0 ? 'color: #34d399;' : 'color: #f87171;');
+      } else {
+        ptsText = 'Pendente';
+        rowStyle = 'color: var(--muted);';
+      }
+    }
+    
+    return `
+      <tr style="border-bottom: 1px solid rgba(255,255,255,0.04); height: 42px;">
+        <td style="padding: 6px 12px; display: flex; align-items: center; gap: 8px; font-weight: 500;">
+          ${icon} <span>${escapeHtml(name)}</span>
+        </td>
+        <td style="padding: 6px 12px; font-family: monospace; font-size: 1.05rem; font-weight: bold; text-align: center;">
+          ${predText}
+        </td>
+        <td style="padding: 6px 12px; text-align: right; font-weight: bold; ${rowStyle}">
+          ${ptsText}
+        </td>
+      </tr>
+    `;
+  };
+
+  const selectedRows = selectedList.map(renderPredictionRow).join('');
+  const otherRows = othersList.map(renderPredictionRow).join('');
+
+  return `
+    <div class="prediction-view-layout" style="display: flex; flex-direction: column; gap: 16px; margin-top: 12px; font-size: 0.95rem;">
+      <div style="background: rgba(255,255,255,0.03); padding: 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+        <div>
+          <span style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.6; display: block; margin-bottom: 2px;">Jogo ${m.id} · ${stageLabel}</span>
+          <strong style="font-size: 1.25rem;">${escapeHtml(home)} <span style="color: var(--accent);">vs</span> ${escapeHtml(away)}</strong>
+        </div>
+        <div style="text-align: right;">
+          <span style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.6; display: block; margin-bottom: 2px;">Resultado Oficial</span>
+          <strong style="font-size: 1.4rem; color: #facc15;">${officialScore}</strong>
+        </div>
+      </div>
+      
+      <div style="border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; background: rgba(0,0,0,0.15);">
+        <table style="width: 100%; border-collapse: collapse; text-align: left;">
+          <thead>
+            <tr style="background: rgba(255,255,255,0.04); border-bottom: 1px solid rgba(255,255,255,0.08); font-size: 0.8rem; text-transform: uppercase; opacity: 0.7; letter-spacing: 0.05em;">
+              <th style="padding: 10px 12px;">Jogador</th>
+              <th style="padding: 10px 12px; text-align: center;">Prognóstico</th>
+              <th style="padding: 10px 12px; text-align: right;">Pontos</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${selectedRows ? `
+              <tr style="background: rgba(56, 189, 248, 0.06); font-weight: bold; border-bottom: 2px solid rgba(56, 189, 248, 0.2);">
+                <td colspan="3" style="padding: 6px 12px; font-size: 0.75rem; text-transform: uppercase; color: var(--accent); letter-spacing: 0.05em;">Selecionado(s)</td>
+              </tr>
+              ${selectedRows}
+            ` : ''}
+            
+            ${otherRows ? `
+              <tr style="background: rgba(255, 255, 255, 0.02); font-weight: bold; border-bottom: 1px solid rgba(255, 255, 255, 0.06);">
+                <td colspan="3" style="padding: 6px 12px; font-size: 0.75rem; text-transform: uppercase; opacity: 0.6; letter-spacing: 0.05em;">Outros Jogadores</td>
+              </tr>
+              ${otherRows}
+            ` : ''}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+export function renderLeaderboardTable(summary) {
+  if (!summary || !summary.rows || summary.rows.length === 0) {
+    return '<div class="empty">Sem dados para a tabela.</div>';
+  }
+  
+  const hasMovement = summary.rows.some(r => r.movement !== undefined);
+  
+  const headers = `
+    <thead>
+      <tr style="background: rgba(255,255,255,0.04); border-bottom: 1px solid rgba(255,255,255,0.08); font-size: 0.8rem; text-transform: uppercase; opacity: 0.7; letter-spacing: 0.05em;">
+        <th style="padding: 10px 12px; width: 60px;">#</th>
+        <th style="padding: 10px 12px;">Jogador</th>
+        <th style="padding: 10px 12px; text-align: center; width: 90px;">Pontos</th>
+        ${summary.includeBw ? '<th style="padding: 10px 12px; text-align: center; width: 50px;" title="Battle Wins">BW</th>' : ''}
+        ${summary.includePp ? '<th style="padding: 10px 12px; text-align: center; width: 50px;" title="Prognósticos Pontos">PP</th>' : ''}
+        <th style="padding: 10px 12px; text-align: center; width: 40px;" title="Acertados">A</th>
+        <th style="padding: 10px 12px; text-align: center; width: 40px;" title="Errados">E</th>
+        <th style="padding: 10px 12px; text-align: center; width: 45px;" title="Golos marcados">GM</th>
+        <th style="padding: 10px 12px; text-align: center; width: 45px;" title="Golos falhados">GF</th>
+        <th style="padding: 10px 12px; text-align: center; width: 40px;" title="Vitórias desfechos certos">V</th>
+        <th style="padding: 10px 12px; text-align: center; width: 40px;" title="Empates certos">E</th>
+        <th style="padding: 10px 12px; text-align: center; width: 40px;" title="Derrotas desfechos certos">D</th>
+      </tr>
+    </thead>
+  `;
+  
+  const tbody = summary.rows.map(row => {
+    let moveHtml = '';
+    if (hasMovement && row.movement !== undefined) {
+      if (row.movement > 0) {
+        moveHtml = `<span style="color: var(--good); margin-left: 4px; font-size: 0.8rem; font-weight: bold;">▲${row.movement}</span>`;
+      } else if (row.movement < 0) {
+        moveHtml = `<span style="color: var(--bad); margin-left: 4px; font-size: 0.8rem; font-weight: bold;">▼${Math.abs(row.movement)}</span>`;
+      } else {
+        moveHtml = `<span style="color: var(--muted); margin-left: 4px; font-size: 0.8rem; font-weight: bold;">•</span>`;
+      }
+    }
+    
+    const bwCol = summary.includeBw ? `<td style="padding: 10px 12px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.06);">${row.battleWins || 0}</td>` : '';
+    const ppCol = summary.includePp ? `<td style="padding: 10px 12px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.06);">${row.matchupPoints || 0}</td>` : '';
+    const nameHtml = escapeHtml(row.name);
+    const iconHtml = renderParticipantIcon(row.icon, row.name);
+    
+    return `
+      <tr style="border-bottom: 1px solid rgba(255,255,255,0.06);">
+        <td style="padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.06);">
+          <div style="display: flex; align-items: center; gap: 2px;">
+            <strong>${row.rank}</strong>
+            ${moveHtml}
+          </div>
+        </td>
+        <td style="padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.06);">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            ${iconHtml}
+            <span>${nameHtml}</span>
+          </div>
+        </td>
+        <td style="padding: 10px 12px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.06);">
+          <strong style="color: var(--accent); font-size: 1.05rem;">${row.points}</strong>
+          ${summary.includeBw && row.battleBonusPoints ? `<small style="display: block; font-size: 0.72rem; color: var(--gold); font-weight: bold;">+${row.battleBonusPoints} BW</small>` : ''}
+        </td>
+        ${bwCol}
+        ${ppCol}
+        <td style="padding: 10px 12px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.06);">${row.correctPredictions || 0}</td>
+        <td style="padding: 10px 12px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.06);">${row.failedPredictions || 0}</td>
+        <td style="padding: 10px 12px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.06);">${row.goalsHit || 0}</td>
+        <td style="padding: 10px 12px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.06);">${row.goalsMissed || 0}</td>
+        <td style="padding: 10px 12px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.06);">${row.winsHit || 0}</td>
+        <td style="padding: 10px 12px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.06);">${row.drawsHit || 0}</td>
+        <td style="padding: 10px 12px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.06);">${row.lossesHit || 0}</td>
+      </tr>
+    `;
+  }).join('');
+  
+  return `
+    <div style="overflow-x: auto; margin-top: 14px; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; background: rgba(0,0,0,0.22); padding: 4px;">
+      <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem;">
+        ${headers}
+        <tbody class="leaderboard-body-rows">
+          ${tbody}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderPredictionRadar(summary) {
+  if (!summary || !summary.match || !summary.predictions || summary.predictions.length === 0) {
+    return '<div class="empty">Sem dados para o gráfico radar.</div>';
+  }
+
+  const m = summary.match;
+  const home = m.home || m.homeTeam || 'Equipa A';
+  const away = m.away || m.awayTeam || 'Equipa B';
+
+  // Collect predictions per outcome
+  let homeWins = 0;
+  let awayWins = 0;
+  let draws = 0;
+  const playerOutcomes = [];
+
+  (summary.predictions || []).forEach(item => {
+    const p = item.prediction;
+    if (!p || p.homeGoals == null || p.awayGoals == null) return;
+    const h = Number(p.homeGoals);
+    const a = Number(p.awayGoals);
+    let outcome;
+    const diff = Math.abs(h - a);
+    if (h > a) {
+      outcome = 'home';
+      homeWins++;
+    } else if (a > h) {
+      outcome = 'away';
+      awayWins++;
+    } else {
+      outcome = 'draw';
+      draws++;
+    }
+    playerOutcomes.push({
+      name: item.player.participantName,
+      icon: item.player.icon,
+      outcome,
+      diff,
+      pred: `${h}-${a}`,
+      isSelected: item.isSelected
+    });
+  });
+
+  const total = homeWins + awayWins + draws;
+  if (total === 0) {
+    return '<div class="empty">Nenhum prognostico disponivel.</div>';
+  }
+
+  // Standing standalone Radar chart (width 900, height 800)
+  const svgWidth = 900;
+  const svgHeight = 800;
+  const cx = 450;
+  const cy = 390;
+  const maxR = 210;
+  const levels = 5;
+  const axes = [
+    { label: home, angle: -90, count: homeWins },
+    { label: away, angle: 30, count: awayWins },
+    { label: 'Empate', angle: 150, count: draws }
+  ];
+
+  const toRad = (deg) => (deg * Math.PI) / 180;
+  const axisPoint = (axisIdx, radius) => {
+    const angle = toRad(axes[axisIdx].angle);
+    return {
+      x: cx + radius * Math.cos(angle),
+      y: cy + radius * Math.sin(angle)
+    };
+  };
+
+  // Grid levels (Radar)
+  let gridSvg = '';
+  for (let lv = 1; lv <= levels; lv++) {
+    const r = (lv / levels) * maxR;
+    const pts = axes.map((_, i) => {
+      const p = axisPoint(i, r);
+      return `${p.x},${p.y}`;
+    }).join(' ');
+    const opacity = lv === levels ? 0.15 : 0.05;
+    const width = lv === levels ? 1.5 : 1;
+    // Triangular grid
+    gridSvg += `<polygon points="${pts}" fill="none" stroke="rgba(255,255,255,${opacity})" stroke-width="${width}" />`;
+    // Circular accent ring
+    gridSvg += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="rgba(255,255,255,0.02)" stroke-dasharray="3,3" />`;
+  }
+
+  // Axis lines (Radar)
+  let axisLinesSvg = '';
+  axes.forEach((_, i) => {
+    const p = axisPoint(i, maxR + 10);
+    axisLinesSvg += `<line x1="${cx}" y1="${cy}" x2="${p.x}" y2="${p.y}" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-dasharray="4,4" />`;
+  });
+
+  // Axis labels with counts (Radar)
+  const values = [homeWins, awayWins, draws];
+  const axisColors = ['#38bdf8', '#f59e0b', '#10b981'];
+  let labelsSvg = '';
+  axes.forEach((axis, i) => {
+    const labelR = maxR + 25;
+    const p = axisPoint(i, labelR);
+    const anchor = i === 0 ? 'middle' : (i === 1 ? 'start' : 'end');
+    const valPct = total > 0 ? Math.round((values[i] / total) * 100) : 0;
+    labelsSvg += `
+      <text x="${p.x}" y="${p.y - 8}" fill="${axisColors[i]}" font-size="14" font-weight="800" text-anchor="${anchor}" dominant-baseline="middle" font-family="system-ui, sans-serif">${escapeHtml(axis.label)}</text>
+      <text x="${p.x}" y="${p.y + 10}" fill="rgba(255,255,255,0.6)" font-size="11.5" font-weight="600" text-anchor="${anchor}" dominant-baseline="middle" font-family="system-ui, sans-serif">${values[i]} jog. (${valPct}%)</text>
+    `;
+  });
+
+  // Calculate player coordinates and distribute to left/right sidebars (Radar)
+  const outcomeAxisMap = { home: 0, away: 1, draw: 2 };
+  
+  // First calculate positions for all predictions
+  ['home', 'away', 'draw'].forEach(outcome => {
+    const axisIdx = outcomeAxisMap[outcome];
+    const players = playerOutcomes.filter(p => p.outcome === outcome);
+    const color = axisColors[axisIdx];
+    const axisAngle = toRad(axes[axisIdx].angle);
+    const count = players.length;
+
+    players.forEach((player, idx) => {
+      const minFrac = 0.35;
+      const maxFrac = 0.90;
+      const frac = count === 1
+        ? 0.65
+        : minFrac + (idx / (count - 1)) * (maxFrac - minFrac);
+      const baseR = frac * maxR;
+
+      // Perpendicular offset to spread dots slightly off-axis
+      const perpAngle = axisAngle + Math.PI / 2;
+      const spreadAmount = count > 1 ? (idx % 2 === 0 ? 1 : -1) * (10 + Math.floor(idx / 2) * 5) : 0;
+
+      const dotX = cx + baseR * Math.cos(axisAngle) + spreadAmount * Math.cos(perpAngle);
+      const dotY = cy + baseR * Math.sin(axisAngle) + spreadAmount * Math.sin(perpAngle);
+
+      player.dotX = dotX;
+      player.dotY = dotY;
+      player.color = color;
+    });
+  });
+
+  // Distribute players to sidebars
+  const leftPlayers = [];
+  const rightPlayers = [];
+
+  // Home (top axis) split between left and right sidebar
+  const homePlayers = playerOutcomes.filter(p => p.outcome === 'home');
+  homePlayers.forEach((player, idx) => {
+    if (idx % 2 === 0) {
+      leftPlayers.push(player);
+    } else {
+      rightPlayers.push(player);
+    }
+  });
+
+  // Draws (bottom-left) go to left sidebar
+  playerOutcomes.filter(p => p.outcome === 'draw').forEach(p => leftPlayers.push(p));
+  // Away wins (bottom-right) go to right sidebar
+  playerOutcomes.filter(p => p.outcome === 'away').forEach(p => rightPlayers.push(p));
+
+  // Sort lists by y-coordinate to prevent connection lines from crossing
+  leftPlayers.sort((a, b) => a.dotY - b.dotY);
+  rightPlayers.sort((a, b) => a.dotY - b.dotY);
+
+  // Setup sidebar sizes & scales dynamically to fit any number of players
+  const maxSidebarCount = Math.max(leftPlayers.length, rightPlayers.length, 1);
+  const sidebarHeight = 680; // range from y=60 to y=740
+  const spacing = Math.min(24, sidebarHeight / maxSidebarCount);
+  const fontSize = Math.min(12, Math.max(9, spacing * 0.45));
+  const smallFontSize = fontSize * 0.85;
+
+  const leftStart = cy - ((leftPlayers.length - 1) * spacing) / 2;
+  const rightStart = cy - ((rightPlayers.length - 1) * spacing) / 2;
+
+  let playerDotsSvg = '';
+  let connectionLinesSvg = '';
+  let sidebarTextSvg = '';
+
+  // Draw player dots on the chart
+  playerOutcomes.forEach(player => {
+    const selectedGlow = player.isSelected ? `filter="url(#selectedGlow)"` : '';
+    const dotRadius = player.isSelected ? 7 : 5;
+    const strokeW = player.isSelected ? 2.5 : 1.5;
+    playerDotsSvg += `
+      <circle cx="${player.dotX}" cy="${player.dotY}" r="${dotRadius}" fill="${player.color}" stroke="#0b0f19" stroke-width="${strokeW}" ${selectedGlow}>
+        <title>${escapeHtml(player.name)} — ${player.pred}</title>
+      </circle>
+    `;
+  });
+
+  // Draw left sidebar connections and labels (using lineX = 150)
+  leftPlayers.forEach((player, idx) => {
+    const yText = leftStart + idx * spacing;
+    const lineX = 150;
+    const color = player.color;
+    
+    // Smooth bezier curve from text column to player dot on the axis
+    const pathD = `M ${lineX} ${yText} C ${lineX + 50} ${yText}, ${player.dotX - 55} ${player.dotY}, ${player.dotX} ${player.dotY}`;
+    connectionLinesSvg += `
+      <path d="${pathD}" fill="none" stroke="${color}" stroke-width="0.8" opacity="0.3" />
+      <circle cx="${lineX}" cy="${yText}" r="2" fill="${color}" opacity="0.7" />
+    `;
+
+    const nameWeight = player.isSelected ? '700' : '500';
+    const nameColor = player.isSelected ? '#ffffff' : 'rgba(255,255,255,0.8)';
+    sidebarTextSvg += `
+      <text x="${lineX - 8}" y="${yText}" fill="${nameColor}" font-size="${fontSize}" font-weight="${nameWeight}" text-anchor="end" dominant-baseline="middle" font-family="system-ui, sans-serif">
+        ${escapeHtml(player.name)}
+        <tspan fill="${color}" font-weight="700" font-size="${smallFontSize}" font-family="monospace" dx="4">${player.pred}</tspan>
+      </text>
+    `;
+  });
+
+  // Draw right sidebar connections and labels (using lineX = 750)
+  rightPlayers.forEach((player, idx) => {
+    const yText = rightStart + idx * spacing;
+    const lineX = 750;
+    const color = player.color;
+    
+    // Smooth bezier curve from text column to player dot on the axis
+    const pathD = `M ${lineX} ${yText} C ${lineX - 50} ${yText}, ${player.dotX + 55} ${player.dotY}, ${player.dotX} ${player.dotY}`;
+    connectionLinesSvg += `
+      <path d="${pathD}" fill="none" stroke="${color}" stroke-width="0.8" opacity="0.3" />
+      <circle cx="${lineX}" cy="${yText}" r="2" fill="${color}" opacity="0.7" />
+    `;
+
+    const nameWeight = player.isSelected ? '700' : '500';
+    const nameColor = player.isSelected ? '#ffffff' : 'rgba(255,255,255,0.8)';
+    sidebarTextSvg += `
+      <text x="${lineX + 8}" y="${yText}" fill="${nameColor}" font-size="${fontSize}" font-weight="${nameWeight}" text-anchor="start" dominant-baseline="middle" font-family="system-ui, sans-serif">
+        ${escapeHtml(player.name)}
+        <tspan fill="${color}" font-weight="700" font-size="${smallFontSize}" font-family="monospace" dx="4">${player.pred}</tspan>
+      </text>
+    `;
+  });
+
+  // Level value markers on top axis
+  let valueLabelsSvg = '';
+  for (let lv = 1; lv <= levels; lv++) {
+    const val = Math.round((lv / levels) * maxVal);
+    const r = (lv / levels) * maxR;
+    const p = axisPoint(0, r);
+    valueLabelsSvg += `<text x="${p.x + 8}" y="${p.y + 4}" fill="rgba(255,255,255,0.35)" font-size="9.5" font-family="system-ui, sans-serif" text-anchor="start">${val}</text>`;
+  }
+
+  // Data polygon outline and glowing shadow
+  const dataPoints = values.map((val, i) => {
+    const r = (val / maxVal) * maxR;
+    const p = axisPoint(i, Math.max(r, 8));
+    return `${p.x},${p.y}`;
+  }).join(' ');
+
+  const dataSvg = `
+    <polygon points="${dataPoints}" fill="url(#radarGradient)" stroke="#38bdf8" stroke-width="2.5" stroke-linejoin="round" />
+  `;
+
+  // Polygon vertex indicator dots
+  let vertexDotsSvg = '';
+  values.forEach((val, i) => {
+    const r = (val / maxVal) * maxR;
+    const p = axisPoint(i, Math.max(r, 8));
+    vertexDotsSvg += `
+      <circle cx="${p.x}" cy="${p.y}" r="6" fill="${axisColors[i]}" stroke="#0b0f19" stroke-width="2" />
+      <circle cx="${p.x}" cy="${p.y}" r="11" fill="none" stroke="${axisColors[i]}" stroke-width="1" opacity="0.4" />
+    `;
+  });
+
+  // Summary cards HTML below the chart
+  const stageLabel = {
+    groups: 'Fase de grupos',
+    round32: '16 avos',
+    round16: 'Oitavos',
+    quarterfinals: 'Quartos',
+    semifinals: 'Meias-finais',
+    third_place: '3.o Lugar',
+    final: 'Final'
+  }[m.stage] || m.stage || 'Jogo';
+
+  return `
+    <div class="prediction-radar-full" style="display: flex; flex-direction: column; gap: 16px; margin-top: 12px;">
+
+      <div style="background: rgba(255,255,255,0.03); padding: 14px 18px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.06); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+        <div>
+          <span style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.6; display: block; margin-bottom: 2px;">Jogo ${m.id} · ${escapeHtml(stageLabel)}</span>
+          <strong style="font-size: 1.15rem;">${escapeHtml(home)} <span style="color: var(--accent);">vs</span> ${escapeHtml(away)}</strong>
+        </div>
+        <div style="display: flex; gap: 12px;">
+          <div style="background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 10px; padding: 8px 16px; text-align: center;">
+            <div style="font-size: 1.4rem; font-weight: 800; color: #38bdf8;">${homeWins}</div>
+            <div style="font-size: 0.68rem; text-transform: uppercase; color: var(--muted); margin-top: 1px;">${escapeHtml(home)}</div>
+          </div>
+          <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 10px; padding: 8px 16px; text-align: center;">
+            <div style="font-size: 1.4rem; font-weight: 800; color: #10b981;">${draws}</div>
+            <div style="font-size: 0.68rem; text-transform: uppercase; color: var(--muted); margin-top: 1px;">Empate</div>
+          </div>
+          <div style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.25); border-radius: 10px; padding: 8px 16px; text-align: center;">
+            <div style="font-size: 1.4rem; font-weight: 800; color: #f59e0b;">${awayWins}</div>
+            <div style="font-size: 0.68rem; text-transform: uppercase; color: var(--muted); margin-top: 1px;">${escapeHtml(away)}</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 20px; display: flex; justify-content: center; overflow-x: auto;">
+        <svg viewBox="0 0 900 800" style="width: 100%; max-width: 900px; height: auto; min-width: 640px; display: block;">
+          <defs>
+            <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#0b0f19" />
+              <stop offset="50%" stop-color="#111827" />
+              <stop offset="100%" stop-color="#070a10" />
+            </linearGradient>
+            <radialGradient id="radarGradient" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="rgba(56, 189, 248, 0.22)" />
+              <stop offset="100%" stop-color="rgba(56, 189, 248, 0.01)" />
+            </radialGradient>
+            <filter id="selectedGlow" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="3.5" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#bgGradient)" rx="14" />
+          
+          <text x="450" y="60" fill="#ffffff" font-size="14" font-weight="800" text-anchor="middle" font-family="system-ui, sans-serif" letter-spacing="0.08em" opacity="0.9">DISTRIBUIÇÃO POR DESFECHO (RADAR)</text>
+          
+          ${gridSvg}
+          ${axisLinesSvg}
+          ${valueLabelsSvg}
+          ${dataSvg}
+          ${vertexDotsSvg}
+          ${connectionLinesSvg}
+          ${playerDotsSvg}
+          ${sidebarTextSvg}
+          ${labelsSvg}
+          <text x="${cx}" y="${cy + 2}" fill="rgba(255,255,255,0.4)" font-size="11.5" font-weight="600" text-anchor="middle" dominant-baseline="middle" font-family="system-ui, sans-serif">${total} prog.</text>
+        </svg>
+      </div>
+    </div>
+  `;
+}
+
+function renderPredictionScatter(summary) {
+  if (!summary || !summary.match || !summary.predictions || summary.predictions.length === 0) {
+    return '<div class="empty">Sem dados para o gráfico de dispersão.</div>';
+  }
+
+  const m = summary.match;
+  const home = m.home || m.homeTeam || 'Equipa A';
+  const away = m.away || m.awayTeam || 'Equipa B';
+
+  let homeWins = 0;
+  let awayWins = 0;
+  let draws = 0;
+  const scoreCounts = {};
+
+  (summary.predictions || []).forEach(item => {
+    const p = item.prediction;
+    if (!p || p.homeGoals == null || p.awayGoals == null) return;
+    const h = Number(p.homeGoals);
+    const a = Number(p.awayGoals);
+    if (h > a) homeWins++;
+    else if (a > h) awayWins++;
+    else draws++;
+
+    const keyH = Math.min(5, h);
+    const keyA = Math.min(5, a);
+    const key = `${keyH}-${keyA}`;
+    if (!scoreCounts[key]) {
+      scoreCounts[key] = { h: keyH, a: keyA, count: 0 };
+    }
+    scoreCounts[key].count++;
+  });
+
+  const total = homeWins + awayWins + draws;
+
+  let scatterGridSvg = '';
+  // Grid outer border centered at 450
+  // startX = 200, endX = 700 (width 500)
+  // startY = 170, endY = 670 (height 500)
+  scatterGridSvg += `<rect x="200" y="170" width="500" height="500" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="1" />`;
+  // Diagonal line representing Draws (x = y)
+  scatterGridSvg += `<line x1="200" y1="670" x2="700" y2="170" stroke="rgba(255,255,255,0.15)" stroke-width="1" stroke-dasharray="4,4" />`;
+
+  // Draw vertical grid lines & X-axis labels (Home goals)
+  for (let h = 0; h <= 5; h++) {
+    const gx = 200 + h * 100;
+    scatterGridSvg += `<line x1="${gx}" y1="170" x2="${gx}" y2="670" stroke="rgba(255,255,255,0.06)" stroke-width="1" />`;
+    scatterGridSvg += `<text x="${gx}" y="695" fill="rgba(255,255,255,0.5)" font-size="12" font-weight="600" text-anchor="middle" font-family="system-ui, sans-serif">${h === 5 ? '5+' : h}</text>`;
+  }
+
+  // Draw horizontal grid lines & Y-axis labels (Away goals)
+  for (let a = 0; a <= 5; a++) {
+    const gy = 670 - a * 100;
+    scatterGridSvg += `<line x1="200" y1="${gy}" x2="700" y2="${gy}" stroke="rgba(255,255,255,0.06)" stroke-width="1" />`;
+    scatterGridSvg += `<text x="175" y="${gy + 4}" fill="rgba(255,255,255,0.5)" font-size="12" font-weight="600" text-anchor="end" dominant-baseline="middle" font-family="system-ui, sans-serif">${a === 5 ? '5+' : a}</text>`;
+  }
+
+  // Axis titles
+  scatterGridSvg += `
+    <text x="450" y="735" fill="#38bdf8" font-size="13" font-weight="700" text-anchor="middle" font-family="system-ui, sans-serif">Golos ${escapeHtml(home)} (Casa)</text>
+    <text x="120" y="420" fill="#f59e0b" font-size="13" font-weight="700" text-anchor="middle" transform="rotate(-90 120 420)" font-family="system-ui, sans-serif">Golos ${escapeHtml(away)} (Fora)</text>
+  `;
+
+  // Draw scatter bubbles representing the score counts
+  let scatterBubblesSvg = '';
+  const scoreKeys = Object.keys(scoreCounts);
+  if (scoreKeys.length > 0) {
+    const counts = scoreKeys.map(k => scoreCounts[k].count);
+    const maxCount = Math.max(...counts, 1);
+    
+    scoreKeys.forEach(key => {
+      const cell = scoreCounts[key];
+      const gridX = 200 + cell.h * 100;
+      const gridY = 670 - cell.a * 100;
+      
+      let bubbleColor = '#10b981'; // Green for Draw
+      if (cell.h > cell.a) {
+        bubbleColor = '#38bdf8'; // Blue for Home Win
+      } else if (cell.a > cell.h) {
+        bubbleColor = '#f59e0b'; // Orange/Yellow for Away Win
+      }
+      
+      const radius = 15 + (cell.count / maxCount) * 17;
+      
+      scatterBubblesSvg += `
+        <g>
+          <circle cx="${gridX}" cy="${gridY}" r="${radius}" fill="${bubbleColor}" fill-opacity="0.8" stroke="#0b0f19" stroke-width="2" />
+          <circle cx="${gridX}" cy="${gridY}" r="${radius + 5}" fill="none" stroke="${bubbleColor}" stroke-width="1.5" opacity="0.25" />
+          <text x="${gridX}" y="${gridY + 4}" fill="#ffffff" font-size="11.5" font-weight="900" text-anchor="middle" dominant-baseline="middle" font-family="system-ui, sans-serif">${cell.count}</text>
+          <text x="${gridX}" y="${gridY - radius - 5}" fill="#ffffff" font-size="10.5" font-weight="700" text-anchor="middle" font-family="system-ui, sans-serif">${cell.h}-${cell.a}</text>
+        </g>
+      `;
+    });
+  }
+
+  const stageLabel = {
+    groups: 'Fase de grupos',
+    round32: '16 avos',
+    round16: 'Oitavos',
+    quarterfinals: 'Quartos',
+    semifinals: 'Meias-finais',
+    third_place: '3.o Lugar',
+    final: 'Final'
+  }[m.stage] || m.stage || 'Jogo';
+
+  return `
+    <div class="prediction-radar-full" style="display: flex; flex-direction: column; gap: 16px; margin-top: 12px;">
+      <div style="background: rgba(255,255,255,0.03); padding: 14px 18px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.06); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+        <div>
+          <span style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.6; display: block; margin-bottom: 2px;">Jogo ${m.id} · ${escapeHtml(stageLabel)}</span>
+          <strong style="font-size: 1.15rem;">${escapeHtml(home)} <span style="color: var(--accent);">vs</span> ${escapeHtml(away)}</strong>
+        </div>
+        <div style="display: flex; gap: 12px;">
+          <div style="background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 10px; padding: 8px 16px; text-align: center;">
+            <div style="font-size: 1.4rem; font-weight: 800; color: #38bdf8;">${homeWins}</div>
+            <div style="font-size: 0.68rem; text-transform: uppercase; color: var(--muted); margin-top: 1px;">${escapeHtml(home)}</div>
+          </div>
+          <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 10px; padding: 8px 16px; text-align: center;">
+            <div style="font-size: 1.4rem; font-weight: 800; color: #10b981;">${draws}</div>
+            <div style="font-size: 0.68rem; text-transform: uppercase; color: var(--muted); margin-top: 1px;">Empate</div>
+          </div>
+          <div style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.25); border-radius: 10px; padding: 8px 16px; text-align: center;">
+            <div style="font-size: 1.4rem; font-weight: 800; color: #f59e0b;">${awayWins}</div>
+            <div style="font-size: 0.68rem; text-transform: uppercase; color: var(--muted); margin-top: 1px;">${escapeHtml(away)}</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 20px; display: flex; justify-content: center; overflow-x: auto;">
+        <svg viewBox="0 0 900 800" style="width: 100%; max-width: 900px; height: auto; min-width: 640px; display: block;">
+          <defs>
+            <linearGradient id="bgGradientScatter" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#0b0f19" />
+              <stop offset="50%" stop-color="#111827" />
+              <stop offset="100%" stop-color="#070a10" />
+            </linearGradient>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#bgGradientScatter)" rx="14" />
+          <text x="450" y="60" fill="#ffffff" font-size="14" font-weight="800" text-anchor="middle" font-family="system-ui, sans-serif" letter-spacing="0.08em" opacity="0.9">GRÁFICO DE DISPERSÃO (RESULTADOS)</text>
+          
+          ${scatterGridSvg}
+          ${scatterBubblesSvg}
+          
+          <text x="450" y="760" fill="rgba(255,255,255,0.4)" font-size="11.5" font-family="system-ui, sans-serif" text-anchor="middle">O tamanho da bolha representa a frequência do resultado</text>
+        </svg>
+      </div>
+    </div>
+  `;
+}
+
+function getArchetype(h, a) {
+  const diff = h - a;
+  const total = h + a;
+  if (diff > 0) {
+    return total >= 3 
+      ? { id: 'hero', name: 'O Herói', color: '#f59e0b', desc: 'Vitória em Casa (Aberto, 3+ golos)' }
+      : { id: 'sage', name: 'O Sábio', color: '#10b981', desc: 'Vitória em Casa (Fechado, <3 golos)' };
+  } else if (diff < 0) {
+    return total >= 3 
+      ? { id: 'rebel', name: 'O Rebelde', color: '#f43f5e', desc: 'Vitória Fora (Aberto, 3+ golos)' }
+      : { id: 'caregiver', name: 'O Cuidador', color: '#a855f7', desc: 'Vitória Fora (Fechado, <3 golos)' };
+  } else {
+    return total >= 3 
+      ? { id: 'open_draw', name: 'Empate Aberto', color: '#38bdf8', desc: 'Empate (Aberto, 3+ golos)' }
+      : { id: 'pragmatic', name: 'O Pragmático', color: '#cbd5e1', desc: 'Empate (Fechado, <3 golos)' };
+  }
+}
+
+function getShortName(fullName) {
+  if (!fullName) return '';
+  const parts = fullName.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0];
+  const firstName = parts[0];
+  const lastPart = parts[parts.length - 1];
+  const lastInitial = lastPart ? lastPart[0] : '';
+  return lastInitial ? `${firstName} ${lastInitial}.` : firstName;
+}
+
+function renderSvgParticipantIcon(iconKey, label, size = 26) {
+  const key = normalizeIconKey(iconKey) || autoIconKeyFromName(label);
+  const meta = PLAYER_ICONS[key];
+  const radius = size / 2;
+  if (!meta) {
+    const initials = String(label || '?').split(/\s+/).map((part) => part[0] || '').join('').slice(0, 2).toUpperCase();
+    return `
+      <g>
+        <circle cx="${radius}" cy="${radius}" r="${radius}" fill="rgba(255,255,255,0.15)" stroke="rgba(255,255,255,0.3)" stroke-width="1" />
+        <text x="${radius}" y="${radius + 3}" fill="#ffffff" font-size="${size * 0.45}" font-weight="900" text-anchor="middle" font-family="system-ui, sans-serif">${escapeHtml(initials)}</text>
+      </g>
+    `;
+  }
+  const gradientId = `svg-profile-icon-${escapeHtml(key)}`;
+  return `
+    <g>
+      <defs>
+        <linearGradient id="${gradientId}" x1="0" x2="1" y1="0" y2="1">
+          <stop offset="0%" stop-color="${meta.bg1}"/>
+          <stop offset="100%" stop-color="${meta.bg2}"/>
+        </linearGradient>
+      </defs>
+      <rect x="0" y="0" width="${size}" height="${size}" rx="${size * 0.28}" fill="url(#${gradientId})"/>
+      <circle cx="${radius}" cy="${radius}" r="${radius * 0.74}" fill="rgba(255,255,255,.08)"/>
+      <g fill="none" stroke="#f8fbff" stroke-width="${3.4 * (size / 84)}" stroke-linecap="round" stroke-linejoin="round" transform="scale(${size / 84})">
+        ${meta.glyph}
+      </g>
+    </g>
+  `;
+}
+
+function renderPredictionProfile(summary) {
+  if (!summary || !summary.match || !summary.predictions || summary.predictions.length === 0) {
+    return '<div class="empty">Sem dados para o gráfico de perfil.</div>';
+  }
+
+  const m = summary.match;
+  const home = m.home || m.homeTeam || 'Equipa A';
+  const away = m.away || m.awayTeam || 'Equipa B';
+
+  const predictions = summary.predictions || [];
+
+  const groups = {
+    hero: { id: 'hero', name: 'O Herói', color: '#f59e0b', gradient: '#heroGrad', desc: 'Vitória em Casa (3+ golos totais)', players: [] },
+    rebel: { id: 'rebel', name: 'O Rebelde', color: '#f43f5e', gradient: '#rebelGrad', desc: 'Vitória Fora (3+ golos totais)', players: [] },
+    sage: { id: 'sage', name: 'O Sábio', color: '#10b981', gradient: '#sageGrad', desc: 'Vitória em Casa (<3 golos totais)', players: [] },
+    caregiver: { id: 'caregiver', name: 'O Cuidador', color: '#a855f7', gradient: '#caregiverGrad', desc: 'Vitória Fora (<3 golos totais)', players: [] },
+    open_draw: { id: 'open_draw', name: 'Empate Aberto', color: '#38bdf8', gradient: '#openDrawGrad', desc: 'Empate com golos (3+ golos)', players: [] },
+    pragmatic: { id: 'pragmatic', name: 'O Pragmático', color: '#cbd5e1', gradient: '#pragmaticGrad', desc: 'Empate sem golos ou 1-1 (<3 golos)', players: [] }
+  };
+
+  const cx = 450;
+  const cy = 410;
+  const startX = 170;
+  const endX = 730;
+  const bottomY = 650;
+  const stepX = 70;
+  const stepY = 80;
+
+  const coordCounts = {};
+
+  predictions.forEach(item => {
+    const p = item.prediction;
+    if (!p || p.homeGoals == null || p.awayGoals == null) return;
+    const h = Number(p.homeGoals);
+    const a = Number(p.awayGoals);
+    
+    const arch = getArchetype(h, a);
+    groups[arch.id].players.push(item);
+
+    const diff = h - a;
+    const totalG = h + a;
+
+    let bx = cx;
+    if (diff < 0) {
+      if (diff === -1) bx = 415 - 50;
+      else if (diff === -2) bx = 415 - 110;
+      else if (diff === -3) bx = 415 - 170;
+      else bx = 415 - 230;
+    } else if (diff > 0) {
+      if (diff === 1) bx = 485 + 50;
+      else if (diff === 2) bx = 485 + 110;
+      else if (diff === 3) bx = 485 + 170;
+      else bx = 485 + 230;
+    }
+
+    let by = cy;
+    if (totalG === 0) by = 650 - 30;
+    else if (totalG === 1) by = 650 - 75;
+    else if (totalG === 2) by = 650 - 120;
+    else if (totalG === 3) by = 425 - 35;
+    else if (totalG === 4) by = 425 - 90;
+    else if (totalG === 5) by = 425 - 145;
+    else by = 425 - 200;
+
+    const coordKey = `${h}-${a}`;
+    if (!coordCounts[coordKey]) {
+      coordCounts[coordKey] = 0;
+    }
+    const index = coordCounts[coordKey]++;
+    
+    let x = bx;
+    let y = by;
+    if (index > 0) {
+      const angle = (index * 72 * Math.PI) / 180;
+      const radius = 28 + Math.floor((index - 1) / 5) * 22;
+      x = bx + radius * Math.cos(angle);
+      y = by + radius * Math.sin(angle);
+    }
+
+    item.plotX = x;
+    item.plotY = y;
+    item.archetypeColor = arch.color;
+    item.predStr = `${h}-${a}`;
+  });
+
+  let dotsAndLabelsSvg = '';
+  predictions.forEach(item => {
+    if (item.plotX == null) return;
+    const isSelected = item.isSelected;
+    const size = 24;
+    const glow = isSelected ? `filter="url(#selectedGlow)"` : '';
+    
+    const shortName = getShortName(item.player.participantName);
+    const labelWidth = shortName.length * 6.2 + 8;
+    const labelX = item.plotX - labelWidth / 2;
+    const labelY = item.plotY + 15;
+
+    let selectedRing = '';
+    if (isSelected) {
+      selectedRing = `
+        <rect x="${item.plotX - 15}" y="${item.plotY - 15}" width="30" height="30" rx="9" fill="none" stroke="${item.archetypeColor}" stroke-width="2.5" ${glow} />
+        <circle cx="${item.plotX}" cy="${item.plotY}" r="${size}" fill="none" stroke="${item.archetypeColor}" stroke-width="1.5" opacity="0.4" />
+      `;
+    }
+    
+    dotsAndLabelsSvg += `
+      <g style="cursor: pointer;">
+        ${selectedRing}
+        <!-- Avatar -->
+        <g transform="translate(${item.plotX - 12}, ${item.plotY - 12})">
+          ${renderSvgParticipantIcon(item.player.icon, item.player.participantName, size)}
+        </g>
+        <title>${escapeHtml(item.player.participantName)}: ${item.predStr}</title>
+        
+        <!-- Compact Name Label Capsule -->
+        <rect x="${labelX}" y="${labelY}" width="${labelWidth}" height="14" rx="3.5" fill="rgba(11, 15, 25, 0.85)" stroke="${isSelected ? item.archetypeColor : 'rgba(255,255,255,0.18)'}" stroke-width="${isSelected ? 1 : 0.6}" />
+        <text x="${item.plotX}" y="${labelY + 10}" fill="#ffffff" font-size="8.8" font-weight="${isSelected ? '900' : '700'}" text-anchor="middle" font-family="system-ui, sans-serif">${escapeHtml(shortName)}</text>
+      </g>
+    `;
+  });
+
+  const cardsHtml = Object.values(groups).map(g => {
+    const activeClass = g.players.length > 0 ? '' : 'opacity: 0.35;';
+    const borderStyle = `border-top: 4px solid ${g.color};`;
+    
+    const playersList = g.players.map(p => {
+      const isSelected = p.isSelected;
+      const highlightBg = isSelected ? 'background: rgba(255,255,255,0.08); border-radius: 6px;' : '';
+      const icon = renderParticipantIcon(p.player.icon, p.player.participantName);
+      return `
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 4px 6px; font-size: 0.82rem; ${highlightBg}">
+          <div style="display: flex; align-items: center; gap: 6px;">
+            ${icon}
+            <span style="${isSelected ? 'font-weight: 700; color: #fff;' : 'color: rgba(255,255,255,0.7);'}">${escapeHtml(p.player.participantName)}</span>
+          </div>
+          <span style="font-family: monospace; font-weight: 700; color: ${g.color};">${p.predStr}</span>
+        </div>
+      `;
+    }).join('') || '<div style="font-size: 0.78rem; color: rgba(255,255,255,0.35); font-style: italic; padding: 4px 6px;">Nenhum jogador</div>';
+
+    return `
+      <div class="archetype-legend-card" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 8px; ${borderStyle} ${activeClass}">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <h4 style="margin: 0; font-size: 0.95rem; font-weight: 800; color: ${g.color};">${g.name}</h4>
+          <span style="background: rgba(255,255,255,0.08); padding: 2px 8px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; color: ${g.color};">${g.players.length}</span>
+        </div>
+        <p style="margin: 0; font-size: 0.75rem; color: rgba(255,255,255,0.6); line-height: 1.35;">${g.desc}</p>
+        <div style="margin-top: 6px; display: flex; flex-direction: column; gap: 2px;">
+          ${playersList}
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  const stageLabel = {
+    groups: 'Fase de grupos',
+    round32: '16 avos',
+    round16: 'Oitavos',
+    quarterfinals: 'Quartos',
+    semifinals: 'Meias-finais',
+    third_place: '3.o Lugar',
+    final: 'Final'
+  }[m.stage] || m.stage || 'Jogo';
+
+  return `
+    <div class="prediction-radar-full" style="display: flex; flex-direction: column; gap: 16px; margin-top: 12px;">
+
+      <div style="background: rgba(255,255,255,0.03); padding: 14px 18px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.06); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+        <div>
+          <span style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.6; display: block; margin-bottom: 2px;">Jogo ${m.id} · ${escapeHtml(stageLabel)}</span>
+          <strong style="font-size: 1.15rem;">${escapeHtml(home)} <span style="color: var(--accent);">vs</span> ${escapeHtml(away)}</strong>
+        </div>
+        <div style="background: rgba(255,255,255,0.05); padding: 6px 12px; border-radius: 8px; font-size: 0.85rem; color: rgba(255,255,255,0.85); font-weight: 600;">
+          Perfil de Prognósticos (${predictions.length} participações)
+        </div>
+      </div>
+
+      <div style="background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 20px; display: flex; justify-content: center; overflow-x: auto;">
+        <svg viewBox="0 0 900 800" style="width: 100%; max-width: 900px; height: auto; min-width: 640px; display: block;">
+          <defs>
+            <linearGradient id="bgGradientProfile" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#0b0f19" />
+              <stop offset="50%" stop-color="#111827" />
+              <stop offset="100%" stop-color="#070a10" />
+            </linearGradient>
+            
+            <linearGradient id="rebelGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#f43f5e" stop-opacity="0.16" />
+              <stop offset="100%" stop-color="#fda4af" stop-opacity="0.01" />
+            </linearGradient>
+            <linearGradient id="caregiverGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#a855f7" stop-opacity="0.16" />
+              <stop offset="100%" stop-color="#c084fc" stop-opacity="0.01" />
+            </linearGradient>
+            <linearGradient id="heroGrad" x1="100%" y1="100%" x2="0%" y2="0%">
+              <stop offset="0%" stop-color="#f59e0b" stop-opacity="0.16" />
+              <stop offset="100%" stop-color="#fde047" stop-opacity="0.01" />
+            </linearGradient>
+            <linearGradient id="sageGrad" x1="100%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stop-color="#10b981" stop-opacity="0.16" />
+              <stop offset="100%" stop-color="#6ee7b7" stop-opacity="0.01" />
+            </linearGradient>
+            <linearGradient id="openDrawGrad" x1="50%" y1="100%" x2="50%" y2="0%">
+              <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.16" />
+              <stop offset="100%" stop-color="#7dd3fc" stop-opacity="0.01" />
+            </linearGradient>
+            <linearGradient id="pragmaticGrad" x1="50%" y1="0%" x2="50%" y2="100%">
+              <stop offset="0%" stop-color="#64748b" stop-opacity="0.16" />
+              <stop offset="100%" stop-color="#cbd5e1" stop-opacity="0.01" />
+            </linearGradient>
+
+            <filter id="selectedGlow" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="3.5" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#bgGradientProfile)" rx="14" />
+          
+          <text x="450" y="60" fill="#ffffff" font-size="14" font-weight="800" text-anchor="middle" font-family="system-ui, sans-serif" letter-spacing="0.08em" opacity="0.9">COORDENADAS DE PERFIL DE PROGNÓSTICO</text>
+
+          <!-- Quadrant background fills -->
+          <path d="M 170 170 L 415 170 L 415 425 L 170 425 Z" fill="url(#rebelGrad)" />
+          <path d="M 170 425 L 415 425 L 415 650 L 170 650 Z" fill="url(#caregiverGrad)" />
+          <path d="M 485 170 L 730 170 L 730 425 L 485 425 Z" fill="url(#heroGrad)" />
+          <path d="M 485 425 L 730 425 L 730 650 L 485 650 Z" fill="url(#sageGrad)" />
+          <path d="M 415 170 L 485 170 L 485 425 L 415 425 Z" fill="url(#openDrawGrad)" />
+          <path d="M 415 425 L 485 425 L 485 650 L 415 650 Z" fill="url(#pragmaticGrad)" />
+
+          <!-- Archetype Names inside Chart -->
+          <text x="292" y="300" fill="#f43f5e" opacity="0.45" font-size="20" font-weight="900" text-anchor="middle" font-family="system-ui, sans-serif" letter-spacing="0.05em">O REBELDE</text>
+          <text x="292" y="550" fill="#a855f7" opacity="0.45" font-size="20" font-weight="900" text-anchor="middle" font-family="system-ui, sans-serif" letter-spacing="0.05em">O CUIDADOR</text>
+          <text x="607" y="300" fill="#f59e0b" opacity="0.45" font-size="20" font-weight="900" text-anchor="middle" font-family="system-ui, sans-serif" letter-spacing="0.05em">O HERÓI</text>
+          <text x="607" y="550" fill="#10b981" opacity="0.45" font-size="20" font-weight="900" text-anchor="middle" font-family="system-ui, sans-serif" letter-spacing="0.05em">O SÁBIO</text>
+          <text x="450" y="300" fill="#38bdf8" opacity="0.45" font-size="12" font-weight="900" text-anchor="middle" font-family="system-ui, sans-serif" letter-spacing="0.03em">EMPATE ABERTO</text>
+          <text x="450" y="550" fill="#cbd5e1" opacity="0.45" font-size="11" font-weight="900" text-anchor="middle" font-family="system-ui, sans-serif" letter-spacing="0.03em">O PRAGMÁTICO</text>
+
+          <!-- Axes lines -->
+          <line x1="${startX}" y1="425" x2="${endX}" y2="425" stroke="rgba(255,255,255,0.25)" stroke-width="2" />
+          <line x1="${cx}" y1="170" x2="${cx}" y2="650" stroke="rgba(255,255,255,0.25)" stroke-width="2" />
+
+          <!-- X axis step markers (dashed lines) -->
+          <line x1="${cx - stepX}" y1="170" x2="${cx - stepX}" y2="650" stroke="rgba(255,255,255,0.06)" stroke-dasharray="3,3" />
+          <line x1="${cx - 2*stepX}" y1="170" x2="${cx - 2*stepX}" y2="650" stroke="rgba(255,255,255,0.06)" stroke-dasharray="3,3" />
+          <line x1="${cx - 3*stepX}" y1="170" x2="${cx - 3*stepX}" y2="650" stroke="rgba(255,255,255,0.06)" stroke-dasharray="3,3" />
+          <line x1="${cx + stepX}" y1="170" x2="${cx + stepX}" y2="650" stroke="rgba(255,255,255,0.06)" stroke-dasharray="3,3" />
+          <line x1="${cx + 2*stepX}" y1="170" x2="${cx + 2*stepX}" y2="650" stroke="rgba(255,255,255,0.06)" stroke-dasharray="3,3" />
+          <line x1="${cx + 3*stepX}" y1="170" x2="${cx + 3*stepX}" y2="650" stroke="rgba(255,255,255,0.06)" stroke-dasharray="3,3" />
+          
+          <!-- Y axis step markers (dashed lines) -->
+          <line x1="${startX}" y1="${bottomY - 1*stepY}" x2="${endX}" y2="${bottomY - 1*stepY}" stroke="rgba(255,255,255,0.06)" stroke-dasharray="3,3" />
+          <line x1="${startX}" y1="${bottomY - 2*stepY}" x2="${endX}" y2="${bottomY - 2*stepY}" stroke="rgba(255,255,255,0.06)" stroke-dasharray="3,3" />
+          <line x1="${startX}" y1="${bottomY - 3*stepY}" x2="${endX}" y2="${bottomY - 3*stepY}" stroke="rgba(255,255,255,0.06)" stroke-dasharray="3,3" />
+          <line x1="${startX}" y1="${bottomY - 4*stepY}" x2="${endX}" y2="${bottomY - 4*stepY}" stroke="rgba(255,255,255,0.06)" stroke-dasharray="3,3" />
+          <line x1="${startX}" y1="${bottomY - 5*stepY}" x2="${endX}" y2="${bottomY - 5*stepY}" stroke="rgba(255,255,255,0.06)" stroke-dasharray="3,3" />
+
+          <!-- Axis Labels (X axis) -->
+          <text x="${cx}" y="670" fill="rgba(255,255,255,0.6)" font-size="11" font-weight="600" text-anchor="middle" font-family="system-ui, sans-serif">Empate</text>
+          <text x="${cx + 2*stepX}" y="670" fill="#38bdf8" font-size="11" font-weight="600" text-anchor="middle" font-family="system-ui, sans-serif">Ganha ${escapeHtml(home)}</text>
+          <text x="${cx - 2*stepX}" y="670" fill="#f59e0b" font-size="11" font-weight="600" text-anchor="middle" font-family="system-ui, sans-serif">Ganha ${escapeHtml(away)}</text>
+
+          <!-- Axis Labels (Y axis) -->
+          <text x="150" y="428" fill="rgba(255,255,255,0.6)" font-size="11" font-weight="600" text-anchor="end" font-family="system-ui, sans-serif">Equilíbrio (2-3 golos)</text>
+          <text x="150" y="200" fill="rgba(255,255,255,0.6)" font-size="11" font-weight="600" text-anchor="end" font-family="system-ui, sans-serif">Muitos golos (6+)</text>
+          <text x="150" y="654" fill="rgba(255,255,255,0.6)" font-size="11" font-weight="600" text-anchor="end" font-family="system-ui, sans-serif">Poucos golos (0-1)</text>
+
+          <text x="450" y="150" fill="rgba(255,255,255,0.3)" font-size="10" font-weight="800" text-anchor="middle" font-family="system-ui, sans-serif">▲ OFENSIVO</text>
+          <text x="450" y="690" fill="rgba(255,255,255,0.3)" font-size="10" font-weight="800" text-anchor="middle" font-family="system-ui, sans-serif">▼ DEFENSIVO</text>
+
+          ${dotsAndLabelsSvg}
+
+        </svg>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; margin-top: 6px;">
+        ${cardsHtml}
+      </div>
+    </div>
+  `;
+}
+
+function renderPredictionPitch(summary) {
+  if (!summary || !summary.match || !summary.predictions || summary.predictions.length === 0) {
+    return '<div class="empty">Sem dados para o relvado.</div>';
+  }
+
+  const m = summary.match;
+  const homeTeam = m.home || m.homeTeam || 'Equipa A';
+  const awayTeam = m.away || m.awayTeam || 'Equipa B';
+
+  const predictions = summary.predictions || [];
+
+  const leftPlayers = [];
+  const rightPlayers = [];
+  const centerPlayers = [];
+
+  const isSameTeam = (name1, name2) => {
+    if (!name1 || !name2) return false;
+    return name1.toLowerCase().trim() === name2.toLowerCase().trim();
+  };
+
+  predictions.forEach(item => {
+    const p = item.prediction;
+    if (!p || p.homeGoals == null || p.awayGoals == null) return;
+    const h = Number(p.homeGoals);
+    const a = Number(p.awayGoals);
+
+    const isHomeWinner = (h > a) || (h === a && p.winnerTeam && isSameTeam(p.winnerTeam, homeTeam));
+    const isAwayWinner = (a > h) || (h === a && p.winnerTeam && isSameTeam(p.winnerTeam, awayTeam));
+
+    if (isHomeWinner) {
+      leftPlayers.push(item);
+    } else if (isAwayWinner) {
+      rightPlayers.push(item);
+    } else {
+      centerPlayers.push(item);
+    }
+  });
+
+  const formatPitchPredictionText = (p) => {
+    if (!p) return '';
+    const h = p.homeGoals;
+    const a = p.awayGoals;
+    let text = `${h}-${a}`;
+    if (h === a && p.winnerTeam && p.winnerTeam !== 'Empate') {
+      const methodLabel = p.method === 'et' ? '(prolongamento)' : p.method === 'pens' ? '(penáltis)' : '';
+      text += `\n${p.winnerTeam}\n${methodLabel}`;
+    } else if (p.method === 'et' || p.method === 'pens') {
+      const methodLabel = p.method === 'et' ? '(prolongamento)' : '(penáltis)';
+      text += `\n${methodLabel}`;
+    }
+    return text.trim();
+  };
+
+  const getFlagHtml = (teamName) => {
+    const url = summary.flags?.[teamName.toLowerCase().trim()];
+    if (url) {
+      return `<img src="${url}" alt="${escapeHtml(teamName)}" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; vertical-align: middle; box-shadow: 0 2px 4px rgba(0,0,0,0.4); border: 1.5px solid rgba(255,255,255,0.7);" />`;
+    }
+    return `<span style="width: 24px; height: 24px; border-radius: 50%; background: rgba(255,255,255,0.15); display: inline-flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: bold; border: 1.5px solid rgba(255,255,255,0.4); vertical-align: middle;">${teamName.substring(0, 2).toUpperCase()}</span>`;
+  };
+
+  const renderCard = (item) => {
+    const isSelected = item.isSelected;
+    const name = item.player.participantName;
+    const shortName = getShortName(name);
+    const predText = formatPitchPredictionText(item.prediction);
+    const borderStyle = isSelected ? 'border: 2px solid var(--accent); background: rgba(56, 189, 248, 0.25);' : 'border: 1px solid rgba(255, 255, 255, 0.15); background: rgba(0, 0, 0, 0.45);';
+    const nameWeight = isSelected ? '900' : '700';
+
+    return `
+      <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; ${borderStyle} border-radius: 8px; padding: 6px 8px; width: 105px; text-align: center; color: white; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.25); transform: translateZ(0); flex-shrink: 0;">
+        <div style="width: 26px; height: 26px; border-radius: 50%; overflow: hidden; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.05);">
+          ${renderSvgParticipantIcon(item.player.icon, name, 26)}
+        </div>
+        <div style="font-size: 0.72rem; font-weight: ${nameWeight}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; text-align: center;" title="${escapeHtml(name)}">
+          ${escapeHtml(shortName)}
+        </div>
+        <div style="font-size: 0.68rem; font-weight: 600; opacity: 0.95; line-height: 1.1; white-space: pre-wrap; font-family: monospace; text-align: center; width: 100%;">
+          ${escapeHtml(predText)}
+        </div>
+      </div>
+    `;
+  };
+
+  const leftCardsHtml = leftPlayers.map(renderCard).join('') || '<div style="font-size: 0.8rem; opacity: 0.5; font-style: italic; color: #fff;">Nenhum</div>';
+  const centerCardsHtml = centerPlayers.map(renderCard).join('') || '<div style="font-size: 0.8rem; opacity: 0.5; font-style: italic; color: #fff;">Nenhum</div>';
+  const rightCardsHtml = rightPlayers.map(renderCard).join('') || '<div style="font-size: 0.8rem; opacity: 0.5; font-style: italic; color: #fff;">Nenhum</div>';
+
+  const stageLabel = {
+    groups: 'Fase de grupos',
+    round32: '16 avos',
+    round16: 'Oitavos',
+    quarterfinals: 'Quartos',
+    semifinals: 'Meias-finais',
+    third_place: '3.o Lugar',
+    final: 'Final'
+  }[m.stage] || m.stage || 'Jogo';
+
+  return `
+    <div class="prediction-radar-full" style="display: flex; flex-direction: column; gap: 16px; margin-top: 12px;">
+      <div style="background: rgba(255,255,255,0.03); padding: 14px 18px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.06); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+        <div>
+          <span style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.6; display: block; margin-bottom: 2px;">Jogo ${m.id} · ${escapeHtml(stageLabel)}</span>
+          <strong style="font-size: 1.15rem;">${escapeHtml(homeTeam)} <span style="color: var(--accent);">vs</span> ${escapeHtml(awayTeam)}</strong>
+        </div>
+        <div style="background: rgba(255,255,255,0.05); padding: 6px 12px; border-radius: 8px; font-size: 0.85rem; color: rgba(255,255,255,0.85); font-weight: 600;">
+          Relvado de Prognósticos (${predictions.length} participações)
+        </div>
+      </div>
+
+      <div class="soccer-pitch" style="position: relative; width: 100%; min-height: 520px; height: auto; background: radial-gradient(circle, #2d7a43 40%, #1c522b 100%); border: 3px solid rgba(255,255,255,0.4); border-radius: 12px; display: flex; box-shadow: inset 0 0 50px rgba(0,0,0,0.6); overflow: hidden; padding: 25px 15px; gap: 10px; z-index: 1;">
+        
+        <!-- Marcador do Relvado (Soccer Field Markings) -->
+        <!-- Linha do meio campo -->
+        <div style="position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; background: rgba(255,255,255,0.25); transform: translateX(-50%); pointer-events: none; z-index: 1;"></div>
+        <!-- Círculo central -->
+        <div style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 140px; height: 140px; border: 2px solid rgba(255,255,255,0.25); border-radius: 50%; pointer-events: none; z-index: 1;"></div>
+        <!-- Grande área esquerda -->
+        <div style="position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 90px; height: 260px; border: 2px solid rgba(255,255,255,0.25); border-left: none; pointer-events: none; z-index: 1;"></div>
+        <!-- Pequena área esquerda -->
+        <div style="position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 30px; height: 110px; border: 2px solid rgba(255,255,255,0.2); border-left: none; pointer-events: none; z-index: 1;"></div>
+        <!-- Grande área direita -->
+        <div style="position: absolute; right: 0; top: 50%; transform: translateY(-50%); width: 90px; height: 260px; border: 2px solid rgba(255,255,255,0.25); border-right: none; pointer-events: none; z-index: 1;"></div>
+        <!-- Pequena área direita -->
+        <div style="position: absolute; right: 0; top: 50%; transform: translateY(-50%); width: 30px; height: 110px; border: 2px solid rgba(255,255,255,0.2); border-right: none; pointer-events: none; z-index: 1;"></div>
+        <!-- Baliza esquerda -->
+        <div style="position: absolute; left: -6px; top: 50%; transform: translateY(-50%); width: 6px; height: 70px; border: 2px solid rgba(255,255,255,0.3); border-left: none; pointer-events: none; z-index: 1;"></div>
+        <!-- Baliza direita -->
+        <div style="position: absolute; right: -6px; top: 50%; transform: translateY(-50%); width: 6px; height: 70px; border: 2px solid rgba(255,255,255,0.3); border-right: none; pointer-events: none; z-index: 1;"></div>
+
+        <!-- Equipa A (Esquerda) -->
+        <div style="flex: 1; display: flex; flex-direction: column; align-items: center; position: relative; z-index: 2; min-width: 0;">
+          <div style="text-align: center; margin-bottom: 20px; font-weight: 800; font-size: 1.15rem; color: #fff; text-shadow: 0 2px 5px rgba(0,0,0,0.8); background: rgba(0,0,0,0.3); padding: 4px 14px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.1); width: fit-content; display: inline-flex; align-items: center; gap: 8px;">
+            ${getFlagHtml(homeTeam)} <span>${escapeHtml(homeTeam)}</span>
+          </div>
+          <div style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; align-content: flex-start; width: 100%;">
+            ${leftCardsHtml}
+          </div>
+        </div>
+
+        <!-- Empate (Centro) -->
+        <div style="width: 170px; display: flex; flex-direction: column; align-items: center; position: relative; z-index: 2; flex-shrink: 0; padding: 0 5px;">
+          <div style="text-align: center; margin-bottom: 20px; font-weight: 800; font-size: 1.15rem; color: #dbeafe; text-shadow: 0 2px 5px rgba(0,0,0,0.8); background: rgba(0,0,0,0.3); padding: 4px 14px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.1); width: fit-content; display: inline-flex; align-items: center; gap: 8px;">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; display: inline-block; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));"><path d="m11 17 2 2a1 1 0 0 0 1.4 0l4-4a1 1 0 0 0 0-1.4l-2.4-2.4a1 1 0 0 0-1.4 0L13 13M8 14H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3M19 14h2a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-3"/></svg>
+            <span>Empate</span>
+          </div>
+          <div style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; align-content: flex-start; width: 100%;">
+            ${centerCardsHtml}
+          </div>
+        </div>
+
+        <!-- Equipa B (Direita) -->
+        <div style="flex: 1; display: flex; flex-direction: column; align-items: center; position: relative; z-index: 2; min-width: 0;">
+          <div style="text-align: center; margin-bottom: 20px; font-weight: 800; font-size: 1.15rem; color: #fff; text-shadow: 0 2px 5px rgba(0,0,0,0.8); background: rgba(0,0,0,0.3); padding: 4px 14px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.1); width: fit-content; display: inline-flex; align-items: center; gap: 8px;">
+            <span>${escapeHtml(awayTeam)}</span> ${getFlagHtml(awayTeam)}
+          </div>
+          <div style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; align-content: flex-start; width: 100%;">
+            ${rightCardsHtml}
+          </div>
+        </div>
+
       </div>
     </div>
   `;
