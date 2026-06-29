@@ -43,6 +43,8 @@
     }
 
     .controls {
+      position: relative;
+      z-index: 10;
       background: rgba(11, 25, 39, .88);
       backdrop-filter: blur(10px);
       border: 1px solid var(--border);
@@ -622,17 +624,30 @@
       </div>
 
       <div class="form-row">
-        <div class="field">
+        <div class="field" id="matchSelectField">
           <label for="matchSelect">Jogo do torneio</label>
           <select id="matchSelect">
             <option value="">A carregar jogos...</option>
           </select>
+        </div>
+        <div class="field" id="multiMatchContainer" style="display: none; min-width: 280px; position: relative;">
+          <label>Jogos Selecionados (Barra Empilhada)</label>
+          <button type="button" id="multiMatchDropdownBtn" style="width: 100%; padding: 14px 16px; background: rgba(255,255,255,.08); color: var(--text); border: 1px solid rgba(255,255,255,.12); border-radius: 14px; text-align: left; cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-size: 1rem; outline: none;">
+            <span id="multiMatchDropdownValue">Selecionar jogos...</span>
+            <span style="font-size: 0.8rem; opacity: 0.7;">▼</span>
+          </button>
+          <div id="multiMatchDropdownContent" style="display: none; position: absolute; top: calc(100% + 4px); left: 0; width: 100%; max-height: 250px; overflow-y: auto; background: #10253b; border: 1px solid rgba(255,255,255,.12); border-radius: 14px; padding: 8px; z-index: 100; box-shadow: var(--shadow);">
+            <div class="checkbox-group" style="display: grid; gap: 6px;">
+              <!-- Checkboxes will load dynamically -->
+            </div>
+          </div>
         </div>
         <div class="field">
           <label for="layoutSelect">Visualização</label>
           <select id="layoutSelect">
             <option value="columns">Colunas</option>
             <option value="column">Coluna</option>
+            <option value="stacked">Barra Empilhada</option>
           </select>
         </div>
         <div class="field" style="display: flex; align-items: center; gap: 8px; height: 50px; flex-direction: row;">
@@ -642,6 +657,10 @@
         <div class="field" style="display: flex; align-items: center; gap: 8px; height: 50px; flex-direction: row;">
           <input type="checkbox" id="showSelectionStatsToggle" style="width: 20px; height: 20px; cursor: pointer; margin: 0;">
           <label for="showSelectionStatsToggle" style="cursor: pointer; font-weight: 700; margin: 0; user-select: none;">Média Vencedor/Empate</label>
+        </div>
+        <div class="field" style="display: flex; align-items: center; gap: 8px; height: 50px; flex-direction: row;">
+          <input type="checkbox" id="hideUnlockedStatsToggle" style="width: 20px; height: 20px; cursor: pointer; margin: 0;">
+          <label for="hideUnlockedStatsToggle" style="cursor: pointer; font-weight: 700; margin: 0; user-select: none;">Ocultar Estatísticas Desbloqueadas</label>
         </div>
       </div>
 
@@ -720,9 +739,11 @@
       officialResults: {},
       predictions: [],
       selectedMatchId: '',
+      selectedMatchIds: [],
       selectedLayout: 'columns',
       showStats: false,
       showSelectionStats: false,
+      hideUnlockedStats: false,
       firebaseReady: false
     };
 
@@ -730,6 +751,7 @@
     const layoutSelect = document.querySelector('#layoutSelect');
     const showStatsToggle = document.querySelector('#showStatsToggle');
     const showSelectionStatsToggle = document.querySelector('#showSelectionStatsToggle');
+    const hideUnlockedStatsToggle = document.querySelector('#hideUnlockedStatsToggle');
     const statusText = document.querySelector('#statusText');
     const captureArea = document.querySelector('#captureArea');
     const downloadBtn = document.querySelector('#downloadBtn');
@@ -1061,6 +1083,299 @@
 
     async function renderSelectedMatch() {
       const matchId = state.selectedMatchId;
+
+      if (state.selectedLayout === 'stacked') {
+        if (state.selectedMatchIds.length === 0) {
+          captureArea.innerHTML = '<div class="capture-inner"><div class="muted-card">Seleciona pelo menos um jogo nos checkboxes acima para ver a barra empilhada.</div></div>';
+          downloadBtn.disabled = true;
+          return;
+        }
+
+        const selectedMatches = state.matches.filter(m => state.selectedMatchIds.includes(String(m.id)));
+        const maxPossiblePoints = selectedMatches.length * 3;
+
+        // Custom point ticks height based on maxPossiblePoints
+        let tickHeight = '48px';
+        if (maxPossiblePoints > 15) {
+          tickHeight = '24px';
+        } else if (maxPossiblePoints > 6) {
+          tickHeight = '32px';
+        }
+        captureArea.style.setProperty('--tick-height', tickHeight);
+
+        // Process points for each player
+        const totalPlayers = state.predictions.length;
+        const maxPointsPerGame = totalPlayers * 3;
+
+        // Process points for each player (for the table / classification)
+        const playerStats = state.predictions.map(player => {
+          let totalPoints = 0;
+          let exactCount = 0;
+          let outcomeCount = 0;
+          let failCount = 0;
+          const segments = [];
+
+          selectedMatches.forEach((match, idx) => {
+            const official = getOfficialResult(match.id);
+            const pred = getPredictionForMatch(player, match.id);
+            
+            if (official && resultHasScore(official)) {
+              const oh = Number(official.homeGoals);
+              const oa = Number(official.awayGoals);
+              
+              if (pred && pred.homeGoals != null && pred.awayGoals != null && pred.homeGoals !== '' && pred.awayGoals !== '') {
+                const ph = Number(pred.homeGoals);
+                const pa = Number(pred.awayGoals);
+                
+                const isExact = (ph === oh && pa === oa);
+                const predOut = ph > pa ? 'home' : ph < pa ? 'away' : 'draw';
+                const offOut = oh > oa ? 'home' : oh < oa ? 'away' : 'draw';
+                const isOutcome = (predOut === offOut);
+                
+                let points = 0;
+                if (isExact) {
+                  points = 3;
+                  exactCount++;
+                } else if (isOutcome) {
+                  points = 1;
+                  outcomeCount++;
+                } else {
+                  failCount++;
+                }
+                
+                if (points > 0) {
+                  segments.push({
+                    matchIndex: idx,
+                    matchId: match.id,
+                    home: match.home,
+                    away: match.away,
+                    points: points,
+                    predText: `${ph}-${pa}`,
+                    officialText: `${oh}-${oa}`,
+                    label: `${match.home} vs ${match.away}`
+                  });
+                }
+                totalPoints += points;
+              } else {
+                failCount++;
+              }
+            }
+          });
+
+          return {
+            ...player,
+            totalPoints,
+            exactCount,
+            outcomeCount,
+            failCount,
+            segments
+          };
+        }).sort((a, b) => b.totalPoints - a.totalPoints || a.participantName.localeCompare(b.participantName, 'pt-PT'));
+
+        // Gradients to assign to each match
+        const GAME_GRADIENTS = [
+          'linear-gradient(135deg, #4cc9f0 0%, #3a0ca3 100%)', // Blue/Indigo
+          'linear-gradient(135deg, #77e27a 0%, #14532d 100%)', // Green
+          'linear-gradient(135deg, #ff6b6b 0%, #c1121f 100%)', // Red
+          'linear-gradient(135deg, #ffd166 0%, #d97706 100%)', // Amber
+          'linear-gradient(135deg, #f72585 0%, #7209b7 100%)', // Pink/Purple
+          'linear-gradient(135deg, #4895ef 0%, #560bad 100%)', // Violet
+          'linear-gradient(135deg, #a7c957 0%, #386641 100%)', // Lime/Forest
+          'linear-gradient(135deg, #f15bb5 0%, #9b5de5 100%)'  // Magenta/Purple
+        ];
+
+        // 1. Build selectedMatchesListHtml
+        const selectedMatchesListHtml = selectedMatches.map((match, idx) => {
+          const official = getOfficialResult(match.id);
+          const scoreStr = official && resultHasScore(official) 
+            ? `${Number(official.homeGoals)} - ${Number(official.awayGoals)}` 
+            : 'VS';
+          const stageLabel = STAGE_LABELS[match.stage] || match.stage || 'Jogo';
+          const gradient = GAME_GRADIENTS[idx % GAME_GRADIENTS.length];
+          return `
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; border-radius: 8px; background: rgba(255,255,255,0.02); border-left: 4px solid; border-image: ${gradient} 1; font-size: 0.85rem;">
+              <span style="font-weight: 700;">Jogo ${match.id} (${stageLabel.split(' ')[0]})</span>
+              <span>${escapeHtml(match.home)} <strong>${scoreStr}</strong> ${escapeHtml(match.away)}</span>
+            </div>
+          `;
+        }).join('');
+
+        // 2. Build playersTableRowsHtml
+        const playersTableRowsHtml = playerStats.map(p => {
+          const efficiency = maxPossiblePoints > 0 ? Math.round((p.totalPoints / maxPossiblePoints) * 100) : 0;
+          return `
+            <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+              <td style="padding: 6px 8px; display: flex; align-items: center; gap: 8px; font-weight: 700;">
+                ${renderParticipantIcon(p.icon)}
+                <span>${escapeHtml(p.participantName)}</span>
+              </td>
+              <td style="padding: 6px 8px; text-align: center; font-weight: 900; color: var(--accent-2);">${p.totalPoints}</td>
+              <td style="padding: 6px 8px; text-align: center; color: var(--muted);">${efficiency}%</td>
+              <td style="padding: 6px 8px; text-align: center; font-size: 0.8rem; color: var(--muted);">${p.exactCount}E / ${p.outcomeCount}V / ${p.failCount}F</td>
+            </tr>
+          `;
+        }).join('');
+
+        // Calculate game-based actual points sum for chart bars
+        const gameStats = selectedMatches.map((match, idx) => {
+          const official = getOfficialResult(match.id);
+          let actualPointsSum = 0;
+          let exactCount = 0;
+          let outcomeCount = 0;
+          let failCount = 0;
+
+          if (official && resultHasScore(official)) {
+            const oh = Number(official.homeGoals);
+            const oa = Number(official.awayGoals);
+
+            state.predictions.forEach(player => {
+              const pred = getPredictionForMatch(player, match.id);
+              if (pred && pred.homeGoals != null && pred.awayGoals != null && pred.homeGoals !== '' && pred.awayGoals !== '') {
+                const ph = Number(pred.homeGoals);
+                const pa = Number(pred.awayGoals);
+
+                const isExact = (ph === oh && pa === oa);
+                const predOut = ph > pa ? 'home' : ph < pa ? 'away' : 'draw';
+                const offOut = oh > oa ? 'home' : oh < oa ? 'away' : 'draw';
+                const isOutcome = (predOut === offOut);
+
+                if (isExact) {
+                  actualPointsSum += 3;
+                  exactCount++;
+                } else if (isOutcome) {
+                  actualPointsSum += 1;
+                  outcomeCount++;
+                } else {
+                  failCount++;
+                }
+              } else {
+                failCount++;
+              }
+            });
+          }
+
+          return {
+            match,
+            actualPointsSum,
+            exactCount,
+            outcomeCount,
+            failCount,
+            gradient: GAME_GRADIENTS[idx % GAME_GRADIENTS.length]
+          };
+        });
+
+        // 3. Build Y-ticks for chart (Percentages or values based on maxPointsPerGame)
+        const tickValues = [
+          maxPointsPerGame,
+          Math.round(maxPointsPerGame * 0.75),
+          Math.round(maxPointsPerGame * 0.5),
+          Math.round(maxPointsPerGame * 0.25),
+          0
+        ];
+        let yTicksHtml = `
+          <div class="chart-y-axis" style="display: flex; flex-direction: column; justify-content: space-between; height: 300px; border-right: 1px solid rgba(255, 255, 255, 0.12); margin-bottom: 74px; padding-right: 8px; text-align: right; width: 45px; flex-shrink: 0;">
+            ${tickValues.map(val => `<div style="font-size: 0.8rem; font-weight: 700; color: var(--muted); height: 14px; line-height: 14px;">${val}</div>`).join('')}
+          </div>
+        `;
+
+        // 4. Build barsHtml (One bar per game)
+        const barsHtml = gameStats.map(g => {
+          const pct = maxPointsPerGame > 0 ? (g.actualPointsSum / maxPointsPerGame) * 100 : 0;
+          return `
+            <div class="chart-bar-container" style="min-width: 140px; max-width: 200px;">
+              <span class="chart-bar-total">${g.actualPointsSum} / ${maxPointsPerGame}</span>
+              <div class="chart-bar" style="height: 300px; display: flex; flex-direction: column-reverse; justify-content: flex-start; position: relative; background: rgba(255, 255, 255, 0.02);">
+                <div class="chart-segment" style="height: ${pct}%; background: ${g.gradient}; display: flex; flex-direction: column; justify-content: center; align-items: center; border-bottom: none; width: 100%; transition: height 0.3s ease;" title="Obtido: ${g.actualPointsSum} pts | Potencial: ${maxPointsPerGame} pts">
+                  <span style="font-size: 0.95rem; font-weight: 900; color: #fff;">+${g.actualPointsSum} Pts</span>
+                  <span style="font-size: 0.7rem; font-weight: 600; color: rgba(255, 255, 255, 0.8);">${Math.round(pct)}%</span>
+                </div>
+              </div>
+              <span class="chart-bar-label" style="line-height: 1.2; padding: 6px 12px;">
+                Jogo ${g.match.id}<br>
+                <span style="font-size: 0.78rem; font-weight: 700; color: var(--muted);">${escapeHtml(g.match.home)} vs ${escapeHtml(g.match.away)}</span>
+              </span>
+            </div>
+          `;
+        }).join('');
+
+        const chartHtml = `
+          <div class="chart-wrapper" style="align-items: flex-start;">
+            ${yTicksHtml}
+            <div class="chart-bars-area" style="display: flex; align-items: flex-end; gap: 20px; flex: 1; padding-left: 10px;">
+              ${barsHtml}
+            </div>
+          </div>
+        `;
+
+        captureArea.innerHTML = `
+          <div class="capture-inner">
+            <div class="top-strip">
+              <div class="brand">
+                <div class="brand-mark"><img src="./favicon-source.png" alt="GGames Mundial 2026"></div>
+                <div>
+                  <h2>Mundial 2026 · Gráfico de Prognósticos</h2>
+                  <p>Giria Games - onde a normalidade é suspeita...</p>
+                </div>
+              </div>
+              <div class="stage-badges">
+                <span class="badge" style="background: rgba(120, 53, 159, 0.2); border-color: rgba(120, 53, 159, 0.4); color: #e9c9ff;">Barra Empilhada</span>
+                <span class="badge">${selectedMatches.length} jogo(s)</span>
+              </div>
+            </div>
+
+            <section class="scoreboard" style="grid-template-columns: 1fr; gap: 16px; padding: 20px; ${state.hideUnlockedStats ? 'display: none;' : ''}">
+              <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding-bottom: 12px; flex-wrap: wrap; gap: 12px;">
+                <h3 style="margin: 0; font-size: 1.25rem; font-weight: 800; color: var(--accent);">Estatísticas Desbloqueadas</h3>
+                <span class="badge finished" style="font-size: 0.9rem; padding: 6px 16px;">
+                  Máximo em Jogo: <strong>${maxPossiblePoints} Pontos</strong>
+                </span>
+              </div>
+              
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
+                <div style="background: rgba(0,0,0,0.2); padding: 14px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.06);">
+                  <h4 style="margin: 0 0 10px 0; font-size: 0.95rem; color: var(--muted); border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 6px; font-weight: 700;">Jogos Incluídos</h4>
+                  <div style="max-height: 180px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;">
+                    ${selectedMatchesListHtml}
+                  </div>
+                </div>
+                
+                <div style="background: rgba(0,0,0,0.2); padding: 14px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.06);">
+                  <h4 style="margin: 0 0 10px 0; font-size: 0.95rem; color: var(--muted); border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 6px; font-weight: 700;">Classificação e Eficiência</h4>
+                  <div style="max-height: 180px; overflow-y: auto;">
+                    <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.85rem;">
+                      <thead>
+                        <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.1); color: var(--muted);">
+                          <th style="padding: 4px 8px;">Jogador</th>
+                          <th style="padding: 4px 8px; text-align: center;">Pts</th>
+                          <th style="padding: 4px 8px; text-align: center;">Efic.</th>
+                          <th style="padding: 4px 8px; text-align: center;">E / V / F</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        ${playersTableRowsHtml}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section class="section">
+              <div class="section-header">
+                <div>
+                  <h3 class="section-title">Análise de Rendimento Empilhado</h3>
+                  <p class="section-subtitle">Distribuição de pontos obtidos nos encontros selecionados.</p>
+                </div>
+              </div>
+              ${chartHtml}
+            </section>
+          </div>
+        `;
+
+        downloadBtn.disabled = false;
+        return;
+      }
+
       if (!matchId) {
         captureArea.innerHTML = '<div class="capture-inner"><div class="muted-card">Escolhe um jogo acima para gerar o resumo visual em gráfico.</div></div>';
         downloadBtn.disabled = true;
@@ -1310,7 +1625,8 @@
     }
 
     async function downloadPng() {
-      if (!state.selectedMatchId) return;
+      if (state.selectedLayout !== 'stacked' && !state.selectedMatchId) return;
+      if (state.selectedLayout === 'stacked' && state.selectedMatchIds.length === 0) return;
       downloadBtn.disabled = true;
       const originalText = downloadBtn.textContent;
       downloadBtn.textContent = 'A gerar PNG...';
@@ -1322,8 +1638,11 @@
           scale: 2,
           logging: false
         });
-        const match = state.matches.find(item => String(item.id) === String(state.selectedMatchId));
-        const fileName = `mundial2026-grafico-${slugify(match?.home || 'jogo')}-vs-${slugify(match?.away || 'jogo')}.png`;
+        let fileName = 'mundial2026-grafico-barra-empilhada.png';
+        if (state.selectedLayout !== 'stacked') {
+          const match = state.matches.find(item => String(item.id) === String(state.selectedMatchId));
+          fileName = `mundial2026-grafico-${slugify(match?.home || 'jogo')}-vs-${slugify(match?.away || 'jogo')}.png`;
+        }
         const link = document.createElement('a');
         link.href = canvas.toDataURL('image/png');
         link.download = fileName;
@@ -1337,6 +1656,49 @@
       }
     }
 
+    function updateMultiMatchDropdownButtonText() {
+      const btnText = document.getElementById('multiMatchDropdownValue');
+      if (!btnText) return;
+      const count = state.selectedMatchIds.length;
+      if (count === 0) {
+        btnText.textContent = 'Selecionar jogos...';
+      } else if (count === 1) {
+        const match = state.matches.find(m => String(m.id) === String(state.selectedMatchIds[0]));
+        btnText.textContent = match ? `1 jogo (${match.home} vs ${match.away})` : '1 jogo selecionado';
+      } else {
+        btnText.textContent = `${count} jogos selecionados`;
+      }
+    }
+
+    function populateMultiMatchCheckboxes() {
+      const container = document.querySelector('#multiMatchContainer .checkbox-group');
+      if (!container) return;
+      
+      const items = state.matches.map(match => {
+        const stageLabel = STAGE_LABELS[match.stage] || match.stage || 'Jogo';
+        const isChecked = state.selectedMatchIds.includes(String(match.id)) ? 'checked' : '';
+        return `
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 8px 10px; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); user-select: none; transition: background .15s ease;">
+            <input type="checkbox" class="match-checkbox" value="${match.id}" ${isChecked} style="width: 18px; height: 18px; cursor: pointer; margin: 0;">
+            <span style="font-size: 0.9rem; font-weight: 600; color: var(--text);">Jogo ${match.id}: ${escapeHtml(match.home)} vs ${escapeHtml(match.away)} <span style="font-size: 0.75rem; color: var(--muted);">(${escapeHtml(stageLabel)})</span></span>
+          </label>
+        `;
+      });
+      
+      container.innerHTML = items.join('');
+      
+      container.querySelectorAll('.match-checkbox').forEach(cb => {
+        cb.addEventListener('change', async () => {
+          const checkedIds = Array.from(container.querySelectorAll('.match-checkbox:checked')).map(el => el.value);
+          state.selectedMatchIds = checkedIds;
+          updateMultiMatchDropdownButtonText();
+          await renderSelectedMatch();
+        });
+      });
+
+      updateMultiMatchDropdownButtonText();
+    }
+
     async function reloadAll() {
       statusText.textContent = 'A carregar dados do Mundial e do Firebase...';
       downloadBtn.disabled = true;
@@ -1346,6 +1708,9 @@
         if (!state.firebaseReady) await initFirebase();
         await loadPredictionsAndResults();
         populateMatchSelect();
+        if (state.selectedLayout === 'stacked') {
+          populateMultiMatchCheckboxes();
+        }
         statusText.textContent = `Jogos carregados: ${state.matches.length} · Prognósticos carregados: ${state.predictions.length}`;
         await renderSelectedMatch();
       } catch (error) {
@@ -1362,7 +1727,44 @@
 
     layoutSelect.addEventListener('change', async event => {
       state.selectedLayout = event.target.value;
+      const matchSelectField = document.getElementById('matchSelectField');
+      const multiMatchContainer = document.getElementById('multiMatchContainer');
+      
+      if (state.selectedLayout === 'stacked') {
+        if (matchSelectField) matchSelectField.style.display = 'none';
+        if (multiMatchContainer) multiMatchContainer.style.display = 'grid';
+        if (state.selectedMatchId && state.selectedMatchIds.length === 0) {
+          state.selectedMatchIds = [state.selectedMatchId];
+        }
+        populateMultiMatchCheckboxes();
+      } else {
+        if (matchSelectField) matchSelectField.style.display = 'grid';
+        if (multiMatchContainer) multiMatchContainer.style.display = 'none';
+        if (state.selectedMatchIds.length > 0) {
+          state.selectedMatchId = state.selectedMatchIds[0];
+          matchSelect.value = state.selectedMatchId;
+        }
+      }
       await renderSelectedMatch();
+    });
+
+    // Dropdown toggle logic
+    document.addEventListener('DOMContentLoaded', () => {
+      const dropdownBtn = document.getElementById('multiMatchDropdownBtn');
+      const dropdownContent = document.getElementById('multiMatchDropdownContent');
+      if (dropdownBtn && dropdownContent) {
+        dropdownBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          dropdownContent.style.display = dropdownContent.style.display === 'none' ? 'block' : 'none';
+        });
+
+        document.addEventListener('click', (event) => {
+          const container = document.getElementById('multiMatchContainer');
+          if (container && !container.contains(event.target)) {
+            dropdownContent.style.display = 'none';
+          }
+        });
+      }
     });
 
     showStatsToggle.addEventListener('change', async event => {
@@ -1372,6 +1774,11 @@
 
     showSelectionStatsToggle.addEventListener('change', async event => {
       state.showSelectionStats = event.target.checked;
+      await renderSelectedMatch();
+    });
+
+    hideUnlockedStatsToggle.addEventListener('change', async event => {
+      state.hideUnlockedStats = event.target.checked;
       await renderSelectedMatch();
     });
 

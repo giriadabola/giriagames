@@ -299,6 +299,7 @@ let db;
 let scoringRules = { ...DEFAULT_SCORING_RULES };
 let allPlayers = [];
 let allGames = [];
+let reformDocs = [];
 let officialMatches = {};
 const apiCache = { fixturesByDate: new Map(), eventsByFixture: new Map() };
 let manualGoals = { home: [], away: [] };
@@ -333,22 +334,192 @@ function renderMatchScoreHeader(game, scoreText) {
 }
 
 function apiTeamsMatch(homeA, awayA, homeB, awayB) { const aH = apiTeamKey(homeA), aA = apiTeamKey(awayA), bH = apiTeamKey(homeB), bA = apiTeamKey(awayB); return !!aH && !!aA && ((aH===bH && aA===bA) || (aH===bA && aA===bH)); }
-function scoreOnePrediction(pred, official) {
-  if (!pred || pred.homeGoals == null || pred.awayGoals == null || official.homeGoals == null || official.awayGoals == null) return { points:0, exact:false, outcomeHit:false };
-  const ph = Number(pred.homeGoals), pa = Number(pred.awayGoals), oh = Number(official.homeGoals), oa = Number(official.awayGoals);
-  const stage = pred.stage || official.stage || 'groups';
-  const exact = ph === oh && pa === oa;
-  const outcomeHit = actualOutcome(official) === predictionOutcome(pred);
-  const winnerHit = pred.winnerTeam && actualOutcome(official) !== 'draw' && normalizeText(pred.winnerTeam) === normalizeText(oh > oa ? official.homeTeam : official.awayTeam);
-  let points = 0;
-  if (stage === 'groups') points = exact ? numericRule('groupExact') : outcomeHit ? numericRule('groupOutcome') : 0;
-  else if (stage === 'final') points = exact ? numericRule('finalInitialExact') : winnerHit ? numericRule('finalInitialWinner') : outcomeHit ? numericRule('finalInitialMethod') : 0;
-  else points = exact ? numericRule('knockoutInitialExact') : (outcomeHit || winnerHit) ? numericRule('knockoutInitialWinner') : 0;
-  return { points, exact, outcomeHit: outcomeHit || winnerHit };
+const teamKey = (name) => String(name || '')
+  .trim()
+  .toLowerCase()
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .replace(/[^a-z0-9]/g, '');
+
+function sameTeamsSameSides(pred, official) {
+  return teamKey(pred?.homeTeam) === teamKey(official?.homeTeam) && teamKey(pred?.awayTeam) === teamKey(official?.awayTeam);
 }
+
+function sameMatchupAnySide(pred, official) {
+  const a = [teamKey(pred?.homeTeam), teamKey(pred?.awayTeam)].sort().join('|');
+  const b = [teamKey(official?.homeTeam), teamKey(official?.awayTeam)].sort().join('|');
+  return a && a === b;
+}
+
+function officialWinnerTeam(official) {
+  if (!official) return '';
+  if (official.winnerTeam && official.winnerTeam !== 'Empate') return official.winnerTeam;
+  const oh = Number(official.homeGoals);
+  const oa = Number(official.awayGoals);
+  if (oh > oa) return official.homeTeam;
+  if (oa > oh) return official.awayTeam;
+  return 'Empate';
+}
+
+function predictedWinnerTeam(pred) {
+  if (!pred) return '';
+  if (pred.winnerTeam) return pred.winnerTeam;
+  const ph = Number(pred.homeGoals);
+  const pa = Number(pred.awayGoals);
+  if (ph > pa) return pred.homeTeam;
+  if (pa > ph) return pred.awayTeam;
+  return 'Empate';
+}
+
+function scoreInitialPrediction(pred, official) {
+  if (!pred || !official || pred.homeGoals == null || pred.awayGoals == null) {
+    return { points: 0, exact: false, outcomeHit: false };
+  }
+  const stage = official.stage || pred.stage;
+  const ph = Number(pred.homeGoals);
+  const pa = Number(pred.awayGoals);
+  const oh = Number(official.homeGoals);
+  const oa = Number(official.awayGoals);
+  const sidesOk = sameTeamsSameSides(pred, official);
+  const winnerHit = teamKey(predictedWinnerTeam(pred)) === teamKey(officialWinnerTeam(official));
+  let exact = sidesOk && ph === oh && pa === oa;
+  if (!exact && sidesOk && ph === pa && pred.method === 'et' && official.method === 'et' && winnerHit) {
+    const implied90 = Math.min(oh, oa);
+    if (ph === implied90 && pa === implied90) {
+      exact = true;
+    }
+  }
+  const group = stage === 'groups';
+  const final = stage === 'final';
+
+  let points = 0;
+  if (group) {
+    points = exact ? numericRule('groupExact') : (sidesOk && predictionOutcome(pred) === actualOutcome(official) ? numericRule('groupOutcome') : 0);
+  } else {
+    if (exact) {
+      if (stage === 'round32') points = numericRule('initialExact32');
+      else if (stage === 'round16') points = numericRule('initialExact16');
+      else if (stage === 'quarterfinals') points = numericRule('initialExact8');
+      else if (stage === 'semifinals') points = numericRule('initialExact4');
+      else if (stage === 'third_place') points = numericRule('initialExact3rd');
+      else if (stage === 'final') points = numericRule('initialExactFinal');
+      else points = final ? numericRule('finalInitialExact') : numericRule('knockoutInitialExact');
+    } else if (winnerHit) {
+      if (stage === 'round32') points = numericRule('initialWinner32');
+      else if (stage === 'round16') points = numericRule('initialWinner16');
+      else if (stage === 'quarterfinals') points = numericRule('initialWinner8');
+      else if (stage === 'semifinals') points = numericRule('initialWinner4');
+      else if (stage === 'third_place') points = numericRule('initialWinner3rd');
+      else if (stage === 'final') points = numericRule('initialWinnerFinal');
+      else points = final ? numericRule('finalInitialWinner') : numericRule('knockoutInitialWinner');
+    }
+  }
+  return { points, exact, outcomeHit: points > 0 && !exact };
+}
+
+function scoreSection2Changed(initialPred, override, official) {
+  const final = (official.stage || override.stage) === 'final';
+  const oh = Number(official.homeGoals);
+  const oa = Number(official.awayGoals);
+  const ph = Number(override.homeGoals);
+  const pa = Number(override.awayGoals);
+  const exact = ph === oh && pa === oa;
+  const stage = official.stage || override.stage;
+  const winnerHit = teamKey(predictedWinnerTeam(override)) === teamKey(officialWinnerTeam(official));
+
+  let resultPoints = 0;
+  if (stage === 'round32') {
+    resultPoints = exact ? numericRule('reformExact32') : (winnerHit ? numericRule('reformWinner32') : 0);
+  } else if (stage === 'round16') {
+    resultPoints = exact ? numericRule('reformExact16') : (winnerHit ? numericRule('reformWinner16') : 0);
+  } else if (stage === 'quarterfinals') {
+    resultPoints = exact ? numericRule('reformExact8') : (winnerHit ? numericRule('reformWinner8') : 0);
+  } else if (stage === 'semifinals') {
+    resultPoints = exact ? numericRule('reformExact4') : (winnerHit ? numericRule('reformWinner4') : 0);
+  } else if (stage === 'third_place') {
+    resultPoints = exact ? numericRule('reformExact3rd') : (winnerHit ? numericRule('reformWinner3rd') : 0);
+  } else if (stage === 'final') {
+    resultPoints = exact ? numericRule('finalReformExact') : (winnerHit ? numericRule('reformWinnerFinal') : 0);
+  } else {
+    resultPoints = exact ? (final ? numericRule('finalReformExact') : numericRule('knockoutReformExact')) : 0;
+  }
+
+  const matchupBonus = sameMatchupAnySide(initialPred, official) ? (final ? numericRule('finalInitialWinner') : numericRule('knockoutInitialWinner')) : 0;
+  const points = matchupBonus + resultPoints;
+  return { points, exact, outcomeHit: points > 0 && !exact };
+}
+
+function scoreOnePrediction(pred, official, override = null) {
+  if (!pred || pred.homeGoals == null || pred.awayGoals == null || official.homeGoals == null || official.awayGoals == null) {
+    return { points: 0, exact: false, outcomeHit: false };
+  }
+  let result;
+  if (!override || override.mode === 'replicate') {
+    result = scoreInitialPrediction(pred, official);
+    if (official.stage && official.stage !== 'groups') {
+      const isFinal = official.stage === 'final';
+      const matchupBonus = sameMatchupAnySide(pred, official) ? (isFinal ? numericRule('finalInitialWinner') : numericRule('knockoutInitialWinner')) : 0;
+      result.points += matchupBonus;
+    }
+  } else {
+    result = scoreSection2Changed(pred, override, official);
+  }
+
+  const stage = official?.stage || pred?.stage;
+  if (stage === 'round32' && pred && official && sameMatchupAnySide(pred, official)) {
+    result.points += 2;
+  }
+
+  return result;
+}
+
+
 function formatPrediction(pred) { if (!pred) return 'Sem prognóstico'; const score = `${pred.homeGoals}-${pred.awayGoals}`; if (pred.stage === 'groups') return score; const method = pred.method === 'PEN' ? ' (pen.)' : pred.method === 'ET' ? ' (prol.)' : ''; return score + method; }
 function formatGameLabel(game) { const dateText = game.date ? new Date(`${game.date}T${game.time || '12:00'}:00`).toLocaleString('pt-PT', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) : ''; const stageLabel = STAGE_LABELS[game.stage] || game.stage || 'Jogo'; const groupPart = game.group ? `Grupo ${game.group} • ` : ''; return `${game.id} • ${game.homeTeam} vs ${game.awayTeam} • ${groupPart}${stageLabel}${dateText ? ' • ' + dateText : ''}`; }
 function timelinePos(pct) { return `${Math.max(0, Math.min(100, pct))}%`; }
+
+
+function normalizeKey(str) {
+  return String(str || '').toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]/g, '');
+}
+
+function getSection2DocForPlayer(player, matchId) {
+  if (!reformDocs) return null;
+  const key = player.participantKey || normalizeKey(player.name);
+  return reformDocs.find(doc => 
+    normalizeKey(doc.participantKey || doc.playerName || doc.name) === key && 
+    Number(doc.matchId) === Number(matchId)
+  ) || null;
+}
+
+function getFinalPredictionForPlayerGame(player, game) {
+  if (!game) return null;
+  const initialPred = player.matches.find(m => String(m.id) === String(game.id));
+  const isKnockout = game.stage !== 'groups';
+  
+  if (isKnockout) {
+    const override = getSection2DocForPlayer(player, game.id);
+    if (!override) return null;
+    if (override.mode === 'changed') {
+      return {
+        ...initialPred,
+        homeGoals: override.homeGoals,
+        awayGoals: override.awayGoals,
+        winnerTeam: override.winnerTeam,
+        method: override.method,
+        homeTeam: override.homeTeam,
+        awayTeam: override.awayTeam,
+        stage: game.stage
+      };
+    } else if (override.mode === 'replicate' && initialPred) {
+      return initialPred;
+    }
+    return null;
+  }
+  return initialPred;
+}
 
 async function init() {
   firebase.initializeApp(FIREBASE_CONFIG);
@@ -383,6 +554,16 @@ async function loadPredictionsAndGames() {
     console.warn('Erro ao carregar worldcupextraMatches:', error);
   }
 
+  try {
+    const reformsSnap = await db.collection('worldcupextraReforms').get();
+    reformDocs = [];
+    reformsSnap.forEach(doc => {
+      reformDocs.push({ id: doc.id, ...doc.data() });
+    });
+  } catch (error) {
+    console.warn('Erro ao carregar worldcupextraReforms:', error);
+  }
+
   const snap = await db.collection(FIREBASE_COLLECTION).get();
   const docs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(doc => doc.status !== 'official' && Array.isArray(doc.matches));
   allPlayers = docs.map(doc => ({
@@ -391,10 +572,47 @@ async function loadPredictionsAndGames() {
     icon: doc.icon || doc.participantIcon || doc.playerIcon || '',
     matches: Array.isArray(doc.matches) ? doc.matches : []
   })).sort((a,b) => a.name.localeCompare(b.name, 'pt'));
+
+  // Load matches from matches.json
+  let localMatches = [];
+  try {
+    const res = await fetch('./matches.json', { cache: 'no-store' });
+    if (res.ok) {
+      const payload = await res.json();
+      localMatches = payload.matches || [];
+    }
+  } catch (err) {
+    console.warn('Erro ao carregar matches.json:', err);
+  }
+
   const byGame = new Map();
+  // seed with matches.json
+  localMatches.forEach(m => {
+    byGame.set(String(m.id), {
+      id: String(m.id),
+      homeTeam: m.home,
+      awayTeam: m.away,
+      home: m.home,
+      away: m.away,
+      date: m.date,
+      time: m.time,
+      stage: m.stage,
+      group: m.group
+    });
+  });
+
+  // fallback/complement with player matches
   allPlayers.forEach(player => player.matches.forEach(match => {
-    if (!byGame.has(String(match.id))) byGame.set(String(match.id), { ...match, id: String(match.id) });
+    const key = String(match.id);
+    if (!byGame.has(key)) {
+      byGame.set(key, { ...match, id: key });
+    } else {
+      const existing = byGame.get(key);
+      if (!existing.homeTeam) existing.homeTeam = match.homeTeam || match.home;
+      if (!existing.awayTeam) existing.awayTeam = match.awayTeam || match.away;
+    }
   }));
+
   allGames = [...byGame.values()].sort((a,b) => {
     const ad = new Date(`${a.date || '2099-01-01'}T${a.time || '12:00'}:00`).getTime();
     const bd = new Date(`${b.date || '2099-01-01'}T${b.time || '12:00'}:00`).getTime();
@@ -412,7 +630,8 @@ function populateGameSelect() {
 function populatePlayerSelect() {
   const sel = $('playerSelect');
   const gameId = $('gameSelect').value;
-  const eligible = allPlayers.filter(p => p.matches.some(m => String(m.id) === String(gameId)));
+  const game = allGames.find(g => String(g.id) === String(gameId));
+  const eligible = allPlayers.filter(p => !!getFinalPredictionForPlayerGame(p, game));
   sel.innerHTML = eligible.map(player => `<option value="${escapeHtml(player.id)}">${escapeHtml(player.name)}</option>`).join('');
 }
 function bindUi() {
@@ -620,12 +839,15 @@ async function loadGoalTimelineForGame(game) {
 }
 
 function buildReactionEvents(player, game, rawEvents) {
-  const pred = player.matches.find(m => String(m.id) === String(game.id));
+  const initialPred = player.matches.find(m => String(m.id) === String(game.id));
+  const override = getSection2DocForPlayer(player, game.id);
+  const pred = getFinalPredictionForPlayerGame(player, game);
   if (!pred) return { pred: null, events: [] };
-  let previousPoints = scoreOnePrediction(pred, { homeGoals: 0, awayGoals: 0, homeTeam: game.homeTeam, awayTeam: game.awayTeam, stage: game.stage }).points;
+
+  let previousPoints = scoreOnePrediction(initialPred, { homeGoals: 0, awayGoals: 0, homeTeam: game.homeTeam, awayTeam: game.awayTeam, stage: game.stage }, override).points;
   const events = rawEvents.map((ev, index) => {
     const afterScore = { ...ev.after, homeTeam: game.homeTeam, awayTeam: game.awayTeam, stage: game.stage };
-    const afterPoints = scoreOnePrediction(pred, afterScore).points;
+    const afterPoints = scoreOnePrediction(initialPred, afterScore, override).points;
     const delta = afterPoints - previousPoints;
     const direction = delta > 0 ? 'up' : delta < 0 ? 'down' : 'flat';
     const item = { ...ev, index, beforePoints: previousPoints, afterPoints, delta, direction };

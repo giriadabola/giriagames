@@ -288,6 +288,40 @@
     return 'Empate';
   }
 
+  function normalizedKnockoutMethod(entry, homeGoals, awayGoals) {
+    const explicit = String(entry?.method || '').trim();
+    if (explicit) return explicit;
+    return homeGoals !== awayGoals ? '90' : '';
+  }
+
+  function isKnockoutExactPrediction(entry, official, winnerHit) {
+    if (!entry || !official) return false;
+    const stage = official.stage || entry.stage;
+    if (stage === 'groups') {
+      return Number(entry.homeGoals) === Number(official.homeGoals) && Number(entry.awayGoals) === Number(official.awayGoals);
+    }
+
+    const ph = Number(entry.homeGoals);
+    const pa = Number(entry.awayGoals);
+    const oh = Number(official.homeGoals);
+    const oa = Number(official.awayGoals);
+    const predMethod = normalizedKnockoutMethod(entry, ph, pa);
+    const officialMethod = normalizedKnockoutMethod(official, oh, oa);
+
+    if (ph === oh && pa === oa) {
+      if (predMethod !== officialMethod) return false;
+      if (ph === pa && (predMethod === 'et' || predMethod === 'pens')) return !!winnerHit;
+      return true;
+    }
+
+    if (ph === pa && predMethod === 'et' && officialMethod === 'et' && winnerHit) {
+      const implied90 = Math.min(oh, oa);
+      return ph === implied90 && pa === implied90;
+    }
+
+    return false;
+  }
+
   function scoreInitialPrediction(pred, official) {
     if (!pred || !official || pred.homeGoals == null || pred.awayGoals == null) {
       return { points: 0, exact: false, outcomeHit: false, goalsHit: 0, goalsMissed: 0, winHit: 0, drawHit: 0, lossHit: 0, played: false, source: 'section1' };
@@ -300,13 +334,7 @@
     const oa = Number(official.awayGoals);
     const sidesOk = sameTeamsSameSides(pred, official);
     const winnerHit = teamKey(predictedWinnerTeam(pred)) === teamKey(officialWinnerTeam(official));
-    let exact = sidesOk && ph === oh && pa === oa;
-    if (!exact && sidesOk && ph === pa && pred.method === 'et' && official.method === 'et' && winnerHit) {
-      const implied90 = Math.min(oh, oa);
-      if (ph === implied90 && pa === implied90) {
-        exact = true;
-      }
-    }
+    const exact = sidesOk && isKnockoutExactPrediction(pred, official, winnerHit);
     const group = stage === 'groups';
     const final = stage === 'final';
 
@@ -357,9 +385,9 @@
     const oa = Number(official.awayGoals);
     const ph = Number(override.homeGoals);
     const pa = Number(override.awayGoals);
-    const exact = ph === oh && pa === oa;
     const stage = official.stage || override.stage;
     const winnerHit = teamKey(predictedWinnerTeam(override)) === teamKey(officialWinnerTeam(official));
+    const exact = isKnockoutExactPrediction(override, official, winnerHit);
 
     let resultPoints = 0;
     if (stage === 'round32') {

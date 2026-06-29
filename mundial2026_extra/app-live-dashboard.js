@@ -1154,14 +1154,22 @@ function openGgamesPlayerHistory(playerId) {
     openModal('<h2>Histórico do jogador</h2><p class="modal-muted">Não foi possível encontrar este jogador.</p>');
     return;
   }
-  const predictions = Array.isArray(playerDoc.matches) ? playerDoc.matches : [];
-  const historyRows = predictions.map(pred => {
-    const match = data?.matches?.find(m => String(m.id) === String(pred.id)) || {};
-    const official = getOfficialResult(pred.id);
+  const scheduledMatches = Array.isArray(data?.matches)
+    ? [...data.matches].sort((a, b) => Number(a.id) - Number(b.id))
+    : [];
+  const historyEntries = scheduledMatches.map(match => {
+    const pred = typeof findInitialPredictionForMatch === 'function'
+      ? findInitialPredictionForMatch(playerDoc, match)
+      : (playerDoc.matches || []).find(row => Number(row.id) === Number(match.id));
+    if (!pred) return null;
+    return { match, pred };
+  }).filter(Boolean);
+  const historyRows = historyEntries.map(({ match, pred }) => {
+    const official = getOfficialResult(match.id);
     const isLive = !!official && isOfficialResultLive(official) && !isOfficialResultFinished(official);
     
     // FETCH THE SECTION 2 REFORMULATION OVERRIDE DOC
-    const override = typeof getSection2DocForPlayer === 'function' ? getSection2DocForPlayer(playerDoc, pred.id) : null;
+    const override = typeof getSection2DocForPlayer === 'function' ? getSection2DocForPlayer(playerDoc, match.id) : null;
     const score = official && isOfficialResultFinished(official) ? scoreOnePrediction(pred, official, override) : null;
     
     const status = official
@@ -1177,7 +1185,7 @@ function openGgamesPlayerHistory(playerId) {
       : '';
     const isFinished = official && isOfficialResultFinished(official);
     const resultCell = isFinished
-      ? `<td class="history-result-cell-clickable" data-match-id="${pred.id}" onclick="handleHistoryResultClick(this.dataset.matchId)" style="cursor: pointer; text-decoration: underline; color: var(--accent); font-weight: bold;">${officialText}</td>`
+      ? `<td class="history-result-cell-clickable" data-match-id="${match.id}" onclick="handleHistoryResultClick(this.dataset.matchId)" style="cursor: pointer; text-decoration: underline; color: var(--accent); font-weight: bold;">${officialText}</td>`
       : `<td>${officialText}</td>`;
       
     let predText = predictionResultText(pred);
@@ -1198,7 +1206,7 @@ function openGgamesPlayerHistory(playerId) {
 
     return `
       <tr>
-        <td>${escapeHtml(pred.id)}</td>
+        <td>${escapeHtml(match.id)}</td>
         <td><span class="history-pill ${statusClass}">${status}${score ? ` · ${score.points} pts` : ''}</span></td>
         <td>${predText}</td>
         ${resultCell}
