@@ -1184,7 +1184,13 @@ function openGgamesPlayerHistory(playerId) {
     if (override && override.mode === 'changed') {
       predText = `${escapeHtml(override.homeTeam)} ${override.homeGoals}-${override.awayGoals} ${escapeHtml(override.awayTeam)}`;
       if (override.winnerTeam) {
-        predText += ` <span style="font-size:0.75rem; opacity:0.85;">(vence ${escapeHtml(override.winnerTeam)})</span>`;
+        let methodSuffix = '';
+        if (override.method === 'et') {
+          methodSuffix = ' após prolongamento';
+        } else if (override.method === 'pens') {
+          methodSuffix = ' após penáltis';
+        }
+        predText += ` <span style="font-size:0.75rem; opacity:0.85;">(vence ${escapeHtml(override.winnerTeam)}${methodSuffix})</span>`;
       }
     } else if (override && override.mode === 'replicate') {
       predText += ` <small style="opacity: 0.65; font-size: 0.72rem;">(Mantido)</small>`;
