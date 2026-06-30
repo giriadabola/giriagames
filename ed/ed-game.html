@@ -298,12 +298,114 @@
       letter-spacing: 0.05em;
       margin-bottom: 4px;
     }
+    .collection-mirrors {
+      display: grid;
+      gap: 12px;
+      margin: 0 0 18px;
+    }
+    .mirror-card {
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background: rgba(255,255,255,.045);
+      overflow: hidden;
+    }
+    .mirror-toggle {
+      width: 100%;
+      border: 0;
+      background: transparent;
+      color: var(--text);
+      padding: 16px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      cursor: pointer;
+      text-align: left;
+      font-weight: 900;
+    }
+    .mirror-toggle small {
+      display: block;
+      color: var(--muted);
+      font-size: .8rem;
+      font-weight: 700;
+      margin-top: 4px;
+    }
+    .mirror-toggle .arrow {
+      color: var(--blue);
+      font-size: 1rem;
+      flex: 0 0 auto;
+    }
+    .mirror-body {
+      display: none;
+      padding: 0 18px 18px;
+      border-top: 1px solid var(--line);
+      background: rgba(2,8,23,.24);
+    }
+    .mirror-card.open .mirror-body {
+      display: block;
+    }
+    .mirror-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 16px;
+    }
+    .mirror-field {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 12px;
+      background: rgba(2,8,23,.34);
+    }
+    .mirror-field label {
+      display: block;
+      color: var(--muted);
+      font-size: .82rem;
+      font-weight: 900;
+      margin-bottom: 8px;
+    }
+    .mirror-field select {
+      width: 100%;
+      border: 1px solid rgba(255,255,255,.14);
+      border-radius: 14px;
+      background: #0f172a;
+      color: var(--text);
+      padding: 11px 12px;
+      outline: none;
+      font-weight: 900;
+    }
+    .mirror-field.wide {
+      grid-column: 1 / -1;
+    }
+    .mirror-switch-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .mirror-switch-label {
+      font-weight: 900;
+      color: var(--muted);
+    }
+    .mirror-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 14px;
+    }
+    .mirror-message {
+      color: var(--muted);
+      font-weight: 800;
+      min-height: 1.2em;
+    }
+    .mirror-message.ok { color: #bbf7d0; }
+    .mirror-message.err { color: #fecaca; }
 
     @media (max-width: 720px) {
       .topbar, .panel-head, .selected-card, .maintenance-card, .auth-card { align-items: stretch; flex-direction: column; }
       .top-actions { justify-content: stretch; }
       .top-actions .btn, .editor-actions .btn, .auth-actions .btn { flex: 1; }
-      .form-grid, .fields-sector { grid-template-columns: 1fr; }
+      .form-grid, .fields-sector, .mirror-grid { grid-template-columns: 1fr; }
       .match-row { grid-template-columns: 1fr; }
       .badge { justify-self:start; }
       .teams { flex-wrap:wrap; }
@@ -421,6 +523,10 @@
           <button class="btn" id="backBtn" type="button">← Voltar à lista</button>
         </div>
 
+        <section class="collection-mirrors" id="collectionMirrors">
+          <div class="empty">A preparar os dados das coleções...</div>
+        </section>
+
         <form id="editForm">
           <div class="form-grid">
             <div class="field">
@@ -528,6 +634,7 @@
       measurementId: 'G-GTTPJ6G5MD'
     };
     const FIREBASE_MATCHES_COLLECTION = 'worldcupextraMatches';
+    const FIREBASE_SECURE_COLLECTION = 'WoldCupSecureHT';
     const FIREBASE_SETTINGS_COLLECTION = 'settings';
     const FIREBASE_MAINTENANCE_DOC = 'worldcupScoringRules';
     const FIREBASE_MAINTENANCE_FIELD = 'bugs';
@@ -548,6 +655,7 @@
       editorPanel: document.getElementById('editorPanel'),
       docIdPill: document.getElementById('docIdPill'),
       selectedTitle: document.getElementById('selectedTitle'),
+      collectionMirrors: document.getElementById('collectionMirrors'),
       form: document.getElementById('editForm'),
       homeGoals: document.getElementById('homeGoalsSelect'),
       awayGoals: document.getElementById('awayGoalsSelect'),
@@ -586,6 +694,7 @@
 
     let matches = [];
     let selected = null;
+    let selectedMirrorDocs = {};
     let currentUser = null;
     let isAdmin = false;
 
@@ -691,6 +800,163 @@
       }
     }
 
+    function mirrorCollectionLabel(key) {
+      return key === FIREBASE_MATCHES_COLLECTION ? 'worldcupextraMatches' : 'WoldCupSecureHT';
+    }
+
+    function buildMirrorFieldId(collectionKey, field) {
+      return `${collectionKey}_${field}`.replace(/[^a-zA-Z0-9_]/g, '_');
+    }
+
+    function renderMirrorCard(collectionKey, docId, data, teams) {
+      if (!data) return '';
+      const finishedOn = data.finished === true;
+      const statusValue = data.status === 'live' ? 'live' : 'finished';
+      const methodValue = ['90', 'et', 'pens'].includes(String(data.method || '')) ? String(data.method) : '90';
+      const winnerValue = [teams.home, teams.away].includes(String(data.winnerTeam || '')) ? String(data.winnerTeam) : teams.home;
+      const homeGoalsValue = Number.isFinite(Number(data.homeGoals)) ? Math.max(0, Math.min(20, Number(data.homeGoals))) : 0;
+      const awayGoalsValue = Number.isFinite(Number(data.awayGoals)) ? Math.max(0, Math.min(20, Number(data.awayGoals))) : 0;
+      return `
+        <article class="mirror-card" data-collection-card="${escapeHtml(collectionKey)}">
+          <button type="button" class="mirror-toggle" data-collection-toggle="${escapeHtml(collectionKey)}">
+            <span>
+              ${escapeHtml(mirrorCollectionLabel(collectionKey))}
+              <small>${escapeHtml(docId)} encontrado nesta coleção</small>
+            </span>
+            <span class="arrow">▼</span>
+          </button>
+          <div class="mirror-body">
+            <div class="mirror-grid">
+              <div class="mirror-field">
+                <label for="${escapeHtml(buildMirrorFieldId(collectionKey, 'homeGoals'))}">homeGoals</label>
+                <select id="${escapeHtml(buildMirrorFieldId(collectionKey, 'homeGoals'))}" data-mirror-field="homeGoals" data-collection="${escapeHtml(collectionKey)}">
+                  ${Array.from({ length: 21 }, (_, n) => `<option value="${n}" ${homeGoalsValue === n ? 'selected' : ''}>${n}</option>`).join('')}
+                </select>
+              </div>
+              <div class="mirror-field">
+                <label for="${escapeHtml(buildMirrorFieldId(collectionKey, 'awayGoals'))}">awayGoals</label>
+                <select id="${escapeHtml(buildMirrorFieldId(collectionKey, 'awayGoals'))}" data-mirror-field="awayGoals" data-collection="${escapeHtml(collectionKey)}">
+                  ${Array.from({ length: 21 }, (_, n) => `<option value="${n}" ${awayGoalsValue === n ? 'selected' : ''}>${n}</option>`).join('')}
+                </select>
+              </div>
+              <div class="mirror-field">
+                <label>finished</label>
+                <div class="mirror-switch-row">
+                  <span class="mirror-switch-label">${finishedOn ? 'ON' : 'OFF'}</span>
+                  <label class="switch">
+                    <input type="checkbox" data-mirror-field="finished" data-collection="${escapeHtml(collectionKey)}" ${finishedOn ? 'checked' : ''}>
+                    <span class="slider" aria-hidden="true"></span>
+                  </label>
+                </div>
+              </div>
+              <div class="mirror-field">
+                <label for="${escapeHtml(buildMirrorFieldId(collectionKey, 'status'))}">status</label>
+                <select id="${escapeHtml(buildMirrorFieldId(collectionKey, 'status'))}" data-mirror-field="status" data-collection="${escapeHtml(collectionKey)}">
+                  <option value="live" ${statusValue === 'live' ? 'selected' : ''}>live</option>
+                  <option value="finished" ${statusValue === 'finished' ? 'selected' : ''}>finished</option>
+                </select>
+              </div>
+              <div class="mirror-field">
+                <label for="${escapeHtml(buildMirrorFieldId(collectionKey, 'method'))}">method</label>
+                <select id="${escapeHtml(buildMirrorFieldId(collectionKey, 'method'))}" data-mirror-field="method" data-collection="${escapeHtml(collectionKey)}">
+                  <option value="90" ${methodValue === '90' ? 'selected' : ''}>90</option>
+                  <option value="et" ${methodValue === 'et' ? 'selected' : ''}>et</option>
+                  <option value="pens" ${methodValue === 'pens' ? 'selected' : ''}>pens</option>
+                </select>
+              </div>
+              <div class="mirror-field">
+                <label for="${escapeHtml(buildMirrorFieldId(collectionKey, 'winnerTeam'))}">winnerTeam</label>
+                <select id="${escapeHtml(buildMirrorFieldId(collectionKey, 'winnerTeam'))}" data-mirror-field="winnerTeam" data-collection="${escapeHtml(collectionKey)}">
+                  <option value="${escapeHtml(teams.home)}" ${winnerValue === teams.home ? 'selected' : ''}>${escapeHtml(teams.home)}</option>
+                  <option value="${escapeHtml(teams.away)}" ${winnerValue === teams.away ? 'selected' : ''}>${escapeHtml(teams.away)}</option>
+                </select>
+              </div>
+            </div>
+            <div class="mirror-actions">
+              <button type="button" class="btn primary" data-save-mirror="${escapeHtml(collectionKey)}">Guardar nesta coleção</button>
+              <span class="mirror-message" data-mirror-message="${escapeHtml(collectionKey)}"></span>
+            </div>
+          </div>
+        </article>
+      `;
+    }
+
+    async function loadMirrorDocs(docId) {
+      const [matchesSnap, secureSnap] = await Promise.all([
+        getDoc(doc(db, FIREBASE_MATCHES_COLLECTION, docId)),
+        getDoc(doc(db, FIREBASE_SECURE_COLLECTION, docId))
+      ]);
+      return {
+        [FIREBASE_MATCHES_COLLECTION]: matchesSnap.exists() ? matchesSnap.data() : null,
+        [FIREBASE_SECURE_COLLECTION]: secureSnap.exists() ? secureSnap.data() : null
+      };
+    }
+
+    function renderCollectionMirrors(docId, teams) {
+      const cards = [
+        renderMirrorCard(FIREBASE_MATCHES_COLLECTION, docId, selectedMirrorDocs[FIREBASE_MATCHES_COLLECTION], teams),
+        renderMirrorCard(FIREBASE_SECURE_COLLECTION, docId, selectedMirrorDocs[FIREBASE_SECURE_COLLECTION], teams)
+      ].filter(Boolean);
+      els.collectionMirrors.innerHTML = cards.length
+        ? cards.join('')
+        : '<div class="empty">Este jogo não existe nem em worldcupextraMatches nem em WoldCupSecureHT.</div>';
+    }
+
+    async function refreshCollectionMirrors(docId, teams) {
+      els.collectionMirrors.innerHTML = '<div class="empty">A carregar dados das coleções...</div>';
+      try {
+        selectedMirrorDocs = await loadMirrorDocs(docId);
+        renderCollectionMirrors(docId, teams);
+      } catch (error) {
+        console.error(error);
+        selectedMirrorDocs = {};
+        els.collectionMirrors.innerHTML = '<div class="empty">Erro ao carregar os documentos das coleções.</div>';
+      }
+    }
+
+    async function saveMirrorCollection(collectionKey) {
+      if (!selected) return;
+      if (!isAdmin) {
+        setMessage('Tens de estar autenticado com estatuto ruler para gravar.', 'err');
+        return;
+      }
+      const card = els.collectionMirrors.querySelector(`[data-collection-card="${collectionKey}"]`);
+      if (!card) return;
+      const messageEl = card.querySelector(`[data-mirror-message="${collectionKey}"]`);
+      if (messageEl) {
+        messageEl.textContent = 'A guardar...';
+        messageEl.className = 'mirror-message';
+      }
+      const payload = {
+        homeGoals: Number(card.querySelector('[data-mirror-field="homeGoals"]').value),
+        awayGoals: Number(card.querySelector('[data-mirror-field="awayGoals"]').value),
+        finished: card.querySelector('[data-mirror-field="finished"]').checked,
+        status: card.querySelector('[data-mirror-field="status"]').value,
+        method: card.querySelector('[data-mirror-field="method"]').value,
+        winnerTeam: card.querySelector('[data-mirror-field="winnerTeam"]').value,
+        manualUpdatedAt: new Date().toISOString(),
+        syncOrigin: 'manual-ed-game-mirror',
+        updatedAt: serverTimestamp()
+      };
+      try {
+        await setDoc(doc(db, collectionKey, selected.id), payload, { merge: true });
+        if (messageEl) {
+          messageEl.textContent = 'Guardado com sucesso.';
+          messageEl.className = 'mirror-message ok';
+        }
+        selectedMirrorDocs[collectionKey] = {
+          ...(selectedMirrorDocs[collectionKey] || {}),
+          ...payload
+        };
+      } catch (error) {
+        console.error(error);
+        if (messageEl) {
+          messageEl.textContent = 'Erro ao guardar nesta coleção.';
+          messageEl.className = 'mirror-message err';
+        }
+      }
+    }
+
     function renderList() {
       if (!matches.length) {
         els.list.innerHTML = '<div class="empty">Não encontrei documentos em worldcupextraMatches.</div>';
@@ -767,6 +1033,7 @@
       els.selectedTitle.textContent = `${home} ${scoreValue(data.homeGoals)} - ${scoreValue(data.awayGoals)} ${away}`;
       els.homeGoalsLabel.textContent = `${home} · homeGoals`;
       els.awayGoalsLabel.textContent = `${away} · awayGoals`;
+      refreshCollectionMirrors(selected.id, { home, away });
       fillNumberSelect(els.homeGoals, data.homeGoals);
       fillNumberSelect(els.awayGoals, data.awayGoals);
       fillNumberSelect(els.homeEdit, data.HomeEdit);
@@ -1037,6 +1304,30 @@
         container.style.display = 'none';
         arrow.textContent = '▼';
       }
+    });
+
+    els.collectionMirrors.addEventListener('click', event => {
+      const toggle = event.target.closest('[data-collection-toggle]');
+      if (toggle) {
+        const card = toggle.closest('.mirror-card');
+        card?.classList.toggle('open');
+        const arrow = toggle.querySelector('.arrow');
+        if (arrow) arrow.textContent = card?.classList.contains('open') ? '▲' : '▼';
+        return;
+      }
+
+      const saveBtn = event.target.closest('[data-save-mirror]');
+      if (saveBtn) {
+        saveMirrorCollection(saveBtn.dataset.saveMirror);
+      }
+    });
+
+    els.collectionMirrors.addEventListener('change', event => {
+      const toggle = event.target.closest('[data-mirror-field="finished"]');
+      if (!toggle) return;
+      const row = toggle.closest('.mirror-switch-row');
+      const label = row?.querySelector('.mirror-switch-label');
+      if (label) label.textContent = toggle.checked ? 'ON' : 'OFF';
     });
 
     function setMaintenanceUi(active) {
