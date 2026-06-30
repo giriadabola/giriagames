@@ -44,6 +44,13 @@ function renderPublicPlayerDetails(publicId) {
   return grouped;
 }
 
+function scoreViewerPrediction(item, match, pred, official, override = null) {
+  if (typeof window.scorePredictionForTable === 'function') {
+    return window.scorePredictionForTable(item, match, pred, official, override);
+  }
+  return official ? scoreOnePrediction(pred, official, override) : null;
+}
+
 function renderPublicByGame(stage = publicViewerStage, filter = publicGameFilter) {
   const now = new Date();
   const stageMatches = data.matches.filter(match => match.stage === stage).filter(match => {
@@ -76,7 +83,7 @@ function renderPublicByGame(stage = publicViewerStage, filter = publicGameFilter
         })).filter(row => {
           if (!row.match) return false;
           if (filter === 'points3' || filter === 'points1') {
-            const score = official ? scoreOnePrediction(row.match, official) : null;
+            const score = scoreViewerPrediction(row.item, match, row.match, official);
             const target = filter === 'points3' ? 3 : 1;
             return score && score.points === target;
           }
@@ -101,7 +108,7 @@ function renderPublicByGame(stage = publicViewerStage, filter = publicGameFilter
             <div class="viewer-picks" style="display: none; margin-top: 12px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 8px;">
               ${predictions.length ? predictions.map(row => {
                 const override = getSection2DocForPlayer(row.item, match.id);
-                const score = official ? scoreOnePrediction(row.match, official, override) : null;
+                const score = scoreViewerPrediction(row.item, match, row.match, official, override);
                 const className = score ? (score.exact ? 'hit-exact' : score.points > 0 ? 'hit-outcome' : 'miss') : '';
                 const badge = score ? `<b>${score.points} pts</b>` : '';
                 const finalPred = override && override.mode === 'changed' ? { ...row.match, homeGoals: override.homeGoals, awayGoals: override.awayGoals, winnerTeam: override.winnerTeam, method: override.method } : row.match;
@@ -156,6 +163,7 @@ function renderGgamesTable(options = {}) {
                 <th>#</th>
                 <th>Jogador</th>
                 ${ggamesSortHeader('points', 'Pontos')}
+                ${ggamesSortHeader('matchupPoints', 'PP', 'Prognósticos Pontos')}
                 ${ggamesSortHeader('correctPredictions', 'A', 'Acertados')}
                 ${ggamesSortHeader('failedPredictions', 'E', 'Errados')}
                 ${ggamesSortHeader('goalsHit', 'GM', 'Golos marcados')}
@@ -167,7 +175,7 @@ function renderGgamesTable(options = {}) {
             </thead>
             <tbody>
               ${rows.map(row => `<tr class="ggames-player-row" data-live-player="${escapeHtml(row.id)}" title="Ver histórico de ${escapeHtml(row.name)}">
-                <td>${row.rank}</td><td><button type="button" class="ggames-player-link" data-live-player="${escapeHtml(row.id)}"><strong>${renderParticipantIdentity(row.name, row.icon, 'participant-ident--compact')}</strong></button></td><td><strong>${row.points}</strong></td><td>${row.correctPredictions}</td><td>${row.failedPredictions}</td><td title="Golos marcados">${row.goalsHit}</td><td title="Golos falhados">${row.goalsMissed}</td><td>${row.winsHit}</td><td>${row.drawsHit}</td><td>${row.lossesHit}</td>
+                <td>${row.rank}</td><td><button type="button" class="ggames-player-link" data-live-player="${escapeHtml(row.id)}"><strong>${renderParticipantIdentity(row.name, row.icon, 'participant-ident--compact')}</strong></button></td><td><strong>${row.points}</strong></td><td>${row.matchupPoints || 0}</td><td>${row.correctPredictions}</td><td>${row.failedPredictions}</td><td title="Golos marcados">${row.goalsHit}</td><td title="Golos falhados">${row.goalsMissed}</td><td>${row.winsHit}</td><td>${row.drawsHit}</td><td>${row.lossesHit}</td>
               </tr>`).join('')}
             </tbody>
           </table>
@@ -458,7 +466,7 @@ async function openPublicPredictionsModal() {
               if (!row.match) return false;
               if (filter === 'points3' || filter === 'points1') {
                 const override = getSection2DocForPlayer(row.item, match.id);
-                const score = official ? scoreOnePrediction(row.match, official, override) : null;
+                const score = scoreViewerPrediction(row.item, match, row.match, official, override);
                 const target = filter === 'points3' ? 3 : 1;
                 return score && score.points === target;
               }
@@ -499,7 +507,7 @@ async function openPublicPredictionsModal() {
                 <div class="viewer-picks" style="display: none; margin-top: 12px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 8px;">
                   ${predictions.length ? predictions.map(row => {
                     const override = getSection2DocForPlayer(row.item, match.id);
-                    const score = official ? scoreOnePrediction(row.match, official, override) : null;
+                    const score = scoreViewerPrediction(row.item, match, row.match, official, override);
                     const className = score ? (score.exact ? 'hit-exact' : score.points > 0 ? 'hit-outcome' : 'miss') : '';
                     const badge = score ? `<b>${score.points} pts</b>` : '';
                     const sec2 = override ? `<em class="section2-mini">${override.mode === 'replicate' ? 'manteve Secção 1' : 'reformulou'}</em>` : '';
