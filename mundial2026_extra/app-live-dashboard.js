@@ -604,12 +604,14 @@ function renderLiveGameUserPredictions(gameId) {
   }
 
   const gamePredictions = [];
-  const official = getOfficialResult(gameId) || worldCupApi.games.find(g => String(g.id) === String(gameId)) || null;
-  const isKnockout = official ? official.stage !== 'groups' : true;
+  const localMatch = localMatchById(gameId);
+  const official = getOfficialResult(gameId) || worldCupApi.games.find(g => String(g.id) === String(gameId)) || localMatch || null;
+  const lookupMatch = localMatch || official || { id: gameId };
+  const isKnockout = lookupMatch ? lookupMatch.stage !== 'groups' : true;
 
   publicPredictions.forEach(player => {
     const initialPred = typeof findInitialPredictionForMatch === 'function'
-      ? findInitialPredictionForMatch(player, official || { id: gameId })
+      ? findInitialPredictionForMatch(player, lookupMatch)
       : (player.matches || []).find(m => String(m.id) === String(gameId));
 
     const override = typeof getSection2DocForPlayer === 'function' ? getSection2DocForPlayer(player, gameId) : null;
@@ -626,14 +628,15 @@ function renderLiveGameUserPredictions(gameId) {
           homeTeam: override.homeTeam,
           awayTeam: override.awayTeam
         };
-      } else if (override.mode === 'replicate' && initialPred) {
+      } else if (override.mode === 'replicate' && (initialPred || override.initialPrediction)) {
+        const basePred = initialPred || override.initialPrediction;
         finalPred = {
-          homeGoals: initialPred.homeGoals,
-          awayGoals: initialPred.awayGoals,
-          winnerTeam: initialPred.winnerTeam,
-          method: initialPred.method,
-          homeTeam: initialPred.homeTeam,
-          awayTeam: initialPred.awayTeam
+          homeGoals: basePred.homeGoals,
+          awayGoals: basePred.awayGoals,
+          winnerTeam: basePred.winnerTeam,
+          method: basePred.method,
+          homeTeam: basePred.homeTeam,
+          awayTeam: basePred.awayTeam
         };
       }
       if (finalPred && finalPred.homeGoals !== '' && finalPred.awayGoals !== '' && finalPred.homeGoals !== null && finalPred.awayGoals !== null) {
