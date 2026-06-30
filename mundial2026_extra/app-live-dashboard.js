@@ -1164,15 +1164,44 @@ function openGgamesPlayerHistory(playerId) {
     const pred = typeof findInitialPredictionForMatch === 'function'
       ? findInitialPredictionForMatch(playerDoc, match)
       : (playerDoc.matches || []).find(row => Number(row.id) === Number(match.id));
-    if (!pred) return null;
-    return { match, pred };
+    const override = typeof getSection2DocForPlayer === 'function' ? getSection2DocForPlayer(playerDoc, match.id) : null;
+    const isKnockout = match.stage && match.stage !== 'groups';
+
+    let displayPred = pred;
+    if (isKnockout && override) {
+      if (override.mode === 'changed') {
+        displayPred = {
+          homeGoals: override.homeGoals,
+          awayGoals: override.awayGoals,
+          winnerTeam: override.winnerTeam,
+          method: override.method,
+          homeTeam: override.homeTeam,
+          awayTeam: override.awayTeam,
+          stage: override.stage || match.stage,
+          id: override.matchId || match.id
+        };
+      } else if (override.mode === 'replicate' && (override.initialPrediction || pred)) {
+        const basePred = override.initialPrediction || pred;
+        displayPred = {
+          homeGoals: basePred.homeGoals,
+          awayGoals: basePred.awayGoals,
+          winnerTeam: basePred.winnerTeam,
+          method: basePred.method,
+          homeTeam: override.homeTeam || basePred.homeTeam || match.home,
+          awayTeam: override.awayTeam || basePred.awayTeam || match.away,
+          stage: override.stage || basePred.stage || match.stage,
+          id: override.matchId || basePred.id || match.id
+        };
+      }
+    }
+
+    if (!displayPred) return null;
+    return { match, pred, displayPred, override };
   }).filter(Boolean);
-  const historyRows = historyEntries.map(({ match, pred }) => {
+  const historyRows = historyEntries.map(({ match, pred, displayPred, override }) => {
     const official = getOfficialResult(match.id);
     const isLive = !!official && isOfficialResultLive(official) && !isOfficialResultFinished(official);
     
-    // FETCH THE SECTION 2 REFORMULATION OVERRIDE DOC
-    const override = typeof getSection2DocForPlayer === 'function' ? getSection2DocForPlayer(playerDoc, match.id) : null;
     const score = official && isOfficialResultFinished(official) ? scoreOnePrediction(pred, official, override) : null;
     
     const status = official
@@ -1191,7 +1220,7 @@ function openGgamesPlayerHistory(playerId) {
       ? `<td data-label="Resultado" class="history-result-cell-clickable" data-match-id="${match.id}" onclick="handleHistoryResultClick(this.dataset.matchId)" style="cursor: pointer; text-decoration: underline; color: var(--accent); font-weight: bold;">${officialText}</td>`
       : `<td data-label="Resultado">${officialText}</td>`;
       
-    let predText = predictionResultText(pred);
+    let predText = predictionResultText(displayPred);
     if (override && override.mode === 'changed') {
       predText = `${escapeHtml(override.homeTeam)} ${override.homeGoals}-${override.awayGoals} ${escapeHtml(override.awayTeam)}`;
       if (override.winnerTeam) {
