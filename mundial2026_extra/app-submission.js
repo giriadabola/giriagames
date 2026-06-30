@@ -449,6 +449,38 @@ function officialWinnerTeam(official) {
   return getWinnerTeamFromScore(official);
 }
 
+function knockoutMethodKey(entry, stage = '') {
+  if (stage === 'groups') return 'group';
+  const raw = String(entry?.method || '').trim().toLowerCase();
+  if (raw === 'pens') return 'pens';
+  if (raw === 'et') return 'et';
+  if (raw === '90') return '90';
+  return '90';
+}
+
+function exactPredictionHit(pred, official, stage) {
+  const teamsMatch = teamsMatchPrediction(pred, official);
+  if (!teamsMatch) return false;
+
+  const ph = Number(pred.homeGoals);
+  const pa = Number(pred.awayGoals);
+  const oh = Number(official.homeGoals);
+  const oa = Number(official.awayGoals);
+  if (ph !== oh || pa !== oa) return false;
+
+  if (stage === 'groups') return true;
+
+  const predMethod = knockoutMethodKey(pred, stage);
+  const officialMethod = knockoutMethodKey(official, stage);
+  if (predMethod !== officialMethod) return false;
+
+  if (predMethod === 'et' || predMethod === 'pens') {
+    return officialWinnerTeam(official) !== 'Empate' && sameTeamName(pred.winnerTeam, officialWinnerTeam(official));
+  }
+
+  return true;
+}
+
 function scoreOnePrediction(pred, official) {
   if (!pred || !official || pred.homeGoals == null || pred.awayGoals == null || official.homeGoals == null || official.awayGoals == null || official.homeGoals === '' || official.awayGoals === '') {
     return { points: 0, exact: false, outcomeHit: false, goalsHit: 0, goalsMissed: 0, winHit: 0, drawHit: 0, lossHit: 0, played: false };
@@ -463,13 +495,7 @@ function scoreOnePrediction(pred, official) {
   const predicted = predictionOutcome(pred);
   const outcomeHit = teamsMatch && actual === predicted;
   const winnerHit = pred.winnerTeam && officialWinnerTeam(official) !== 'Empate' && sameTeamName(pred.winnerTeam, officialWinnerTeam(official));
-  let exact = teamsMatch && ph === oh && pa === oa;
-  if (!exact && teamsMatch && ph === pa && pred.method === 'et' && official.method === 'et' && winnerHit) {
-    const implied90 = Math.min(oh, oa);
-    if (ph === implied90 && pa === implied90) {
-      exact = true;
-    }
-  }
+  const exact = exactPredictionHit(pred, official, stage);
 
   let points = 0;
   if (stage === 'groups') {
