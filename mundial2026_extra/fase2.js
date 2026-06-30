@@ -239,7 +239,33 @@
 
   function getSection2DocForPlayer(item, matchId) {
     const key = item?.participantKey || normalizeKey(item?.participantName);
-    return getSection2Doc(key, matchId);
+    const match = (data?.matches || []).find(m => Number(m.id) === Number(matchId));
+    const homeTeam = match ? String(match.home || match.homeTeam || '').trim().toLowerCase() : '';
+    const awayTeam = match ? String(match.away || match.awayTeam || '').trim().toLowerCase() : '';
+    const stage = match ? String(match.stage || '').trim().toLowerCase() : '';
+    const docs = section2Docs.filter(doc => String(doc.participantKey) === String(key));
+    if (!docs.length) return null;
+
+    const exactIdAndTeams = docs.find(doc => {
+      const sameId = Number(doc.matchId) === Number(matchId);
+      const sameStage = !stage || String(doc.stage || '').trim().toLowerCase() === stage;
+      const sameTeams = homeTeam && awayTeam
+        && String(doc.homeTeam || '').trim().toLowerCase() === homeTeam
+        && String(doc.awayTeam || '').trim().toLowerCase() === awayTeam;
+      return sameId && sameStage && sameTeams;
+    });
+    if (exactIdAndTeams) return exactIdAndTeams;
+
+    const teamsMatch = docs.find(doc => {
+      const sameStage = !stage || String(doc.stage || '').trim().toLowerCase() === stage;
+      const sameTeams = homeTeam && awayTeam
+        && String(doc.homeTeam || '').trim().toLowerCase() === homeTeam
+        && String(doc.awayTeam || '').trim().toLowerCase() === awayTeam;
+      return sameStage && sameTeams;
+    });
+    if (teamsMatch) return teamsMatch;
+
+    return docs.find(doc => Number(doc.matchId) === Number(matchId)) || null;
   }
 
   function sameTeamsSameSides(pred, official) {
@@ -290,38 +316,32 @@
     return 'Empate';
   }
 
-  function normalizedKnockoutMethod(entry, homeGoals, awayGoals) {
-    const explicit = String(entry?.method || '').trim();
-    if (explicit) return explicit;
-    return homeGoals !== awayGoals ? '90' : '';
+  function knockoutMethodKey(entry, stage = '') {
+    if (stage === 'groups') return 'group';
+    const raw = String(entry?.method || '').trim().toLowerCase();
+    if (raw === 'pens') return 'pens';
+    if (raw === 'et') return 'et';
+    if (raw === '90') return '90';
+    return '90';
   }
 
-  function isKnockoutExactPrediction(entry, official, winnerHit) {
-    if (!entry || !official) return false;
-    const stage = official.stage || entry.stage;
-    if (stage === 'groups') {
-      return Number(entry.homeGoals) === Number(official.homeGoals) && Number(entry.awayGoals) === Number(official.awayGoals);
+  function exactKnockoutPrediction(pred, official, stage, sameSides = true) {
+    const ph = Number(pred?.homeGoals);
+    const pa = Number(pred?.awayGoals);
+    const oh = Number(official?.homeGoals);
+    const oa = Number(official?.awayGoals);
+    if (!sameSides || ph !== oh || pa !== oa) return false;
+    if (stage === 'groups') return true;
+
+    const predMethod = knockoutMethodKey(pred, stage);
+    const officialMethod = knockoutMethodKey(official, stage);
+    if (predMethod !== officialMethod) return false;
+
+    if (predMethod === 'et' || predMethod === 'pens') {
+      return teamKey(predictedWinnerTeam(pred)) === teamKey(officialWinnerTeam(official));
     }
 
-    const ph = Number(entry.homeGoals);
-    const pa = Number(entry.awayGoals);
-    const oh = Number(official.homeGoals);
-    const oa = Number(official.awayGoals);
-    const predMethod = normalizedKnockoutMethod(entry, ph, pa);
-    const officialMethod = normalizedKnockoutMethod(official, oh, oa);
-
-    if (ph === oh && pa === oa) {
-      if (predMethod !== officialMethod) return false;
-      if (ph === pa && (predMethod === 'et' || predMethod === 'pens')) return !!winnerHit;
-      return true;
-    }
-
-    if (ph === pa && predMethod === 'et' && officialMethod === 'et' && winnerHit) {
-      const implied90 = Math.min(oh, oa);
-      return ph === implied90 && pa === implied90;
-    }
-
-    return false;
+    return true;
   }
 
   function scoreInitialPrediction(pred, official) {
@@ -336,7 +356,7 @@
     const oa = Number(official.awayGoals);
     const sidesOk = sameTeamsSameSides(pred, official);
     const winnerHit = teamKey(predictedWinnerTeam(pred)) === teamKey(officialWinnerTeam(official));
-    const exact = sidesOk && isKnockoutExactPrediction(pred, official, winnerHit);
+    const exact = exactKnockoutPrediction(pred, official, stage, sidesOk);
     const group = stage === 'groups';
     const final = stage === 'final';
 
@@ -389,7 +409,7 @@
     const pa = Number(override.awayGoals);
     const stage = official.stage || override.stage;
     const winnerHit = teamKey(predictedWinnerTeam(override)) === teamKey(officialWinnerTeam(official));
-    const exact = isKnockoutExactPrediction(override, official, winnerHit);
+    const exact = exactKnockoutPrediction(override, official, stage, true);
 
     let resultPoints = 0;
     if (stage === 'round32') {
@@ -439,6 +459,52 @@
 
     return result;
   };
+
+  function scorePredictionForTable(item, match, pred, official, override = null) {
+    if (!pred || !official) {
+      return {
+        points: 0,
+        exact: false,
+        outcomeHit: false,
+        goalsHit: 0,
+        goalsMissed: 0,
+        winHit: 0,
+        drawHit: 0,
+        lossHit: 0,
+        played: false,
+        source: override?.mode === 'changed' ? 'section2' : 'section1',
+        matchupBonus: 0,
+        resultPoints: 0
+      };
+    }
+
+    const home = resolveOfficialTeam(match, 'home');
+    const away = resolveOfficialTeam(match, 'away');
+    const unresolved = isTeamUnresolved(home) || isTeamUnresolved(away);
+    const stage = official.stage || match?.stage || pred.stage;
+    const scorePred = (override && override.mode === 'replicate')
+      ? {
+          ...(override.initialPrediction || pred),
+          homeTeam: override.homeTeam || (override.initialPrediction?.homeTeam) || pred.homeTeam || home,
+          awayTeam: override.awayTeam || (override.initialPrediction?.awayTeam) || pred.awayTeam || away,
+          stage: override.stage || override.initialPrediction?.stage || pred.stage || stage,
+          id: override.matchId || override.initialPrediction?.id || pred.id || match?.id
+        }
+      : pred;
+    const baseScore = scoreOnePrediction(scorePred, official, override);
+    const shouldApplyStandaloneMatchupBonus = (!override || override.mode === 'replicate') && stage === 'round32' && !unresolved;
+    const matchupBonus = shouldApplyStandaloneMatchupBonus && sameMatchupAnySide(scorePred, { homeTeam: home, awayTeam: away })
+      ? numericRule('knockoutInitialWinner')
+      : 0;
+
+    return {
+      ...baseScore,
+      points: Number(baseScore.points || 0),
+      matchupBonus: Number(baseScore.matchupBonus || 0) + matchupBonus,
+      resultPoints: Number(baseScore.resultPoints ?? baseScore.points ?? 0)
+    };
+  }
+  window.scorePredictionForTable = scorePredictionForTable;
 
   const SECTION2_COLLECTION = 'worldcupextraReforms';
   const baseLoadPublicPredictions = loadPublicPredictions;
@@ -493,24 +559,14 @@
         
         const override = getSection2DocForPlayer(item, match.id);
 
-        let matchupBonus = 0;
-        if (!unresolved && match.stage === 'round32' && pred && override?.mode === 'changed') {
-          if (sameMatchupAnySide(pred, { homeTeam: home, awayTeam: away })) {
-            matchupBonus = numericRule('knockoutInitialWinner');
-            stats.matchupPoints += matchupBonus;
-            stats.points += matchupBonus;
-          }
-        }
-
         const official = getOfficialResult(match.id);
         if (!official) return;
         if (!pred) return;
 
-        const score = scoreOnePrediction(pred, official, override);
+        const score = scorePredictionForTable(item, match, pred, official, override);
         
-        // Remove double-counted matchupBonus from score.points since we already added it above
-        const resultPoints = score.points - (score.matchupBonus || 0);
-        stats.points += resultPoints;
+        stats.points += score.resultPoints ?? score.points;
+        stats.matchupPoints += score.matchupBonus || 0;
         
         stats.correctPredictions += score.points > 0 ? 1 : 0;
         stats.failedPredictions += score.points === 0 ? 1 : 0;
