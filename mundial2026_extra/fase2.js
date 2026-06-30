@@ -268,13 +268,15 @@
   function findInitialPredictionForMatch(item, match, home = null, away = null) {
     if (!item || !match) return null;
     const matches = item.matches || [];
+    const exactPred = matches.find(row => Number(row.id) === Number(match.id || match.matchId));
+    if (exactPred) return exactPred;
     if (match.stage && match.stage !== 'groups') {
       const h = home || resolveOfficialTeam(match, 'home');
       const a = away || resolveOfficialTeam(match, 'away');
       const matchupPred = matches.find(p => p.stage === match.stage && sameMatchupAnySide(p, { homeTeam: h, awayTeam: a }));
       if (matchupPred) return matchupPred;
     }
-    return matches.find(row => Number(row.id) === Number(match.id || match.matchId));
+    return null;
   }
   window.findInitialPredictionForMatch = findInitialPredictionForMatch;
 
