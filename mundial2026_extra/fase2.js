@@ -278,6 +278,26 @@
     return a && a === b;
   }
 
+  function calculateResolvedRound32MatchupPoints(item) {
+    const bonusPerMatchup = Number(
+      window.scoringRules?.knockoutInitialWinner ??
+      DEFAULT_SCORING_RULES?.knockoutInitialWinner ??
+      2
+    );
+
+    return (data?.matches || []).reduce((total, match) => {
+      if (match.stage !== 'round32') return total;
+      const home = resolveOfficialTeam(match, 'home');
+      const away = resolveOfficialTeam(match, 'away');
+      if (isTeamUnresolved(home) || isTeamUnresolved(away)) return total;
+      const pred = findInitialPredictionForMatch(item, match, home, away);
+      if (!pred || !sameMatchupAnySide(pred, { homeTeam: home, awayTeam: away })) {
+        return total;
+      }
+      return total + bonusPerMatchup;
+    }, 0);
+  }
+
   function officialWinnerTeam(official) {
     if (!official) return '';
     if (official.winnerTeam && official.winnerTeam !== 'Empate') return official.winnerTeam;
@@ -295,13 +315,16 @@
     if (!item || !match) return null;
     const matches = item.matches || [];
     const exactPred = matches.find(row => Number(row.id) === Number(match.id || match.matchId));
-    if (exactPred) return exactPred;
     if (match.stage && match.stage !== 'groups') {
       const h = home || resolveOfficialTeam(match, 'home');
       const a = away || resolveOfficialTeam(match, 'away');
+      if (exactPred && sameMatchupAnySide(exactPred, { homeTeam: h, awayTeam: a })) {
+        return exactPred;
+      }
       const matchupPred = matches.find(p => p.stage === match.stage && sameMatchupAnySide(p, { homeTeam: h, awayTeam: a }));
       if (matchupPred) return matchupPred;
     }
+    if (exactPred) return exactPred;
     return null;
   }
   window.findInitialPredictionForMatch = findInitialPredictionForMatch;
@@ -429,7 +452,7 @@
     }
 
     const matchupBonus = sameMatchupAnySide(initialPred, official) ? (final ? numericRule('finalInitialWinner') : numericRule('knockoutInitialWinner')) : 0;
-    const points = matchupBonus + resultPoints;
+    const points = resultPoints;
     const goalsHit = (ph === oh ? oh : 0) + (pa === oa ? oa : 0);
     const goalsMissed = Math.abs(ph - oh) + Math.abs(pa - oa);
     const actual = actualOutcome(official);
@@ -566,7 +589,6 @@
         const score = scorePredictionForTable(item, match, pred, official, override);
         
         stats.points += score.resultPoints ?? score.points;
-        stats.matchupPoints += score.matchupBonus || 0;
         
         stats.correctPredictions += score.points > 0 ? 1 : 0;
         stats.failedPredictions += score.points === 0 ? 1 : 0;
@@ -577,6 +599,7 @@
         stats.lossesHit += score.lossHit;
         stats.exactResults += score.exact ? 1 : 0;
       });
+      stats.matchupPoints = calculateResolvedRound32MatchupPoints(item);
       return stats;
     });
 
@@ -898,6 +921,26 @@
     return a && a === b;
   }
 
+  function findCanonicalStageMatchLocal(match, homeTeam, awayTeam) {
+    if (!match) return null;
+    const stage = String(match.stage || '');
+    const direct = (data?.matches || []).find(item => Number(item.id) === Number(match.id));
+    if (direct && stage && String(direct.stage || '') === stage) {
+      return direct;
+    }
+    if (!homeTeam || !awayTeam) return direct || match;
+    return (data?.matches || []).find(item =>
+      String(item.stage || '') === stage &&
+      sameMatchupAnySideLocal(
+        { homeTeam, awayTeam },
+        {
+          homeTeam: resolveOfficialTeamLocal(item, 'home'),
+          awayTeam: resolveOfficialTeamLocal(item, 'away')
+        }
+      )
+    ) || direct || match;
+  }
+
   function findWindowPair(stage) {
     const source = reformWindows.data || {};
     const pairs = REFORM_STAGE_FIELDS[stage] || [];
@@ -1170,14 +1213,22 @@
     const windowInfo = findWindowPair(stage);
     const matches = (data?.matches || []).filter(match => match.stage === stage);
 
-    const correctMatchups = matches.filter(match => {
+    const correctMatchups = matches.map(match => {
       const home = resolveOfficialTeamLocal(match, 'home');
       const away = resolveOfficialTeamLocal(match, 'away');
       const unresolved = isTeamUnresolved(home) || isTeamUnresolved(away);
-      if (unresolved) return false;
+      if (unresolved) return null;
       const initialPred = findInitialPredictionForMatch(item, match, home, away);
-      return initialPred && sameMatchupAnySideLocal(initialPred, { homeTeam: home, awayTeam: away });
-    });
+      if (!initialPred || !sameMatchupAnySideLocal(initialPred, { homeTeam: home, awayTeam: away })) {
+        return null;
+      }
+      const canonicalMatch = findCanonicalStageMatchLocal(match, home, away);
+      return {
+        match: canonicalMatch || match,
+        home,
+        away
+      };
+    }).filter(Boolean);
 
     let correctMatchesSummaryHtml = '';
     if (correctMatchups.length > 0) {
@@ -1185,10 +1236,9 @@
         <div style="background: rgba(34, 197, 94, 0.08); border: 1px solid rgba(34, 197, 94, 0.3); border-radius: 16px; padding: 14px 18px; margin-bottom: 20px; font-size: 0.9rem; text-align: left;">
           <strong style="color: #4ade80; display: block; margin-bottom: 6px; font-weight: 800;">✅ Confrontos que acertaste no prognóstico inicial (${correctMatchups.length}):</strong>
           <ul style="margin: 0; padding-left: 18px; line-height: 1.6; color: #a8b7cf; font-weight: 600;">
-            ${correctMatchups.map(match => {
-              const home = resolveOfficialTeamLocal(match, 'home');
-              const away = resolveOfficialTeamLocal(match, 'away');
-              return `<li>Jogo ${match.id}: <strong>${escapeHtml(home)} vs ${escapeHtml(away)}</strong></li>`;
+            ${correctMatchups.map(entry => {
+              const matchId = entry.match?.id ?? '';
+              return `<li>Jogo ${escapeHtml(matchId)}: <strong>${escapeHtml(entry.home)} vs ${escapeHtml(entry.away)}</strong></li>`;
             }).join('')}
           </ul>
         </div>

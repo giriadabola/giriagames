@@ -462,7 +462,7 @@
           battleDraws: b.battleDraws || 0,
           battleLosses: b.battleLosses || 0,
           battleBonusPoints: b.battleBonusPoints || 0,
-          points: (row.points || 0) - (showPp ? 0 : (row.matchupPoints || 0)) + (showBw ? (b.battleBonusPoints || 0) : 0)
+          points: (row.points || 0) + (showPp ? (row.matchupPoints || 0) : 0) + (showBw ? (b.battleBonusPoints || 0) : 0)
         };
       });
 
