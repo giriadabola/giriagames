@@ -357,6 +357,16 @@
     if (stage === 'groups') return true;
 
     const predMethod = knockoutMethodKey(pred, stage);
+    const officialMethodRaw = String(official?.method || '').trim().toLowerCase();
+    if (!officialMethodRaw) {
+      // Alguns resultados oficiais antigos/espelhados ficaram sem "method".
+      // Nesses casos, um KO com score final igual e vencedor igual não deve cair para "acertou só o vencedor".
+      if (predMethod === 'et' || predMethod === 'pens') {
+        return teamKey(predictedWinnerTeam(pred)) === teamKey(officialWinnerTeam(official));
+      }
+      return true;
+    }
+
     const officialMethod = knockoutMethodKey(official, stage);
     if (predMethod !== officialMethod) return false;
 
