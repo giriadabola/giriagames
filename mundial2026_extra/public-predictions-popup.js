@@ -237,6 +237,57 @@ function openGgamesRulesModal() {
   `);
 }
 
+function openGgamesRulesModal() {
+  openModal(`
+    <div class="modal-head">
+      <div>
+        <p class="eyebrow small">Tabela Ggames</p>
+        <h2>Regras de pontuação</h2>
+      </div>
+    </div>
+    <section class="rules-modal-content">
+      <h3>Secção 1 — prognóstico inicial</h3>
+      <ul>
+        <li><strong>Fase de grupos:</strong> ganha ${numericRule('groupExact')} pontos quando acerta no resultado exato. Ganha ${numericRule('groupOutcome')} ponto(s) quando não acerta no resultado exato mas acerta no vencedor ou no empate.</li>
+        <li><strong>16 avos:</strong> ganha ${numericRule('initialExact32')} pontos quando acerta no resultado exato. Ganha ${numericRule('initialWinner32')} pontos quando não acerta no resultado exato mas acerta no vencedor/apurado.</li>
+        <li><strong>Oitavos de final:</strong> ganha ${numericRule('initialExact16')} pontos quando acerta no resultado exato. Ganha ${numericRule('initialWinner16')} pontos quando não acerta no resultado exato mas acerta no vencedor/apurado.</li>
+        <li><strong>Quartos de final:</strong> ganha ${numericRule('initialExact8')} pontos quando acerta no resultado exato. Ganha ${numericRule('initialWinner8')} pontos quando não acerta no resultado exato mas acerta no vencedor/apurado.</li>
+        <li><strong>Meias-finais:</strong> ganha ${numericRule('initialExact4')} pontos quando acerta no resultado exato. Ganha ${numericRule('initialWinner4')} pontos quando não acerta no resultado exato mas acerta no vencedor/apurado.</li>
+        <li><strong>3.º lugar:</strong> ganha ${numericRule('initialExact3rd')} pontos quando acerta no resultado exato. Ganha ${numericRule('initialWinner3rd')} pontos quando não acerta no resultado exato mas acerta no vencedor.</li>
+        <li><strong>Final:</strong> ganha ${numericRule('initialExactFinal')} pontos quando acerta no resultado exato. Ganha ${numericRule('initialWinnerFinal')} pontos quando não acerta no resultado exato mas acerta no campeão/vencedor. Ganha ${numericRule('finalInitialMethod')} ponto(s) quando acerta apenas no desfecho da final sem acertar no resultado exato.</li>
+      </ul>
+      <h3>Secção 2 — reformulações</h3>
+      <ul>
+        <li><strong>16 avos:</strong> ganha ${numericRule('reformExact32')} pontos quando acerta no resultado exato. Ganha ${numericRule('reformWinner32')} ponto(s) quando não acerta no resultado exato mas acerta no vencedor/apurado.</li>
+        <li><strong>Oitavos de final:</strong> ganha ${numericRule('reformExact16')} pontos quando acerta no resultado exato. Ganha ${numericRule('reformWinner16')} ponto(s) quando não acerta no resultado exato mas acerta no vencedor/apurado.</li>
+        <li><strong>Quartos de final:</strong> ganha ${numericRule('reformExact8')} pontos quando acerta no resultado exato. Ganha ${numericRule('reformWinner8')} ponto(s) quando não acerta no resultado exato mas acerta no vencedor/apurado.</li>
+        <li><strong>Meias-finais:</strong> ganha ${numericRule('reformExact4')} pontos quando acerta no resultado exato. Ganha ${numericRule('reformWinner4')} pontos quando não acerta no resultado exato mas acerta no vencedor/apurado.</li>
+        <li><strong>3.º lugar:</strong> ganha ${numericRule('reformExact3rd')} pontos quando acerta no resultado exato. Ganha ${numericRule('reformWinner3rd')} pontos quando não acerta no resultado exato mas acerta no vencedor.</li>
+        <li><strong>Final:</strong> ganha ${numericRule('finalReformExact')} pontos quando acerta no resultado exato. Ganha ${numericRule('reformWinnerFinal')} pontos quando não acerta no resultado exato mas acerta no campeão/vencedor.</li>
+        <li><strong>Se mantiver o prognóstico inicial:</strong> contam as regras da Secção 1. <strong>Se reformular:</strong> contam as regras da Secção 2.</li>
+        <li>As regras são lidas do Firebase em <strong>settings/worldcupScoringRules</strong>. Se o documento não existir, o site usa os valores padrão.</li>
+      </ul>
+      <h3>Estatísticas da tabela</h3>
+      <ul>
+        <li><strong>BW:</strong> Battle Wins — vitórias obtidas nos Battles. Cada 2 vitórias de Battle concedem +1 ponto extra na classificação.</li>
+        <li><strong>PP:</strong> Prognósticos Pontos — coluna reservada aos pontos extra de prognósticos, quando aplicável pelas regras ativas do projeto.</li>
+        <li><strong>Acertados:</strong> prognósticos que deram pontos.</li>
+        <li><strong>Falhados:</strong> prognósticos de jogos já disputados que não deram pontos.</li>
+        <li><strong>GM:</strong> golos marcados — golos que o jogador acertou no prognóstico.</li>
+        <li><strong>GF:</strong> golos falhados — diferença entre os golos previstos e os golos reais.</li>
+        <li><strong>Vitórias/Empates/Derrotas:</strong> desfechos acertados pelo jogador.</li>
+      </ul>
+      <h3>Desempate</h3>
+      <ol>
+        <li>Mais pontos.</li>
+        <li>Mais prognósticos acertados.</li>
+        <li>Mais GM.</li>
+        <li>Menos GF.</li>
+      </ol>
+    </section>
+  `);
+}
+
 function renderGiriaBattles(rows) {
   if (rows.length < 2) return '<p class="modal-muted">Ainda não há confrontos suficientes.</p>';
   const futureMatches = data.matches.filter(match => !getOfficialResult(match.id) && getMatchDateObj(match) >= new Date());
