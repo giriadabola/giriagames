@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ggames-mundial-2026-v40-live-game-ordered-matches';
+const CACHE_NAME = 'ggames-mundial-2026-v41-index-cache-clean';
 
 self.addEventListener('install', event => {
   self.skipWaiting();
