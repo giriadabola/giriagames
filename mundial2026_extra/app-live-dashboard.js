@@ -146,6 +146,13 @@ function isMatchBeforeKickoff(game) {
   return new Date() < kickoff;
 }
 
+function compareMatchesBySchedule(a, b) {
+  const kickoffA = getMatchDateObj({ date: a?.date, time: a?.time || '12:00' }).getTime();
+  const kickoffB = getMatchDateObj({ date: b?.date, time: b?.time || '12:00' }).getTime();
+  if (kickoffA !== kickoffB) return kickoffA - kickoffB;
+  return Number(a?.id || 0) - Number(b?.id || 0);
+}
+
 function ggamesApiKickoffMs(game, fallbackMatch = null) {
   const local = fallbackMatch || localMatchById(game?.id || game?.matchId);
   const dateStr = game?.date || local?.date;
@@ -811,7 +818,7 @@ function renderFutureApiGames() {
   const source = worldCupApi.games.length ? worldCupApi.games : (data?.matches || []).map(m => ({...m, id: String(m.id), homeTeam: m.home, awayTeam: m.away, homeGoals: null, awayGoals: null, finished: false, live: false}));
   const games = source
     .filter(g => !g.finished && !g.live && getMatchDateObj({ date: g.date, time: g.time }) >= now)
-    .sort((a, b) => getMatchDateObj({ date: a.date, time: a.time }) - getMatchDateObj({ date: b.date, time: b.time }))
+    .sort(compareMatchesBySchedule)
     .slice(0, 18);
   if (!games.length) return '<div class="empty-state">Não há jogos futuros para mostrar.</div>';
   return `<div class="api-games-list">${games.map(g => renderLiveGameCard(g, 'future')).join('')}</div>`;
@@ -1168,7 +1175,7 @@ function openGgamesPlayerHistory(playerId) {
     return;
   }
   const scheduledMatches = Array.isArray(data?.matches)
-    ? [...data.matches].sort((a, b) => Number(a.id) - Number(b.id))
+    ? [...data.matches].sort(compareMatchesBySchedule)
     : [];
   const historyEntries = scheduledMatches.map(match => {
     const pred = typeof findInitialPredictionForMatch === 'function'
