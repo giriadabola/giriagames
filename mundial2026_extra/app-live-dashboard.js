@@ -7,6 +7,13 @@ function getWinnerTeamFromScore(result) {
   return 'Empate';
 }
 
+function scoreHistoryPrediction(playerDoc, match, pred, official, override = null) {
+  if (typeof window.scorePredictionForTable === 'function') {
+    return window.scorePredictionForTable(playerDoc, match, pred, official, override);
+  }
+  return official ? scoreOnePrediction(pred, official, override) : null;
+}
+
 function apiMatchForLocal(match) {
   return worldCupApi.games.find(g => String(g.id) === String(match.id)) || null;
 }
@@ -802,7 +809,10 @@ function renderLiveApiGames() {
 function renderFutureApiGames() {
   const now = new Date();
   const source = worldCupApi.games.length ? worldCupApi.games : (data?.matches || []).map(m => ({...m, id: String(m.id), homeTeam: m.home, awayTeam: m.away, homeGoals: null, awayGoals: null, finished: false, live: false}));
-  const games = source.filter(g => !g.finished && !g.live && getMatchDateObj({ date: g.date, time: g.time }) >= now).slice(0, 18);
+  const games = source
+    .filter(g => !g.finished && !g.live && getMatchDateObj({ date: g.date, time: g.time }) >= now)
+    .sort((a, b) => getMatchDateObj({ date: a.date, time: a.time }) - getMatchDateObj({ date: b.date, time: b.time }))
+    .slice(0, 18);
   if (!games.length) return '<div class="empty-state">Não há jogos futuros para mostrar.</div>';
   return `<div class="api-games-list">${games.map(g => renderLiveGameCard(g, 'future')).join('')}</div>`;
 }
@@ -1202,7 +1212,7 @@ function openGgamesPlayerHistory(playerId) {
     const official = getOfficialResult(match.id);
     const isLive = !!official && isOfficialResultLive(official) && !isOfficialResultFinished(official);
     
-    const score = official && isOfficialResultFinished(official) ? scoreOnePrediction(pred, official, override) : null;
+    const score = official && isOfficialResultFinished(official) ? scoreHistoryPrediction(playerDoc, match, pred, official, override) : null;
     
     const status = official
       ? (isLive ? 'Live' : (score?.points > 0 ? 'Acertou' : 'Falhou'))
