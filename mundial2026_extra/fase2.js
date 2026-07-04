@@ -1279,9 +1279,7 @@
           ${activeStages.map(s => `<button type="button" class="section2-stage-tab ${s === stage ? 'active' : ''}" data-reform-stage="${escapeHtml(s)}">${escapeHtml(STAGE_LABELS[s])}</button>`).join('')}
         </div>
         <div class="section2-games">
-          ${stage === 'round32'
-            ? (matches.map(match => renderReformMatch(match, item)).join('') || '<p class="modal-muted">Não há jogos nesta fase.</p>')
-            : '<p class="modal-muted" style="text-align: center; padding: 20px 0; color: var(--muted);">Acima dos 16 avos, apenas o resumo dos confrontos acertados é exibido.</p>'}
+          ${matches.map(match => renderReformMatch(match, item)).join('') || '<p class="modal-muted">Não há jogos nesta fase.</p>'}
         </div>
       </section>
     `;
