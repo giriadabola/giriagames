@@ -400,6 +400,33 @@
     }
     .mirror-message.ok { color: #bbf7d0; }
     .mirror-message.err { color: #fecaca; }
+    .stage-toggle-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+    .stage-toggle-btn {
+      border: 1px solid rgba(192, 132, 252, .28);
+      border-radius: 999px;
+      background: rgba(168, 85, 247, .08);
+      color: #d8b4fe;
+      padding: 8px 12px;
+      font-weight: 900;
+      cursor: pointer;
+      transition: background .16s ease, border-color .16s ease, transform .16s ease;
+    }
+    .stage-toggle-btn:hover {
+      transform: translateY(-1px);
+      border-color: rgba(192, 132, 252, .48);
+      background: rgba(168, 85, 247, .14);
+    }
+    .stage-toggle-btn.active {
+      color: #07111f;
+      border-color: rgba(250, 204, 21, .4);
+      background: linear-gradient(135deg, #facc15, #f59e0b);
+      box-shadow: 0 10px 24px rgba(245, 158, 11, .18);
+    }
 
     @media (max-width: 720px) {
       .topbar, .panel-head, .selected-card, .maintenance-card, .auth-card { align-items: stretch; flex-direction: column; }
@@ -498,6 +525,10 @@
           <span id="usersPredsToggleArrow">▼</span>
         </button>
         <div id="usersPredsListContainer" style="display: none; padding: 18px; max-height: 400px; overflow-y: auto;">
+          <div class="stage-toggle-row">
+            <button type="button" class="stage-toggle-btn active" data-users-stage="round32">16 avos</button>
+            <button type="button" class="stage-toggle-btn" data-users-stage="round16">Oitavos</button>
+          </div>
           <div id="usersPredsStats" style="margin-bottom: 12px; font-weight: bold; font-size: 0.95rem; color: var(--muted);"></div>
           <div id="usersPredsList" style="display: grid; gap: 8px;">
             <p class="empty" style="margin: 0; padding: 0;">A carregar dados dos jogadores...</p>
@@ -1209,7 +1240,21 @@
       }
     });
 
-    async function loadUsersPredictions() {
+    const USER_REFORM_STAGE_META = {
+      round32: { label: '16 avos', totalFallback: 16 },
+      round16: { label: 'oitavos', totalFallback: 8 }
+    };
+    let usersPredsActiveStage = 'round32';
+
+    function setUsersPredictionsStage(stage) {
+      usersPredsActiveStage = USER_REFORM_STAGE_META[stage] ? stage : 'round32';
+      document.querySelectorAll('[data-users-stage]').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.usersStage === usersPredsActiveStage);
+      });
+    }
+
+    async function loadUsersPredictions(stage = usersPredsActiveStage) {
+      setUsersPredictionsStage(stage);
       const container = document.getElementById('usersPredsList');
       const statsEl = document.getElementById('usersPredsStats');
       if (!container) return;
@@ -1217,16 +1262,18 @@
       try {
         const snap = await getDocs(collection(db, 'worldcupextraReforms'));
         
-        // Find how many round32 matches exist in our loaded matches list
-        const r32Matches = matches.filter(m => m.data && m.data.stage === 'round32');
-        const totalR32 = r32Matches.length || 16;
+        const stageMeta = USER_REFORM_STAGE_META[usersPredsActiveStage] || USER_REFORM_STAGE_META.round32;
+        const stageMatches = matches.filter(m => m.data && m.data.stage === usersPredsActiveStage);
+        const totalStageMatches = stageMatches.length || stageMeta.totalFallback;
+        const totalR32 = totalStageMatches;
+        const stageLabel = stageMeta.label;
 
         // We group the reform docs by participant key/name
         const usersMap = {};
 
         snap.forEach(docSnap => {
           const u = docSnap.data();
-          if (u.stage !== 'round32') return;
+          if (u.stage !== usersPredsActiveStage) return;
 
           const key = u.participantKey || docSnap.id.split('_')[0];
           const name = u.participantName || key;
@@ -1245,7 +1292,7 @@
         const usersList = Object.keys(usersMap).map(key => {
           const u = usersMap[key];
           const predictedCount = u.predictedMatches.size;
-          const remaining = Math.max(0, totalR32 - predictedCount);
+          const remaining = Math.max(0, totalStageMatches - predictedCount);
           return {
             key,
             name: u.name,
@@ -1256,11 +1303,20 @@
 
         usersList.sort((a, b) => a.name.localeCompare(b.name, 'pt-PT'));
 
-        let totalUsers = usersList.length;
-        let completeUsers = usersList.filter(u => u.remaining === 0).length;
+        const totalUsers = usersList.length;
+        const completeUsers = usersList.filter(u => u.remaining === 0).length;
 
         if (statsEl) {
           statsEl.innerHTML = `Reformulações (16 avos): ${totalUsers} jogadores | Concluídos (16/16): ${completeUsers} | Pendentes: ${totalUsers - completeUsers}`;
+        }
+
+        if (statsEl && usersPredsActiveStage !== 'round32') {
+          statsEl.innerHTML = `Reformulacoes (${stageLabel}): ${totalUsers} jogadores | Concluidos (${totalStageMatches}/${totalStageMatches}): ${completeUsers} | Pendentes: ${totalUsers - completeUsers}`;
+        }
+
+        if (usersList.length === 0 && usersPredsActiveStage !== 'round32') {
+          container.innerHTML = `<div style="color: var(--muted); padding: 10px;">Nenhuma reformulacao de ${escapeHtml(stageLabel)} encontrada em worldcupextraReforms.</div>`;
+          return;
         }
 
         if (usersList.length === 0) {
@@ -1286,6 +1342,9 @@
             </div>
           `;
         }).join('');
+        if (usersPredsActiveStage !== 'round32') {
+          container.innerHTML = container.innerHTML.replaceAll('jogos dos 16 avos', `jogos dos ${escapeHtml(stageLabel)}`);
+        }
 
       } catch (error) {
         console.error(error);
@@ -1304,6 +1363,16 @@
         container.style.display = 'none';
         arrow.textContent = '▼';
       }
+    });
+
+    document.querySelectorAll('[data-users-stage]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        setUsersPredictionsStage(btn.dataset.usersStage);
+        const container = document.getElementById('usersPredsListContainer');
+        if (container && container.style.display !== 'none') {
+          loadUsersPredictions(usersPredsActiveStage);
+        }
+      });
     });
 
     els.collectionMirrors.addEventListener('click', event => {
