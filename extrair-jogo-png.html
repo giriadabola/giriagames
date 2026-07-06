@@ -1,0 +1,1369 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Extrair Jogo em PNG · Mundial 2026</title>
+  <style>
+    :root {
+      --bg: #07131f;
+      --bg-soft: #0e2235;
+      --panel: #10253b;
+      --panel-2: #16314d;
+      --border: rgba(255,255,255,.12);
+      --text: #eef6ff;
+      --muted: #9eb6cf;
+      --accent: #4cc9f0;
+      --accent-2: #77e27a;
+      --danger: #ff6b6b;
+      --warning: #ffd166;
+      --shadow: 0 18px 48px rgba(0,0,0,.28);
+      --radius: 24px;
+      --radius-sm: 16px;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background:
+        radial-gradient(circle at top, rgba(76, 201, 240, .18), transparent 30%),
+        radial-gradient(circle at bottom right, rgba(119, 226, 122, .16), transparent 25%),
+        linear-gradient(180deg, #07131f 0%, #091827 100%);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 28px;
+    }
+
+    .page {
+      max-width: 1400px;
+      margin: 0 auto;
+      display: grid;
+      gap: 24px;
+    }
+
+    .controls {
+      background: rgba(11, 25, 39, .88);
+      backdrop-filter: blur(10px);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 22px;
+      box-shadow: var(--shadow);
+    }
+
+    .controls-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-bottom: 18px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: clamp(1.6rem, 2vw, 2.2rem);
+      line-height: 1.1;
+    }
+
+    .subtitle, .status-text {
+      color: var(--muted);
+      margin: 0;
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .btn, select {
+      border: 0;
+      border-radius: 14px;
+      font: inherit;
+    }
+
+    .btn {
+      padding: 12px 18px;
+      font-weight: 700;
+      cursor: pointer;
+      color: #08111b;
+      background: linear-gradient(135deg, #77e27a 0%, #4cc9f0 100%);
+      transition: transform .15s ease, opacity .15s ease;
+    }
+
+    .btn.secondary {
+      color: var(--text);
+      background: rgba(255,255,255,.08);
+      border: 1px solid rgba(255,255,255,.12);
+    }
+
+    .btn:disabled {
+      cursor: not-allowed;
+      opacity: .5;
+    }
+
+    .btn:hover:not(:disabled) { transform: translateY(-1px); }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: minmax(280px, 1fr) minmax(220px, 260px);
+      gap: 14px;
+      align-items: end;
+    }
+
+    .field { display: grid; gap: 8px; }
+    .field label {
+      font-size: .95rem;
+      color: #d8e6f5;
+      font-weight: 700;
+    }
+
+    select {
+      width: 100%;
+      padding: 14px 16px;
+      background: rgba(255,255,255,.08);
+      color: var(--text);
+      border: 1px solid rgba(255,255,255,.12);
+      outline: none;
+    }
+
+    select option {
+      color: #111;
+    }
+
+    .capture-wrap {
+      display: grid;
+      gap: 14px;
+    }
+
+    .capture {
+      background:
+        radial-gradient(circle at top left, rgba(76, 201, 240, .18), transparent 24%),
+        radial-gradient(circle at top right, rgba(119, 226, 122, .18), transparent 22%),
+        linear-gradient(180deg, rgba(16, 37, 59, .98) 0%, rgba(9, 21, 34, 1) 100%);
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 32px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      position: relative;
+    }
+
+    .capture::before,
+    .capture::after {
+      content: "";
+      position: absolute;
+      border-radius: 999px;
+      filter: blur(14px);
+      opacity: .24;
+      pointer-events: none;
+    }
+
+    .capture::before {
+      width: 260px; height: 260px;
+      background: #4cc9f0;
+      top: -90px; left: -60px;
+    }
+
+    .capture::after {
+      width: 240px; height: 240px;
+      background: #77e27a;
+      bottom: -80px; right: -60px;
+    }
+
+    .capture-inner {
+      position: relative;
+      z-index: 1;
+      padding: 26px;
+      display: grid;
+      gap: 20px;
+    }
+
+    .top-strip {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-mark {
+      width: 56px;
+      height: 56px;
+      border-radius: 18px;
+      display: grid;
+      place-items: center;
+      padding: 6px;
+      background: rgba(255,255,255,.08);
+      border: 1px solid rgba(255,255,255,.12);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.15);
+      overflow: hidden;
+      flex: 0 0 56px;
+    }
+
+    .brand-mark img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+    }
+
+    .brand h2 {
+      margin: 0;
+      font-size: 1.15rem;
+      line-height: 1.15;
+    }
+
+    .brand p {
+      margin: 2px 0 0;
+      color: var(--muted);
+      font-size: .93rem;
+    }
+
+    .stage-badges {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .badge {
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: .86rem;
+      font-weight: 700;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.08);
+      color: #f4fbff;
+    }
+
+    .badge.live { background: rgba(255, 209, 102, .18); color: #ffe29c; border-color: rgba(255,209,102,.25); }
+    .badge.finished { background: rgba(119,226,122,.18); color: #b7f2b9; border-color: rgba(119,226,122,.25); }
+    .badge.future { background: rgba(76, 201, 240, .14); color: #bfeeff; border-color: rgba(76,201,240,.22); }
+
+    .scoreboard {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+      gap: 20px;
+      align-items: center;
+      background: rgba(255,255,255,.05);
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 26px;
+      padding: 20px;
+    }
+
+    .team-box {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      min-width: 0;
+    }
+
+    .team-box.away {
+      justify-content: flex-end;
+      text-align: right;
+    }
+
+    .flag {
+      width: 84px;
+      height: 84px;
+      min-width: 84px;
+      border-radius: 50%;
+      object-fit: cover;
+      background: rgba(255,255,255,.08);
+      border: 3px solid rgba(255,255,255,.16);
+      box-shadow: 0 8px 18px rgba(0,0,0,.22);
+    }
+
+    .team-name {
+      font-size: clamp(1.3rem, 2vw, 2.1rem);
+      font-weight: 900;
+      line-height: 1.05;
+      margin: 0;
+      word-break: break-word;
+    }
+
+    .team-sub {
+      margin: 7px 0 0;
+      color: var(--muted);
+      font-size: .95rem;
+    }
+
+    .score-center {
+      text-align: center;
+      min-width: 170px;
+    }
+
+    .score-main {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 150px;
+      padding: 16px 22px;
+      border-radius: 22px;
+      background: linear-gradient(180deg, rgba(255,255,255,.12) 0%, rgba(255,255,255,.06) 100%);
+      border: 1px solid rgba(255,255,255,.12);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
+      font-size: clamp(1.7rem, 2.4vw, 2.6rem);
+      font-weight: 900;
+      letter-spacing: .04em;
+    }
+
+    .score-main .live-dot {
+      width: 10px; height: 10px; border-radius: 50%; background: #ffd166; margin-right: 12px;
+      box-shadow: 0 0 0 6px rgba(255,209,102,.14);
+      animation: pulse 1.2s infinite;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(1); opacity: 1; }
+      70% { transform: scale(1.15); opacity: .65; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    .score-note {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: .95rem;
+      line-height: 1.35;
+    }
+
+    .section {
+      background: rgba(255,255,255,.05);
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 24px;
+      padding: 18px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .section-title {
+      margin: 0;
+      font-size: 1.15rem;
+    }
+
+    .section-subtitle {
+      margin: 3px 0 0;
+      color: var(--muted);
+      font-size: .94rem;
+    }
+
+    .winner-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .winner-card,
+    .pick-card {
+      border-radius: 22px;
+      border: 1px solid rgba(255,255,255,.08);
+      background: linear-gradient(180deg, rgba(255,255,255,.08) 0%, rgba(255,255,255,.04) 100%);
+      padding: 16px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .winner-card::before,
+    .pick-card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(255,255,255,.08), transparent 45%);
+      opacity: .8;
+      pointer-events: none;
+    }
+
+    .winner-top,
+    .pick-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .participant-ident {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+      font-weight: 800;
+    }
+
+    .participant-ident__name {
+      display: inline-block;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 220px;
+    }
+
+    .participant-icon {
+      width: 42px;
+      height: 42px;
+      flex: 0 0 42px;
+      display: inline-grid;
+      place-items: center;
+      border-radius: 14px;
+      overflow: hidden;
+      background: rgba(255,255,255,.08);
+    }
+
+    .participant-icon svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .winner-points,
+    .pick-points {
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: .9rem;
+      font-weight: 900;
+      background: rgba(119,226,122,.14);
+      border: 1px solid rgba(119,226,122,.24);
+      color: #c6f7c8;
+      white-space: nowrap;
+    }
+
+    .winner-points.zero,
+    .pick-points.bad {
+      background: rgba(255,107,107,.14);
+      border-color: rgba(255,107,107,.24);
+      color: #ffc6c6;
+    }
+
+    .pick-points.wait {
+      background: rgba(255,255,255,.08);
+      border-color: rgba(255,255,255,.12);
+      color: #d2e3f1;
+    }
+
+    .pick-points.live {
+      background: rgba(255,209,102,.15);
+      border-color: rgba(255,209,102,.25);
+      color: #ffe29c;
+    }
+
+    .winner-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 14px;
+      border-radius: 18px;
+      min-height: 68px;
+    }
+
+    .winner-card .participant-ident {
+      gap: 8px;
+      font-size: 1rem;
+      line-height: 1.1;
+    }
+
+    .winner-card .participant-ident__name {
+      max-width: 170px;
+    }
+
+    .winner-card .participant-icon {
+      width: 34px;
+      height: 34px;
+      flex: 0 0 34px;
+      border-radius: 11px;
+    }
+
+    .winner-card .winner-points {
+      padding: 6px 10px;
+      font-size: .82rem;
+    }
+
+    .winner-main {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+      position: relative;
+      z-index: 1;
+      flex: 1;
+    }
+
+    .winner-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+      flex-wrap: wrap;
+      flex: 1;
+    }
+
+    .winner-rank {
+      font-size: .88rem;
+      color: #ffe29c;
+      font-weight: 800;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      position: relative;
+      z-index: 1;
+      line-height: 1.15;
+    }
+
+    .pick-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 14px;
+    }
+
+    .pick-card.ok {
+      background: linear-gradient(180deg, rgba(119,226,122,.16) 0%, rgba(119,226,122,.08) 100%);
+      border-color: rgba(119,226,122,.26);
+    }
+
+    .pick-card.bad {
+      background: linear-gradient(180deg, rgba(255,107,107,.15) 0%, rgba(255,107,107,.08) 100%);
+      border-color: rgba(255,107,107,.26);
+    }
+
+    .pick-card.live {
+      background: linear-gradient(180deg, rgba(255,209,102,.14) 0%, rgba(255,209,102,.07) 100%);
+      border-color: rgba(255,209,102,.23);
+    }
+
+    .pick-card.wait {
+      background: linear-gradient(180deg, rgba(255,255,255,.08) 0%, rgba(255,255,255,.04) 100%);
+    }
+
+    .mini-match {
+      position: relative;
+      z-index: 1;
+      margin-top: 14px;
+      padding-top: 14px;
+      border-top: 1px solid rgba(255,255,255,.08);
+      display: grid;
+      gap: 10px;
+    }
+
+    .mini-line {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .mini-team {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      font-size: .92rem;
+      color: #e9f3fc;
+    }
+
+    .mini-team.away {
+      flex-direction: row-reverse;
+      text-align: right;
+      justify-content: flex-end;
+    }
+
+    .mini-flag {
+      width: 28px;
+      height: 28px;
+      min-width: 28px;
+      border-radius: 50%;
+      object-fit: cover;
+      background: rgba(255,255,255,.1);
+      border: 2px solid rgba(255,255,255,.16);
+    }
+
+    .mini-team span:last-child {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .mini-score {
+      min-width: 78px;
+      text-align: center;
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-weight: 900;
+      background: rgba(255,255,255,.08);
+      border: 1px solid rgba(255,255,255,.12);
+    }
+
+    .mini-status {
+      color: var(--muted);
+      font-size: .87rem;
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .muted-card {
+      border-radius: 18px;
+      border: 1px dashed rgba(255,255,255,.14);
+      padding: 16px;
+      color: var(--muted);
+      background: rgba(255,255,255,.03);
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0,0,0,0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    @media (max-width: 980px) {
+      body { padding: 18px; }
+      .form-row { grid-template-columns: 1fr; }
+      .scoreboard { grid-template-columns: 1fr; text-align: center; }
+      .team-box,
+      .team-box.away { justify-content: center; text-align: center; }
+      .team-box.away { flex-direction: row; }
+      .score-center { order: -1; }
+      .top-strip { align-items: flex-start; }
+      .capture-inner { padding: 18px; }
+      .section { padding: 16px; }
+      .winner-card,
+      .winner-main,
+      .winner-info {
+        align-items: flex-start;
+      }
+      .winner-card {
+        flex-direction: column;
+      }
+      .winner-rank {
+        white-space: normal;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="controls">
+      <div class="controls-top">
+        <div>
+          <h1>Extrair informação de um jogo em PNG</h1>
+          <p class="subtitle">Escolhe um jogo do torneio e gera uma imagem com cabeçalho do jogo, melhores pontuações e todos os prognósticos dos jogadores.</p>
+        </div>
+        <div class="actions">
+          <button id="refreshBtn" class="btn secondary" type="button">Recarregar dados</button>
+          <button id="downloadBtn" class="btn" type="button" disabled>Download PNG</button>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="field">
+          <label for="matchSelect">Jogo do torneio</label>
+          <select id="matchSelect">
+            <option value="">A carregar jogos...</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="sortSelect">Ordenar prognósticos</label>
+          <select id="sortSelect">
+            <option value="points">Pontos / resultado</option>
+            <option value="name">Nome do jogador</option>
+          </select>
+        </div>
+      </div>
+
+      <p id="statusText" class="status-text" style="margin-top:14px;">A carregar dados do Mundial e do Firebase...</p>
+    </section>
+
+    <section class="capture-wrap">
+      <div id="captureArea" class="capture" aria-live="polite">
+        <div class="capture-inner">
+          <div class="muted-card">Escolhe um jogo acima para gerar o resumo visual.</div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script type="module">
+    const STAGE_LABELS = {
+      groups: 'Fase de grupos',
+      round32: '16 avos',
+      round16: 'Oitavos de final',
+      quarterfinals: 'Quartos de final',
+      semifinals: 'Meias-finais',
+      third_place: 'Jogo do 3.º lugar',
+      final: 'Final'
+    };
+
+    const FIREBASE_CONFIG = {
+      apiKey: 'AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0',
+      authDomain: 'g-games-8a8fc.firebaseapp.com',
+      projectId: 'g-games-8a8fc',
+      storageBucket: 'g-games-8a8fc.firebasestorage.app',
+      messagingSenderId: '689897349449',
+      appId: '1:689897349449:web:536599794579901beb7a98',
+      measurementId: 'G-GTTPJ6G5MD'
+    };
+
+    const FIREBASE_COLLECTION = 'worldcupextra';
+    const FIREBASE_MATCHES_COLLECTION = 'worldcupextraMatches';
+    const DEFAULT_SCORING_RULES = {
+      groupExact: 3,
+      groupOutcome: 1,
+      knockoutInitialExact: 6,
+      knockoutInitialWinner: 2,
+      finalInitialExact: 8,
+      finalInitialWinner: 4,
+      finalInitialMethod: 2
+    };
+
+    const CUSTOM_PLAYER_ICONS = {
+      lion: { label: 'Leão', bg1: '#f59e0b', bg2: '#7c2d12', glyph: '<path d="M26 25l7-9 9 5 9-5 7 9-4 27H30z"/><path d="M31 33c2-7 7-11 11-11s9 4 11 11"/><circle cx="37" cy="38" r="2.2"/><circle cx="47" cy="38" r="2.2"/><path d="M39 44l3 3 3-3"/><path d="M36 49c4 2 8 2 12 0"/>' },
+      wave: { label: 'Água', bg1: '#38bdf8', bg2: '#1d4ed8', glyph: '<path d="M18 46c6 0 6-7 12-7s6 7 12 7 6-7 12-7 6 7 12 7"/><path d="M18 35c6 0 6-7 12-7s6 7 12 7 6-7 12-7 6 7 12 7"/><path d="M42 18c6 7 6 12 0 18-6-6-6-11 0-18z"/>' },
+      buffalo: { label: 'Búfalo', bg1: '#92400e', bg2: '#2d1606', glyph: '<path d="M18 27c8 0 9-10 18-10v7c3-3 6-5 8-5s5 2 8 5v-7c9 0 10 10 18 10-4 2-7 6-8 10H26c-1-4-4-8-8-10z"/><path d="M28 37h28l-3 17H31z"/><circle cx="38" cy="41" r="2.2"/><circle cx="46" cy="41" r="2.2"/><path d="M39 49h6"/>' },
+      elephant: { label: 'Elefante', bg1: '#94a3b8', bg2: '#334155', glyph: '<path d="M23 34c0-10 8-16 19-16h1c11 0 19 6 19 16v8c0 6-4 11-10 13v7h-9v-8h-2c-10 0-18-8-18-18z"/><path d="M42 35c0 5 3 7 7 9 5 2 7 5 7 9 0 3-2 6-4 8"/><path d="M33 33c2 2 4 3 6 3"/><circle cx="35" cy="30" r="2.2"/><path d="M33 42l-3 5m24-5l3 5"/>' },
+      tiger: { label: 'Tigre', bg1: '#fb923c', bg2: '#7c2d12', glyph: '<path d="M24 27l8-10 8 7 2-6 2 6 8-7 8 10-4 27H28z"/><path d="M31 30l3 9m8-13v16m11-12l-3 9"/><circle cx="37" cy="39" r="2.2"/><circle cx="47" cy="39" r="2.2"/><path d="M39 44l3 3 3-3"/><path d="M37 49c4 2 8 2 10 0"/>' },
+      hyena: { label: 'Hiena', bg1: '#a16207', bg2: '#3f2a0f', glyph: '<path d="M25 29l7-10 7 4 5-3 7 3 8-4 5 10-4 24H29z"/><circle cx="37" cy="38" r="2.2"/><circle cx="47" cy="37" r="2.2"/><path d="M37 47c4 3 10 3 14 0"/><path d="M35 48l4-1m4 1l4-1m4 1l4-1"/><path d="M31 33l-3 3m26-4l4 3"/>' },
+      boa: { label: 'Jiboia', bg1: '#22c55e', bg2: '#14532d', glyph: '<path d="M22 44c0-8 5-13 12-13 6 0 8 4 8 7s-2 7-8 7c-4 0-6 3-6 6 0 3 3 5 6 5h16c7 0 12-5 12-11 0-7-5-12-12-12-4 0-7 2-9 5"/><circle cx="25" cy="44" r="5"/><circle cx="23.5" cy="43" r="1.4"/><circle cx="26.5" cy="43" r="1.4"/><path d="M25 48v5"/>' },
+      gator: { label: 'Jacaré', bg1: '#16a34a', bg2: '#14532d', glyph: '<path d="M17 41c8-10 18-15 31-15 6 0 12 1 19 4-7 3-12 7-15 13l-24 1c-4 0-8-1-11-3z"/><path d="M36 33h21"/><path d="M42 38h18"/><path d="M47 44l3 3 3-3 3 3 3-3"/><circle cx="32" cy="31" r="2"/>' },
+      hippo: { label: 'Hipopótamo', bg1: '#64748b', bg2: '#1e293b', glyph: '<path d="M19 36c0-11 10-18 23-18s23 7 23 18v6c0 7-5 12-12 12H31c-7 0-12-5-12-12z"/><path d="M27 39h30v11H27z"/><circle cx="37" cy="33" r="2.2"/><circle cx="47" cy="33" r="2.2"/><circle cx="37" cy="44" r="1.8"/><circle cx="47" cy="44" r="1.8"/>' },
+      eagle: { label: 'Águia', bg1: '#fbbf24', bg2: '#78350f', glyph: '<path d="M22 44c7-12 16-19 29-19 7 0 12 2 18 7-5 1-8 3-12 7l-5 6H31z"/><path d="M50 35l12 2-8 6"/><circle cx="39" cy="31" r="2.1"/><path d="M25 48l8-7m10 4l8-6"/>' },
+      wolf: { label: 'Lobo', bg1: '#cbd5e1', bg2: '#334155', glyph: '<path d="M24 28l8-12 8 9 2-7 2 7 8-9 8 12-5 25H29z"/><circle cx="37" cy="39" r="2.2"/><circle cx="47" cy="39" r="2.2"/><path d="M39 45l3-3 3 3"/><path d="M36 50c5 2 9 2 12 0"/>' },
+      rhino: { label: 'Rinoceronte', bg1: '#9ca3af', bg2: '#374151', glyph: '<path d="M20 42c0-9 8-16 21-16 9 0 16 2 24 8l-8 3v13H30c-6 0-10-3-10-8z"/><path d="M57 30l9-8-2 10"/><circle cx="34" cy="31" r="2.1"/><path d="M29 50h19"/>' },
+      cobra: { label: 'Cobra', bg1: '#10b981', bg2: '#064e3b', glyph: '<path d="M42 17c10 0 18 7 18 17 0 8-5 13-12 16v9H36v-9c-7-3-12-8-12-16 0-10 8-17 18-17z"/><circle cx="36" cy="32" r="2.1"/><circle cx="48" cy="32" r="2.1"/><path d="M42 38v10"/><path d="M42 48l-2 4m2-4l2 4"/>' },
+      shark: { label: 'Tubarão', bg1: '#38bdf8', bg2: '#0f172a', glyph: '<path d="M15 43c8-11 18-17 32-17 6 0 12 2 18 5l7 2-7 4 7 6c-6 3-12 5-18 5-14 0-24-5-32-13z"/><path d="M39 27l8-12 5 13"/><path d="M23 43l-8-7v14z"/><circle cx="47" cy="35" r="2"/><path d="M54 42c-4 2-8 3-13 3"/>' },
+      falcon: { label: 'Falcão', bg1: '#60a5fa', bg2: '#172554', glyph: '<path d="M20 46c7-14 17-22 29-22 8 0 13 2 19 7l-14 3-5 8-6 7H27z"/><path d="M49 34l13 2-7 5"/><circle cx="39" cy="30" r="2"/><path d="M32 48l8-7"/>' },
+      panther: { label: 'Pantera', bg1: '#475569', bg2: '#020617', glyph: '<path d="M24 28l8-11 8 8 2-6 2 6 8-8 8 11-5 26H29z"/><circle cx="37" cy="39" r="2.2"/><circle cx="47" cy="39" r="2.2"/><path d="M39 45l3 2 3-2"/><path d="M36 50c4 1 8 1 12 0"/>' },
+      bear: { label: 'Urso', bg1: '#92400e', bg2: '#422006', glyph: '<circle cx="31" cy="25" r="5"/><circle cx="53" cy="25" r="5"/><path d="M22 37c0-11 9-18 20-18s20 7 20 18v6c0 6-5 11-11 11H33c-6 0-11-5-11-11z"/><circle cx="37" cy="36" r="2.2"/><circle cx="47" cy="36" r="2.2"/><path d="M39 44l3 2 3-2"/>' },
+      fox: { label: 'Raposa', bg1: '#f97316', bg2: '#7c2d12', glyph: '<path d="M22 28l10-12 10 10 10-10 10 12-8 26H30z"/><circle cx="37" cy="38" r="2.2"/><circle cx="47" cy="38" r="2.2"/><path d="M39 45l3 3 3-3"/><path d="M34 50l8-5 8 5"/>' },
+      owl: { label: 'Coruja', bg1: '#8b5cf6', bg2: '#312e81', glyph: '<path d="M27 25l7-8 8 7 8-7 7 8v23c0 4-3 7-7 7H34c-4 0-7-3-7-7z"/><circle cx="36" cy="35" r="5"/><circle cx="48" cy="35" r="5"/><circle cx="36" cy="35" r="1.8"/><circle cx="48" cy="35" r="1.8"/><path d="M42 42l-3 4h6z"/>' },
+      bull: { label: 'Touro', bg1: '#ef4444', bg2: '#450a0a', glyph: '<path d="M18 27c8 0 10-10 19-10v7c2-3 4-4 5-4s3 1 5 4v-7c9 0 11 10 19 10-5 2-8 6-9 10H27c-1-4-4-8-9-10z"/><path d="M28 37h28l-4 17H32z"/><circle cx="38" cy="41" r="2.2"/><circle cx="46" cy="41" r="2.2"/><path d="M39 49h6"/>' }
+    };
+
+    const CUSTOM_PLAYER_ICON_ALIASES = {
+      leao: 'lion', 'leão': 'lion', agua: 'wave', 'água': 'wave', bufalo: 'buffalo', 'búfalo': 'buffalo',
+      elefante: 'elephant', tigre: 'tiger', hiena: 'hyena', jiboia: 'boa', jibóia: 'boa',
+      jacare: 'gator', jacaré: 'gator', hipopotamo: 'hippo', hipopótamo: 'hippo', aguia: 'eagle', 'águia': 'eagle',
+      lobo: 'wolf', rinoceronte: 'rhino', cobra: 'cobra', tubarao: 'shark', tubarão: 'shark',
+      falcao: 'falcon', falcão: 'falcon', pantera: 'panther', urso: 'bear', raposa: 'fox', coruja: 'owl', touro: 'bull'
+    };
+
+    const state = {
+      matches: [],
+      flagsByName: new Map(),
+      flagUrlCache: new Map(),
+      officialResults: {},
+      predictions: [],
+      scoringRules: { ...DEFAULT_SCORING_RULES },
+      selectedMatchId: '',
+      firebaseReady: false
+    };
+
+    const matchSelect = document.querySelector('#matchSelect');
+    const sortSelect = document.querySelector('#sortSelect');
+    const statusText = document.querySelector('#statusText');
+    const captureArea = document.querySelector('#captureArea');
+    const downloadBtn = document.querySelector('#downloadBtn');
+    const refreshBtn = document.querySelector('#refreshBtn');
+
+    function escapeHtml(text) {
+      return String(text ?? '').replace(/[&<>"']/g, char => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+      }[char]));
+    }
+
+    function slugify(text) {
+      return String(text || '')
+        .trim()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+    }
+
+    function normalizeTeamName(name) {
+      return String(name || '')
+        .trim()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+
+    function participantIconKey(source) {
+      const raw = typeof source === 'string'
+        ? source
+        : (source?.icon || source?.participantIcon || source?.playerIcon || source?.animalIcon || '');
+      const normalized = String(raw || '').trim().toLowerCase().replace(/^fa-/, '').replace(/\s+/g, '-').replace(/_/g, '-');
+      return CUSTOM_PLAYER_ICON_ALIASES[normalized] || normalized;
+    }
+
+    function participantIconMeta(source) {
+      const key = participantIconKey(source);
+      return CUSTOM_PLAYER_ICONS[key] || null;
+    }
+
+    function renderParticipantIcon(iconSource) {
+      const meta = participantIconMeta(iconSource);
+      if (!meta) return '<span class="participant-icon" aria-hidden="true">👤</span>';
+      const key = participantIconKey(iconSource);
+      return `<span class="participant-icon" title="${escapeHtml(meta.label)}" aria-hidden="true"><svg viewBox="0 0 84 84" role="img" focusable="false"><defs><linearGradient id="grad-${escapeHtml(key)}" x1="0" x2="1" y1="0" y2="1"><stop offset="0%" stop-color="${meta.bg1}"/><stop offset="100%" stop-color="${meta.bg2}"/></linearGradient></defs><rect x="4" y="4" width="76" height="76" rx="24" fill="url(#grad-${escapeHtml(key)})"/><circle cx="42" cy="42" r="31" fill="rgba(255,255,255,.08)"/><g fill="none" stroke="#f8fbff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round">${meta.glyph}</g></svg></span>`;
+    }
+
+    function renderParticipantIdentity(name, iconSource) {
+      return `<span class="participant-ident">${renderParticipantIcon(iconSource)}<span class="participant-ident__name">${escapeHtml(name || 'Participante')}</span></span>`;
+    }
+
+    function formatDate(dateStr, timeStr) {
+      if (!dateStr) return 'Data por definir';
+      const date = new Date(`${dateStr}T${timeStr || '12:00'}:00`);
+      return new Intl.DateTimeFormat('pt-PT', {
+        weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+      }).format(date);
+    }
+
+    function sameTeamName(a, b) {
+      return normalizeTeamName(a) === normalizeTeamName(b);
+    }
+
+    function resultHasScore(result) {
+      return !!result && result.homeGoals != null && result.homeGoals !== '' && result.awayGoals != null && result.awayGoals !== '';
+    }
+
+    function isOfficialResultLive(result) {
+      if (!result) return false;
+      if (result.finished === true || result._finished === true || result.status === 'finished') return false;
+      return !!(result.live === true || result._live === true || result.status === 'live');
+    }
+
+    function isOfficialResultFinished(result) {
+      if (!result) return false;
+      if (result.finished === true || result._finished === true || result.status === 'finished') return true;
+      return !!(resultHasScore(result) && !isOfficialResultLive(result) && (result.status === 'official' || result.type === 'officialResult' || result.status === 'finished'));
+    }
+
+    function shouldTrackMatchDocAsOfficial(doc) {
+      if (!doc) return false;
+      const isLive = isOfficialResultLive(doc);
+      const hasG = isLive 
+        ? (doc.homeGoalsLive != null && doc.homeGoalsLive !== '') 
+        : (doc.homeGoals != null && doc.homeGoals !== '');
+      const hasAwayG = isLive 
+        ? (doc.awayGoalsLive != null && doc.awayGoalsLive !== '') 
+        : (doc.awayGoals != null && doc.awayGoals !== '');
+      return (isLive || isOfficialResultFinished(doc) || resultHasScore(doc)) && hasG && hasAwayG;
+    }
+
+    function normalizeMatchStateDoc(docId, raw = {}) {
+      const matchId = Number(raw.matchId ?? String(docId || '').replace(/^match_/, ''));
+      const isLive = !!(raw.live === true || raw.status === 'live');
+      return {
+        id: docId,
+        ...raw,
+        matchId: Number.isFinite(matchId) ? matchId : null,
+        documentId: raw.documentId || raw.matchDocId || docId,
+        homeGoals: isLive ? (raw.homeGoalsLive ?? raw.homeGoals ?? null) : (raw.homeGoals ?? null),
+        awayGoals: isLive ? (raw.awayGoalsLive ?? raw.awayGoals ?? null) : (raw.awayGoals ?? null)
+      };
+    }
+
+    function actualOutcome(match) {
+      if (!resultHasScore(match)) return '';
+      const home = Number(match.homeGoals);
+      const away = Number(match.awayGoals);
+      if (home > away) return 'home';
+      if (away > home) return 'away';
+      return 'draw';
+    }
+
+    function predictionOutcome(pred) {
+      if (!pred) return '';
+      const home = Number(pred.homeGoals);
+      const away = Number(pred.awayGoals);
+      if (home > away) return 'home';
+      if (away > home) return 'away';
+      return 'draw';
+    }
+
+    function getWinnerTeamFromScore(match) {
+      if (!resultHasScore(match)) return '';
+      const home = Number(match.homeGoals);
+      const away = Number(match.awayGoals);
+      if (home > away) return match.homeTeam || match.home;
+      if (away > home) return match.awayTeam || match.away;
+      return 'Empate';
+    }
+
+    function teamsMatchPrediction(pred, official) {
+      if (!pred || !official) return false;
+      if ((pred.stage || official.stage) === 'groups') return true;
+      return sameTeamName(pred.homeTeam || pred.home, official.homeTeam || official.home) && sameTeamName(pred.awayTeam || pred.away, official.awayTeam || official.away);
+    }
+
+    function scoreOnePrediction(pred, official) {
+      if (!pred || !official || pred.homeGoals == null || pred.awayGoals == null || pred.homeGoals === '' || pred.awayGoals === '' || !resultHasScore(official)) {
+        return { points: 0, exact: false, outcomeHit: false, played: false };
+      }
+
+      const ph = Number(pred.homeGoals);
+      const pa = Number(pred.awayGoals);
+      const oh = Number(official.homeGoals);
+      const oa = Number(official.awayGoals);
+      const stage = pred.stage || official.stage || 'groups';
+      const teamsMatch = teamsMatchPrediction(pred, official);
+      const exact = teamsMatch && ph === oh && pa === oa;
+      const actual = actualOutcome(official);
+      const predicted = predictionOutcome(pred);
+      const outcomeHit = teamsMatch && actual === predicted;
+      const officialWinner = getWinnerTeamFromScore(official);
+      const winnerHit = pred.winnerTeam && officialWinner !== 'Empate' && sameTeamName(pred.winnerTeam, officialWinner);
+
+      let points = 0;
+      if (stage === 'groups') {
+        points = exact ? Number(state.scoringRules.groupExact) : outcomeHit ? Number(state.scoringRules.groupOutcome) : 0;
+      } else if (stage === 'final') {
+        points = exact ? Number(state.scoringRules.finalInitialExact) : winnerHit ? Number(state.scoringRules.finalInitialWinner) : outcomeHit ? Number(state.scoringRules.finalInitialMethod) : 0;
+      } else {
+        points = exact ? Number(state.scoringRules.knockoutInitialExact) : outcomeHit ? Number(state.scoringRules.knockoutInitialWinner) : 0;
+      }
+
+      return {
+        points,
+        exact,
+        outcomeHit: outcomeHit || winnerHit,
+        played: true
+      };
+    }
+
+    async function dataUrlFromSvgUrl(url) {
+      if (!url) return '';
+      if (state.flagUrlCache.has(url)) return state.flagUrlCache.get(url);
+      try {
+        const response = await fetch(url, { mode: 'cors' });
+        const text = await response.text();
+        const encoded = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(text)}`;
+        state.flagUrlCache.set(url, encoded);
+        return encoded;
+      } catch (error) {
+        console.warn('Falha ao converter bandeira para data URL:', url, error);
+        state.flagUrlCache.set(url, url);
+        return url;
+      }
+    }
+
+    async function getFlagSrc(teamName) {
+      const key = normalizeTeamName(teamName);
+      const item = state.flagsByName.get(key);
+      if (!item?.flagRound) return '';
+      return dataUrlFromSvgUrl(item.flagRound);
+    }
+
+    async function loadFlags() {
+      const response = await fetch('./mundial2026_bandeiras_redondas.json');
+      if (!response.ok) throw new Error('Não foi possível carregar o ficheiro das bandeiras.');
+      const payload = await response.json();
+
+      // Aceita os dois formatos:
+      // 1) array direto: [ { nome, flagRound... } ]
+      // 2) objeto: { teams: [ { nome, flagRound... } ] }
+      const items = Array.isArray(payload)
+        ? payload
+        : (Array.isArray(payload?.teams) ? payload.teams : []);
+
+      state.flagsByName = new Map();
+
+      items.forEach(item => {
+        if (item?.nome) state.flagsByName.set(normalizeTeamName(item.nome), item);
+        if (item?.name) state.flagsByName.set(normalizeTeamName(item.name), item);
+        if (item?.nameEn) state.flagsByName.set(normalizeTeamName(item.nameEn), item);
+        if (item?.id) state.flagsByName.set(normalizeTeamName(item.id), item);
+        (item?.aliases || []).forEach(alias => {
+          state.flagsByName.set(normalizeTeamName(alias), item);
+        });
+      });
+    }
+
+    async function loadMatches() {
+      const response = await fetch('./matches.json');
+      if (!response.ok) throw new Error('Não foi possível carregar os jogos.');
+      const payload = await response.json();
+      state.matches = Array.isArray(payload?.matches) ? payload.matches : [];
+    }
+
+    async function initFirebase() {
+      const appModule = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js');
+      const firestoreModule = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js');
+      const app = appModule.initializeApp(FIREBASE_CONFIG);
+      const db = firestoreModule.getFirestore(app);
+      state.firebase = {
+        db,
+        ...firestoreModule
+      };
+      state.firebaseReady = true;
+    }
+
+    async function loadScoringRules() {
+      if (!state.firebaseReady) return;
+      try {
+        const { db, doc, getDoc } = state.firebase;
+        const snap = await getDoc(doc(db, 'settings', 'worldcupScoringRules'));
+        if (snap.exists()) {
+          const raw = snap.data();
+          Object.keys(DEFAULT_SCORING_RULES).forEach(key => {
+            const value = Number(raw?.[key]);
+            if (Number.isFinite(value) && value >= 0) state.scoringRules[key] = value;
+          });
+        }
+      } catch (error) {
+        console.warn('Não foi possível carregar as regras de pontuação. A usar padrão.', error);
+      }
+    }
+
+    async function loadOfficialMatchStateDocs() {
+      if (!state.firebaseReady) return { allDocs: [], officialByMatchId: {} };
+      const { db, collection, query, orderBy, getDocs } = state.firebase;
+      const collectionRef = collection(db, FIREBASE_COLLECTION);
+      const matchesCollectionRef = collection(db, FIREBASE_MATCHES_COLLECTION);
+      let legacySnapshot;
+      let matchesSnapshot = null;
+
+      try {
+        legacySnapshot = await getDocs(query(collectionRef, orderBy('clientTimestamp', 'desc')));
+      } catch {
+        legacySnapshot = await getDocs(collectionRef);
+      }
+      try {
+        matchesSnapshot = await getDocs(matchesCollectionRef);
+      } catch (error) {
+        console.warn('Não foi possível carregar worldcupextraMatches. A usar fallback legacy.', error);
+      }
+
+      const allDocs = legacySnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+      const legacyOfficialDocs = allDocs
+        .filter(doc => doc.status === 'official' || doc.type === 'officialResult' || doc.status === 'finished')
+        .filter(doc => doc.matchId != null || doc.id?.startsWith?.('official-match-'))
+        .map(doc => [String(doc.matchId ?? String(doc.id).replace('official-match-', '')), doc]);
+
+      const matchStateDocs = (matchesSnapshot?.docs || [])
+        .map(docSnap => normalizeMatchStateDoc(docSnap.id, docSnap.data()))
+        .filter(shouldTrackMatchDocAsOfficial)
+        .map(doc => [String(doc.matchId), doc]);
+
+      return {
+        allDocs,
+        officialByMatchId: Object.fromEntries([...legacyOfficialDocs, ...matchStateDocs])
+      };
+    }
+
+    async function loadPredictionsAndResults() {
+      const loaded = await loadOfficialMatchStateDocs();
+      state.officialResults = loaded.officialByMatchId;
+      state.predictions = loaded.allDocs
+        .filter(doc => doc.status !== 'official' && doc.type !== 'officialResult' && Array.isArray(doc.matches))
+        .map(doc => ({
+          id: doc.id,
+          participantName: doc.participantName || doc.name || 'Participante',
+          icon: doc.icon || doc.participantIcon || doc.playerIcon || '',
+          matches: Array.isArray(doc.matches) ? doc.matches : []
+        }));
+    }
+
+    function getOfficialResult(matchId) {
+      return state.officialResults[String(matchId)] || null;
+    }
+
+    function getPredictionForMatch(player, matchId) {
+      return (player.matches || []).find(item => String(item.id) === String(matchId)) || null;
+    }
+
+    function populateMatchSelect() {
+      const options = ['<option value="">Escolhe um jogo...</option>'];
+      state.matches.forEach(match => {
+        const stageLabel = STAGE_LABELS[match.stage] || match.stage || 'Jogo';
+        const groupLabel = match.group ? ` · Grupo ${escapeHtml(match.group)}` : '';
+        const label = `Jogo ${match.id} · ${match.home} vs ${match.away} · ${stageLabel}${groupLabel}`;
+        options.push(`<option value="${match.id}">${escapeHtml(label)}</option>`);
+      });
+      matchSelect.innerHTML = options.join('');
+      if (state.selectedMatchId) matchSelect.value = state.selectedMatchId;
+    }
+
+    function matchStatusInfo(official) {
+      if (!official || !resultHasScore(official)) {
+        return { key: 'future', label: 'Por jogar', badgeClass: 'future' };
+      }
+      if (isOfficialResultLive(official)) {
+        return { key: 'live', label: 'Ao vivo', badgeClass: 'live' };
+      }
+      return { key: 'finished', label: 'Terminado', badgeClass: 'finished' };
+    }
+
+    async function renderSelectedMatch() {
+      const matchId = state.selectedMatchId;
+      if (!matchId) {
+        captureArea.innerHTML = '<div class="capture-inner"><div class="muted-card">Escolhe um jogo acima para gerar o resumo visual.</div></div>';
+        downloadBtn.disabled = true;
+        return;
+      }
+
+      const match = state.matches.find(item => String(item.id) === String(matchId));
+      if (!match) {
+        captureArea.innerHTML = '<div class="capture-inner"><div class="muted-card">Esse jogo não foi encontrado.</div></div>';
+        downloadBtn.disabled = true;
+        return;
+      }
+
+      const official = getOfficialResult(match.id);
+      const status = matchStatusInfo(official);
+      const homeFlag = await getFlagSrc(match.home);
+      const awayFlag = await getFlagSrc(match.away);
+      const scoreText = resultHasScore(official)
+        ? `${Number(official.homeGoals)} - ${Number(official.awayGoals)}`
+        : 'VS';
+      const competitionBadge = match.group ? `Grupo ${match.group}` : (STAGE_LABELS[match.stage] || 'Eliminatória');
+
+      const picks = state.predictions.map(player => {
+        const prediction = getPredictionForMatch(player, match.id);
+        const score = prediction && resultHasScore(official) ? scoreOnePrediction(prediction, official) : null;
+        return {
+          player,
+          prediction,
+          score,
+          sortPoints: score?.points ?? -1
+        };
+      }).filter(item => item.prediction);
+
+      const sorted = [...picks].sort((a, b) => {
+        if (sortSelect.value === 'name') {
+          return (a.player.participantName || '').localeCompare(b.player.participantName || '', 'pt-PT');
+        }
+        return (b.sortPoints - a.sortPoints) || (a.player.participantName || '').localeCompare(b.player.participantName || '', 'pt-PT');
+      });
+
+      const winners = (() => {
+        if (status.key !== 'finished') return [];
+        const maxPoints = Math.max(...sorted.map(item => item.score?.points ?? -1), -1);
+        if (maxPoints <= 0) return [];
+        return sorted.filter(item => (item.score?.points ?? -1) === maxPoints);
+      })();
+
+      const winnersHtml = status.key === 'finished'
+        ? winners.length
+          ? `<div class="winner-grid">${winners.map((item, index) => `
+              <article class="winner-card">
+                <div class="winner-main">
+                  ${renderParticipantIdentity(item.player.participantName, item.player.icon)}
+                  <div class="winner-info">
+                    <span class="winner-rank">🏆 Melhor pontuação deste jogo${winners.length > 1 ? ` · Empate #${index + 1}` : ''}</span>
+                  </div>
+                </div>
+                <span class="winner-points">${item.score.points} pts</span>
+              </article>
+            `).join('')}</div>`
+          : '<div class="muted-card">Neste jogo ninguém somou pontos.</div>'
+        : status.key === 'live'
+          ? '<div class="muted-card">A pontuação final aparecerá quando o jogo terminar.</div>'
+          : '<div class="muted-card">Os melhores pontuadores aparecerão aqui quando o jogo terminar.</div>';
+
+      const pickCards = await Promise.all(sorted.map(async item => {
+        const pred = item.prediction;
+        const homePredFlag = await getFlagSrc(pred.homeTeam || match.home);
+        const awayPredFlag = await getFlagSrc(pred.awayTeam || match.away);
+        let cardClass = 'wait';
+        let pillClass = 'wait';
+        let pillText = 'Por jogar';
+        let resultLabel = 'Aguarda resultado oficial';
+
+        if (status.key === 'live' && item.score) {
+          cardClass = item.score.points > 0 ? 'live' : 'wait';
+          pillClass = 'live';
+          pillText = `${item.score.points} pts provisórios`;
+          resultLabel = item.score.points > 0 ? 'A acertar por agora' : 'Ainda sem pontuar';
+        } else if (status.key === 'finished' && item.score) {
+          cardClass = item.score.points > 0 ? 'ok' : 'bad';
+          pillClass = item.score.points > 0 ? 'ok' : 'bad';
+          pillText = `${item.score.points} pts`;
+          if (item.score.exact) resultLabel = 'Acertou no resultado exato';
+          else if (item.score.outcomeHit) resultLabel = 'Acertou no vencedor / desfecho';
+          else resultLabel = 'Falhou';
+        }
+
+        return `
+          <article class="pick-card ${cardClass}">
+            <div class="pick-top">
+              ${renderParticipantIdentity(item.player.participantName, item.player.icon)}
+              <span class="pick-points ${pillClass}">${pillText}</span>
+            </div>
+            <div class="mini-match">
+              <div class="mini-line">
+                <div class="mini-team home">
+                  ${homePredFlag ? `<img class="mini-flag" src="${homePredFlag}" alt="Bandeira ${escapeHtml(pred.homeTeam || match.home)}" crossorigin="anonymous">` : ''}
+                  <span>${escapeHtml(pred.homeTeam || match.home)}</span>
+                </div>
+                <div class="mini-score">${Number(pred.homeGoals)} - ${Number(pred.awayGoals)}</div>
+                <div class="mini-team away">
+                  ${awayPredFlag ? `<img class="mini-flag" src="${awayPredFlag}" alt="Bandeira ${escapeHtml(pred.awayTeam || match.away)}" crossorigin="anonymous">` : ''}
+                  <span>${escapeHtml(pred.awayTeam || match.away)}</span>
+                </div>
+              </div>
+              <div class="mini-status">
+                <span>${escapeHtml(resultLabel)}</span>
+                <span>${escapeHtml(STAGE_LABELS[pred.stage] || STAGE_LABELS[match.stage] || 'Jogo')}</span>
+              </div>
+            </div>
+          </article>
+        `;
+      }));
+
+      captureArea.innerHTML = `
+        <div class="capture-inner">
+          <div class="top-strip">
+            <div class="brand">
+              <div class="brand-mark"><img src="./favicon-source.png" alt="GGames Mundial 2026"></div>
+              <div>
+                <h2>Mundial 2026 · Resumo do jogo</h2>
+                <p>Giria Games - onde a normalidade é suspeita...</p>
+              </div>
+            </div>
+            <div class="stage-badges">
+              <span class="badge">${escapeHtml(STAGE_LABELS[match.stage] || 'Jogo')}</span>
+              <span class="badge">${escapeHtml(competitionBadge)}</span>
+              <span class="badge ${status.badgeClass}">${escapeHtml(status.label)}</span>
+            </div>
+          </div>
+
+          <section class="scoreboard">
+            <div class="team-box home">
+              ${homeFlag ? `<img class="flag" src="${homeFlag}" alt="Bandeira ${escapeHtml(match.home)}" crossorigin="anonymous">` : ''}
+              <div>
+                <h3 class="team-name">${escapeHtml(match.home)}</h3>
+                <p class="team-sub">${escapeHtml(match.country || '')}</p>
+              </div>
+            </div>
+
+            <div class="score-center">
+              <div class="score-main">${status.key === 'live' ? '<span class="live-dot" aria-hidden="true"></span>' : ''}${escapeHtml(scoreText)}</div>
+              <div class="score-note">${escapeHtml(formatDate(match.date, match.time))}${match.venue ? ` · ${escapeHtml(match.venue)}` : ''}${match.city ? ` · ${escapeHtml(match.city)}` : ''}</div>
+            </div>
+
+            <div class="team-box away">
+              <div>
+                <h3 class="team-name">${escapeHtml(match.away)}</h3>
+                <p class="team-sub">${escapeHtml(match.country || '')}</p>
+              </div>
+              ${awayFlag ? `<img class="flag" src="${awayFlag}" alt="Bandeira ${escapeHtml(match.away)}" crossorigin="anonymous">` : ''}
+            </div>
+          </section>
+
+          <section class="section">
+            <div class="section-header">
+              <div>
+                <h3 class="section-title">Melhores pontuações neste jogo</h3>
+                <p class="section-subtitle">Jogadores que fizeram mais pontos neste encontro.</p>
+              </div>
+            </div>
+            ${winnersHtml}
+          </section>
+
+          <section class="section">
+            <div class="section-header">
+              <div>
+                <h3 class="section-title">Prognósticos dos jogadores</h3>
+                <p class="section-subtitle">${sorted.length} prognóstico(s) encontrado(s) para este jogo.</p>
+              </div>
+            </div>
+            ${pickCards.length ? `<div class="pick-grid">${pickCards.join('')}</div>` : '<div class="muted-card">Ainda não existem prognósticos gravados para este jogo.</div>'}
+          </section>
+        </div>
+      `;
+
+      downloadBtn.disabled = false;
+    }
+
+    async function downloadPng() {
+      if (!state.selectedMatchId) return;
+      downloadBtn.disabled = true;
+      const originalText = downloadBtn.textContent;
+      downloadBtn.textContent = 'A gerar PNG...';
+      try {
+        const canvas = await window.html2canvas(captureArea, {
+          backgroundColor: null,
+          useCORS: true,
+          allowTaint: false,
+          scale: 2,
+          logging: false
+        });
+        const match = state.matches.find(item => String(item.id) === String(state.selectedMatchId));
+        const fileName = `mundial2026-${slugify(match?.home || 'jogo')}-vs-${slugify(match?.away || 'jogo')}.png`;
+        const link = document.createElement('a');
+        link.href = canvas.toDataURL('image/png');
+        link.download = fileName;
+        link.click();
+      } catch (error) {
+        console.error(error);
+        alert('Não foi possível gerar o PNG. Confirma se as bandeiras carregaram e tenta novamente.');
+      } finally {
+        downloadBtn.disabled = false;
+        downloadBtn.textContent = originalText;
+      }
+    }
+
+    async function reloadAll() {
+      statusText.textContent = 'A carregar dados do Mundial e do Firebase...';
+      downloadBtn.disabled = true;
+      try {
+        await loadMatches();
+        await loadFlags();
+        if (!state.firebaseReady) await initFirebase();
+        await loadScoringRules();
+        await loadPredictionsAndResults();
+        populateMatchSelect();
+        statusText.textContent = `Jogos carregados: ${state.matches.length} · Prognósticos carregados: ${state.predictions.length}`;
+        await renderSelectedMatch();
+      } catch (error) {
+        console.error(error);
+        statusText.textContent = 'Erro ao carregar dados. Serve esta página num servidor web (ex.: Live Server) e confirma o acesso ao Firebase.';
+        captureArea.innerHTML = '<div class="capture-inner"><div class="muted-card">Não foi possível carregar os dados desta página. Verifica a consola e confirma que estás a abrir a página num servidor web.</div></div>';
+      }
+    }
+
+    matchSelect.addEventListener('change', async event => {
+      state.selectedMatchId = event.target.value;
+      await renderSelectedMatch();
+    });
+
+    sortSelect.addEventListener('change', renderSelectedMatch);
+    refreshBtn.addEventListener('click', reloadAll);
+    downloadBtn.addEventListener('click', downloadPng);
+
+    reloadAll();
+  </script>
+</body>
+</html>
