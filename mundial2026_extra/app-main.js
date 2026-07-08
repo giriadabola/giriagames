@@ -284,6 +284,28 @@ function bindEvents() {
       return;
     }
 
+    const historyPpToggle = event.target.closest('[data-history-pp-toggle]');
+    if (historyPpToggle) {
+      event.stopPropagation();
+      const panel = document.querySelector('[data-history-pp-panel]');
+      if (panel) {
+        const willOpen = panel.hidden;
+        panel.hidden = !willOpen;
+        historyPpToggle.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+        if (willOpen) {
+          panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }
+      return;
+    }
+
+    const ppPlayerBtn = event.target.closest('[data-pp-player]');
+    if (ppPlayerBtn) {
+      event.stopPropagation();
+      openGgamesMatchupPoints(ppPlayerBtn.dataset.ppPlayer);
+      return;
+    }
+
     const livePlayerBtn = event.target.closest('[data-live-player]');
     if (livePlayerBtn) {
       event.stopPropagation();

@@ -175,7 +175,7 @@ function renderGgamesTable(options = {}) {
             </thead>
             <tbody>
               ${rows.map(row => `<tr class="ggames-player-row" data-live-player="${escapeHtml(row.id)}" title="Ver histórico de ${escapeHtml(row.name)}">
-                <td>${row.rank}</td><td><button type="button" class="ggames-player-link" data-live-player="${escapeHtml(row.id)}"><strong>${renderParticipantIdentity(row.name, row.icon, 'participant-ident--compact')}</strong></button></td><td><strong>${row.points}</strong></td><td>${row.matchupPoints || 0}</td><td>${row.correctPredictions}</td><td>${row.failedPredictions}</td><td title="Golos marcados">${row.goalsHit}</td><td title="Golos falhados">${row.goalsMissed}</td><td>${row.winsHit}</td><td>${row.drawsHit}</td><td>${row.lossesHit}</td>
+                <td>${row.rank}</td><td><button type="button" class="ggames-player-link" data-live-player="${escapeHtml(row.id)}"><strong>${renderParticipantIdentity(row.name, row.icon, 'participant-ident--compact')}</strong></button></td><td><strong>${row.points}</strong></td><td><button type="button" class="ggames-pp-btn" data-pp-player="${escapeHtml(row.id)}" title="Ver jogos PP de ${escapeHtml(row.name)}">${row.matchupPoints || 0}</button></td><td>${row.correctPredictions}</td><td>${row.failedPredictions}</td><td title="Golos marcados">${row.goalsHit}</td><td title="Golos falhados">${row.goalsMissed}</td><td>${row.winsHit}</td><td>${row.drawsHit}</td><td>${row.lossesHit}</td>
               </tr>`).join('')}
             </tbody>
           </table>

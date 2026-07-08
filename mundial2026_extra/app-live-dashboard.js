@@ -1166,6 +1166,49 @@ function renderLiveGiriaBattles() {
 }
 
 
+function openGgamesMatchupPoints(playerId) {
+  const rows = calculateGgamesTable();
+  const row = rows.find(r => String(r.id) === String(playerId));
+  if (!row) {
+    openModal('<h2>Pontos PP</h2><p class="modal-muted">Não foi possível encontrar este jogador.</p>');
+    return;
+  }
+
+  const entries = Array.isArray(row.matchupPointEntries)
+    ? [...row.matchupPointEntries].sort((a, b) => Number(a.matchId) - Number(b.matchId))
+    : [];
+
+  const detailRows = entries.map(entry => `
+      <tr>
+        <td data-label="Jogo">${escapeHtml(entry.matchId)}</td>
+        <td data-label="Confronto">${escapeHtml(entry.homeTeam)} vs ${escapeHtml(entry.awayTeam)}</td>
+        <td data-label="Fase">${escapeHtml(entry.stageLabel || STAGE_LABELS[entry.stage] || entry.stage || '')}</td>
+        <td data-label="Data">${escapeHtml(entry.date || '')} ${escapeHtml(entry.time || '')}</td>
+        <td data-label="PP"><strong>${escapeHtml(entry.points)}</strong></td>
+      </tr>
+    `).join('');
+
+  openModal(`
+    <div class="modal-head">
+      <div>
+        <p class="eyebrow small">Tabela Ggames</p>
+        <h2>${renderParticipantIdentity(`Pontos PP de ${row.name}`, row.icon, 'participant-ident--title')}</h2>
+        <p class="modal-muted">Jogos em que o confronto previsto na fase 1 aconteceu mesmo.</p>
+      </div>
+    </div>
+    <section class="player-history-summary">
+      <article><span>Pontos PP</span><strong>${row.matchupPoints || 0}</strong></article>
+      <article><span>Jogos PP</span><strong>${entries.length}</strong></article>
+    </section>
+    <div class="table-scroll history-scroll">
+      <table class="ggames-table player-history-table">
+        <thead><tr><th>Jogo</th><th>Confronto</th><th>Fase</th><th>Data</th><th>PP</th></tr></thead>
+        <tbody>${detailRows || '<tr><td colspan="5">Este jogador ainda não tem jogos com pontos PP.</td></tr>'}</tbody>
+      </table>
+    </div>
+  `);
+}
+
 function openGgamesPlayerHistory(playerId) {
   const rows = calculateGgamesTable();
   const row = rows.find(r => String(r.id) === String(playerId));
@@ -1215,6 +1258,18 @@ function openGgamesPlayerHistory(playerId) {
     if (!displayPred) return null;
     return { match, pred, displayPred, override };
   }).filter(Boolean);
+  const ppEntries = Array.isArray(row.matchupPointEntries)
+    ? [...row.matchupPointEntries].sort((a, b) => Number(a.matchId) - Number(b.matchId))
+    : [];
+  const ppRows = ppEntries.map(entry => `
+      <tr>
+        <td data-label="Jogo">${escapeHtml(entry.matchId)}</td>
+        <td data-label="Confronto">${escapeHtml(entry.homeTeam)} vs ${escapeHtml(entry.awayTeam)}</td>
+        <td data-label="Fase">${escapeHtml(entry.stageLabel || STAGE_LABELS[entry.stage] || entry.stage || '')}</td>
+        <td data-label="Data">${escapeHtml(entry.date || '')} ${escapeHtml(entry.time || '')}</td>
+        <td data-label="PP"><strong>${escapeHtml(entry.points)}</strong></td>
+      </tr>
+    `).join('');
   const historyRows = historyEntries.map(({ match, pred, displayPred, override }) => {
     const official = getOfficialResult(match.id);
     const isLive = !!official && isOfficialResultLive(official) && !isOfficialResultFinished(official);
@@ -1272,11 +1327,27 @@ function openGgamesPlayerHistory(playerId) {
     </div>
     <section class="player-history-summary">
       <article><span>Pontos Totais</span><strong>${row.points}</strong></article>
-      <article><span>Pontos BW</span><strong>(${row.battleBonusPoints || 0})</strong></article>
+      <button type="button" class="player-history-summary-card player-history-summary-card--action" data-history-pp-toggle aria-expanded="false">
+        <span>Pontos PP</span>
+        <strong>${row.matchupPoints || 0}</strong>
+      </button>
+      <article><span>Pontos BW</span><strong>${row.battleBonusPoints || 0}</strong></article>
       <article><span>Acertados</span><strong>${row.correctPredictions}</strong></article>
       <article><span>Falhados</span><strong>${row.failedPredictions}</strong></article>
       <article><span>Golos Marcados</span><strong>${row.goalsHit}</strong></article>
       <article><span>Golos Falhados</span><strong>${row.goalsMissed}</strong></article>
+    </section>
+    <section class="history-pp-panel" data-history-pp-panel hidden>
+      <div class="history-pp-head">
+        <h3>Jogos PP</h3>
+        <p class="modal-muted">Lista dos jogos que deram pontos PP a este utilizador.</p>
+      </div>
+      <div class="table-scroll history-scroll">
+        <table class="ggames-table player-history-table">
+          <thead><tr><th>Jogo</th><th>Confronto</th><th>Fase</th><th>Data</th><th>PP</th></tr></thead>
+          <tbody>${ppRows || '<tr><td colspan="5">Este jogador ainda não tem jogos com pontos PP.</td></tr>'}</tbody>
+        </table>
+      </div>
     </section>
     <div class="table-scroll history-scroll">
       <table class="ggames-table player-history-table">

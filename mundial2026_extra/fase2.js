@@ -40,6 +40,14 @@
     'third_place': 'final',
     'final': 'final'
   };
+  const MATCHUP_PP_BY_STAGE = {
+    round32: 2,
+    round16: 2,
+    quarterfinals: 4,
+    semifinals: 6,
+    third_place: 7,
+    final: 10
+  };
 
   const hasStageStarted = (stage) => {
     if (endateworldConfig) {
@@ -278,24 +286,39 @@
     return a && a === b;
   }
 
-  function calculateResolvedRound32MatchupPoints(item) {
-    const bonusPerMatchup = Number(
-      window.scoringRules?.knockoutInitialWinner ??
-      DEFAULT_SCORING_RULES?.knockoutInitialWinner ??
-      2
-    );
+  function matchupPointsForStage(stage) {
+    return Number(MATCHUP_PP_BY_STAGE?.[stage] || 0);
+  }
 
-    return (data?.matches || []).reduce((total, match) => {
-      if (match.stage !== 'round32') return total;
+  function calculateMatchupPointsSummary(item) {
+    return (data?.matches || []).reduce((summary, match) => {
+      if (!KO_STAGES.includes(match.stage)) return summary;
+      const bonusPerMatchup = matchupPointsForStage(match.stage);
+      if (!bonusPerMatchup) return summary;
       const home = resolveOfficialTeam(match, 'home');
       const away = resolveOfficialTeam(match, 'away');
-      if (isTeamUnresolved(home) || isTeamUnresolved(away)) return total;
+      if (isTeamUnresolved(home) || isTeamUnresolved(away)) return summary;
       const pred = findInitialPredictionForMatch(item, match, home, away);
       if (!pred || !sameMatchupAnySide(pred, { homeTeam: home, awayTeam: away })) {
-        return total;
+        return summary;
       }
-      return total + bonusPerMatchup;
-    }, 0);
+      summary.total += bonusPerMatchup;
+      summary.entries.push({
+        matchId: Number(match.id),
+        stage: match.stage,
+        stageLabel: STAGE_LABELS[match.stage] || match.stage,
+        homeTeam: home,
+        awayTeam: away,
+        date: match.date || '',
+        time: match.time || '',
+        points: bonusPerMatchup
+      });
+      return summary;
+    }, { total: 0, entries: [] });
+  }
+
+  function calculateResolvedRound32MatchupPoints(item) {
+    return calculateMatchupPointsSummary(item).total;
   }
 
   function officialWinnerTeam(official) {
@@ -461,7 +484,7 @@
       resultPoints = exact ? (final ? numericRule('finalReformExact') : numericRule('knockoutReformExact')) : 0;
     }
 
-    const matchupBonus = sameMatchupAnySide(initialPred, official) ? (final ? numericRule('finalInitialWinner') : numericRule('knockoutInitialWinner')) : 0;
+    const matchupBonus = sameMatchupAnySide(initialPred, official) ? matchupPointsForStage(stage) : 0;
     const points = resultPoints;
     const goalsHit = (ph === oh ? oh : 0) + (pa === oa ? oa : 0);
     const goalsMissed = Math.abs(ph - oh) + Math.abs(pa - oa);
@@ -525,9 +548,9 @@
         }
       : pred;
     const baseScore = scoreOnePrediction(scorePred, official, override);
-    const shouldApplyStandaloneMatchupBonus = (!override || override.mode === 'replicate') && stage === 'round32' && !unresolved;
+    const shouldApplyStandaloneMatchupBonus = (!override || override.mode === 'replicate') && KO_STAGES.includes(stage) && !unresolved;
     const matchupBonus = shouldApplyStandaloneMatchupBonus && sameMatchupAnySide(scorePred, { homeTeam: home, awayTeam: away })
-      ? numericRule('knockoutInitialWinner')
+      ? matchupPointsForStage(stage)
       : 0;
 
     return {
@@ -572,6 +595,7 @@
         id: item.id,
         participantKey: item.participantKey || normalizeKey(item.participantName),
         name: item.participantName || 'Participante',
+        icon: item.icon || item.participantIcon || item.playerIcon || '',
         points: 0,
         correctPredictions: 0,
         failedPredictions: 0,
@@ -581,7 +605,8 @@
         drawsHit: 0,
         lossesHit: 0,
         exactResults: 0,
-        matchupPoints: 0
+        matchupPoints: 0,
+        matchupPointEntries: []
       };
       (data?.matches || []).forEach(match => {
         const home = resolveOfficialTeam(match, 'home');
@@ -609,7 +634,9 @@
         stats.lossesHit += score.lossHit;
         stats.exactResults += score.exact ? 1 : 0;
       });
-      stats.matchupPoints = calculateResolvedRound32MatchupPoints(item);
+      const matchupSummary = calculateMatchupPointsSummary(item);
+      stats.matchupPoints = matchupSummary.total;
+      stats.matchupPointEntries = matchupSummary.entries;
       return stats;
     });
 
