@@ -857,7 +857,7 @@
   const isTeamUnresolved = window.isTeamUnresolved;
   const REFORM_COLLECTION = 'worldcupextraReforms';
   const REFORM_SETTINGS_COLLECTION = 'settings';
-  const REFORM_SETTINGS_DOC = 'endateworld';
+  const REFORM_SETTINGS_DOC = 'worldcupReformWindows';
   const REFORM_STAGES = ['round32', 'round16', 'quarterfinals', 'semifinals', 'third_place', 'final'];
   const REFORM_STAGE_FIELDS = {
     round32: [
@@ -965,7 +965,7 @@
   function isStageWindowOpen(stage) {
     const { open, close } = findWindowPair(stage);
     const now = new Date();
-    return !!open && !!close && now >= open && now <= close;
+    return !!open && !!close && now >= open && now < close;
   }
 
   function openStagesNow() {
