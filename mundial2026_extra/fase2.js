@@ -857,7 +857,7 @@
   const isTeamUnresolved = window.isTeamUnresolved;
   const REFORM_COLLECTION = 'worldcupextraReforms';
   const REFORM_SETTINGS_COLLECTION = 'settings';
-  const REFORM_SETTINGS_DOC = 'worldcupReformWindows';
+  const REFORM_SETTINGS_DOC = 'endateworld';
   const REFORM_STAGES = ['round32', 'round16', 'quarterfinals', 'semifinals', 'third_place', 'final'];
   const REFORM_STAGE_FIELDS = {
     round32: [
@@ -982,7 +982,7 @@
       const snap = await firebaseTools.getDoc(ref);
       reformWindows.data = snap.exists() ? snap.data() : {};
     } catch (error) {
-      console.warn('Não foi possível carregar settings/worldcupReformWindows.', error);
+      console.warn('Não foi possível carregar settings/endateworld.', error);
     }
     reformWindows.activeStages = openStagesNow();
     updateReformButton();
@@ -1180,7 +1180,7 @@
           </div>
         </div>
         <section class="reform-box">
-          <p>Cria/atualiza o documento <strong>settings/worldcupReformWindows</strong> com a janela da fase que queres abrir.</p>
+          <p>Cria/atualiza o documento <strong>settings/endateworld</strong> com a janela da fase que queres abrir.</p>
         </section>
       `;
     }
