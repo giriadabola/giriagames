@@ -691,6 +691,10 @@ async function openPublicPredictionsModal() {
         dashboard.innerHTML = renderLiveDashboard();
       }
 
+      if (typeof window.refreshReformButtonState === 'function') {
+        await window.refreshReformButtonState(true);
+      }
+
       if (typeof startLiveApiSync === 'function') startLiveApiSync();
     };
   }

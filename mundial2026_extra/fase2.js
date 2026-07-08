@@ -1157,6 +1157,10 @@
     btn.hidden = false;
     btn.textContent = `Reformular prognósticos dos ${label.toLowerCase()}`;
   }
+  window.refreshReformButtonState = async function(force = true) {
+    await loadReformWindows(force);
+    updateReformButton();
+  };
 
   function renderReformLogin(message = '') {
     const activeStages = reformWindows.activeStages || openStagesNow();
