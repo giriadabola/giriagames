@@ -473,11 +473,8 @@ async function init() {
 
 init();
 
-// Recarregar a página forçadamente a cada 5 minutos (300000ms)
-setInterval(() => {
-  console.log('Forçando refresh completo da página a cada 5 minutos...');
-  location.reload(true);
-}, 5 * 60 * 1000);
-
-
-
+// Recarregar a página forçadamente a cada 5 minutos (300000ms) desativado para evitar custos excessivos de leitura no Firestore.
+// setInterval(() => {
+//   console.log('Forçando refresh completo da página a cada 5 minutos...');
+//   location.reload(true);
+// }, 5 * 60 * 1000);
