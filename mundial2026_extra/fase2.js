@@ -1481,7 +1481,7 @@
       teamKeyLocal(doc.homeTeam) === teamKeyLocal(homeTeam) &&
       teamKeyLocal(doc.awayTeam) === teamKeyLocal(awayTeam)
     );
-    return exact || docs[0] || null;
+    return exact || null;
   }
 
   function buildSemifinalScenarioEntries(stage) {
