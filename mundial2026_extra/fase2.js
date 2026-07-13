@@ -2131,7 +2131,7 @@
       homeGoals,
       awayGoals,
       method,
-      winnerTeam: mode === 'replicate' ? (initialPred?.winnerTeam || '') : winnerTeam,
+      winnerTeam: mode === 'replicate' ? (initialPred?.winnerTeam || winnerFromResultLike(initialPred) || '') : winnerTeam,
       scenarioKey: card.dataset.reformScenarioKey || buildScenarioDocKey(match.id, homeTeam, awayTeam),
       windowStage,
       pinVerified: true,
@@ -2139,6 +2139,7 @@
       clientTimestamp: new Date().toISOString()
     };
     const msg = card.querySelector('[data-reform-message]');
+    console.log("Saving reform payload:", payload);
     try {
       await firebaseTools.setDoc(firebaseTools.doc(firestoreDb, REFORM_COLLECTION, docId), payload, { merge: true });
       if (msg) msg.textContent = 'Gravado com sucesso.';
