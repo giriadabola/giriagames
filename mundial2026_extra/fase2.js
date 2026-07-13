@@ -1459,7 +1459,7 @@
   }
 
   function getParticipantKey(item) {
-    return item?.participantKey || normalizeKeyLocal(item?.participantName || item?.name || '');
+    return item?.id || item?.participantKey || normalizeKeyLocal(item?.participantName || item?.name || '');
   }
 
   function getParticipantByKey(key) {
