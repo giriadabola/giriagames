@@ -374,10 +374,11 @@ class RivalSquadsView {
     async loadUsers() {
         const usersRef = collection(db, 'users');
         const querySnapshot = await getDocs(usersRef);
+        const latestSeason = await getCurrentSeason();
         const users = [];
 
         querySnapshot.forEach((userDoc) => {
-            const userData = mergeUserSeasonData(userDoc.data(), await getCurrentSeason());
+            const userData = mergeUserSeasonData(userDoc.data(), latestSeason);
             if (userData.natabela === "Yes" && userData.nometabela) {
                 users.push({ id: userDoc.id, displayNome: userData.nometabela });
             }
