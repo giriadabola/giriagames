@@ -264,6 +264,7 @@
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
         import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
         import { getFirestore, doc, getDoc, collection, query, where, getDocs, onSnapshot, orderBy, limit } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        import { checkPageContentAccess } from './js/page-content-guard.js';
 
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
@@ -372,6 +373,12 @@
                     const menuSettings = await loadMenuSettings();
                     if (menuSettings.bank !== 'on' && userDoc.data().estatuto !== 'ruler') { window.location.href = '404.html'; return; }
                     if (typeof updateMenuVisibility === 'function') updateMenuVisibility(menuSettings);
+
+                    const hasContentAccess = await checkPageContentAccess('banca', userDoc.data().estatuto, db);
+                    if (!hasContentAccess) {
+                        loadingScreen.style.display = 'none';
+                        return;
+                    }
 
                     const configSnap = await getDoc(doc(db, 'paineis', 'configuracoes_gerais'));
                     currentSeason = configSnap.exists() ? configSnap.data().temporadaAtual.replace('/', '') : '';

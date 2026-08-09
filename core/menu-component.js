@@ -49,7 +49,7 @@ document.addEventListener("DOMContentLoaded", () => {
             text-decoration: none; color: #7f8c8d;
             transition: color 0.3s ease, transform 0.3s ease; position: relative;
         }
-        .menu-item.hidden { display: none; }
+        .menu-item.hidden { display: none !important; }
         .menu-item:hover {
             color: #ffffff; transform: translateY(-3px);
         }
