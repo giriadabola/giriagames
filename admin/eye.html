@@ -302,6 +302,7 @@
     import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
     import { getFirestore, collection, getDocs, doc, getDoc, query, where, orderBy, updateDoc, onSnapshot, writeBatch, deleteField, setDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
     import { CADERNETA_PACK_DEFINITIONS, MINI_GAME_CURRENCY_OPTIONS, buildNormalizedCadernetaPackPricing } from '../core/mini-games-config.js';
+    import { getLatestSeason, getSeasonData, mergeUserSeasonData } from '../core/user-season.js';
 
     const firebaseConfig = {
         apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0",
@@ -319,17 +320,54 @@
 
     let allUsersData = [], playerCounts = {}, debtTotals = {};
     let currentSort = { column: 'pontos', direction: 'desc' };
-    let currentFilter = 'active', currentSeason = null;
+    let currentFilter = 'active', currentSeason = null, currentSeasonLabel = null;
     let changesMap = new Map(), isInitialLoadComplete = false;
     let changeLog = [], newChangesCount = 0;
     const fieldNames = { pontos: 'Pontos', gcoins: 'GCoins', whowins: 'WhoWins', divida: 'Dívida', jogadores: 'Jogadores' };
 
-    async function fetchCurrentSeason() { if (currentSeason) return currentSeason; const configRef = doc(db, "paineis", "configuracoes_gerais"); const docSnap = await getDoc(configRef); if (docSnap.exists() && docSnap.data().temporadaAtual) { const temporada = docSnap.data().temporadaAtual; currentSeason = temporada.replace(/\//g, ''); return currentSeason; } throw new Error("Não foi possível encontrar a temporada atual."); }
-    async function handleRecalculateBalance(userId) { const button = document.getElementById('recalculate-button'); const originalText = button.textContent; button.disabled = true; button.textContent = 'A calcular...'; try { const season = await fetchCurrentSeason(); const movimentosRef = collection(db, "movimentos"); const q = query(movimentosRef, where("userId", "==", userId), where("temporada", "==", season)); const querySnapshot = await getDocs(q); let newBalance = 0; querySnapshot.forEach((doc) => { const data = doc.data(); if (data.estado !== 'WhoWins Paid') { const valor = parseFloat(data.valorreal); if (!isNaN(valor)) newBalance += valor; } }); const userRef = doc(db, 'users', userId); const gCoinsField = `${season}GCoins`; await updateDoc(userRef, { [gCoinsField]: newBalance }); button.textContent = 'Sucesso!'; button.style.backgroundColor = '#28a745'; } catch (error) { console.error("Erro ao recalcular saldo:", error); button.textContent = 'Erro!'; button.style.backgroundColor = '#dc3545'; } finally { setTimeout(() => { button.textContent = originalText; button.disabled = false; button.style.backgroundColor = ''; }, 2000); } }
+    async function fetchCurrentSeason() { if (currentSeason) return currentSeason; currentSeasonLabel = await getLatestSeason(db); currentSeason = currentSeasonLabel.replace(/\//g, ''); return currentSeason; }
+    async function handleRecalculateBalance(userId) { const button = document.getElementById('recalculate-button'); const originalText = button.textContent; button.disabled = true; button.textContent = 'A calcular...'; try { const season = await fetchCurrentSeason(); const movimentosRef = collection(db, "movimentos"); const q = query(movimentosRef, where("userId", "==", userId), where("temporada", "==", season)); const querySnapshot = await getDocs(q); let newBalance = 0; querySnapshot.forEach((doc) => { const data = doc.data(); if (data.estado !== 'WhoWins Paid') { const valor = parseFloat(data.valorreal); if (!isNaN(valor)) newBalance += valor; } }); const userRef = doc(db, 'users', userId); const userSnapshot = await getDoc(userRef); const seasonData = userSnapshot.exists() ? getSeasonData(userSnapshot.data(), currentSeasonLabel) : {}; await updateDoc(userRef, { [currentSeasonLabel]: { ...seasonData, GCoins: newBalance } }); button.textContent = 'Sucesso!'; button.style.backgroundColor = '#28a745'; } catch (error) { console.error("Erro ao recalcular saldo:", error); button.textContent = 'Erro!'; button.style.backgroundColor = '#dc3545'; } finally { setTimeout(() => { button.textContent = originalText; button.disabled = false; button.style.backgroundColor = ''; }, 2000); } }
     function formatFirebaseTimestamp(timestampObject) { if (!timestampObject || typeof timestampObject.toDate !== 'function') return 'Nunca'; try { const dateObj = timestampObject.toDate(); const day = String(dateObj.getDate()).padStart(2, '0'); const month = String(dateObj.getMonth() + 1).padStart(2, '0'); const year = dateObj.getFullYear(); const hours = String(dateObj.getHours()).padStart(2, '0'); const minutes = String(dateObj.getMinutes()).padStart(2, '0'); return `${day}/${month}/${year}, ${hours}h${minutes}`; } catch (error) { return 'Data Inválida'; } }
     function formatMovementDate(timestampObject) { if (!timestampObject || typeof timestampObject.toDate !== 'function') return 'N/A'; const dateObj = timestampObject.toDate(); const day = dateObj.getDate(); const month = dateObj.toLocaleString('pt-PT', { month: 'long' }); const year = dateObj.getFullYear(); return `${day} ${month} ${year}`; }
     function renderTable(users) { const tableBody = document.getElementById('users-table-body'); tableBody.innerHTML = ''; users.forEach(user => { const row = document.createElement('tr'); row.setAttribute('data-userid', user.id); row.setAttribute('data-username', user.displayName); const userChanges = changesMap.get(user.id) || {}; row.innerHTML = `<td>${user.displayName}</td><td>${user.tatica}</td><td class="${userChanges.pontos ? 'highlight-update' : ''}">${user.pontos}</td><td class="${userChanges.gcoins ? 'highlight-update' : ''}">${user.gcoins}</td><td class="${userChanges.whowins ? 'highlight-update' : ''}">${user.whowins}</td><td class="${userChanges.divida ? 'highlight-update' : ''}">${user.divida}</td><td class="${userChanges.jogadores ? 'highlight-update' : ''}">${user.jogadores}</td><td>${user.ultimoacesso}</td>`; tableBody.appendChild(row); }); addEventListenersToRows(); document.querySelectorAll('.highlight-update').forEach(cell => { setTimeout(() => { cell.classList.remove('highlight-update'); }, 2500); }); changesMap.clear(); }
     function processAndRenderUsers(usersSnapshot) { const statusMessage = document.getElementById('status-message'); const tableContainer = document.querySelector('.table-container'); if (usersSnapshot.empty) { statusMessage.textContent = 'Nenhum utilizador encontrado.'; statusMessage.style.display = 'block'; tableContainer.style.display = 'none'; return; } const newUsersData = []; const oldDataMap = new Map(allUsersData.map(u => [u.id, u])); usersSnapshot.forEach(doc => { const userData = doc.data(); const userId = doc.id; const pontosField = `${currentSeason}Pontos`; const gcoinsField = `${currentSeason}GCoins`; const newUser = { id: userId, displayName: userData.nometabela || userData.email || 'N/A', tatica: userData.tática || 'N/A', pontos: userData[pontosField] || 0, gcoins: userData[gcoinsField] || 0, whowins: userData.whowinsgCoins || 0, divida: debtTotals[userId] || 0, jogadores: playerCounts[userId] || 0, ultimoacesso: formatFirebaseTimestamp(userData.ultimoacesso), natabela: userData.natabela || 'No' }; newUsersData.push(newUser); const oldUser = oldDataMap.get(userId); if (oldUser && isInitialLoadComplete) { const userChanges = {}; for (const key of Object.keys(fieldNames)) { if (oldUser[key] !== newUser[key]) { userChanges[key] = true; changeLog.unshift({ user: newUser.displayName, field: fieldNames[key], oldValue: oldUser[key], newValue: newUser[key], timestamp: new Date() }); newChangesCount++; } } if (Object.keys(userChanges).length > 0) { changesMap.set(userId, userChanges); } } }); allUsersData = newUsersData; applyFiltersAndSort(); if (isInitialLoadComplete) { updateBulletinUI(); } statusMessage.style.display = 'none'; tableContainer.style.display = 'block'; }
+    // Versão sazonal: os campos de época são lidos dentro de users/{uid}/{época}.
+    function processAndRenderUsers(usersSnapshot) {
+        const newUsersData = [];
+        const oldDataMap = new Map(allUsersData.map((user) => [user.id, user]));
+        usersSnapshot.forEach((userDoc) => {
+            const rawUserData = userDoc.data();
+            const userData = mergeUserSeasonData(rawUserData, currentSeasonLabel);
+            const newUser = {
+                id: userDoc.id,
+                displayName: userData.nometabela || userData.email || 'N/A',
+                tatica: userData.tática || 'N/A',
+                pontos: userData.Pontos || 0,
+                gcoins: userData.GCoins || 0,
+                whowins: userData.whowinsgCoins || 0,
+                divida: debtTotals[userDoc.id] || 0,
+                jogadores: playerCounts[userDoc.id] || 0,
+                ultimoacesso: formatFirebaseTimestamp(userData.ultimoacesso),
+                natabela: userData.natabela || 'No'
+            };
+            newUsersData.push(newUser);
+            const oldUser = oldDataMap.get(userDoc.id);
+            if (oldUser && isInitialLoadComplete) {
+                for (const key of Object.keys(fieldNames)) {
+                    if (oldUser[key] !== newUser[key]) {
+                        changeLog.unshift({ user: newUser.displayName, field: fieldNames[key], oldValue: oldUser[key], newValue: newUser[key], timestamp: new Date() });
+                        newChangesCount++;
+                    }
+                }
+            }
+        });
+        allUsersData = newUsersData;
+        applyFiltersAndSort();
+        if (isInitialLoadComplete) updateBulletinUI();
+        statusMessage.style.display = 'none';
+        tableContainer.style.display = 'block';
+    }
+
     function updateBulletinUI() { const bulletinButton = document.getElementById('bulletin-button'); const bulletinBadge = document.getElementById('bulletin-badge'); if (newChangesCount > 0) { bulletinBadge.textContent = newChangesCount > 9 ? '9+' : newChangesCount; bulletinButton.classList.remove('bulletin-hidden'); bulletinButton.classList.add('bulletin-visible'); } else { bulletinButton.classList.remove('bulletin-visible'); bulletinButton.classList.add('bulletin-hidden'); } }
     function renderAndShowChangeLog() { const popup = document.getElementById('changelog-popup'); const container = document.getElementById('changelog-container'); container.innerHTML = ''; if (changeLog.length === 0) { container.innerHTML = '<p style="text-align:center; color:#666;">Nenhuma alteração registada.</p>'; } else { changeLog.forEach(log => { const logEntry = document.createElement('div'); logEntry.className = 'log-entry'; const time = `${String(log.timestamp.getHours()).padStart(2, '0')}:${String(log.timestamp.getMinutes()).padStart(2, '0')}`; logEntry.innerHTML = `<span>[${time}]</span> O campo <strong>${log.field}</strong> do utilizador <span class="user">${log.user}</span> mudou de <span>${log.oldValue}</span> <i class="fas fa-long-arrow-alt-right change-arrow"></i> <span>${log.newValue}</span>.`; container.appendChild(logEntry); }); } popup.style.display = 'flex'; newChangesCount = 0; updateBulletinUI(); }
     function addEventListenersToRows() { document.querySelectorAll('#users-table-body tr').forEach(row => { row.addEventListener('click', () => { const userId = row.dataset.userid; const userName = row.dataset.username; if (userId) { fetchAndShowMovements(userId, userName); } }); }); }

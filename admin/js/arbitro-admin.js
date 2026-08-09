@@ -4,6 +4,7 @@ import { db } from './auth-guard.js';
 // Importa as outras funções do Firestore que esta página específica precisa.
 import { collection, getDocs, doc, getDoc, updateDoc, where, addDoc, serverTimestamp, getCountFromServer, query, limit, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { CADERNETA_FREE_PACK_TYPE, CADERNETA_GIFT_OFFERS_COLLECTION, CADERNETA_GIFT_SOURCE_NAME, buildCadernetaGiftOfferId, isEligibleFreePackRound, normalizeSeasonKey } from "../../caderneta/pack-offers.js";
+import { compactSeason, getLatestSeason, getSeasonData, mergeUserSeasonData } from "../../core/user-season.js";
 
 // ========================================================================
 // === INTERAÇÃO DO POPUP & DRAGGING (Movido de arbitro.html) ===
@@ -161,18 +162,19 @@ let allPredictions = [];
 let isProcessingLaunch = false;
 let totalEligibleVoters = 0;
 
+async function getEligibleUsersForSeason(seasonLabel = null) {
+    const targetSeason = seasonLabel || await getLatestSeason(db);
+    const usersSnapshot = await getDocs(collection(db, 'users'));
+    return usersSnapshot.docs
+        .map((userDoc) => ({ id: userDoc.id, data: mergeUserSeasonData(userDoc.data(), targetSeason) }))
+        .filter(({ data }) => data.aceite === 'Yes' && data.natabela === 'Yes')
+        .map(({ id, data }) => ({ id, nometabela: data.nometabela }));
+}
+
 async function loadPredictions() {
     let qualifiedGPlayers = [];
     try {
-        const usersRef = collection(db, 'users');
-        const q = query(usersRef, where("aceite", "==", "Yes"), where("natabela", "==", "Yes"));
-        const querySnapshot = await getDocs(q);
-        querySnapshot.forEach((doc) => {
-            qualifiedGPlayers.push({
-                id: doc.id,
-                nometabela: doc.data().nometabela
-            });
-        });
+        qualifiedGPlayers = await getEligibleUsersForSeason();
         qualifiedGPlayers.sort((a, b) => a.nometabela.localeCompare(b.nometabela));
     } catch (error) {
         console.error("Erro ao buscar GPlayers qualificados:", error);
@@ -449,8 +451,7 @@ async function unifiedLaunchHandler() {
             const querySnapshot = await getDocs(q);
             if (!querySnapshot.empty) {
                 const temporada = querySnapshot.docs[0].data().temporada;
-                const temporadaKey = temporada.replace('/', '');
-                await recalculateUserTotals(Array.from(allAffectedUserIds), temporadaKey);
+                await recalculateUserTotals(Array.from(allAffectedUserIds), temporada);
                 await grantSeasonStarterCadernetaPacks({
                     round: ronda,
                     seasonLabel: temporada
@@ -479,21 +480,16 @@ async function grantSeasonStarterCadernetaPacks({ round, seasonLabel }) {
     }
 
     const seasonKey = normalizeSeasonKey(seasonLabel);
-    const eligibleUsersQuery = query(
-        collection(db, 'users'),
-        where("aceite", "==", "Yes"),
-        where("natabela", "==", "Yes")
-    );
-    const eligibleUsersSnapshot = await getDocs(eligibleUsersQuery);
+    const eligibleUsers = await getEligibleUsersForSeason(seasonLabel);
 
-    if (eligibleUsersSnapshot.empty) {
+    if (eligibleUsers.length === 0) {
         return 0;
     }
 
     let createdOffers = 0;
 
-    for (const userDoc of eligibleUsersSnapshot.docs) {
-        const userId = userDoc.id;
+    for (const user of eligibleUsers) {
+        const userId = user.id;
         const offerId = buildCadernetaGiftOfferId({
             seasonKey,
             round,
@@ -733,12 +729,14 @@ async function processGameMods(ronda) {
     return affectedUserIds;
 }
 
-async function recalculateUserTotals(userIds, temporadaKey) {
+async function recalculateUserTotals(userIds, temporada) {
+    const temporadaKey = compactSeason(temporada);
     const estadosQueValemPontos = ["Palpite Paid", "Mod Play"];
 
     for (const userId of userIds) {
         const userRef = doc(db, 'users', userId);
-        const userUpdatePayload = {};
+        const userSnapshot = await getDoc(userRef);
+        const currentSeasonData = userSnapshot.exists() ? getSeasonData(userSnapshot.data(), temporada) : {};
 
         const gcoinsQuery = query(collection(db, 'movimentos'), where("userId", "==", userId), where("temporada", "==", temporadaKey));
         let totalGCoins = 0;
@@ -750,16 +748,19 @@ async function recalculateUserTotals(userIds, temporadaKey) {
                 totalGCoins += (data.valorreal || 0);
             }
         });
-        userUpdatePayload[`${temporadaKey}GCoins`] = totalGCoins;
+        const seasonUpdate = {
+            ...currentSeasonData,
+            GCoins: totalGCoins
+        };
 
         const pontosQuery = query(collection(db, 'movimentos'), where("userId", "==", userId), where("temporada", "==", temporadaKey), where("estado", "in", estadosQueValemPontos));
         let totalPontos = 0;
         const pontosSnapshot = await getDocs(pontosQuery);
         pontosSnapshot.forEach(doc => totalPontos += (doc.data().valorreal || 0));
-        userUpdatePayload[`${temporadaKey}Pontos`] = totalPontos;
+        seasonUpdate.Pontos = totalPontos;
         
-        if (Object.keys(userUpdatePayload).length > 0) {
-            await updateDoc(userRef, userUpdatePayload);
+        if (Object.keys(seasonUpdate).length > 0) {
+            await updateDoc(userRef, { [temporada]: seasonUpdate });
             console.log(`Utilizador ${userId} atualizado: Pontos=${totalPontos}, GCoins=${totalGCoins}`);
         }
     }
@@ -768,15 +769,7 @@ async function recalculateUserTotals(userIds, temporadaKey) {
 async function fetchTotalEligibleVoters() {
     let qualifiedGPlayers = [];
     try {
-        const usersRef = collection(db, 'users');
-        const q = query(usersRef, where("aceite", "==", "Yes"), where("natabela", "==", "Yes"));
-        const querySnapshot = await getDocs(q);
-        querySnapshot.forEach((doc) => {
-            qualifiedGPlayers.push({
-                id: doc.id,
-                nometabela: doc.data().nometabela
-            });
-        });
+        qualifiedGPlayers = await getEligibleUsersForSeason();
         qualifiedGPlayers.sort((a, b) => a.nometabela.localeCompare(b.nometabela));
     } catch (error) {
         console.error("Erro ao obter a contagem total de votantes:", error);

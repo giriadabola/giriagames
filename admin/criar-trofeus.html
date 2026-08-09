@@ -68,6 +68,7 @@
       <script type="module">
         import { db } from './js/auth-guard.js';
         import { collection, getDocs, doc, getDoc, query, where, addDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        import { getLatestSeason, mergeUserSeasonData } from '../core/user-season.js';
 
         const cache = {};
         const ui = {
@@ -139,9 +140,10 @@
                     <div><label for="status-ativo">Ativo</label><select id="status-ativo"><option value="yes" selected>Yes</option><option value="no">No</option></select></div>
                 </div><br><button type="submit">Criar Troféu</button>`;
 
-            const [usersSnap, compSnap, clubesSnap] = await Promise.all([getDocs(query(collection(db, 'users'), where('natabela', '==', 'Yes'))), getDocs(collection(db, 'competicoes')), getDocs(collection(db, 'clubes'))]);
+            const seasonLabel = await getLatestSeason(db);
+            const [usersSnap, compSnap, clubesSnap] = await Promise.all([getDocs(collection(db, 'users')), getDocs(collection(db, 'competicoes')), getDocs(collection(db, 'clubes'))]);
             const gp = document.getElementById('gplayer'), cs = document.getElementById('competicao'), cl = document.getElementById('clube');
-            usersSnap.forEach(doc => gp.innerHTML += `<option value="${doc.id}">${doc.data().nometabela}</option>`);
+            usersSnap.forEach(doc => { const userData = mergeUserSeasonData(doc.data(), seasonLabel); if (userData.natabela === 'Yes') gp.innerHTML += `<option value="${doc.id}">${userData.nometabela}</option>`; });
             compSnap.forEach(doc => cs.innerHTML += `<option value="${doc.id}">${doc.data().nome}</option>`);
             clubesSnap.forEach(doc => cl.innerHTML += `<option value="${doc.id}">${doc.data().nome}</option>`);
             ui.loaders.form.style.display = 'none';

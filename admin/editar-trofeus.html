@@ -80,6 +80,7 @@
     <script type="module">
         import { db } from './js/auth-guard.js';
         import { collection, getDocs, doc, getDoc, query, where, updateDoc, deleteDoc, Timestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        import { getLatestSeason, mergeUserSeasonData } from '../core/user-season.js';
 
         const cache = { trophies: {} }; // Cache de troféus por temporada
         const ui = {
@@ -196,12 +197,13 @@
         async function main() {
             const [seasonsSnap, usersSnap] = await Promise.all([
                 getDocs(collection(db, 'paineis/configuracoes_gerais/temporadas')),
-                getDocs(query(collection(db, 'users'), where('natabela', '==', 'Yes')))
+                getDocs(collection(db, 'users'))
             ]);
 
             const seasons = seasonsSnap.docs.map(d => d.data().nome).sort().reverse();
+            const latestSeason = await getLatestSeason(db);
             [ui.seasonSelect, ui.modalSeasonSelect].forEach(sel => sel.innerHTML = seasons.map(s => `<option value="${s}">${s}</option>`).join(''));
-            usersSnap.forEach(doc => ui.userSelect.innerHTML += `<option value="${doc.id}">${doc.data().nometabela}</option>`);
+            usersSnap.forEach(doc => { const userData = mergeUserSeasonData(doc.data(), latestSeason); if (userData.natabela === 'Yes') ui.userSelect.innerHTML += `<option value="${doc.id}">${userData.nometabela}</option>`; });
 
             // --- Event Listeners ---
             ui.seasonSelect.addEventListener('change', () => { ui.userSelect.value = ''; handleUserChange(); });
