@@ -1584,6 +1584,7 @@ onAuthStateChanged(auth, async (user) => {
             window.location.href = '404.html'; 
             return; 
         } 
+        let hasContentAccess = true;
         try { 
             void updateDoc(doc(db, 'users', user.uid), { ultimoacesso: serverTimestamp() })
                 .catch((error) => console.error('Erro ao actualizar o último acesso:', error)); 
@@ -1596,10 +1597,8 @@ onAuthStateChanged(auth, async (user) => {
                 } 
                 window.updateMenuVisibility(menuData); 
             } 
-            const hasContentAccess = await checkPageContentAccess('myteam', currentUserStatus, db);
+            hasContentAccess = await checkPageContentAccess('myteam', currentUserStatus, db);
             if (!hasContentAccess) {
-                const loadingScreen = document.getElementById('loading-screen');
-                if (loadingScreen) loadingScreen.style.display = 'none';
                 return;
             }
             await logUserAction(`Entrou em ${document.title}`);
@@ -1628,7 +1627,7 @@ onAuthStateChanged(auth, async (user) => {
             console.error("Erro na inicialização:", error); 
         } finally { 
             loadingScreen.style.display = 'none'; 
-            content.style.display = 'block'; 
+            if (hasContentAccess) content.style.display = 'block';
         } 
     } else { 
         window.location.href = 'index.html'; 

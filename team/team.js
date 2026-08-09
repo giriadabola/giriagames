@@ -94,9 +94,9 @@ onAuthStateChanged(auth, async (user) => {
             return;
         }
 
-        const hasContentAccess = await checkPageContentAccess('team', userData.estatuto, db);
+        let hasContentAccess = true;
+        hasContentAccess = await checkPageContentAccess('team', userData.estatuto, db);
         if (!hasContentAccess) {
-            loadingScreen.style.display = 'none';
             return;
         }
 
@@ -111,6 +111,6 @@ onAuthStateChanged(auth, async (user) => {
         console.error('Erro ao inicializar o Relvado:', error);
     } finally {
         loadingScreen.style.display = 'none';
-        content.style.display = 'block';
+        if (hasContentAccess) content.style.display = 'block';
     }
 });

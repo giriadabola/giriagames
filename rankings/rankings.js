@@ -228,6 +228,10 @@ onAuthStateChanged(auth, async (user) => {
         const hasAccess = checkPageAccess(currentUserStatus, menuSettings);
 
         if (hasAccess) {
+            if (typeof updateMenuVisibility === 'function' && menuSettings) {
+                updateMenuVisibility(menuSettings);
+            }
+
             const hasContentAccess = await checkPageContentAccess('rankings', currentUserStatus, db);
             if (!hasContentAccess) {
                 loadingScreen.style.display = 'none';
@@ -237,9 +241,6 @@ onAuthStateChanged(auth, async (user) => {
             // Regista a entrada na página
             await logUserAction(`Entrou em ${document.title}`);
             
-            if (typeof updateMenuVisibility === 'function') {
-                updateMenuVisibility(menuSettings);
-            }
             loadingScreen.style.display = 'none';
             content.style.display = 'block';
             void Promise.all([

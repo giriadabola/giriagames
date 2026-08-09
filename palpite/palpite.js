@@ -324,14 +324,14 @@ onAuthStateChanged(auth, async (user) => {
             return;
         }
 
+        if (window.updateMenuVisibility && paineisMenuSettings) {
+            window.updateMenuVisibility(paineisMenuSettings);
+        }
+
         const hasContentAccess = await checkPageContentAccess('palpite', currentUserStatus, db);
         if (!hasContentAccess) {
             if (loadingScreen) loadingScreen.style.display = 'none';
             return;
-        }
-
-        if (window.updateMenuVisibility) {
-            window.updateMenuVisibility(paineisMenuSettings);
         }
 
         console.log(`User is logged in on palpite.html with status: ${currentUserStatus}`);

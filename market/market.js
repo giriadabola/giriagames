@@ -1124,6 +1124,10 @@ onAuthStateChanged(auth, async (user) => {
                 const menuSettings = await loadMenuSettings();
                 updateLoadingProgress(10);
 
+                if (window.updateMenuVisibility && menuSettings) {
+                    window.updateMenuVisibility(menuSettings);
+                }
+
                 if (!checkPageAccess(currentUserEstatuto, menuSettings)) return;
                 updateLoadingProgress(10);
 
@@ -1138,10 +1142,6 @@ onAuthStateChanged(auth, async (user) => {
                 const transactionButton = document.getElementById('transaction-button-link');
                 if (transactionButton && menuSettings?.bank === 'off') {
                     transactionButton.style.display = 'none';
-                }
-
-                if (window.updateMenuVisibility) {
-                    window.updateMenuVisibility(menuSettings);
                 }
 
                 initializeMarketCountdown();

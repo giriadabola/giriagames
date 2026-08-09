@@ -136,6 +136,10 @@ onAuthStateChanged(auth, async (user) => {
             window.location.href = '404.html';
             return;
         }
+        const menuSettings = await loadMenuSettings();
+        if (typeof updateMenuVisibility === 'function' && menuSettings) {
+            updateMenuVisibility(menuSettings);
+        }
         const hasContentAccess = await checkPageContentAccess('whowins', userInfo.estatuto, db);
         if (!hasContentAccess) {
             const loadingScreen = document.getElementById('loading-screen');
@@ -143,10 +147,6 @@ onAuthStateChanged(auth, async (user) => {
             return;
         }
         await logUserAction(`Entrou em ${document.title}`);
-        const menuSettings = await loadMenuSettings();
-        if (typeof updateMenuVisibility === 'function') {
-            updateMenuVisibility(menuSettings);
-        }
         document.getElementById('user-name').textContent = userInfo.nomeDeUsuario || 'Jogador';
         const arenaDocRef = doc(db, 'paineis', 'paineis arena');
         const arenaDocSnap = await getDoc(arenaDocRef);

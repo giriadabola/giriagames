@@ -778,6 +778,10 @@ onAuthStateChanged(auth, async (user) => {
                 return;
             }
 
+            if (typeof updateMenuVisibility === 'function' && menuSettings) {
+                updateMenuVisibility(menuSettings); // Controla APENAS o menu inferior
+            }
+
             const hasContentAccess = await checkPageContentAccess('profile', userStatus, db);
             if (!hasContentAccess) {
                 loadingScreen.style.display = 'none';
@@ -791,10 +795,6 @@ onAuthStateChanged(auth, async (user) => {
                 console.error("Erro ao atualizar o campo ultimoacesso: ", error);
             }
 
-            // Aplica as configurações de visibilidade (agora corretamente separadas)
-            if (typeof updateMenuVisibility === 'function') {
-                updateMenuVisibility(menuSettings); // Controla APENAS o menu inferior
-            }
             initialPanelSettings = panelSettings; // Guarda as configurações iniciais para o listener
 
             if (panelSettings) {

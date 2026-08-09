@@ -3,6 +3,7 @@ import { app, db, auth } from '../core/firebase.js';
 import { getDoc, doc, collection, query, where, getDocs, setDoc, writeBatch, Timestamp, increment, updateDoc, onSnapshot, orderBy, limit, deleteField } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js";
+import { checkPageContentAccess } from "../js/page-content-guard.js";
 
 const functions = getFunctions(app);
 
@@ -286,6 +287,13 @@ onAuthStateChanged(auth, async (user) => {
             if (!checkPageAccess(userInfo, accessSettings)) {
                 console.warn("[Endless Championship] Page access check failed. Redirecting to 404.html");
                 window.location.href = '404.html';
+                return;
+            }
+
+            const hasContentAccess = await checkPageContentAccess('endless-championship', userInfo.estatuto, db);
+            if (!hasContentAccess) {
+                const loadingScreen = document.getElementById('loading-screen');
+                if (loadingScreen) loadingScreen.style.display = 'none';
                 return;
             }
 
