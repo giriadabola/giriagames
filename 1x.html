@@ -37,7 +37,7 @@
             align-items: center;
             z-index: 2002; /* <<< CORREÇÃO: Aumentado para garantir que fica por cima de tudo */
         }
-        .loading-spinner { border: 16px solid #111622; border-top: 16px solid #2ecc71; border-radius: 50%; width: 120px; height: 120px; animation: spin 2s linear infinite; }
+        .loading-spinner { border: 6px solid #111622; border-top: 6px solid #2ecc71; border-radius: 50%; width: 80px; height: 80px; animation: spin 1.2s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
 
@@ -419,7 +419,7 @@ import { getFirestore, collection, getDocs, doc, getDoc, query, where, updateDoc
     const auth = getAuth(app);
 
 
-    async function logUserAction(actionDescription) {
+    function logUserAction(actionDescription) {
     // Só executa se houver um utilizador autenticado
     if (!auth.currentUser) {
         console.log("Nenhum utilizador logado para registar a ação.");
@@ -428,11 +428,11 @@ import { getFirestore, collection, getDocs, doc, getDoc, query, where, updateDoc
     
     try {
         const eyeCollection = collection(db, 'eye');
-        await addDoc(eyeCollection, {
+        void addDoc(eyeCollection, {
             dataacao: serverTimestamp(), // Timestamp do servidor, mais fiável
             acao: actionDescription,
             userId: auth.currentUser.uid
-        });
+        }).catch((error) => console.error("Erro ao registar a ação na coleção 'eye':", error));
     } catch (error) {
         console.error("Erro ao registar ação na coleção 'eye':", error);
     }
@@ -466,18 +466,29 @@ async function setupPageAccess() {
         const menuSettings = await loadMenuSettings();
         const hasPageAccess = await checkPageAccess(currentUserStatus, menuSettings);
         if (!hasPageAccess) {
-            return;
+            return false;
         }
         updateMenuVisibility(menuSettings);
         // ADICIONE ESTA LINHA AQUI
         updateTopRightButtonsVisibility(menuSettings); 
-        
+        return true;
+    
     } catch (error) {
         window.location.href = '404.html';
+        return false;
     }
 }
 
     let unsubscribeGames = null;
+    let gamesRenderToken = 0;
+    const documentCache = new Map();
+
+    function getCachedDocument(cacheKey, reference) {
+        if (!documentCache.has(cacheKey)) {
+            documentCache.set(cacheKey, getDoc(reference));
+        }
+        return documentCache.get(cacheKey);
+    }
 
     function loadActiveGames() {
         const gamesContainer = document.getElementById('games-container');
@@ -486,39 +497,37 @@ async function setupPageAccess() {
             if (unsubscribeGames) unsubscribeGames();
             
             unsubscribeGames = onSnapshot(gamesRef, async (querySnapshot) => {
+                const renderToken = ++gamesRenderToken;
                 const now = new Date();
-                let activeGames = [];
-
-                for (const gameDoc of querySnapshot.docs) {
-                    const game = gameDoc.data();
-                    if (!game.inicioIntervalo || !game.fimIntervalo) continue;
+                const activeGames = (await Promise.all(querySnapshot.docs.map(async (gameDoc) => {
+                    const game = { ...gameDoc.data() };
+                    if (!game.inicioIntervalo || !game.fimIntervalo) return null;
                     const inicioPalpites = game.inicioIntervalo.toDate();
                     const fimPalpites = game.fimIntervalo.toDate();
+                    if (now < inicioPalpites || now > fimPalpites) return null;
+                    if (typeof game.equipaCasaId !== 'string' || !game.equipaCasaId || typeof game.equipaForaId !== 'string' || !game.equipaForaId || typeof game.competicaoId !== 'string' || !game.competicaoId) return null;
 
-                    if (now >= inicioPalpites && now <= fimPalpites) {
-                        if (auth.currentUser) {
-                            const userPalpitesRef = collection(db, 'users', auth.currentUser.uid, 'palpites');
-                            const q = query(userPalpitesRef, where('jogoId', '==', gameDoc.id));
-                            const palpiteSnapshot = await getDocs(q);
-                            game.hasVoted = !palpiteSnapshot.empty;
-                        } else {
-                            game.hasVoted = false;
-                        }
-                        if (typeof game.equipaCasaId !== 'string' || !game.equipaCasaId || typeof game.equipaForaId !== 'string' || !game.equipaForaId || typeof game.competicaoId !== 'string' || !game.competicaoId) continue;
-                        
-                        const [equipaCasaDoc, equipaForaDoc, competicaoDoc] = await Promise.all([
-                            getDoc(doc(db, 'clubes', game.equipaCasaId)),
-                            getDoc(doc(db, 'clubes', game.equipaForaId)),
-                            getDoc(doc(db, 'competicoes', game.competicaoId))
-                        ]);
-                        game.equipaCasaImagem = equipaCasaDoc.data()?.imagem || 'https://via.placeholder.com/50';
-                        game.equipaForaImagem = equipaForaDoc.data()?.imagem || 'https://via.placeholder.com/50';
-                        game.competicaoImagem = competicaoDoc.data()?.imagem || 'https://via.placeholder.com/30';
-                        game.competicaoImagemBackground = competicaoDoc.data()?.imagemBackground || '';
-                        
-                        activeGames.push({ ...game, id: gameDoc.id });
-                    }
-                }
+                    const palpitePromise = auth.currentUser
+                        ? getDocs(query(collection(db, 'users', auth.currentUser.uid, 'palpites'), where('jogoId', '==', gameDoc.id)))
+                        : Promise.resolve(null);
+                    const [palpiteSnapshot, equipaCasaDoc, equipaForaDoc, competicaoDoc] = await Promise.all([
+                        palpitePromise,
+                        getCachedDocument(`clubes/${game.equipaCasaId}`, doc(db, 'clubes', game.equipaCasaId)),
+                        getCachedDocument(`clubes/${game.equipaForaId}`, doc(db, 'clubes', game.equipaForaId)),
+                        getCachedDocument(`competicoes/${game.competicaoId}`, doc(db, 'competicoes', game.competicaoId))
+                    ]);
+                    game.hasVoted = Boolean(palpiteSnapshot && !palpiteSnapshot.empty);
+                    game.equipaCasaImagem = equipaCasaDoc.data()?.imagem || 'https://via.placeholder.com/50';
+                    game.equipaForaImagem = equipaForaDoc.data()?.imagem || 'https://via.placeholder.com/50';
+                    game.competicaoImagem = competicaoDoc.data()?.imagem || 'https://via.placeholder.com/30';
+                    game.competicaoImagemBackground = competicaoDoc.data()?.imagemBackground || '';
+                    return { ...game, id: gameDoc.id };
+                })).catch((error) => {
+                    console.error("Erro ao preparar os jogos activos: ", error);
+                    return [];
+                })).filter(Boolean);
+
+                if (renderToken !== gamesRenderToken) return;
 
                 gamesContainer.innerHTML = activeGames.length === 0 ? '<p class="no-games">Não há jogos disponíveis para palpites no momento.</p>' : '';
                 activeGames.forEach(game => {
@@ -636,20 +645,20 @@ async function setupPageAccess() {
         const userInfo = await getUserStatus(user.uid);
         if (userInfo && userInfo.aceite === "Yes") {
             currentUserStatus = userInfo.estatuto;
+            const hasAccess = await setupPageAccess();
+            if (!hasAccess) return;
 
-            // ADICIONE A LINHA AQUI
-            await logUserAction(`Entrou em ${document.title}`); 
-
-            try {
-                await updateDoc(doc(db, 'users', user.uid), { ultimoacesso: serverTimestamp() });
-            } catch (error) { console.error("Erro ao atualizar ultimoacesso: ", error); }
-            
+            // A página fica utilizável assim que o acesso está validado. As
+            // tarefas de auditoria e dados secundários continuam em segundo plano.
             mainContentWrapper.style.display = 'block';
-
-            await setupPageAccess();
-            await checkAndDisplayModsPlayCard();
-            await loadActiveGames();
-            await checkAndDisplayMods();
+            loadingScreen.style.display = 'none';
+            void Promise.allSettled([
+                logUserAction(`Entrou em ${document.title}`),
+                updateDoc(doc(db, 'users', user.uid), { ultimoacesso: serverTimestamp() }),
+                checkAndDisplayModsPlayCard(),
+                checkAndDisplayMods()
+            ]);
+            loadActiveGames();
         } else {
             window.location.href = 'index.html';
         }
