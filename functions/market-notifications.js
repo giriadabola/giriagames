@@ -575,7 +575,14 @@ exports.sendInboxNotification = onCall({
 }, async (request) => {
   await ensureAdminAccess(request.auth?.uid || null);
 
-  const message = sanitizeManualMessage(request.data?.message);
+  const sender = typeof request.data?.sender === "string" ? request.data.sender.trim() : "";
+  const emailTitle = typeof request.data?.emailTitle === "string" ? request.data.emailTitle.trim() : "";
+  const rawMessage = typeof request.data?.message === "string" ? request.data.message : "";
+  const message = sanitizeManualMessage(`${emailTitle}\n${rawMessage}`);
+
+  if (!sender || !emailTitle) {
+    throw new HttpsError("invalid-argument", "O remetente e o título são obrigatórios.");
+  }
   const targetUserIds = Array.isArray(request.data?.targetUserIds)
     ? [...new Set(request.data.targetUserIds.filter((userId) => typeof userId === "string" && userId.trim()))]
     : [];
@@ -597,7 +604,7 @@ exports.sendInboxNotification = onCall({
   }
 
   const payload = {
-    title: ":: gGames :: Informa\u00e7\u00e3o",
+    title: `(${sender}) :: gGames`,
     body: message,
     tag: `inbox-notification-${Date.now()}`,
     url: "./profile.html",
