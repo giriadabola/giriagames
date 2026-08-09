@@ -16,6 +16,7 @@ const APP_SHELL_FILES = [
   './core/top-bar-component.js',
   './core/firebase.js',
   './core/pwa/register-pwa.js',
+  './core/pwa/loading-watchdog.js',
   './core/pwa/push-config.js',
   './js/page-content-guard.js',
   './profile/profile-notifications.js',

@@ -390,16 +390,20 @@ document.addEventListener("DOMContentLoaded", () => {
         if (user) {
             const userDocRef = doc(db, 'users', user.uid);
             onSnapshot(userDocRef, async (docSnap) => {
-                if (docSnap.exists()) {
-                    const userData = docSnap.data();
-                    const latestSeason = await getLatestSeason(db);
-                    const seasonData = getSeasonData(userData, latestSeason);
-                    const userGcoins = typeof seasonData.GCoins === 'number' ? seasonData.GCoins : 0;
-                    
-                    const coinValueElement = document.getElementById('top-user-gcoins-value');
-                    if (coinValueElement) {
-                        coinValueElement.textContent = userGcoins.toLocaleString('pt-PT');
+                try {
+                    if (docSnap.exists()) {
+                        const userData = docSnap.data();
+                        const latestSeason = await getLatestSeason(db);
+                        const seasonData = getSeasonData(userData, latestSeason);
+                        const userGcoins = typeof seasonData.GCoins === 'number' ? seasonData.GCoins : 0;
+
+                        const coinValueElement = document.getElementById('top-user-gcoins-value');
+                        if (coinValueElement) {
+                            coinValueElement.textContent = userGcoins.toLocaleString('pt-PT');
+                        }
                     }
+                } catch (error) {
+                    console.error("Error updating gCoins in top menu:", error);
                 }
             }, (error) => {
                 console.error("Error listening to user doc for top menu:", error);
@@ -425,6 +429,8 @@ document.addEventListener("DOMContentLoaded", () => {
                         }
                     }
                 }
+            }, (error) => {
+                console.error("Error listening to menu settings for top menu:", error);
             });
         }
     });

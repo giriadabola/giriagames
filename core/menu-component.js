@@ -1,3 +1,15 @@
+(function loadLoadingWatchdog() {
+    const path = window.location.pathname.toLowerCase();
+    if (/(^|\/)market(?:\.html|\/|$)/.test(path) || document.getElementById('loading-watchdog')) {
+        return;
+    }
+
+    const script = document.createElement('script');
+    script.id = 'loading-watchdog';
+    script.src = './core/pwa/loading-watchdog.js';
+    document.head.appendChild(script);
+})();
+
 document.addEventListener("DOMContentLoaded", () => {
     // 1. O HTML do menu (sem alterações)
     const menuHTML = `
