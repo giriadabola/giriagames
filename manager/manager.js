@@ -16,18 +16,18 @@ let isShowingOtherManagers = false;
 
 // --- Utility Functions ---
 
-async function logUserAction(actionDescription) {
+function logUserAction(actionDescription) {
     if (!auth.currentUser) {
         console.log("Nenhum utilizador logado para registar a ação.");
         return;
     }
     try {
         const eyeCollection = collection(db, 'eye');
-        await addDoc(eyeCollection, {
+        void addDoc(eyeCollection, {
             dataacao: serverTimestamp(),
             acao: actionDescription,
             userId: auth.currentUser.uid
-        });
+        }).catch((error) => console.error("Erro ao registar a acção na coleção 'eye':", error));
     } catch (error) {
         console.error("Erro ao registar ação na coleção 'eye':", error);
     }

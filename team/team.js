@@ -8,17 +8,17 @@ const content = document.querySelector('.content');
 const rivalViewRoot = document.getElementById('team-rivals-view');
 let rivalSquadsView = null;
 
-async function logUserAction(actionDescription) {
+function logUserAction(actionDescription) {
     if (!auth.currentUser) {
         return;
     }
 
     try {
-        await addDoc(collection(db, 'eye'), {
+        void addDoc(collection(db, 'eye'), {
             dataacao: serverTimestamp(),
             acao: actionDescription,
             userId: auth.currentUser.uid
-        });
+        }).catch((error) => console.error("Erro ao registar a acção na coleção 'eye':", error));
     } catch (error) {
         console.error("Erro ao registar a ação na coleção 'eye':", error);
     }
