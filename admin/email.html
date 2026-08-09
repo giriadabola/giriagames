@@ -155,6 +155,13 @@
             filter: none;
         }
 
+        .notification-submit-btn {
+            margin-top: 10px;
+            background: linear-gradient(135deg, #2d9cdb, #1769aa);
+            color: #ffffff;
+            box-shadow: 0 4px 15px rgba(45, 156, 219, 0.25);
+        }
+
         .toggle-history-btn {
             background: transparent;
             border: 2px solid #ffb703;
@@ -240,6 +247,9 @@
                 <button type="submit" id="sendBtn" class="submit-btn">
                     <i class="fas fa-paper-plane"></i> Enviar Mensagem
                 </button>
+                <button type="button" id="sendWithNotificationBtn" class="submit-btn notification-submit-btn">
+                    <i class="fas fa-bell"></i> Enviar com notificação
+                </button>
             </form>
             
             <button id="toggleHistoryBtn" class="submit-btn toggle-history-btn">
@@ -262,6 +272,7 @@
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
         import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
         import { getFirestore, doc, getDoc, getDocs, collection, addDoc, query, where, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
 
         const firebaseConfig = {
             apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0",
@@ -276,6 +287,8 @@
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
+        const functions = getFunctions(app, 'us-central1');
+        const sendInboxNotificationCallable = httpsCallable(functions, 'sendInboxNotification');
 
         const emailCard = document.querySelector('.email-card');
         const historyCard = document.getElementById('historyCard');
@@ -284,6 +297,7 @@
         const destinatarioSelect = document.getElementById('destinatario');
         const emailForm = document.getElementById('emailForm');
         const sendBtn = document.getElementById('sendBtn');
+        const sendWithNotificationBtn = document.getElementById('sendWithNotificationBtn');
         const toast = document.getElementById('toast');
 
         let allGPlayers = [];
@@ -331,17 +345,33 @@
             }
         }
 
-        async function handleSend(e) {
+        async function handleSend(e, withNotification = false) {
             e.preventDefault();
+
+            if (!emailForm.reportValidity()) {
+                return;
+            }
             
             const remetente = document.getElementById('remetente').value;
             const destinatario = destinatarioSelect.value;
             const titulo = document.getElementById('titulo').value;
             const corpo = document.getElementById('corpo').value;
+            const targetUserIds = destinatario === 'todos'
+                ? allGPlayers.map(gp => gp.uid)
+                : [destinatario];
+
+            const notificationContent = `${titulo.trim()}\n${corpo.trim()}`.replace(/\s+/g, ' ');
+
+            if (withNotification && notificationContent.length > 180) {
+                showToast('Para enviar com notificação, o título e o corpo não podem ultrapassar 180 caracteres.', 'error');
+                return;
+            }
 
             sendBtn.disabled = true;
-            const originalBtnHTML = sendBtn.innerHTML;
-            sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> A enviar...';
+            sendWithNotificationBtn.disabled = true;
+            const actionButton = withNotification ? sendWithNotificationBtn : sendBtn;
+            const originalBtnHTML = actionButton.innerHTML;
+            actionButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> A enviar...';
 
             try {
                 // Criar um ID único de grupo para agrupar estes envios no histórico
@@ -377,6 +407,27 @@
                     showToast("Mensagem enviada com sucesso!");
                 }
 
+                if (withNotification) {
+                    try {
+                        const notificationResult = await sendInboxNotificationCallable({
+                            sender: remetente,
+                            emailTitle: titulo,
+                            message: corpo,
+                            targetUserIds
+                        });
+                        const deliveredTo = Number(notificationResult.data?.deliveredTo || 0);
+                        showToast(
+                            deliveredTo > 0
+                                ? `Mensagem e notificação enviadas (${deliveredTo} dispositivo(s)).`
+                                : 'Mensagem enviada, mas não há dispositivos ativos para notificar.',
+                            deliveredTo > 0 ? 'success' : 'error'
+                        );
+                    } catch (notificationError) {
+                        console.error('Erro ao enviar notificação da mensagem:', notificationError);
+                        showToast('Mensagem enviada, mas a notificação não foi enviada.', 'error');
+                    }
+                }
+
                 // Reset do formulário exceto remetente
                 document.getElementById('titulo').value = '';
                 document.getElementById('corpo').value = '';
@@ -391,7 +442,8 @@
                 showToast("Erro ao enviar a mensagem.", "error");
             } finally {
                 sendBtn.disabled = false;
-                sendBtn.innerHTML = originalBtnHTML;
+                sendWithNotificationBtn.disabled = false;
+                actionButton.innerHTML = originalBtnHTML;
             }
         }
 
@@ -530,6 +582,7 @@
             emailCard.style.display = 'block';
             loadGPlayers();
             emailForm.addEventListener('submit', handleSend);
+            sendWithNotificationBtn.addEventListener('click', (event) => handleSend(event, true));
             
             document.getElementById('addLinkBtn').addEventListener('click', () => {
                 const url = prompt("Introduza o URL do link:", "https://");
