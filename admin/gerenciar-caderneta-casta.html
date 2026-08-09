@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerenciar Caderneta & Casta - G EMPIRE</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <link rel="stylesheet" href="css/menu-admin.css">
+    <script type="module" src="js/auth-guard.js"></script>
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { min-height: 100vh; background-color: #090c10; font-family: 'Poppins', Arial, sans-serif; color: #f0f2f5; }
+        
+        .content { padding: 110px 20px 40px; max-width: 1200px; margin: 0 auto; }
+        h1 { color: #ffffff; margin-bottom: 10px; text-align: center; font-weight: 700; font-size: 28px; }
+        .subtitle { text-align: center; color: #8892b0; margin-bottom: 30px; font-size: 15px; }
+        
+        /* Controls / Search Bar */
+        .controls-row { display: flex; gap: 16px; margin-bottom: 24px; align-items: center; flex-wrap: wrap; }
+        .search-wrapper { position: relative; width: 320px; }
+        .search-wrapper i { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); color: #8892b0; }
+        .search-input { width: 100%; padding: 12px 42px 12px 16px; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; font-size: 15px; outline: none; background-color: #111622; color: #ffffff; transition: all 0.3s ease; }
+        .search-input:focus { border-color: rgba(33, 118, 255, 0.5); box-shadow: 0 0 10px rgba(33, 118, 255, 0.15); }
+        .filter-select { padding: 12px 36px 12px 16px; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; font-size: 15px; outline: none; background-color: #111622; color: #ffffff; transition: all 0.3s ease; cursor: pointer; min-width: 180px; appearance: none; -webkit-appearance: none; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%238892b0' viewBox='0 0 16 16'><path fill-rule='evenodd' d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/></svg>"); background-repeat: no-repeat; background-position: calc(100% - 14px) center; }
+        .filter-select:focus { border-color: rgba(33, 118, 255, 0.5); box-shadow: 0 0 10px rgba(33, 118, 255, 0.15); }
+
+        .btn-save { background: linear-gradient(135deg, #2176ff, #0a58ca); color: white; border: none; padding: 12px 28px; border-radius: 8px; font-size: 15px; font-weight: 700; cursor: pointer; transition: all 0.3s ease; text-transform: uppercase; letter-spacing: 0.5px; margin-left: auto; box-shadow: 0 4px 15px rgba(33, 118, 255, 0.25); display: flex; align-items: center; gap: 8px; }
+        .btn-save:hover { background: linear-gradient(135deg, #0a58ca, #08449c); transform: translateY(-1px); box-shadow: 0 6px 20px rgba(33, 118, 255, 0.35); }
+        .btn-save:disabled { background: #161c28; color: #8892b0; border: 1px solid rgba(255,255,255,0.05); cursor: not-allowed; box-shadow: none; transform: none; }
+
+        /* Excel-like Table Container */
+        .table-container { background-color: #111622; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.06); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45); overflow-x: auto; margin-bottom: 30px; }
+        .excel-table { width: 100%; border-collapse: collapse; text-align: left; min-width: 900px; }
+        .excel-table th, .excel-table td { padding: 12px 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.04); font-size: 14px; vertical-align: middle; }
+        .excel-table th { background-color: #161c28; color: #8892b0; font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px; border-bottom: 2px solid rgba(255, 255, 255, 0.08); user-select: none; }
+        .excel-table th i { margin-left: 6px; font-size: 10px; transition: color 0.2s; }
+        .excel-table tr { transition: background-color 0.2s ease; }
+        .excel-table tr:hover { background-color: rgba(33, 118, 255, 0.04); }
+        .excel-table tr:last-child td { border-bottom: none; }
+        
+        .player-row-img { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 1px solid rgba(255, 255, 255, 0.1); margin-right: 8px; vertical-align: middle; }
+        .player-row-name { font-weight: 600; color: #ffffff; display: inline-block; vertical-align: middle; }
+        
+        /* Status Toggles and Rarity selects */
+        .table-switch { position: relative; display: inline-block; width: 46px; height: 24px; vertical-align: middle; }
+        .table-switch input { opacity: 0; width: 0; height: 0; }
+        .table-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #e74c3c; transition: .4s; border-radius: 24px; border: 1px solid rgba(255,255,255,0.05); }
+        .table-slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 2px; bottom: 2px; background-color: white; transition: .4s; border-radius: 50%; }
+        .table-switch input:checked + .table-slider { background-color: #2ecc71; }
+        .table-switch input:checked + .table-slider:before { transform: translateX(22px); }
+
+        .select-casta { background-color: #161c28; color: #ffffff; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 6px; padding: 6px 12px; font-size: 13px; font-weight: 600; outline: none; cursor: pointer; transition: all 0.2s ease; }
+        .select-casta:focus { border-color: rgba(33, 118, 255, 0.5); }
+        .select-casta.comum { color: #f0f2f5; }
+        .select-casta.raro { color: #3498db; }
+        .select-casta.epico { color: #9b59b6; }
+        .select-casta.lendario { color: #f1c40f; text-shadow: 0 0 5px rgba(241, 196, 15, 0.3); }
+
+        /* Badges */
+        .badge { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
+        .badge.gold { background-color: rgba(241, 196, 15, 0.15); color: #f1c40f; border: 1px solid rgba(241, 196, 15, 0.2); }
+        .badge.silver { background-color: rgba(189, 195, 199, 0.15); color: #bdc3c7; border: 1px solid rgba(189, 195, 199, 0.2); }
+        .badge.bronze { background-color: rgba(211, 84, 0, 0.15); color: #d35400; border: 1px solid rgba(211, 84, 0, 0.2); }
+        .badge.platinum { background-color: rgba(236, 240, 241, 0.15); color: #ecf0f1; border: 1px solid rgba(236, 240, 241, 0.2); }
+
+        /* Loading / Saved messages */
+        .loading-screen-global { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #090c10; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 2000; }
+        .loading-spinner { border: 6px solid #1a1f2c; border-top: 6px solid #2176ff; border-radius: 50%; width: 60px; height: 60px; animation: spin 1.2s linear infinite; margin-bottom: 16px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        .toast-msg { position: fixed; bottom: 20px; right: 20px; background-color: #2ecc71; color: white; padding: 12px 24px; border-radius: 8px; font-weight: bold; box-shadow: 0 4px 15px rgba(46, 204, 113, 0.3); display: none; z-index: 3000; animation: slideUp 0.3s ease; }
+        @keyframes slideUp { from { transform: translateY(50px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    </style>
+    <link rel="stylesheet" href="css/admin-global.css">
+</head>
+<body style="display: none;">
+
+    <nav id="menu-placeholder" class="top-menu"></nav>
+
+    <div class="content">
+        <div style="display: flex; align-items: center; justify-content: center; position: relative;">
+            <a href="gerenciar-jogadores.html" class="menu-item" style="position: absolute; left: 0;"><i class="fas fa-arrow-left"></i> Voltar</a>
+            <div>
+                <h1>Gerenciar Caderneta & Casta</h1>
+                <p class="subtitle">Ative cromos na Caderneta e defina a raridade específica para o Álbum.</p>
+            </div>
+        </div>
+
+        <div class="controls-row">
+            <div class="search-wrapper">
+                <input type="text" class="search-input" placeholder="Pesquisar jogador..." id="tableSearch">
+                <i class="fas fa-search"></i>
+            </div>
+            <select id="filter-clube" class="filter-select">
+                <option value="">Todos os Clubes</option>
+            </select>
+            <select id="filter-posicao" class="filter-select">
+                <option value="">Todas as Posições</option>
+                <option value="Guarda-Redes">Guarda-Redes</option>
+                <option value="Defesa">Defesa</option>
+                <option value="Médio">Médio</option>
+                <option value="Avançado">Avançado</option>
+            </select>
+            <button id="btnSave" class="btn-save" disabled>
+                <i class="fas fa-save"></i> Salvar Alterações (<span id="changes-count">0</span>)
+            </button>
+        </div>
+
+        <div class="table-container">
+            <table class="excel-table">
+                <thead>
+                    <tr>
+                        <th data-sort="nome" style="cursor: pointer;">Jogador <i class="fas fa-sort"></i></th>
+                        <th data-sort="clube" style="cursor: pointer;">Clube <i class="fas fa-sort"></i></th>
+                        <th data-sort="posicao" style="cursor: pointer;">Posição <i class="fas fa-sort"></i></th>
+                        <th data-sort="casta" style="cursor: pointer; text-align: center;">Casta Live <i class="fas fa-sort"></i></th>
+                        <th style="text-align: center;">Mini Games > Caderneta (Ativo)</th>
+                        <th style="text-align: center;">Casta Caderneta (Raridade)</th>
+                    </tr>
+                </thead>
+                <tbody id="players-table-body">
+                    <!-- Dinâmico -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Loading Screen -->
+    <div id="loading-screen" class="loading-screen-global">
+        <div class="loading-spinner"></div>
+        <div>A carregar dados da caderneta...</div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast-msg">Alterações gravadas com sucesso!</div>
+
+    <script type="module">
+        import { db } from './js/auth-guard.js';
+        import { collection, getDocs, doc, writeBatch } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+        let allPlayers = [];
+        let clubsMap = new Map();
+        let changedPlayers = new Map();
+        let currentSortColumn = 'nome';
+        let currentSortDirection = 'asc';
+
+        function normalizeMiniGamesForSave(originalMiniGames) {
+            if (!originalMiniGames) return {};
+
+            if (Array.isArray(originalMiniGames)) {
+                const mappedMiniGames = {};
+                originalMiniGames.forEach(game => {
+                    if (game && game !== 'caderneta') {
+                        mappedMiniGames[game] = true;
+                    }
+                });
+                return mappedMiniGames;
+            }
+
+            if (typeof originalMiniGames === 'object') {
+                return { ...originalMiniGames };
+            }
+
+            return {};
+        }
+
+        window.resolvePlayerImage = function(img, code) {
+            if (!img.dataset.tryIndex) {
+                img.dataset.tryIndex = "0";
+            }
+            const extensions = ['webp', 'png', 'jpg', 'jpeg', 'svg'];
+            const currentIndex = parseInt(img.dataset.tryIndex);
+            
+            if (currentIndex < extensions.length) {
+                img.dataset.tryIndex = (currentIndex + 1).toString();
+                img.src = `../assets/faces/face_${code}.${extensions[currentIndex]}`;
+            } else {
+                img.onerror = null;
+                img.src = 'placeholder.jpg';
+            }
+        };
+
+        async function initPage() {
+            try {
+                // Fetch players and clubs in parallel
+                const [playersSnap, clubsSnap] = await Promise.all([
+                    getDocs(collection(db, 'jogadores')),
+                    getDocs(collection(db, 'clubes'))
+                ]);
+
+                clubsSnap.forEach(d => clubsMap.set(d.id, d.data().nome));
+
+                // Process players
+                allPlayers = playersSnap.docs.map(doc => {
+                    const data = doc.data();
+                    
+                    // Safe parse of miniGames (might be array or object)
+                    let cadernetaActive = false;
+                    let cadernetaCasta = 'comum';
+
+                    if (data.miniGames) {
+                        if (Array.isArray(data.miniGames)) {
+                            cadernetaActive = data.miniGames.includes('caderneta');
+                        } else if (typeof data.miniGames === 'object') {
+                            const cad = data.miniGames.caderneta;
+                            if (cad && typeof cad === 'object') {
+                                cadernetaActive = cad.estado === true;
+                                cadernetaCasta = cad.casta || 'comum';
+                            } else {
+                                cadernetaActive = data.miniGames.caderneta === true;
+                            }
+                        }
+                    }
+
+                    return {
+                        id: doc.id,
+                        nome: data.nome || 'Sem Nome',
+                        clube: data.clube || 'N/A',
+                        posicao: data.posicao || 'N/A',
+                        casta: data.casta || 'Jogador Bronze',
+                        imagem: data.imagem || '',
+                        codigoUrl: data.codigoUrl || '',
+                        cadernetaActive,
+                        cadernetaCasta,
+                        originalData: data
+                    };
+                });
+
+                populateFilters();
+                renderTable();
+
+                document.getElementById('loading-screen').style.display = 'none';
+                document.body.style.display = 'block';
+
+            } catch (error) {
+                console.error("Erro ao carregar dados:", error);
+                alert("Erro ao carregar os dados dos jogadores.");
+            }
+        }
+
+        function populateFilters() {
+            const clubes = [...new Set(allPlayers.map(p => p.clube).filter(c => c && c !== 'N/A'))].sort();
+            const filterClube = document.getElementById('filter-clube');
+            filterClube.innerHTML = '<option value="">Todos os Clubes</option>';
+            clubes.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c;
+                opt.textContent = c;
+                filterClube.appendChild(opt);
+            });
+        }
+
+        function getTierBadgeClass(casta) {
+            switch(casta) {
+                case 'Jogador Platina': return 'platinum';
+                case 'Jogador Ouro': return 'gold';
+                case 'Jogador Prata': return 'silver';
+                default: return 'bronze';
+            }
+        }
+
+        function getCastaShort(casta) {
+            return casta ? casta.replace('Jogador ', '') : 'Bronze';
+        }
+
+        function renderTable() {
+            const tableBody = document.getElementById('players-table-body');
+            tableBody.innerHTML = '';
+
+            const searchTerm = document.getElementById('tableSearch').value.toLowerCase().trim();
+            const selectedClube = document.getElementById('filter-clube').value;
+            const selectedPosicao = document.getElementById('filter-posicao').value;
+
+            // Filter players
+            let filtered = allPlayers.filter(p => {
+                const matchesSearch = p.nome.toLowerCase().includes(searchTerm) || p.clube.toLowerCase().includes(searchTerm);
+                const matchesClube = !selectedClube || p.clube === selectedClube;
+                const matchesPosicao = !selectedPosicao || p.posicao === selectedPosicao;
+                return matchesSearch && matchesClube && matchesPosicao;
+            });
+
+            // Sort players
+            filtered.sort((a, b) => {
+                let valA = a[currentSortColumn];
+                let valB = b[currentSortColumn];
+                if (typeof valA === 'string') {
+                    return currentSortDirection === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+                } else {
+                    return currentSortDirection === 'asc' ? valA - valB : valB - valA;
+                }
+            });
+
+            filtered.forEach(p => {
+                const tr = document.createElement('tr');
+
+                // Determine image
+                let ext = 'webp';
+                if (p.imagem) {
+                    const match = p.imagem.match(/face_(.+)\.(webp|png|jpe?g|svg)/i);
+                    if (match) ext = match[2];
+                }
+                const displayImg = p.codigoUrl 
+                    ? `../assets/faces/face_${p.codigoUrl}.${ext}` 
+                    : '../assets/faces/face_placeholder.jpg';
+
+                // Rarity style
+                const isChecked = changedPlayers.has(p.id) ? changedPlayers.get(p.id).cadernetaActive : p.cadernetaActive;
+                const activeCasta = changedPlayers.has(p.id) ? changedPlayers.get(p.id).cadernetaCasta : p.cadernetaCasta;
+
+                tr.innerHTML = `
+                    <td>
+                        <img src="${displayImg}" class="player-row-img" onerror="window.resolvePlayerImage(this, '${p.codigoUrl}')">
+                        <span class="player-row-name">${p.nome}</span>
+                    </td>
+                    <td>${p.clube}</td>
+                    <td>${p.posicao}</td>
+                    <td>
+                        <span class="badge ${getTierBadgeClass(p.casta)}">${getCastaShort(p.casta)}</span>
+                    </td>
+                    <td style="text-align: center;">
+                        <label class="table-switch">
+                            <input type="checkbox" class="toggle-caderneta-active" data-id="${p.id}" ${isChecked ? 'checked' : ''}>
+                            <span class="table-slider"></span>
+                        </label>
+                    </td>
+                    <td style="text-align: center;">
+                        <select class="select-casta ${activeCasta}" data-id="${p.id}">
+                            <option value="comum" class="comum" ${activeCasta === 'comum' ? 'selected' : ''}>Comum</option>
+                            <option value="raro" class="raro" ${activeCasta === 'raro' ? 'selected' : ''}>Raro</option>
+                            <option value="epico" class="epico" ${activeCasta === 'epico' ? 'selected' : ''}>Épico</option>
+                            <option value="lendario" class="lendario" ${activeCasta === 'lendario' ? 'selected' : ''}>Lendário</option>
+                        </select>
+                    </td>
+                `;
+
+                // Add Event Listeners for inline changes
+                tr.querySelector('.toggle-caderneta-active').addEventListener('change', (e) => {
+                    updatePlayerChange(p.id, 'cadernetaActive', e.target.checked);
+                });
+
+                tr.querySelector('.select-casta').addEventListener('change', (e) => {
+                    const select = e.target;
+                    select.className = `select-casta ${select.value}`;
+                    updatePlayerChange(p.id, 'cadernetaCasta', select.value);
+                });
+
+                tableBody.appendChild(tr);
+            });
+        }
+
+        function updatePlayerChange(playerId, field, value) {
+            const player = allPlayers.find(p => p.id === playerId);
+            if (!player) return;
+
+            let change = changedPlayers.get(playerId) || {
+                cadernetaActive: player.cadernetaActive,
+                cadernetaCasta: player.cadernetaCasta
+            };
+
+            change[field] = value;
+
+            // If it is identical to database data, remove the change tracking
+            if (change.cadernetaActive === player.cadernetaActive && change.cadernetaCasta === player.cadernetaCasta) {
+                changedPlayers.delete(playerId);
+            } else {
+                changedPlayers.set(playerId, change);
+            }
+
+            // Update UI Button states
+            const btnSave = document.getElementById('btnSave');
+            const countSpan = document.getElementById('changes-count');
+            countSpan.textContent = changedPlayers.size;
+            
+            if (changedPlayers.size > 0) {
+                btnSave.removeAttribute('disabled');
+            } else {
+                btnSave.setAttribute('disabled', 'true');
+            }
+        }
+
+        // Save batch
+        document.getElementById('btnSave').addEventListener('click', async () => {
+            const btnSave = document.getElementById('btnSave');
+            btnSave.setAttribute('disabled', 'true');
+            document.getElementById('loading-screen').style.display = 'flex';
+
+            const batch = writeBatch(db);
+
+            try {
+                for (const [playerId, change] of changedPlayers.entries()) {
+                    const player = allPlayers.find(p => p.id === playerId);
+                    if (!player) continue;
+
+                    const playerRef = doc(db, 'jogadores', playerId);
+                    const newMiniGames = normalizeMiniGamesForSave(player.originalData.miniGames);
+
+                    newMiniGames.caderneta = {
+                        estado: change.cadernetaActive,
+                        casta: change.cadernetaCasta
+                    };
+
+                    batch.set(playerRef, {
+                        miniGames: newMiniGames,
+                        ultimaAtualizacao: new Date().toISOString()
+                    }, { merge: true });
+                }
+
+                await batch.commit();
+
+                // Apply changes locally
+                for (const [playerId, change] of changedPlayers.entries()) {
+                    const player = allPlayers.find(p => p.id === playerId);
+                    if (player) {
+                        player.cadernetaActive = change.cadernetaActive;
+                        player.cadernetaCasta = change.cadernetaCasta;
+                        if (!player.originalData.miniGames || Array.isArray(player.originalData.miniGames)) {
+                            player.originalData.miniGames = {};
+                        }
+                        player.originalData.miniGames.caderneta = {
+                            estado: change.cadernetaActive,
+                            casta: change.cadernetaCasta
+                        };
+                    }
+                }
+
+                changedPlayers.clear();
+                document.getElementById('changes-count').textContent = '0';
+                
+                // Show Success Toast
+                const toast = document.getElementById('toast');
+                toast.style.display = 'block';
+                setTimeout(() => { toast.style.display = 'none'; }, 3000);
+
+                renderTable();
+
+            } catch (err) {
+                console.error("Erro ao gravar alterações:", err);
+                alert("Erro ao gravar alterações. Verifique o console.");
+            } finally {
+                document.getElementById('loading-screen').style.display = 'none';
+            }
+        });
+
+        // Set up search and filters
+        document.getElementById('tableSearch').addEventListener('input', renderTable);
+        document.getElementById('filter-clube').addEventListener('change', renderTable);
+        document.getElementById('filter-posicao').addEventListener('change', renderTable);
+
+        // Sorting
+        document.querySelectorAll('.excel-table th[data-sort]').forEach(th => {
+            th.addEventListener('click', () => {
+                const column = th.getAttribute('data-sort');
+                if (currentSortColumn === column) {
+                    currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
+                } else {
+                    currentSortColumn = column;
+                    currentSortDirection = 'asc';
+                }
+
+                // Update icons
+                document.querySelectorAll('.excel-table th i').forEach(icon => {
+                    icon.className = 'fas fa-sort';
+                    icon.style.color = '#8892b0';
+                });
+                const currentIcon = th.querySelector('i');
+                currentIcon.className = currentSortDirection === 'asc' ? 'fas fa-sort-up' : 'fas fa-sort-down';
+                currentIcon.style.color = '#2176ff';
+
+                renderTable();
+            });
+        });
+
+        // Start
+        document.addEventListener('DOMContentLoaded', initPage);
+    </script>
+    <script src="js/menuadmin-loader.js"></script>
+</body>
+</html>

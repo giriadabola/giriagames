@@ -1,0 +1,988 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Criar Mitos Game - G EMPIRE</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+    <!-- 1. Adiciona o nosso guardião de segurança. Ele deve ser o primeiro script. -->
+  <script type="module" src="js/auth-guard.js"></script>
+
+    <style>
+        /* --- CSS styles --- */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        .lab-icon { position: fixed; top: 80px; right: 20px; background-color: #2176ff; color: white; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.2); transition: transform 0.3s ease; z-index: 1500; }
+        .lab-icon:hover { transform: scale(1.1); }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); z-index: 2000; overflow-y: auto; }
+        .modal-content { position: relative; background-color: white; margin: 50px auto; padding: 20px; width: 90%; max-width: 500px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .close-modal { position: absolute; right: 20px; top: 20px; font-size: 24px; cursor: pointer; color: #666; }
+        .select2-container { width: 100% !important; }
+        .select2-dropdown { z-index: 2001; } /* Ensure dropdown is above modal overlay */
+        body { min-height: 100vh; background-color: #f0f0f0; font-family: Arial, sans-serif; }
+        .top-menu { position: fixed; top: 0; left: 0; width: 100%; background-color: #ffffff; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); padding: 12px 0; display: flex; justify-content: center; gap: 24px; align-items: center; z-index: 1000; }
+        .menu-item { text-decoration: none; color: #666; transition: color 0.3s ease; font-weight: 500; padding: 8px 16px; border-radius: 4px; display: flex; align-items: center; gap: 8px; }
+        .menu-item:hover, .menu-item.active { color: #2176ff; background-color: rgba(33, 118, 255, 0.1); }
+        .menu-item i { font-size: 16px; }
+        .content { padding: 80px 20px 20px; max-width: 800px; margin: 0 auto; }
+        .form-container { background: white; border-radius: 8px; padding: 24px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); }
+        h1, h2 { color: #333; margin-bottom: 24px; font-size: 24px; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; color: #333; font-weight: 500; }
+        input[type="text"], input[type="number"], textarea, select, input[type="datetime-local"] { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; background-color: white; }
+        select:disabled { background-color: #e9ecef; cursor: not-allowed;} /* Style for disabled select */
+        textarea { height: 100px; resize: vertical; }
+        .btn { background-color: #2176ff; color: white; border: none; padding: 12px 24px; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: 500; transition: background-color 0.3s ease; }
+        .btn:hover { background-color: #0056d6; }
+        .error-message { color: #dc3545; font-size: 14px; margin-top: 4px; display: none; }
+        .special-fields-group { background-color: #f9f9f9; padding: 15px; border-radius: 6px; margin-bottom: 20px; }
+        .competition-team-group { background-color: #eef4ff; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #d0dfff; }
+        .competition-team-group .form-group:last-child { margin-bottom: 0; }
+        #openSatelliteModal { top: 130px; right: 20px; background-color: #ff7f21; }
+        #satelliteModal .close-modal-btn { margin-top: 15px; background-color: #6c757d; }
+        #satelliteModal .close-modal-btn:hover { background-color: #5a6268; }
+    </style>
+
+    <link rel="stylesheet" href="css/admin-global.css">
+
+    <link rel="stylesheet" href="css/menu-admin.css">
+</head>
+<body style="display: none;"> <!-- 2. O corpo da página está oculto por padrão -->
+    
+    <!-- ****** FAMILY MODAL START ****** -->
+    <div id="familyModal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal">×</span>
+            <h2>Criar Item Mitos Game</h2>
+            <form id="createFamilyForm">
+                <div class="form-group">
+                    <label for="familyType">Tipo:</label>
+                    <select id="familyType" name="familyType" required>
+                        <option value="" disabled selected>Selecione o tipo</option>
+                        <option value="familia">Família</option>
+                        <option value="casta">Casta</option>
+                    </select>
+                    <div class="error-message">Por favor, selecione um tipo.</div>
+                </div>
+                <div class="form-group">
+                    <label for="familyName">Nome:</label>
+                    <input type="text" id="familyName" name="familyName" required>
+                     <div class="error-message">Por favor, insira um nome.</div>
+                </div>
+                <div class="form-group" id="castaFamilySelectorGroup" style="display: none;">
+                    <label for="castaFamilySelect">Selecione a Família da Casta:</label>
+                    <select id="castaFamilySelect" name="castaFamily">
+                        <option value="">Carregando famílias...</option>
+                    </select>
+                    <div class="error-message">Por favor, selecione a família da casta.</div>
+                </div>
+                <div class="form-group">
+                    <label for="familyImage">Imagem (URL):</label>
+                    <input type="text" id="familyImage" name="familyImage" required>
+                     <div class="error-message">Por favor, insira um URL de imagem válido.</div>
+                </div>
+                <div class="form-group">
+                    <label for="escudoImage">Escudo (URL):</label>
+                    <input type="text" id="escudoImage" name="escudoImage">
+                     <div class="error-message" style="display: none;">Por favor, insira um URL de escudo válido.</div>
+                </div>
+                <div class="form-group">
+                    <label for="familyCountries">Países:</label>
+                    <select id="familyCountries" name="familyCountries[]" multiple="multiple" required>
+                        <option value="">Carregando países...</option>
+                    </select>
+                     <div class="error-message">Por favor, selecione pelo menos um país.</div>
+                </div>
+                <button type="submit" class="btn">Criar Item</button>
+            </form>
+        </div>
+    </div>
+    <!-- ****** FAMILY MODAL END ****** -->
+
+    <!-- ****** SATELLITE MODAL START ****** -->
+    <div id="satelliteModal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal">×</span>
+            <h2>Criar Regra de Painel</h2>
+            <form id="satelliteForm">
+                <div class="form-group">
+                    <label for="satellitePais">País</label>
+                    <select id="satellitePais" name="satellitePais" required>
+                        <option value="" disabled selected>Selecione o País</option>
+                    </select>
+                    <div class="error-message">Por favor, selecione um país.</div>
+                </div>
+                <div class="form-group">
+                    <label for="satelliteCompeticao">Competição</label>
+                    <select id="satelliteCompeticao" name="satelliteCompeticao" required disabled>
+                        <option value="">Selecione um país primeiro</option>
+                    </select>
+                    <div class="error-message">Por favor, selecione uma competição.</div>
+                </div>
+                <div class="form-group">
+                    <label for="satellitePatamar">Patamar</label>
+                    <select id="satellitePatamar" name="satellitePatamar" required>
+                        <option value="Patamar 1" selected>Patamar 1</option><option value="Patamar 2">Patamar 2</option><option value="Patamar 3">Patamar 3</option><option value="Patamar 4">Patamar 4</option><option value="Patamar 5">Patamar 5</option><option value="Patamar 6">Patamar 6</option><option value="Patamar 7">Patamar 7</option><option value="Patamar 8">Patamar 8</option><option value="Patamar 9">Patamar 9</option><option value="Patamar 10">Patamar 10</option><option value="Patamar 11">Patamar 11</option><option value="Patamar 12">Patamar 12</option><option value="Patamar 13">Patamar 13</option><option value="Patamar 14">Patamar 14</option><option value="Patamar 15">Patamar 15</option><option value="Patamar 16">Patamar 16</option><option value="Patamar 17">Patamar 17</option><option value="Patamar 18">Patamar 18</option><option value="Patamar 19">Patamar 19</option><option value="Patamar 20">Patamar 20</option>
+                    </select>
+                    <div class="error-message">Por favor, selecione um patamar.</div>
+                </div>
+                <div class="form-group">
+                    <label for="satelliteAtivo">Ativo?</label>
+                    <select id="satelliteAtivo" name="satelliteAtivo" required>
+                        <option value="yes" selected>Sim</option>
+                        <option value="no">Não</option>
+                    </select>
+                    <div class="error-message">Por favor, selecione o estado ativo.</div>
+                </div>
+                <button type="submit" class="btn">Criar Regra</button>
+                <button type="button" class="btn close-modal-btn" style="margin-left: 10px;">Cancelar</button>
+            </form>
+        </div>
+    </div>
+    <!-- ****** SATELLITE MODAL END ****** -->
+
+    <div class="lab-icon" id="openFamilyModal"> <i class="fas fa-flask"></i> </div>
+    <div class="lab-icon" id="openSatelliteModal"> <i class="fas fa-satellite"></i> </div>
+
+    <nav id="menu-placeholder" class="top-menu"></nav>
+
+    <main class="content">
+        <div class="form-container">
+            <h1>Criar Novo Jogo de Mitos</h1>
+            <form id="createMitosForm">
+                <div class="form-group"><label for="name">Nome</label><input type="text" id="name" name="name" required><div class="error-message">Por favor, insira um nome válido.</div></div>
+                <div class="form-group"><label for="familia">Família</label><select id="familia" name="familia" required><option value="">Selecione a família</option></select><div class="error-message">Por favor, selecione uma família.</div></div>
+                <div class="form-group"><label for="castaSelect">Casta</label><select id="castaSelect" name="casta" required disabled><option value="">Selecione uma família primeiro</option></select><div class="error-message">Por favor, selecione uma casta.</div></div>
+                <div class="form-group"><label for="description">Descrição</label><textarea id="description" name="description" required></textarea><div class="error-message">Por favor, insira uma descrição.</div></div>
+                <div class="form-group"><label for="imagem">URL da Imagem</label><input type="text" id="imagem" name="imagem" required><div class="error-message">Por favor, insira uma URL de imagem válida.</div></div>
+                <div class="competition-team-group">
+                    <div class="form-group"><label for="competicao1">Competição 1 (Opcional)</label><select id="competicao1" name="competicao1" disabled><option value="">Selecione uma casta primeiro</option></select></div>
+                    <div class="form-group"><label for="equipa1">Equipa 1 (Opcional)</label><select id="equipa1" name="equipa1" disabled><option value="">Selecione uma competição primeiro</option></select></div>
+                    <div class="form-group"><label for="competicao2">Competição 2 (Opcional)</label><select id="competicao2" name="competicao2" disabled><option value="">Selecione uma casta primeiro</option></select></div>
+                    <div class="form-group"><label for="equipa2">Equipa 2 (Opcional)</label><select id="equipa2" name="equipa2" disabled><option value="">Selecione uma competição primeiro</option></select></div>
+                    <div class="form-group"><label for="competicao3">Competição 3 (Opcional)</label><select id="competicao3" name="competicao3" disabled><option value="">Selecione uma casta primeiro</option></select></div>
+                    <div class="form-group"><label for="equipa3">Equipa 3 (Opcional)</label><select id="equipa3" name="equipa3" disabled><option value="">Selecione uma competição primeiro</option></select></div>
+                    <div class="form-group"><label for="competicao4">Competição 4 (Opcional)</label><select id="competicao4" name="competicao4" disabled><option value="">Selecione uma casta primeiro</option></select></div>
+                    <div class="form-group"><label for="equipa4">Equipa 4 (Opcional)</label><select id="equipa4" name="equipa4" disabled><option value="">Selecione uma competição primeiro</option></select></div>
+                </div>
+                <div class="form-group"><label for="pontosGanhos">Pontos Ganhos</label><input type="number" id="pontosGanhos" name="pontosGanhos" min="0" value="0"></div>
+                <div class="form-group"><label for="vitorias">Vitórias</label><input type="number" id="vitorias" name="vitorias" min="0" value="0"></div>
+                <div class="form-group"><label for="empates">Empates</label><input type="number" id="empates" name="empates" min="0" value="0"></div>
+                <div class="form-group"><label for="derrotas">Derrotas</label><input type="number" id="derrotas" name="derrotas" min="0" value="0"></div>
+                <div class="special-fields-group">
+                    <div class="form-group"><label for="ativo">Ativo?</label><select id="ativo" name="ativo" required><option value="yes">Sim</option><option value="no">Não</option></select></div>
+                    <div class="form-group"><label for="visivel">Visível?</label><select id="visivel" name="visivel" required><option value="no" selected>Não</option><option value="yes">Sim</option></select></div>
+                    <div class="form-group"><label for="dataAtivacao">Data de Ativação (Opcional)</label><input type="datetime-local" id="dataAtivacao" name="dataAtivacao"></div>
+                </div>
+                <div class="form-group"><label for="compradoPor">Comprado Por (Opcional)</label><select id="compradoPor" name="compradoPor"><option value="">Selecione o comprador</option></select></div>
+                <div class="form-group"><label for="nivel">Nível</label><select id="nivel" name="nivel" required><option value="Nivel 1" selected>Nivel 1</option><option value="Nivel 2">Nivel 2</option><option value="Nivel 3">Nivel 3</option></select></div>
+                <div class="form-group"><label for="patamar">Patamar</label><select id="patamar" name="patamar" required><option value="Patamar 1" selected>Patamar 1</option><option value="Patamar 2">Patamar 2</option><option value="Patamar 3">Patamar 3</option><option value="Patamar 4">Patamar 4</option><option value="Patamar 5">Patamar 5</option><option value="Patamar 6">Patamar 6</option><option value="Patamar 7">Patamar 7</option><option value="Patamar 8">Patamar 8</option><option value="Patamar 9">Patamar 9</option><option value="Patamar 10">Patamar 10</option><option value="Patamar 11">Patamar 11</option><option value="Patamar 12">Patamar 12</option><option value="Patamar 13">Patamar 13</option><option value="Patamar 14">Patamar 14</option><option value="Patamar 15">Patamar 15</option><option value="Patamar 16">Patamar 16</option><option value="Patamar 17">Patamar 17</option><option value="Patamar 18">Patamar 18</option><option value="Patamar 19">Patamar 19</option><option value="Patamar 20">Patamar 20</option></select></div>
+                <div class="form-group"><label for="preco">Preço</label><input type="text" id="preco" name="preco" value="0"></div>
+                <button type="submit" class="btn">Criar Jogo de Mitos</button>
+            </form>
+        </div>
+    </main>
+
+    <!-- 3. O script da página foi modificado e limpo -->
+    <script type="module">
+        // Importa a variável 'db' do guardião central e outras funções do Firestore
+        import { db } from './js/auth-guard.js';
+        import { collection, addDoc, getDocs, query, where, doc, getDoc, setDoc, updateDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+    
+        // A inicialização do Firebase ('firebaseConfig', 'initializeApp', etc.) foi REMOVIDA daqui
+    
+        // ****** Modal Elements & Functionality (Constants declared globally, check existence before use) ******
+        const familyModal = document.getElementById('familyModal');
+        const openFamilyBtn = document.getElementById('openFamilyModal');
+        const closeFamilyBtn = familyModal ? familyModal.querySelector('.close-modal') : null;
+        const familyTypeSelect = document.getElementById('familyType');
+        const castaFamilySelectorGroup = document.getElementById('castaFamilySelectorGroup');
+        const castaFamilySelect = document.getElementById('castaFamilySelect');
+        const createFamilyForm = document.getElementById('createFamilyForm');
+        const escudoImageInput = document.getElementById('escudoImage');
+        const satelliteModal = document.getElementById('satelliteModal');
+        const openSatelliteBtn = document.getElementById('openSatelliteModal');
+        const closeSatelliteBtns = satelliteModal ? satelliteModal.querySelectorAll('.close-modal, .close-modal-btn') : [];
+    
+        // ****** Main Form Elements ******
+        const mainForm = document.getElementById('createMitosForm');
+        const familiaSelectMain = document.getElementById('familia');
+        const castaSelectMain = document.getElementById('castaSelect');
+        const competicaoSelects = [
+            document.getElementById('competicao1'), document.getElementById('competicao2'),
+            document.getElementById('competicao3'), document.getElementById('competicao4')
+        ];
+        const equipaSelects = [
+            document.getElementById('equipa1'), document.getElementById('equipa2'),
+            document.getElementById('equipa3'), document.getElementById('equipa4')
+        ];
+    
+        // ****** Global Data Holders ******
+        let allCompetitionsData = [];
+        let allClubsData = [];
+        let countriesMapById = new Map();
+        let countriesMapByName = new Map();
+        let allFamiliasData = new Map();
+        let allCastasData = new Map();
+    
+        // ****** Event Listeners (Family Modal) ******
+        if (openFamilyBtn) {
+            openFamilyBtn.onclick = function() {
+                if (familyModal) familyModal.style.display = "block";
+                if (createFamilyForm) createFamilyForm.reset();
+                $('#familyCountries').val(null).trigger('change');
+                if (castaFamilySelectorGroup) castaFamilySelectorGroup.style.display = 'none';
+                if (castaFamilySelect) {
+                    castaFamilySelect.required = false;
+                    castaFamilySelect.innerHTML = '<option value="">Carregando famílias...</option>';
+                }
+                if(familyModal) familyModal.querySelectorAll('.error-message').forEach(el => el.style.display = 'none');
+                loadCountriesModal();
+            }
+        }
+        if (closeFamilyBtn) {
+            closeFamilyBtn.onclick = function() { if (familyModal) familyModal.style.display = "none"; }
+        }
+    
+        // ****** Event Listeners (Satellite Modal) ******
+        if (openSatelliteBtn) {
+            openSatelliteBtn.onclick = async function() {
+                const satelliteModalElement = document.getElementById('satelliteModal');
+                const satelliteFormElement = document.getElementById('satelliteForm');
+                const satellitePaisSelectElement = document.getElementById('satellitePais');
+                const satelliteCompeticaoSelectElement = document.getElementById('satelliteCompeticao');
+                const satellitePatamarSelectElement = document.getElementById('satellitePatamar');
+                const satelliteAtivoSelectElement = document.getElementById('satelliteAtivo');
+    
+                if (!satelliteModalElement || !satelliteFormElement || !satellitePaisSelectElement || !satelliteCompeticaoSelectElement || !satellitePatamarSelectElement || !satelliteAtivoSelectElement ) {
+                    console.error("One or more satellite modal elements not found!");
+                    return;
+                }
+    
+                satelliteModalElement.style.display = "block";
+                satelliteFormElement.reset();
+    
+                satelliteCompeticaoSelectElement.innerHTML = '<option value="">Selecione um país primeiro</option>';
+                satelliteCompeticaoSelectElement.disabled = true;
+    
+                $(satellitePaisSelectElement).val(null).trigger('change');
+                $(satelliteCompeticaoSelectElement).val(null).trigger('change');
+                $(satellitePatamarSelectElement).val('Patamar 1').trigger('change');
+                $(satelliteAtivoSelectElement).val('yes').trigger('change');
+    
+                satelliteModalElement.querySelectorAll('.error-message').forEach(el => el.style.display = 'none');
+    
+                await populateSatellitePais();
+    
+                 if (satellitePaisSelectElement && !satellitePaisSelectElement.disabled) {
+                     setTimeout(() => {
+                         $(satellitePaisSelectElement).select2({
+                             placeholder: 'Selecione o País', allowClear: true,
+                             dropdownParent: $(satelliteModalElement),
+                             dropdownAutoWidth: true
+                         });
+                     }, 0);
+                 } else if (satellitePaisSelectElement) {
+                     console.warn("Satellite Pais select is disabled, cannot initialize Select2.");
+                 }
+    
+                if(satelliteCompeticaoSelectElement && satellitePatamarSelectElement && satelliteAtivoSelectElement) {
+                    setTimeout(() => {
+                        $(satelliteCompeticaoSelectElement).select2({
+                             placeholder: 'Selecione a Competição', allowClear: true,
+                             dropdownParent: $(satelliteModalElement),
+                             dropdownAutoWidth: true
+                         });
+                        $(satellitePatamarSelectElement).select2({
+                             dropdownParent: $(satelliteModalElement),
+                             dropdownAutoWidth: true,
+                             minimumResultsForSearch: Infinity
+                         });
+                        $(satelliteAtivoSelectElement).select2({
+                             dropdownParent: $(satelliteModalElement),
+                             dropdownAutoWidth: true,
+                             minimumResultsForSearch: Infinity
+                        });
+                    }, 0);
+                }
+    
+                console.log("Satellite Modal Opened and form prepared.");
+            }
+        }
+    
+        if(closeSatelliteBtns && closeSatelliteBtns.length > 0) {
+            closeSatelliteBtns.forEach(btn => {
+                btn.onclick = function() {
+                    if (satelliteModal) satelliteModal.style.display = "none";
+                }
+            });
+        }
+    
+        window.onclick = function(event) {
+            if (event.target == familyModal) {
+                if(familyModal) familyModal.style.display = "none";
+            }
+            if (event.target == satelliteModal) {
+                if(satelliteModal) satelliteModal.style.display = "none";
+            }
+        }
+    
+        async function loadFamiliesForCastaSelectModal() { console.log("Placeholder: loadFamiliesForCastaSelectModal"); }
+        async function loadUsers() { console.log("Placeholder: loadUsers"); }
+        async function loadFamiliasMainForm() { console.log("Placeholder: loadFamiliasMainForm"); }
+        async function loadAllClubs() { console.log("Placeholder: loadAllClubs"); allClubsData = []; }
+        async function loadCountriesModal() { console.log("Placeholder: loadCountriesModal"); }
+    
+        async function loadAllCountries() {
+            console.log("--> loadAllCountries START");
+            countriesMapById.clear();
+            countriesMapByName.clear();
+            let count = 0;
+            try {
+                const querySnapshot = await getDocs(collection(db, 'paises'));
+                console.log(`--> loadAllCountries: Snapshot empty? ${querySnapshot.empty}. Size: ${querySnapshot.size}`);
+                if (!querySnapshot.empty) {
+                    querySnapshot.forEach((doc) => {
+                        const data = doc.data();
+                        if (data && data.nome) {
+                            countriesMapById.set(doc.id, data.nome);
+                            countriesMapByName.set(data.nome, doc.id);
+                            count++;
+                        } else {
+                             console.warn(`--> loadAllCountries: Documento de país (ID: ${doc.id}) não possui campo 'nome' ou data is null.`);
+                        }
+                    });
+                     console.log(`--> loadAllCountries: FINISHED PROCESSING. Added ${count} countries. Map size: ${countriesMapByName.size}`);
+                } else {
+                    console.warn("--> loadAllCountries: Nenhum país encontrado na coleção 'paises'. Snapshot was empty.");
+                }
+            } catch (error) {
+                console.error("--> Erro fatal ao carregar todos os países: ", error);
+            }
+             console.log("--> loadAllCountries END");
+        }
+    
+        async function loadAllCompetitions() {
+            console.log("--> loadAllCompetitions START");
+            allCompetitionsData = [];
+            let processedCount = 0;
+            let addedCount = 0;
+            try {
+                if (countriesMapById.size === 0) {
+                    console.log("--> loadAllCompetitions: countriesMapById is empty, reloading countries...");
+                    await loadAllCountries();
+                     if (countriesMapById.size === 0) {
+                         console.error("--> loadAllCompetitions: Failed to load countries, cannot map competitions accurately. Aborting competition load.");
+                         return;
+                     }
+                }
+    
+                const competicoesSnapshot = await getDocs(collection(db, 'competicoes'));
+                console.log(`--> loadAllCompetitions: Snapshot empty? ${competicoesSnapshot.empty}. Size: ${competicoesSnapshot.size}`);
+    
+                if (!competicoesSnapshot.empty) {
+                    competicoesSnapshot.forEach((doc) => {
+                        processedCount++;
+                        const data = doc.data();
+    
+                        const competitionId = doc.id;
+                        const competitionName = data.nome;
+                        const competitionEchelon = data.escalao;
+                        const countryId = data.paisId;
+    
+                        if (!competitionName || !countryId) {
+                             console.warn(`--> loadAllCompetitions: Competição (ID: ${doc.id}) IGNORADA por falta de 'nome' (${competitionName}) ou 'paisId' (${countryId}).`);
+                             return;
+                        }
+    
+                         const countryName = countriesMapById.get(countryId);
+                         let displayText = "";
+    
+                         if (!countryName) {
+                             console.warn(`--> loadAllCompetitions: Competição '${competitionName}' (ID: ${doc.id}) tem paisId '${countryId}' inválido ou país não encontrado no countriesMapById.`);
+                              displayText = competitionEchelon ? `${competitionEchelon} - ${competitionName}` : competitionName;
+                         } else {
+                              if (competitionEchelon) {
+                                 displayText = `${countryName}: ${competitionEchelon} - ${competitionName}`;
+                             } else {
+                                 displayText = `${countryName}: ${competitionName}`;
+                             }
+                         }
+    
+                         if (!displayText) {
+                             console.warn(`--> loadAllCompetitions: DisplayText generation failed for Comp ID ${doc.id}, skipping.`);
+                             return;
+                         }
+    
+                        allCompetitionsData.push({
+                            id: competitionId,
+                            name: competitionName,
+                            paisId: countryId,
+                            escalao: competitionEchelon || '',
+                            displayText: displayText
+                        });
+                        addedCount++;
+    
+                    });
+                     console.log(`--> loadAllCompetitions: FINISHED PROCESSING. Processed ${processedCount}, Added ${addedCount} competitions. Array length: ${allCompetitionsData.length}`);
+                } else {
+                     console.warn("--> loadAllCompetitions: Nenhuma competição encontrada na coleção 'competicoes'. Snapshot estava vazio.");
+                }
+            } catch (error) {
+                console.error("--> Erro fatal ao carregar todas as competições: ", error);
+            }
+             console.log(`--> loadAllCompetitions END. Final array length: ${allCompetitionsData.length}`);
+        }
+    
+        function updateCompetitionDropdowns(allowedCountryNames = []) {
+            console.log("updateCompetitionDropdowns called with countries:", allowedCountryNames);
+            const countryIds = allowedCountryNames.map(name => countriesMapByName.get(name)).filter(id => id);
+    
+            competicaoSelects.forEach(select => {
+                const currentVal = $(select).val();
+                $(select).empty().append('<option value="">Selecione a competição</option>').prop('disabled', true);
+    
+                if (countryIds.length > 0) {
+                    const filteredCompetitions = allCompetitionsData
+                        .filter(comp => countryIds.includes(comp.paisId))
+                        .sort((a, b) => (a.displayText || a.name).localeCompare(b.displayText || b.name));
+    
+                    if (filteredCompetitions.length > 0) {
+                        filteredCompetitions.forEach(comp => {
+                            select.appendChild(new Option(comp.displayText || comp.name, comp.name));
+                        });
+                        $(select).prop('disabled', false);
+                    } else {
+                        $(select).append('<option value="">Nenhuma competição encontrada</option>');
+                    }
+                } else {
+                     $(select).prop('disabled', true).empty().append('<option value="">Selecione uma casta primeiro</option>');
+                }
+                $(select).val(currentVal).trigger('change.select2');
+            });
+            equipaSelects.forEach(select => $(select).empty().append('<option value="">Selecione uma competição primeiro</option>').prop('disabled', true).trigger('change.select2'));
+        }
+    
+        async function loadCastasForSelectedFamily(familyId) {
+            console.log(`loadCastasForSelectedFamily called with familyId: ${familyId}`);
+            if (!castaSelectMain) { console.error("Casta select main not found"); return; }
+            $(castaSelectMain).empty().prop('disabled', true);
+            allCastasData.clear();
+    
+            if (!familyId) {
+                $(castaSelectMain).append('<option value="">Selecione uma família primeiro</option>').trigger('change');
+                updateCompetitionDropdowns([]);
+                return;
+            }
+    
+            $(castaSelectMain).append('<option value="">Carregando castas...</option>').trigger('change');
+            try {
+                const q = query(collection(db, 'mitosgameItens'), where('tipo', '==', 'casta'), where('familiaId', '==', familyId));
+                const querySnapshot = await getDocs(q);
+    
+                $(castaSelectMain).empty().append('<option value="">Selecione a casta</option>');
+                if (querySnapshot.empty) {
+                    $(castaSelectMain).append('<option value="" disabled>Nenhuma casta encontrada</option>');
+                } else {
+                    querySnapshot.forEach((doc) => {
+                        const casta = doc.data();
+                        casta.id = doc.id;
+                        allCastasData.set(doc.id, casta);
+                        castaSelectMain.appendChild(new Option(casta.nome, doc.id));
+                    });
+                    $(castaSelectMain).prop('disabled', false);
+                }
+                $(castaSelectMain).trigger('change');
+    
+            } catch (error) {
+                console.error("Erro ao carregar castas: ", error);
+                $(castaSelectMain).empty().append('<option value="">Erro ao carregar castas</option>');
+            }
+        }
+    
+        function formatClub(club) {
+            if (!club.id) { return club.text; }
+            return club.text;
+        }
+    
+        function updateEquipaDropdown(competitionIndex) {
+            const competicaoSelect = competicaoSelects[competitionIndex - 1];
+            const equipaSelect = equipaSelects[competitionIndex - 1];
+            if (!competicaoSelect || !equipaSelect) return;
+    
+            const selectedCompetitionName = $(competicaoSelect).val();
+            $(equipaSelect).empty().prop('disabled', true);
+    
+            if (!selectedCompetitionName) {
+                $(equipaSelect).append('<option value="">Selecione uma competição primeiro</option>').trigger('change.select2');
+                return;
+            }
+    
+            const competitionData = allCompetitionsData.find(comp => comp.name === selectedCompetitionName);
+            if (!competitionData) {
+                 console.error(`Could not find competition data for name: ${selectedCompetitionName}`);
+                 $(equipaSelect).append('<option value="">Erro: Competição inválida</option>').trigger('change.select2');
+                 return;
+            }
+            const competitionId = competitionData.id;
+    
+    
+            $(equipaSelect).append('<option value="">Carregando equipas...</option>').trigger('change.select2');
+    
+            const filteredClubs = allClubsData
+                .filter(club => club.competicaoId === competitionId)
+                .sort((a, b) => a.name.localeCompare(b.name));
+    
+            $(equipaSelect).empty();
+            if (filteredClubs.length > 0) {
+                $(equipaSelect).append('<option value="">Selecione a equipa</option>');
+                filteredClubs.forEach(club => {
+                    equipaSelect.appendChild(new Option(club.name, club.id));
+                });
+                $(equipaSelect).prop('disabled', false);
+            } else {
+                $(equipaSelect).append('<option value="">Nenhuma equipa encontrada</option>');
+            }
+            $(equipaSelect).trigger('change.select2');
+        }
+    
+        function validateModalForm() {
+            let isValid = true;
+            const form = createFamilyForm;
+            form.querySelectorAll('.error-message').forEach(el => el.style.display = 'none');
+            form.querySelectorAll('input[required], select[required]').forEach(input => {
+                let fieldValid = true;
+                if (input.tagName === 'SELECT') {
+                    if (!input.value || (input.multiple && $(input).val().length === 0)) {
+                        fieldValid = false;
+                    }
+                } else {
+                    if (!input.value.trim()) {
+                        fieldValid = false;
+                    }
+                     if (input.type === 'text' && (input.id === 'familyImage' || input.id === 'escudoImage') && input.value.trim()) {
+                        try { new URL(input.value.trim()); } catch (_) { fieldValid = false; }
+                     }
+                }
+    
+                if (!fieldValid && $(input).is(':visible')) {
+                    isValid = false;
+                    $(input).closest('.form-group').find('.error-message').show();
+                }
+            });
+            return isValid;
+        }
+    
+        function validateMainForm() {
+             let isValid = true;
+             const form = mainForm;
+             form.querySelectorAll('.error-message').forEach(el => el.style.display = 'none');
+             form.querySelectorAll('input[required], select[required], textarea[required]').forEach(input => {
+                  let fieldValid = true;
+                  if (input.tagName === 'SELECT') {
+                      if (!input.value || (input.multiple && $(input).val().length === 0)) { fieldValid = false; }
+                  } else {
+                      if (!input.value.trim()) { fieldValid = false; }
+                      if (input.id === 'imagem' && input.value.trim()) {
+                         try { new URL(input.value.trim()); } catch (_) { fieldValid = false; }
+                      }
+                  }
+                   if (!fieldValid) {
+                      isValid = false;
+                      $(input).closest('.form-group').find('.error-message').show();
+                  }
+             });
+             return isValid;
+        }
+    
+        async function populateSatellitePais() {
+            const satellitePaisSelectElement = document.getElementById('satellitePais');
+            if (!satellitePaisSelectElement) { console.error("Satellite Pais select not found for populating"); return; }
+    
+            satellitePaisSelectElement.innerHTML = '<option value="">Carregando países...</option>';
+            satellitePaisSelectElement.disabled = true;
+            try {
+                if (countriesMapByName.size === 0) {
+                    console.log("Populate Satellite Pais: Countries map empty, loading...");
+                    await loadAllCountries();
+                    console.log(`Populate Satellite Pais: Countries loaded, map size: ${countriesMapByName.size}`);
+                }
+    
+                satellitePaisSelectElement.innerHTML = '<option value="" disabled selected>Selecione o País</option>';
+                if (countriesMapByName.size === 0) {
+                    satellitePaisSelectElement.innerHTML = '<option value="">Nenhum país encontrado</option>';
+                     console.warn("Populate Satellite Pais: No countries found in map after loading.");
+                } else {
+                     const sortedCountryNames = Array.from(countriesMapByName.keys()).sort((a, b) => a.localeCompare(b));
+                     sortedCountryNames.forEach(countryName => {
+                        const option = new Option(countryName, countryName);
+                        satellitePaisSelectElement.appendChild(option);
+                     });
+                     satellitePaisSelectElement.disabled = false;
+                     console.log(`Populate Satellite Pais: Populated with ${sortedCountryNames.length} countries.`);
+                }
+            } catch (error) {
+                console.error("Erro ao carregar países para o modal satélite: ", error);
+                satellitePaisSelectElement.innerHTML = '<option value="">Erro ao carregar países</option>';
+            }
+        }
+    
+        function populateSatelliteCompeticao(selectedCountryName) {
+            const satelliteCompeticaoSelectElement = document.getElementById('satelliteCompeticao');
+            if (!satelliteCompeticaoSelectElement) { console.error("Satellite Competicao select not found for populating"); return; }
+    
+            satelliteCompeticaoSelectElement.innerHTML = '<option value="">Carregando competições...</option>';
+            satelliteCompeticaoSelectElement.disabled = true;
+            $(satelliteCompeticaoSelectElement).val(null).trigger('change');
+    
+            if (!selectedCountryName) {
+                satelliteCompeticaoSelectElement.innerHTML = '<option value="">Selecione um país primeiro</option>';
+                $(satelliteCompeticaoSelectElement).trigger('change');
+                return;
+            }
+            const countryId = countriesMapByName.get(selectedCountryName);
+            if (!countryId) {
+                 console.error(`Country ID not found for name: ${selectedCountryName}`);
+                 satelliteCompeticaoSelectElement.innerHTML = '<option value="">Erro interno (País inválido)</option>';
+                 $(satelliteCompeticaoSelectElement).trigger('change');
+                 return;
+            }
+            if (allCompetitionsData.length === 0) {
+                 console.warn("populateSatelliteCompeticao: Competition data array (allCompetitionsData) is empty.");
+                 satelliteCompeticaoSelectElement.innerHTML = '<option value="">Dados de competição não carregados</option>';
+                 $(satelliteCompeticaoSelectElement).trigger('change');
+                 return;
+            }
+    
+            const filteredCompetitions = allCompetitionsData
+                .filter(comp => comp.paisId === countryId)
+                .sort((a, b) => (a.displayText || a.name).localeCompare(b.displayText || b.name));
+    
+            console.log(`populateSatelliteCompeticao: Found ${filteredCompetitions.length} competitions for country ID ${countryId} (${selectedCountryName}).`);
+    
+            satelliteCompeticaoSelectElement.innerHTML = '<option value="" disabled selected>Selecione a Competição</option>';
+            if (filteredCompetitions.length === 0) {
+                satelliteCompeticaoSelectElement.innerHTML = '<option value="">Nenhuma competição encontrada</option>';
+            } else {
+                filteredCompetitions.forEach(comp => {
+                    const option = new Option(comp.displayText || comp.name, comp.name);
+                    satelliteCompeticaoSelectElement.appendChild(option);
+                });
+                satelliteCompeticaoSelectElement.disabled = false;
+            }
+             $(satelliteCompeticaoSelectElement).trigger('change');
+        }
+    
+        function validateSatelliteForm() {
+            let isValid = true;
+            const satelliteModalElement = document.getElementById('satelliteModal');
+            const satellitePaisSelectElement = document.getElementById('satellitePais');
+            const satelliteCompeticaoSelectElement = document.getElementById('satelliteCompeticao');
+            const satellitePatamarSelectElement = document.getElementById('satellitePatamar');
+            const satelliteAtivoSelectElement = document.getElementById('satelliteAtivo');
+    
+            if (!satelliteModalElement || !satellitePaisSelectElement || !satelliteCompeticaoSelectElement || !satellitePatamarSelectElement || !satelliteAtivoSelectElement) {
+                 console.error("Cannot validate satellite form, elements missing.");
+                 return false;
+            }
+    
+            satelliteModalElement.querySelectorAll('.error-message').forEach(el => el.style.display = 'none');
+    
+            if (!$(satellitePaisSelectElement).val()) {
+                isValid = false;
+                $(satellitePaisSelectElement).closest('.form-group').find('.error-message').show();
+            }
+            if (!$(satelliteCompeticaoSelectElement).val()) {
+                 isValid = false;
+                 $(satelliteCompeticaoSelectElement).closest('.form-group').find('.error-message').show();
+            }
+             if (!$(satellitePatamarSelectElement).val()) {
+                 isValid = false;
+                 $(satellitePatamarSelectElement).closest('.form-group').find('.error-message').show();
+             }
+             if (!$(satelliteAtivoSelectElement).val()) {
+                 isValid = false;
+                 $(satelliteAtivoSelectElement).closest('.form-group').find('.error-message').show();
+             }
+            return isValid;
+        }
+    
+        $(document).ready(function() {
+            console.log("Document Ready function started!");
+    
+            const satelliteFormElement = document.getElementById('satelliteForm');
+            const satellitePaisSelectElement = document.getElementById('satellitePais');
+            const satelliteCompeticaoSelectElement = document.getElementById('satelliteCompeticao');
+            const satellitePatamarSelectElement = document.getElementById('satellitePatamar');
+            const satelliteAtivoSelectElement = document.getElementById('satelliteAtivo');
+            const familiaSelectMainElement = document.getElementById('familia');
+            const castaSelectMainElement = document.getElementById('castaSelect');
+            const familyCountriesElement = document.getElementById('familyCountries');
+    
+            if (familiaSelectMainElement) $(familiaSelectMainElement).select2({ placeholder: 'Selecione uma família', allowClear: true, dropdownAutoWidth: true });
+            $('#compradoPor').select2({ placeholder: 'Selecione o comprador', allowClear: true, dropdownAutoWidth: true });
+            if (castaSelectMainElement) $(castaSelectMainElement).select2({ placeholder: 'Selecione uma família primeiro', allowClear: true, dropdownAutoWidth: true }).prop('disabled', true);
+            $('#competicao1, #competicao2, #competicao3, #competicao4').select2({ placeholder: 'Selecione uma casta primeiro', allowClear: true, dropdownAutoWidth: true }).prop('disabled', true);
+            $('#equipa1, #equipa2, #equipa3, #equipa4').select2({ placeholder: 'Selecione uma competição primeiro', allowClear: true, dropdownAutoWidth: true, templateResult: formatClub, templateSelection: formatClub }).prop('disabled', true);
+            if (familyCountriesElement) $(familyCountriesElement).select2({ placeholder: 'Selecione os países', allowClear: true, dropdownParent: $('#familyModal'), dropdownAutoWidth: true });
+    
+            if (familiaSelectMainElement) {
+                $(familiaSelectMainElement).on('select2:select', function (e) { console.log('Familia selected'); loadCastasForSelectedFamily(this.value); updateCompetitionDropdowns([]); });
+                $(familiaSelectMainElement).on('select2:clear', function (e) { console.log('Familia cleared'); loadCastasForSelectedFamily(null); updateCompetitionDropdowns([]); });
+            } else { console.warn("familiaSelectMainElement not found for listeners."); }
+    
+            if (castaSelectMainElement) {
+                 $(castaSelectMainElement).on('select2:select', function (e) {
+                     console.log('Casta selected');
+                     const castaData = allCastasData.get(this.value);
+                     const allowedCountryNames = castaData?.paises || [];
+                     console.log("Updating competition dropdowns for countries:", allowedCountryNames);
+                     updateCompetitionDropdowns(allowedCountryNames);
+                 });
+                 $(castaSelectMainElement).on('select2:clear', function (e) { console.log('Casta cleared'); updateCompetitionDropdowns([]); });
+            } else { console.warn("castaSelectMainElement not found for listeners."); }
+    
+            $('#competicao1').on('change', () => updateEquipaDropdown(1));
+            $('#competicao2').on('change', () => updateEquipaDropdown(2));
+            $('#competicao3').on('change', () => updateEquipaDropdown(3));
+            $('#competicao4').on('change', () => updateEquipaDropdown(4));
+    
+            if (familyTypeSelect) {
+                familyTypeSelect.addEventListener('change', function() {
+                    const selectedType = this.value;
+                    const escudoGroup = $('#escudoImage').closest('.form-group');
+                    if (castaFamilySelectorGroup) castaFamilySelectorGroup.style.display = selectedType === 'casta' ? 'block' : 'none';
+                    if (castaFamilySelect) castaFamilySelect.required = selectedType === 'casta';
+                    if (selectedType === 'casta') { loadFamiliesForCastaSelectModal(); }
+                    $(this).closest('.form-group').find('.error-message').hide();
+                    $('#familyName').closest('.form-group').find('.error-message').hide();
+                    $('#familyImage').closest('.form-group').find('.error-message').hide();
+                    if (escudoGroup) escudoGroup.find('.error-message').hide();
+                    $('#familyCountries').closest('.form-group').find('.error-message').hide();
+                    if(castaFamilySelectorGroup) $(castaFamilySelectorGroup).find('.error-message').hide();
+                });
+            } else { console.warn("familyTypeSelect not found for listener."); }
+    
+            if (satellitePaisSelectElement) {
+                $(satellitePaisSelectElement).on('change', function() {
+                     console.log(`Satellite Pais CHANGED to: ${$(this).val()}`);
+                    $(this).closest('.form-group').find('.error-message').hide();
+                    populateSatelliteCompeticao($(this).val());
+                });
+            } else { console.warn("satellitePaisSelectElement not found for listener."); }
+    
+            if (satelliteCompeticaoSelectElement) {
+                $(satelliteCompeticaoSelectElement).on('change', function() {
+                     console.log(`Satellite Competicao CHANGED to: ${$(this).val()}`);
+                    $(this).closest('.form-group').find('.error-message').hide();
+                });
+            } else { console.warn("satelliteCompeticaoSelectElement not found for listener."); }
+    
+            if (satellitePatamarSelectElement) {
+                $(satellitePatamarSelectElement).on('change', function() {
+                     console.log(`Satellite Patamar CHANGED to: ${$(this).val()}`);
+                     $(this).closest('.form-group').find('.error-message').hide();
+                });
+            } else { console.warn("satellitePatamarSelectElement not found for listener."); }
+    
+             if (satelliteAtivoSelectElement) {
+                $(satelliteAtivoSelectElement).on('change', function() {
+                     console.log(`Satellite Ativo CHANGED to: ${$(this).val()}`);
+                     $(this).closest('.form-group').find('.error-message').hide();
+                });
+            } else { console.warn("satelliteAtivoSelectElement not found for listener."); }
+    
+            if (createFamilyForm) {
+                createFamilyForm.addEventListener('submit', async function(e) {
+                     e.preventDefault();
+                     if (!validateModalForm()) { return; }
+    
+                     const itemType = familyTypeSelect.value;
+                     const itemName = document.getElementById('familyName')?.value.trim();
+                     const itemImage = document.getElementById('familyImage')?.value.trim();
+                     const itemEscudo = document.getElementById('escudoImage')?.value.trim();
+                     const itemCountries = $('#familyCountries').val() || [];
+                     const itemFamilyId = (itemType === 'casta') ? castaFamilySelect?.value : '';
+    
+                     if(itemType === 'casta' && !itemFamilyId) {
+                         alert('Erro: Família da casta é obrigatória.');
+                         $(castaFamilySelect).closest('.form-group').find('.error-message').show();
+                         return;
+                     }
+    
+                     const itemData = {
+                         nome: itemName,
+                         tipo: itemType,
+                         imagem: itemImage,
+                         escudoUrl: itemEscudo,
+                         paises: itemCountries,
+                         ...(itemType === 'casta' && { familiaId: itemFamilyId })
+                     };
+    
+                     console.log("Submitting Family Modal Data:", itemData);
+                     try {
+                         const docRef = await addDoc(collection(db, 'mitosgameItens'), itemData);
+                         console.log("Family item written with ID: ", docRef.id);
+                         alert('Item (' + itemType + ') criado com sucesso!');
+                         if(familyModal) familyModal.style.display = "none";
+                          createFamilyForm.reset();
+                         $('#familyCountries').val(null).trigger('change');
+                         if(itemType === 'familia') { loadFamiliasMainForm(); }
+                     } catch (error) { console.error("Error creating item: ", error); alert('Erro ao criar item.'); }
+                });
+            } else { console.warn("createFamilyForm not found for listener."); }
+    
+            if (mainForm) {
+                 mainForm.addEventListener('submit', async function(e) {
+                     e.preventDefault();
+                     if (!validateMainForm()) { console.log("Main form validation failed."); return; }
+                      try {
+                        const findCompId = (selectId) => {
+                            const compName = document.getElementById(selectId)?.value;
+                            return allCompetitionsData.find(c => c.name === compName)?.id || "";
+                        }
+    
+                        const formData = {
+                            nome: document.getElementById('name')?.value.trim(),
+                            familiaId: familiaSelectMain?.value || "",
+                            castaId: castaSelectMain?.value || "",
+                            descricao: document.getElementById('description')?.value.trim(),
+                            imagem: document.getElementById('imagem')?.value.trim(),
+                            equipa1Id: document.getElementById('equipa1')?.value || "",
+                            equipa2Id: document.getElementById('equipa2')?.value || "",
+                            equipa3Id: document.getElementById('equipa3')?.value || "",
+                            equipa4Id: document.getElementById('equipa4')?.value || "",
+                            competicao1Id: findCompId('competicao1'),
+                            competicao2Id: findCompId('competicao2'),
+                            competicao3Id: findCompId('competicao3'),
+                            competicao4Id: findCompId('competicao4'),
+                            pontosGanhos: parseInt(document.getElementById('pontosGanhos')?.value) || 0,
+                            vitorias: parseInt(document.getElementById('vitorias')?.value) || 0,
+                            empates: parseInt(document.getElementById('empates')?.value) || 0,
+                            derrotas: parseInt(document.getElementById('derrotas')?.value) || 0,
+                            ativo: document.getElementById('ativo')?.value === 'yes',
+                            visivel: document.getElementById('visivel')?.value === 'yes',
+                            dataAtivacao: document.getElementById('dataAtivacao')?.value || null,
+                            compradoPor: document.getElementById('compradoPor')?.value || "",
+                            nivel: document.getElementById('nivel')?.value,
+                            patamar: document.getElementById('patamar')?.value,
+                            preco: document.getElementById('preco')?.value.trim(),
+                            tipo: 'mito'
+                        };
+    
+                        console.log("Submitting Main Form Data:", formData);
+                        const docRef = await addDoc(collection(db, 'mitosgameItens'), formData);
+                        console.log("Mito document written with ID: ", docRef.id);
+                        alert('Mito criado com sucesso!');
+    
+                        mainForm.reset();
+                        $('#familia').val(null).trigger('change');
+                        $('#compradoPor').val(null).trigger('change');
+                        $('#nivel').val('Nivel 1').trigger('change');
+                        $('#patamar').val('Patamar 1').trigger('change');
+                         $('#visivel').val('no').trigger('change');
+                         $('#ativo').val('yes').trigger('change');
+                        mainForm.querySelectorAll('.error-message').forEach(el => el.style.display = 'none');
+    
+                    } catch (error) { console.error('Erro ao criar mito:', error); alert('Erro ao criar mito.'); }
+                 });
+            } else { console.warn("mainForm not found for listener."); }
+    
+            if (satelliteFormElement) {
+                satelliteFormElement.addEventListener('submit', async function(e) {
+                    e.preventDefault();
+                    const paisSelect = satellitePaisSelectElement;
+                    const competicaoSelect = satelliteCompeticaoSelectElement;
+                    const patamarSelect = satellitePatamarSelectElement;
+                    const ativoSelect = satelliteAtivoSelectElement;
+
+                    if (!validateSatelliteForm()) {
+                        console.log("Satellite form validation failed.");
+                        return;
+                    }
+
+                    const selectedPais = $(paisSelect).val();
+                    const selectedCompeticao = $(competicaoSelect).val();
+                    const selectedPatamar = $(patamarSelect).val();
+                    const selectedAtivo = $(ativoSelect).val();
+
+                    if (!selectedPais || !selectedCompeticao || !selectedPatamar || !selectedAtivo) {
+                        alert("Erro: Dados inválidos no formulário satélite. Verifique os campos.");
+                        return;
+                    }
+
+                    const targetCollectionName = 'mitosgameRegras';
+                    const regrasCollectionRef = collection(db, targetCollectionName);
+
+                    try {
+                        console.log(`Verificando se já existe regra para o país "${selectedPais}" na coleção "${targetCollectionName}"...`);
+                        const q = query(regrasCollectionRef, where("pais", "==", selectedPais));
+                        const querySnapshot = await getDocs(q);
+
+                        if (!querySnapshot.empty) {
+                            console.warn(`Regra para o país "${selectedPais}" já existe. A gravação foi cancelada.`);
+                            alert(`Erro: Já existe uma regra definida para o país "${selectedPais}". Não é possível criar uma nova.`);
+                            return;
+                        }
+
+                        console.log(`Nenhuma regra encontrada para "${selectedPais}". A criar nova regra...`);
+
+                        const newRuleData = {
+                            pais: selectedPais,
+                            competicao: selectedCompeticao,
+                            patamar: selectedPatamar,
+                            ativo: (selectedAtivo === 'yes')
+                        };
+
+                        console.log(`Attempting to add new rule document to '${targetCollectionName}' with data:`, newRuleData);
+
+                        const docRef = await addDoc(regrasCollectionRef, newRuleData);
+
+                        console.log(`New rule document created successfully in '${targetCollectionName}' with ID:`, docRef.id);
+                        alert('Nova regra criada com sucesso!');
+
+                        satelliteFormElement.reset();
+                        $(paisSelect).val(null).trigger('change');
+                        $(patamarSelect).val('Patamar 1').trigger('change');
+                        $(ativoSelect).val('yes').trigger('change');
+
+                        if (satelliteModal) satelliteModal.style.display = 'none';
+
+                    } catch (error) {
+                        console.error(`Erro durante o processo de verificação ou gravação na coleção '${targetCollectionName}':`, error);
+                        alert('Erro ao verificar ou criar a regra. Verifique o console para detalhes.');
+                    }
+                });
+            } else {
+                console.error("Satellite form not found, cannot attach submit listener.");
+            }
+    
+            (async function() {
+               console.log("IIFE inside Document Ready - Calling initial load functions...");
+                try {
+                     await loadAllCountries();
+                     await loadAllCompetitions();
+    
+                     await Promise.all([
+                         loadAllClubs(),
+                         loadUsers(),
+                         loadFamiliasMainForm()
+                     ]);
+                     console.log("Initial data loading sequence complete.");
+                } catch (error) {
+                     console.error("Error during initial data loading:", error);
+                     alert("Erro ao carregar dados iniciais. A página pode não funcionar corretamente.");
+                }
+            })();
+    
+            console.log("All event listeners attached.");
+        });
+    
+    </script>
+
+    <script src="js/menuadmin-loader.js"></script>
+</body>
+</html>
