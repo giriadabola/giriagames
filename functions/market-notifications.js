@@ -640,7 +640,7 @@ exports.sendManualMarketNotification = onCall({
     title: "gGames",
     body: message,
     tag: `market-manual-${Date.now()}`,
-    url: "./market.html",
+    url: "./profile.html",
   };
 
   const delivery = await sendPayloadToUsers(interestedUsers, payload);
