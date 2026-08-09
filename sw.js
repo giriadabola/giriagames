@@ -1,7 +1,9 @@
-const APP_SHELL_CACHE = 'giria-1x-shell-v3';
+const APP_SHELL_CACHE = 'gGames-shell-v4';
 const APP_SHELL_FILES = [
+  './index.html',
   './1x.html',
   './1x.webmanifest',
+  './assets/logos/manifest.webmanifest',
   './profile.html',
   './config.js',
   './menu-component.js',
