@@ -186,6 +186,14 @@ document.addEventListener("DOMContentLoaded", () => {
     styleElement.textContent = menuCSS;
     document.head.appendChild(styleElement);
     document.body.insertAdjacentHTML('beforeend', menuHTML);
+
+    if (!document.querySelector('script[data-profile-menu-badge]')) {
+        const badgeScript = document.createElement('script');
+        badgeScript.type = 'module';
+        badgeScript.src = './core/profile-menu-badge.js';
+        badgeScript.dataset.profileMenuBadge = 'true';
+        document.head.appendChild(badgeScript);
+    }
     
     // Chama a função para ativar o item correto do menu
     setActiveMenuItem();

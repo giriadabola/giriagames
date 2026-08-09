@@ -284,6 +284,8 @@ if (debtDisplay) {
 
 // Check Firebase panel settings for myths visibility
 const checkMythsVisibility = async () => {
+    if (!auth.currentUser) return;
+
     try {
         const painelDoc = await getDoc(doc(db, 'paineis', 'paineis perfil'));
         if (painelDoc.exists()) {
@@ -1316,11 +1318,8 @@ async function loadInbox(userId) {
         
         inboxUnsubscribe = onSnapshot(q, async (snapshot) => {
             inboxSection.style.display = 'block';
-            const bottomMenuBadge = document.querySelector('[data-menu-key="profile"] .menu-badge');
-
             if (snapshot.empty) {
                 if (inboxBadge) inboxBadge.style.display = 'none';
-                if (bottomMenuBadge) bottomMenuBadge.style.display = 'none';
                 inboxGrid.innerHTML = `<div class="inbox-status-msg" style="color: #8892b0; grid-column: 1 / -1; font-size: 14px;">Sem propostas pendentes de momento.</div>`;
                 return;
             }
@@ -1366,15 +1365,6 @@ async function loadInbox(userId) {
                     inboxBadge.style.display = 'flex';
                 } else {
                     inboxBadge.style.display = 'none';
-                }
-            }
-
-            if (bottomMenuBadge) {
-                if (emailCount > 0) {
-                    bottomMenuBadge.textContent = emailCount;
-                    bottomMenuBadge.style.display = 'flex';
-                } else {
-                    bottomMenuBadge.style.display = 'none';
                 }
             }
 
