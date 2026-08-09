@@ -2,6 +2,7 @@ import { db, auth } from "../core/firebase.js";
 import { doc, getDoc, collection, getDocs, query, where, updateDoc, serverTimestamp, addDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { buildAlfredoGiftMessage, CADERNETA_GIFT_OFFERS_COLLECTION, CADERNETA_GIFT_REDIRECT_PARAM } from "../caderneta/pack-offers.js";
+import { getLatestSeason, mergeUserSeasonData } from "../core/user-season.js";
 
 function logUserAction(actionDescription) {
     if (!auth.currentUser) {
@@ -24,6 +25,14 @@ function logUserAction(actionDescription) {
 const modCache = new Map();
 const userCache = new Map();
 const gameCache = new Map();
+let usersSnapshotPromise = null;
+
+function loadUsersSnapshot() {
+    if (!usersSnapshotPromise) {
+        usersSnapshotPromise = getDocs(collection(db, 'users'));
+    }
+    return usersSnapshotPromise;
+}
 
 const loadingScreen = document.getElementById('loading-screen');
 const content = document.querySelector('.content');
@@ -207,9 +216,9 @@ onAuthStateChanged(auth, async (user) => {
 
         try {
             const userDocRef = doc(db, 'users', user.uid);
-            await updateDoc(userDocRef, {
+            void updateDoc(userDocRef, {
                 ultimoacesso: serverTimestamp()
-            });
+            }).catch((error) => console.error("Erro ao atualizar o campo ultimoacesso: ", error));
         } catch (error) {
             console.error("Erro ao atualizar o campo ultimoacesso: ", error);
         }
@@ -224,20 +233,15 @@ onAuthStateChanged(auth, async (user) => {
             if (typeof updateMenuVisibility === 'function') {
                 updateMenuVisibility(menuSettings);
             }
-            await loadSeasons();
-            
-            if (mostRecentSeason) {
-                await checkForRankingUpdateAndShowAnimation();
-            }
-
-            pendingGiftOfferCount = await fetchPendingCadernetaGiftOffersCount(user.uid);
-            
             loadingScreen.style.display = 'none';
             content.style.display = 'block';
-
-            if (pendingGiftOfferCount > 0 && animationPopup.style.display !== 'block') {
-                showAlfredoGiftPopup();
-            }
+            void Promise.all([
+                loadSeasons().then(() => mostRecentSeason ? checkForRankingUpdateAndShowAnimation() : undefined),
+                fetchPendingCadernetaGiftOffersCount(user.uid)
+            ]).then(([, giftCount]) => {
+                pendingGiftOfferCount = giftCount;
+                if (pendingGiftOfferCount > 0 && animationPopup.style.display !== 'block') showAlfredoGiftPopup();
+            }).catch((error) => console.error("Erro ao carregar dados secundários do ranking: ", error));
         } else {
             window.location.href = '404.html';
         }
@@ -293,23 +297,17 @@ async function checkPendingPredictionsStatus(season) {
 }
 
 async function loadSeasons() {
-    const palpitesRef = collection(db, 'palpites');
-    const palpitesSnap = await getDocs(palpitesRef);
-    const seasons = new Set();
+    mostRecentSeason = await getLatestSeason(db);
+    const sortedSeasons = [mostRecentSeason];
 
-    palpitesSnap.forEach(doc => {
-        const temporada = doc.data().temporada;
-        if (temporada) seasons.add(temporada);
-    });
-
-    const sortedSeasons = Array.from(seasons).sort((a, b) => b.localeCompare(a));
-
-    if (sortedSeasons.length > 0) {
+    if (mostRecentSeason) {
         mostRecentSeason = sortedSeasons[0]; // <-- Define a variável global
         const isPending = await checkPendingPredictionsStatus(mostRecentSeason);
         updateStatusIndicator(isPending);
-        await loadRankings(mostRecentSeason);
-        await loadRoundHighlights(mostRecentSeason); // <-- Carrega os destaques da ronda
+        await Promise.all([
+            loadRankings(mostRecentSeason),
+            loadRoundHighlights(mostRecentSeason)
+        ]);
     } else {
         rankingsBody.innerHTML = '<tr><td colspan="4">Sem épocas disponíveis.</td></tr>';
         document.getElementById('status-indicator').style.display = 'none';
@@ -317,15 +315,13 @@ async function loadSeasons() {
 }
 
 async function loadRankings(season) {
-    const usersRef = collection(db, 'users');
-    const usersSnap = await getDocs(usersRef);
+    const usersSnap = await loadUsersSnapshot();
     const rankings = [];
 
     usersSnap.forEach(userDoc => {
-        const userData = userDoc.data();
+        const userData = mergeUserSeasonData(userDoc.data(), season);
         if (userData.aceite === "Yes" && userData.estatuto && userData.natabela === "Yes") {
-            const seasonPointsKey = season.replace('/', '') + 'Pontos';
-            const seasonPoints = userData[seasonPointsKey] || 0;
+            const seasonPoints = userData.Pontos || 0;
             rankings.push({
                 userId: userDoc.id,
                 username: userData.nometabela || 'Utilizador Desconhecido',
@@ -666,13 +662,15 @@ async function checkForRankingUpdateAndShowAnimation() {
 async function calculateAllUserPointsUpToRound(season, targetRound) {
     const userPoints = new Map();
     const usersRef = collection(db, 'users');
-    const usersSnap = await getDocs(query(usersRef, where("natabela", "==", "Yes"), where("aceite", "==", "Yes")));
+    const usersSnap = await getDocs(usersRef);
 
     // Inicializa todos os jogadores com 0 pontos
     usersSnap.forEach(doc => {
+        const userData = mergeUserSeasonData(doc.data(), season);
+        if (userData.natabela !== 'Yes' || userData.aceite !== 'Yes') return;
         userPoints.set(doc.id, {
             userId: doc.id,
-            username: doc.data().nometabela || 'Desconhecido',
+            username: userData.nometabela || 'Desconhecido',
             points: 0
         });
     });
@@ -888,8 +886,7 @@ async function loadRoundHighlights(season) {
     highlightsContainer.innerHTML = '<div style="color: #8892b0; font-size: 0.9rem; text-align: center; width: 100%;">A carregar destaques da ronda...</div>';
 
     try {
-        const usersRef = collection(db, 'users');
-        const usersSnap = await getDocs(usersRef);
+        const usersSnap = await loadUsersSnapshot();
         const userNames = {};
         usersSnap.forEach(doc => {
             userNames[doc.id] = doc.data().nometabela || doc.data().username || 'Desconhecido';

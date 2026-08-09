@@ -2,6 +2,7 @@
 import { db, auth } from '../core/firebase.js';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
 import { doc, setDoc, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+import { getLatestSeason } from '../core/user-season.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     const loader = document.getElementById('loader');
@@ -64,15 +65,18 @@ document.addEventListener('DOMContentLoaded', () => {
         const gplayerName = document.getElementById('gplayerName').value;
         if (!gplayerName) { showError('Por favor, preencha o campo Nome de Usuário.'); return; }
         try {
+            const seasonLabel = await getLatestSeason(db);
             await setDoc(doc(db, 'users', tempUser.uid), {
                 nomeDeUsuario: gplayerName,
                 email: tempUser.email,
                 estatuto: "gplayer",
-                gCoinsGanhos: 0,
-                pontos: 0,
-                tática: ["4-4-2"], 
-                ativo: null,
-                aceite: "no"
+                aceite: "no",
+                [seasonLabel]: {
+                    gCoinsGanhos: 0,
+                    pontos: 0,
+                    tática: ["4-4-2"],
+                    ativo: null
+                }
             });
             signupSuccessPopup.style.display = 'none';
             verificationPopup.style.display = 'flex';

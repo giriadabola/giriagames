@@ -9,12 +9,14 @@ import { buildNormalizedCadernetaPackPricing, getCadernetaPackDefinitionByType, 
 import { createStickerPayload, drawPackPlayers, VALID_CADERNETA_RARITIES } from "./pack-engine.js";
 import { CADERNETA_FREE_PACK_TYPE, CADERNETA_GIFT_OFFERS_COLLECTION, CADERNETA_GIFT_REDIRECT_PARAM } from "./pack-offers.js";
 import { fetchUniqueSeasons, getPlayerSeasonData, hasPlayerDataForSeason } from "../admin/js/player-season-helper.js";
+import { compactSeason, getLatestSeason, getSeasonData, mergeUserSeasonData } from "../core/user-season.js";
 
 // App state
 let currentUser = null;
 let currentSeason = "";
 let currentSeasonLabel = "";
 let currentGcoinsField = "";
+let currentSeasonData = {};
 let userGcoins = 0;
 let userMiniGcoins = 0;
 let currentUserStatus = "";
@@ -199,24 +201,20 @@ onAuthStateChanged(auth, async (user) => {
 
 // Load the current season and GCoins field
 async function loadSeasonAndUserGcoins() {
-    const configSnap = await getDoc(doc(db, 'paineis', 'configuracoes_gerais'));
-    if (configSnap.exists()) {
-        const temp = configSnap.data().temporadaAtual || "";
-        currentSeasonLabel = temp;
-        currentSeason = temp.replace('/', ''); // e.g. "20252026"
-    } else {
-        currentSeasonLabel = "2025/2026";
-        currentSeason = "20252026"; // Fallback
-    }
+    currentSeasonLabel = await getLatestSeason(db);
+    currentSeason = compactSeason(currentSeasonLabel);
     
-    currentGcoinsField = currentSeason + "GCoins";
+    currentGcoinsField = "GCoins";
 
     // Load user GCoins
     const userSnap = await getDoc(doc(db, 'users', currentUser.uid));
     if (userSnap.exists()) {
-        currentUserStatus = userSnap.data().estatuto || "";
-        userGcoins = userSnap.data()[currentGcoinsField] || 0;
-        userMiniGcoins = userSnap.data().whowinsgCoins || 0;
+        const rawUserData = userSnap.data();
+        const userData = mergeUserSeasonData(rawUserData, currentSeasonLabel);
+        currentSeasonData = getSeasonData(rawUserData, currentSeasonLabel);
+        currentUserStatus = userData.estatuto || "";
+        userGcoins = userData.GCoins || 0;
+        userMiniGcoins = userData.whowinsgCoins || 0;
     }
 }
 
@@ -1870,7 +1868,12 @@ async function handlePackPurchase(packType) {
         const isMiniGcoinsPurchase = currency === 'mini-gcoins';
         const newBalance = isMiniGcoinsPurchase ? userMiniGcoins - price : userGcoins - price;
         const updatedUserBalanceField = isMiniGcoinsPurchase ? 'whowinsgCoins' : currentGcoinsField;
-        batch.update(userRef, { [updatedUserBalanceField]: newBalance });
+        batch.update(userRef, {
+            [currentSeasonLabel]: {
+                ...currentSeasonData,
+                [updatedUserBalanceField]: newBalance
+            }
+        });
 
         // 2. Create movimento
         const movimentoRef = doc(collection(db, 'movimentos'));

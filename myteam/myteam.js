@@ -2,6 +2,7 @@ import { db, auth } from '../core/firebase.js';
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { doc, getDoc, collection, getDocs, query, orderBy, limit, setDoc, addDoc, where, serverTimestamp, updateDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { initRivalSquadsView } from '../core/rival-squads-view.js';
+import { compactSeason, getLatestSeason, getSeasonData, mergeUserSeasonData } from '../core/user-season.js';
 
 // --- Sobrescrever window.alert com Modal Personalizado ---
 window.alert = function(message) {
@@ -1100,10 +1101,7 @@ async function handleSellToBanca(player) {
         confirmBtn.disabled = true;
         confirmBtn.style.opacity = '0.5';
         try {
-            const seasonsQuery = query(collection(db, 'palpites'), orderBy('temporada', 'desc'), limit(1));
-            const seasonsSnapshot = await getDocs(seasonsQuery);
-            let latestSeason = seasonsSnapshot.docs[0]?.data()?.temporada || '';
-            latestSeason = latestSeason.replace('/', '');
+            const latestSeason = await getLatestSeason(db);
 
             const batch = writeBatch(db);
 
@@ -1120,7 +1118,7 @@ async function handleSellToBanca(player) {
                 posicao: player.posicao,
                 preco: finalPrice,
                 valorreal: finalPrice,
-                temporada: latestSeason,
+                temporada: compactSeason(latestSeason),
                 userId: currentUserUid,
                 tipo: 'Mercado',
                 descricao: `Vendido à Banca com desconto de ${discount} gCoins`
@@ -1133,7 +1131,7 @@ async function handleSellToBanca(player) {
                 preco: -finalPrice,
                 movimentoData: serverTimestamp(),
                 tipo: "Banca",
-                temporada: latestSeason,
+                temporada: compactSeason(latestSeason),
                 descricao: `Compra de jogador ${player.nome}`,
                 para_userId: currentUserUid
             });
@@ -1141,10 +1139,14 @@ async function handleSellToBanca(player) {
             const userRef = doc(db, 'users', currentUserUid);
             const userSnap = await getDoc(userRef);
             if (userSnap.exists()) {
-                const currentGCoins = userSnap.data()[`${latestSeason}GCoins`] || 0;
-                batch.update(userRef, {
-                    [`${latestSeason}GCoins`]: currentGCoins + finalPrice
-                });
+            const seasonData = getSeasonData(userSnap.data(), latestSeason);
+            const currentGCoins = seasonData.GCoins || 0;
+            batch.update(userRef, {
+                [latestSeason]: {
+                    ...seasonData,
+                    GCoins: currentGCoins + finalPrice
+                }
+            });
             }
 
             const positionAssigned = Object.keys(assignedPlayers).find(key => assignedPlayers[key] === player.id);
@@ -1248,10 +1250,11 @@ async function showGPlayersListPopup(player) {
 
     try {
         const usersRef = collection(db, 'users');
+        const latestSeason = await getLatestSeason(db);
         const querySnapshot = await getDocs(usersRef);
         const users = [];
         querySnapshot.forEach((userDoc) => {
-            const userData = userDoc.data();
+            const userData = mergeUserSeasonData(userDoc.data(), latestSeason);
             if (userData.natabela === "Yes" && userData.nometabela && userDoc.id !== currentUserUid) {
                 users.push({ id: userDoc.id, displayNome: userData.nometabela });
             }
@@ -1386,7 +1389,8 @@ async function fetchFormationsFromFirestore() {
     try { 
         const docSnap = await getDoc(doc(db, 'users', currentUserUid)); 
         if (docSnap.exists()) { 
-            const taticasArray = docSnap.data().tática; 
+            const latestSeason = await getLatestSeason(db);
+            const taticasArray = getSeasonData(docSnap.data(), latestSeason).tática;
             if (Array.isArray(taticasArray) && taticasArray.length > 0) { 
                 return taticasArray.map(name => ({ value: name, label: name })); 
             } 
@@ -1533,15 +1537,16 @@ function populatePositionFilter() {
         positionFilterSelect.appendChild(option);
     });
 }
-async function populateFormationDropdownFromFirestore() { 
-    const formationsFromUser = await fetchFormationsFromFirestore(); 
+async function populateFormationDropdownFromFirestore(formationsFromUser = null) { 
+    const availableFormations = formationsFromUser || await fetchFormationsFromFirestore(); 
     formationSelect.innerHTML = '<option value="" disabled selected>Selecionar Formação</option>'; 
-    formationsFromUser.forEach(f => { 
+    availableFormations.forEach(f => { 
         const option = document.createElement('option'); 
         option.value = f.value; 
         option.textContent = f.label; 
         formationSelect.appendChild(option); 
-    }); 
+    });
+    return availableFormations;
 }
 function filterPlayers() { 
     const searchTerm = playerSearchInput.value.toLowerCase(); 
@@ -1579,7 +1584,8 @@ onAuthStateChanged(auth, async (user) => {
             return; 
         } 
         try { 
-            await updateDoc(doc(db, 'users', user.uid), { ultimoacesso: serverTimestamp() }); 
+            void updateDoc(doc(db, 'users', user.uid), { ultimoacesso: serverTimestamp() })
+                .catch((error) => console.error('Erro ao actualizar o último acesso:', error)); 
             const paineisMenuDoc = await getDoc(doc(db, 'paineis', 'paineis menu')); 
             if (paineisMenuDoc.exists()) { 
                 const menuData = paineisMenuDoc.data(); 
@@ -1591,21 +1597,26 @@ onAuthStateChanged(auth, async (user) => {
             } 
             await logUserAction(`Entrou em ${document.title}`);
             await Promise.all([ fetchCountries(), fetchUserOwnedPlayers(), fetchPlayerStyles(), fetchPaineisCoefficients() ]); 
-            await populateFormationDropdownFromFirestore(); 
+            const [activeFormation, formationsFromUser] = await Promise.all([
+                fetchActiveFormationFromPlanteis(),
+                fetchFormationsFromFirestore()
+            ]);
+            await populateFormationDropdownFromFirestore(formationsFromUser);
             populateCountryFilter(); 
             populateClubFilter(); 
             populatePositionFilter();
             renderPlayerResults(); 
-            const activeFormation = await fetchActiveFormationFromPlanteis(); 
-            const formationsFromUser = await fetchFormationsFromFirestore(); 
             let initialFormationToLoad = activeFormation || (formationsFromUser[0]?.value || null); 
             if (initialFormationToLoad) { 
                 formationSelect.value = initialFormationToLoad; 
                 currentFormation = initialFormationToLoad; 
-                await loadFormation(); 
+                renderFormation(initialFormationToLoad);
             } else { 
                 renderFormation(null); 
             } 
+            loadingScreen.style.display = 'none';
+            content.style.display = 'block';
+            if (initialFormationToLoad) await loadFormation();
         } catch (error) { 
             console.error("Erro na inicialização:", error); 
         } finally { 

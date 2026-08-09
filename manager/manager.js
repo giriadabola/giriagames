@@ -2,6 +2,7 @@
 import { db, auth } from '../core/firebase.js';
 import { getDoc, doc, collection, query, where, getDocs, updateDoc, runTransaction, serverTimestamp, writeBatch, orderBy, addDoc, arrayUnion, limit } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { compactSeason, getLatestSeason as getConfiguredLatestSeason, getSeasonData, mergeUserSeasonData } from "../core/user-season.js";
 
 console.log("Manager Page Script: Module loading initiated.");
 
@@ -41,7 +42,9 @@ async function getUserStatus(userId) {
     try {
         const docSnap = await getDoc(userDocRef);
         if (docSnap.exists() && docSnap.data().aceite === "Yes") {
-            const userData = docSnap.data();
+            const rawUserData = docSnap.data();
+            const latestSeasonLabel = await getConfiguredLatestSeason(db);
+            const userData = mergeUserSeasonData(rawUserData, latestSeasonLabel);
             const status = { uid: userId, estatuto: userData.estatuto, mentalidade: userData.mentalidade || null, estadio: userData.estadio || null, data: userData };
             console.log("getUserStatus: User found and accepted.", status); return status;
         } else if (docSnap.exists()) {
@@ -119,6 +122,10 @@ async function checkPageAccess(userStatus, menuSettings) {
 }
 
 async function getLatestSeason() {
+    return await getConfiguredLatestSeason(db);
+}
+
+async function getLegacyLatestSeason() {
     console.log("getLatestSeason: Fetching seasons from 'jogos' collection..."); const jogosCollectionRef = collection(db, 'jogos'); const fieldNameHoldingSeasonString = 'temporada'; try { const querySnapshot = await getDocs(jogosCollectionRef); let latestSeasonVal = "0"; let latestFormattedSeason = null; querySnapshot.forEach((doc) => { const gameData = doc.data(); const seasonString = gameData[fieldNameHoldingSeasonString]; if (seasonString && typeof seasonString === 'string') { const parts = seasonString.split('/'); if (parts.length === 2 && parts[0].length === 4 && parts[1].length === 4 && !isNaN(parts[0]) && !isNaN(parts[1])) { const startYear = parts[0]; const endYear = parts[1]; const sortableVal = endYear; const formatted = startYear + endYear; if (sortableVal > latestSeasonVal) { latestSeasonVal = sortableVal; latestFormattedSeason = formatted; } } else { console.warn(`getLatestSeason: Invalid season string format: "${seasonString}" in doc ${doc.id}`); } } }); if (latestFormattedSeason) { console.log("getLatestSeason: Latest season determined:", latestFormattedSeason); return latestFormattedSeason; } else { console.error("getLatestSeason: Could not determine latest season from 'jogos'."); return null; } } catch (error) { console.error("getLatestSeason: Error fetching documents from 'jogos':", error); return null; }
 }
 
@@ -299,7 +306,7 @@ function closeConfirmation() {
     console.log("closeConfirmation: Closing mentalidade confirmation popup."); const popup = document.getElementById('confirmation-popup'); if (popup) popup.classList.remove('active');
 }
 async function confirmChoice(confirmed) {
-    console.log(`confirmChoice: User action - confirmed: ${confirmed}`); closeConfirmation(); if (!confirmed) { console.log("confirmChoice: Choice cancelled."); return; } if (!selectedMentalidade || !currentUser) { console.error("confirmChoice: Missing mentalidade or user data."); showInfoPopup("Erro", "Dados em falta."); return; } showInfoPopup("Processando...", "A gravar..."); try { const userDocRef = doc(db, 'users', currentUser.uid); await updateDoc(userDocRef, { mentalidade: selectedMentalidade.id }); console.log('confirmChoice: User mentalidade updated.'); try { const latestSeason = await getLatestSeason(); if (latestSeason) { const precoMentalidade = selectedMentalidade.valor ?? 0; const valorRealMentalidade = -precoMentalidade; const movimentoData = { estado: "Escolhido", itemManager: selectedMentalidade.nome || "?", temporada: latestSeason, movimentoData: serverTimestamp(), preco: precoMentalidade, tipo: "Manager", userId: currentUser.uid, valorreal: valorRealMentalidade, managerTipo: selectedMentalidade.tipo || "Mentalidade", nivel: selectedMentalidade.nivel || 'Nível 1' }; console.log("confirmChoice: Creating movement data:", movimentoData); const movRef = await addDoc(collection(db, 'movimentos'), movimentoData); console.log("confirmChoice: Movement record created:", movRef.id); } else { console.warn("confirmChoice: No season. Skipping movement."); } } catch (movError) { console.error("confirmChoice: Error creating movement:", movError); showInfoPopup("Aviso", "Escolha salva, erro no registo."); await new Promise(resolve => setTimeout(resolve, 1500)); } console.log('confirmChoice: Refreshing page...'); closePopup(); closeInfoPopup(); location.reload(); } catch (error) { console.error('confirmChoice: Error updating user:', error); closeInfoPopup(); showInfoPopup('Erro', 'Falha ao salvar. Tente novamente.'); }
+    console.log(`confirmChoice: User action - confirmed: ${confirmed}`); closeConfirmation(); if (!confirmed) { console.log("confirmChoice: Choice cancelled."); return; } if (!selectedMentalidade || !currentUser) { console.error("confirmChoice: Missing mentalidade or user data."); showInfoPopup("Erro", "Dados em falta."); return; } showInfoPopup("Processando...", "A gravar..."); try { const userDocRef = doc(db, 'users', currentUser.uid); const latestSeason = await getLatestSeason(); const existingSeasonData = getSeasonData(currentUser.data, latestSeason); await updateDoc(userDocRef, { [latestSeason]: { ...existingSeasonData, mentalidade: selectedMentalidade.id } }); console.log('confirmChoice: User mentalidade updated.'); try { const latestSeason = await getLatestSeason(); if (latestSeason) { const precoMentalidade = selectedMentalidade.valor ?? 0; const valorRealMentalidade = -precoMentalidade; const movimentoData = { estado: "Escolhido", itemManager: selectedMentalidade.nome || "?", temporada: compactSeason(latestSeason), movimentoData: serverTimestamp(), preco: precoMentalidade, tipo: "Manager", userId: currentUser.uid, valorreal: valorRealMentalidade, managerTipo: selectedMentalidade.tipo || "Mentalidade", nivel: selectedMentalidade.nivel || 'Nível 1' }; console.log("confirmChoice: Creating movement data:", movimentoData); const movRef = await addDoc(collection(db, 'movimentos'), movimentoData); console.log("confirmChoice: Movement record created:", movRef.id); } else { console.warn("confirmChoice: No season. Skipping movement."); } } catch (movError) { console.error("confirmChoice: Error creating movement:", movError); showInfoPopup("Aviso", "Escolha salva, erro no registo."); await new Promise(resolve => setTimeout(resolve, 1500)); } console.log('confirmChoice: Refreshing page...'); closePopup(); closeInfoPopup(); location.reload(); } catch (error) { console.error('confirmChoice: Error updating user:', error); closeInfoPopup(); showInfoPopup('Erro', 'Falha ao salvar. Tente novamente.'); }
 }
 
 // --- Nested Item Popup Logic ---
@@ -514,7 +521,8 @@ async function confirmStadiumPurchase(confirmed) {
             if (lockDocSnap.exists()) {
                 throw new Error("Este estádio já foi adquirido por outro manager (lock existente).");
             }
-            if (userData.estadio) {
+            const seasonData = getSeasonData(userData, latestSeason);
+            if (seasonData.estadio) {
                 throw new Error("Já possui um estádio. Compra cancelada.");
             }
 
@@ -528,14 +536,17 @@ async function confirmStadiumPurchase(confirmed) {
             });
 
             transaction.update(userDocRef, {
-                estadio: stadiumToPurchase.nome
+                [latestSeason]: {
+                    ...seasonData,
+                    estadio: stadiumToPurchase.nome
+                }
             });
 
             const movimentoDocRef = doc(collection(db, 'movimentos'));
             const movimentoData = {
                 estado: "Comprado",
                 itemManager: stadiumToPurchase.nome,
-                temporada: latestSeason,
+                temporada: compactSeason(latestSeason),
                 movimentoData: serverTimestamp(),
                 preco: stadiumPrice,
                 tipo: "Manager",
@@ -554,9 +565,8 @@ async function confirmStadiumPurchase(confirmed) {
 
         console.log("confirmStadiumPurchase: Recalculating total GCoins based on all movements...");
         let calculatedTotalGCoins = 0;
-        const gcoinsField = `${latestSeason}GCoins`;
         try {
-            const allMovimentosQuery = query(collection(db, 'movimentos'), where('userId', '==', currentUser.uid));
+            const allMovimentosQuery = query(collection(db, 'movimentos'), where('userId', '==', currentUser.uid), where('temporada', '==', compactSeason(latestSeason)));
             const allMovimentosSnapshot = await getDocs(allMovimentosQuery);
 
             allMovimentosSnapshot.forEach(doc => {
@@ -564,10 +574,15 @@ async function confirmStadiumPurchase(confirmed) {
             });
             console.log(`confirmStadiumPurchase: Calculated total GCoins from ${allMovimentosSnapshot.size} movements: ${calculatedTotalGCoins}`);
 
+            const latestUserSnapshot = await getDoc(userDocRef);
+            const latestSeasonData = latestUserSnapshot.exists() ? getSeasonData(latestUserSnapshot.data(), latestSeason) : {};
             await updateDoc(userDocRef, {
-                [gcoinsField]: calculatedTotalGCoins
+                [latestSeason]: {
+                    ...latestSeasonData,
+                    GCoins: calculatedTotalGCoins
+                }
             });
-            console.log(`confirmStadiumPurchase: User GCoins (${gcoinsField}) updated successfully with calculated total value.`);
+            console.log(`confirmStadiumPurchase: User GCoins for ${latestSeason} updated successfully with calculated total value.`);
 
         } catch (recalcError) {
             console.error("confirmStadiumPurchase: ERROR during GCoins recalculation and update:", recalcError);
@@ -755,7 +770,7 @@ async function confirmItemPurchase(confirmed) {
 
     try {
         latestSeason = await getLatestSeason(); if (!latestSeason) throw new Error("Temporada não determinada.");
-        const gcoinsFieldCheck = `${latestSeason}GCoins`;
+        const gcoinsFieldCheck = 'GCoins';
 
         const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
         const tomorrowStart = new Date(todayStart); tomorrowStart.setDate(todayStart.getDate() + 1);
@@ -776,14 +791,15 @@ async function confirmItemPurchase(confirmed) {
             const userDocSnap = await transaction.get(userDocRef);
             if (!userDocSnap.exists()) throw new Error("User doc not found in transaction.");
             const userData = userDocSnap.data();
-            const currentUserGCoins = userData[gcoinsFieldCheck] || 0;
+            const seasonData = getSeasonData(userData, latestSeason);
+            const currentUserGCoins = seasonData[gcoinsFieldCheck] || 0;
             if (currentUserGCoins < itemPrice) { throw new Error(`Saldo insuficiente`); }
             
             const movimentoDocRef = doc(collection(db, 'movimentos'));
             const movimentoData = { 
                 estado: "Comprado", 
                 itemManager: itemToPurchase.nome, 
-                temporada: latestSeason, 
+                temporada: compactSeason(latestSeason), 
                 movimentoData: serverTimestamp(), 
                 preco: itemPrice, 
                 tipo: "Manager", 
@@ -809,17 +825,29 @@ async function confirmItemPurchase(confirmed) {
             
             transaction.update(managerItemRef, { compradoPorUids: arrayUnion(currentUser.uid) });
             if (itemToPurchase.tipo === "Formações") {
-                transaction.update(userDocRef, { tática: arrayUnion(itemToPurchase.nome) });
+                transaction.update(userDocRef, {
+                    [latestSeason]: {
+                        ...seasonData,
+                        tática: arrayUnion(itemToPurchase.nome)
+                    }
+                });
             }
         });
 
         console.log("confirmItemPurchase: Transaction OK! Recalculating GCoins...");
-        const finalSeason = latestSeason; const finalGcoinsField = `${finalSeason}GCoins`;
-        const allMovimentosQuery = query(collection(db, 'movimentos'), where('userId', '==', currentUser.uid));
+        const finalSeason = latestSeason;
+        const allMovimentosQuery = query(collection(db, 'movimentos'), where('userId', '==', currentUser.uid), where('temporada', '==', compactSeason(finalSeason)));
         const allMovimentosSnapshot = await getDocs(allMovimentosQuery);
         let totalValorReal = 0;
         allMovimentosSnapshot.forEach(doc => { totalValorReal += doc.data().valorreal || 0; });
-        await updateDoc(userDocRef, { [finalGcoinsField]: totalValorReal });
+        const latestUserSnapshot = await getDoc(userDocRef);
+        const finalSeasonData = latestUserSnapshot.exists() ? getSeasonData(latestUserSnapshot.data(), finalSeason) : {};
+        await updateDoc(userDocRef, {
+            [finalSeason]: {
+                ...finalSeasonData,
+                GCoins: totalValorReal
+            }
+        });
 
         closeItemConfirmation();
         setTimeout(() => location.reload(), 1000);
@@ -1191,16 +1219,17 @@ async function displayOtherManagersView() {
     setPageBackground('https://lh3.googleusercontent.com/pw/AP1GczPZedYgh1QcwMzyJcb3Xe5XfxjNNvKPVvR7UetQ01ebddLxeU_ZtPAOudlBzqtDcjIyjH6V71ySDpfxykBMo52FGxMtFpa34kCRmkQ7Qvyx8nBXcu2geDy_16GThkINoio6urG7q46ItYZp9R7tVAF3=w1415-h809-s-no-gm?authuser=1', 0.48);
 
     try {
-        const usersQuery = query(collection(db, "users"), where("estadio", ">", ""));
-        const querySnapshot = await getDocs(usersQuery);
+        const latestSeason = await getLatestSeason();
+        const querySnapshot = await getDocs(collection(db, "users"));
         listContainer.innerHTML = '';
         let otherManagersCount = 0;
 
         const userCards = [];
         querySnapshot.forEach((doc) => {
             if (doc.id === currentUser.uid) return;
+            const userData = mergeUserSeasonData(doc.data(), latestSeason);
+            if (!userData.estadio) return;
             otherManagersCount++;
-            const userData = doc.data();
             const userCard = document.createElement('div');
             userCard.className = 'user-manager-card';
             userCard.dataset.userId = doc.id;

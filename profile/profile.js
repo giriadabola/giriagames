@@ -4,6 +4,7 @@ import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/
 import { doc, getDoc, collection, getDocs, query, orderBy, limit, where, updateDoc, addDoc, serverTimestamp, onSnapshot, writeBatch, increment } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 import { buildUserPredictionStats, renderUserStats } from "./profile-stats.js";
 import { initProfileNotifications } from "./profile-notifications.js";
+import { compactSeason, getLatestSeason, getSeasonData, mergeUserSeasonData } from "../core/user-season.js";
 
 const functions = getFunctions(app, 'us-central1');
 
@@ -499,21 +500,6 @@ async function loadBancaValue() {
     }
 }
 
-function findLatestGcoinsField(userData) {
-    let latestSeason = 0;
-    let latestGcoinsField = null;
-    for (const key in userData) {
-        if (key.endsWith('GCoins')) {
-            const season = parseInt(key.slice(0, 8));
-            if (!isNaN(season) && season > latestSeason) {
-                latestSeason = season;
-                latestGcoinsField = key;
-            }
-        }
-    }
-    return latestGcoinsField;
-}
-
 async function loadUserDebts() {
     const user = auth.currentUser;
     if (!user) return;
@@ -553,23 +539,16 @@ async function updateGCoinsDisplay() {
 
     if (user) {
         try {
-            const configRef = doc(db, 'paineis', 'configuracoes_gerais');
             const userRef = doc(db, 'users', user.uid);
-            
-            const [configSnap, userSnap] = await Promise.all([
-                getDoc(configRef),
+
+            const [seasonLabel, userSnap] = await Promise.all([
+                getLatestSeason(db),
                 getDoc(userRef)
             ]);
 
             if (userSnap.exists()) {
-                const userData = userSnap.data();
-                const temporadaAtual = configSnap.exists() ? configSnap.data().temporadaAtual : '';
-                
-                if (temporadaAtual) {
-                    const seasonString = temporadaAtual.replace('/', '');
-                    const gcoinsField = seasonString + 'GCoins';
-                    
-                    const gcoins = userData[gcoinsField] || 0;
+                if (seasonLabel) {
+                    const gcoins = getSeasonData(userSnap.data(), seasonLabel).GCoins || 0;
                     gcoinsValue.textContent = gcoins.toFixed(0);
 
                     return gcoins; 
@@ -735,6 +714,10 @@ onAuthStateChanged(auth, async (user) => {
     // Se o utilizador estiver autenticado, prossiga
     if (user) {
         try {
+            // Inicializa as notificações antes dos restantes carregamentos do perfil.
+            // Assim, um erro noutra secção não impede o registo do dispositivo.
+            await initProfileNotifications(user);
+
             // Inicia um listener em tempo real para as configurações do painel de perfil
             const panelDocRef = doc(db, 'paineis', 'paineis perfil');
             isInitialPanelLoad = true; // Flag para ignorar a primeira chamada do listener (que é o estado inicial)
@@ -778,7 +761,8 @@ onAuthStateChanged(auth, async (user) => {
             }
 
             await logUserAction(`Entrou em ${document.title}`);
-            const userData = userDocSnap.data();
+            const latestSeason = await getLatestSeason(db);
+            const userData = mergeUserSeasonData(userDocSnap.data(), latestSeason);
             const userStatus = userData.estatuto || null;
 
             if (menuSettings.profile !== 'on' && userStatus !== 'ruler') {
@@ -835,7 +819,6 @@ onAuthStateChanged(auth, async (user) => {
 
             // --- CARREGAR MINI-GAMES DINÂMICOS ---
             await loadDynamicMiniGames(userData);
-            await initProfileNotifications(user);
 
             // --- CARREGAR CAIXA DE ENTRADA (PROPOSTAS) ---
             if (panelSettings && panelSettings.inbox === 'on') {
@@ -1144,7 +1127,8 @@ if (testMockBtn && testMockContainer && testMockSelect) {
             try {
                 const simUserSnap = await getDoc(doc(db, 'users', selectedId));
                 if (simUserSnap.exists()) {
-                    await loadDynamicMiniGames(simUserSnap.data());
+                    const latestSeason = await getLatestSeason(db);
+                    await loadDynamicMiniGames(mergeUserSeasonData(simUserSnap.data(), latestSeason));
                 }
             } catch (err) {
                 console.error("Erro ao carregar mini-games para utilizador simulado:", err);
@@ -1522,16 +1506,14 @@ async function loadInbox(userId) {
                                 bankBalance = configSnap.data().valor || 0;
                             }
 
-                            const seasonsQuery = query(collection(db, 'palpites'), orderBy('temporada', 'desc'), limit(1));
-                            const seasonsSnapshot = await getDocs(seasonsQuery);
-                            let latestSeason = seasonsSnapshot.docs[0]?.data()?.temporada || '';
-                            latestSeason = latestSeason.replace('/', '');
+                            const latestSeason = await getLatestSeason(db);
 
                             const buyerRef = doc(db, 'users', userId);
                             const buyerSnap = await getDoc(buyerRef);
                             if (!buyerSnap.exists()) return;
                             const buyerData = buyerSnap.data();
-                            const buyerGCoins = buyerData[`${latestSeason}GCoins`] || 0;
+                            const buyerSeasonData = getSeasonData(buyerData, latestSeason);
+                            const buyerGCoins = buyerSeasonData.GCoins || 0;
 
                             if (buyerGCoins < p.player.preco) {
                                 alert(`Não tens GCoins suficientes para aceitar esta proposta! Preço: ${p.player.preco} GCoins, O teu Saldo: ${buyerGCoins} GCoins.`);
@@ -1556,7 +1538,8 @@ async function loadInbox(userId) {
                                 return;
                             }
 
-                            const sellerGCoins = sellerData[`${latestSeason}GCoins`] || 0;
+                            const sellerSeasonData = getSeasonData(sellerData, latestSeason);
+                            const sellerGCoins = sellerSeasonData.GCoins || 0;
                             const buyerName = buyerData.nometabela || 'Utilizador';
 
                             const batch = writeBatch(db);
@@ -1566,12 +1549,18 @@ async function loadInbox(userId) {
                             });
 
                             batch.update(buyerRef, {
-                                [`${latestSeason}GCoins`]: buyerGCoins - p.player.preco
+                                [latestSeason]: {
+                                    ...buyerSeasonData,
+                                    GCoins: buyerGCoins - p.player.preco
+                                }
                             });
 
                             const finalSellerGains = Math.max(0, p.player.preco - comissaoBancaVenda);
                             batch.update(sellerRef, {
-                                [`${latestSeason}GCoins`]: sellerGCoins + finalSellerGains
+                                [latestSeason]: {
+                                    ...sellerSeasonData,
+                                    GCoins: sellerGCoins + finalSellerGains
+                                }
                             });
 
                             batch.update(doc(db, "paineis", "Banca"), {
@@ -1592,7 +1581,7 @@ async function loadInbox(userId) {
                                 posicao: p.player.posicao,
                                 preco: -p.player.preco,
                                 valorreal: -p.player.preco,
-                                temporada: latestSeason,
+                                temporada: compactSeason(latestSeason),
                                 tipo: 'Mercado',
                                 movimentoData: serverTimestamp(),
                                 descricao: `Compra de jogador ${p.player.nome} a ${p.senderName}`
@@ -1607,7 +1596,7 @@ async function loadInbox(userId) {
                                 posicao: p.player.posicao,
                                 preco: p.player.preco,
                                 valorreal: finalSellerGains,
-                                temporada: latestSeason,
+                                temporada: compactSeason(latestSeason),
                                 tipo: 'Mercado',
                                 movimentoData: serverTimestamp(),
                                 descricao: `Venda de jogador ${p.player.nome} a ${buyerName} (Comissão da Banca: ${comissaoBancaVenda} gCoins)`
@@ -1616,7 +1605,7 @@ async function loadInbox(userId) {
                             batch.set(doc(collection(db, 'movimentos')), {
                                 preco: comissaoBancaVenda,
                                 tipo: "Banca",
-                                temporada: latestSeason,
+                                temporada: compactSeason(latestSeason),
                                 movimentoData: serverTimestamp(),
                                 descricao: `Comissão de venda de jogador ${p.player.nome} entre ${p.senderName} e ${buyerName}`
                             });

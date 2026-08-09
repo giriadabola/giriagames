@@ -1,5 +1,6 @@
 import { db } from './firebase.js';
 import { collection, doc, getDoc, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getLatestSeason, mergeUserSeasonData } from './user-season.js';
 
 const FORMATIONS = {
     '4-4-2': [
@@ -86,9 +87,7 @@ async function getCurrentSeason() {
         return cachedSeason;
     }
 
-    const configDocRef = doc(db, 'paineis', 'configuracoes_gerais');
-    const configDocSnap = await getDoc(configDocRef);
-    cachedSeason = configDocSnap.exists() ? configDocSnap.data().temporadaAtual || '' : '';
+    cachedSeason = await getLatestSeason(db);
     return cachedSeason;
 }
 
@@ -378,7 +377,7 @@ class RivalSquadsView {
         const users = [];
 
         querySnapshot.forEach((userDoc) => {
-            const userData = userDoc.data();
+            const userData = mergeUserSeasonData(userDoc.data(), await getCurrentSeason());
             if (userData.natabela === "Yes" && userData.nometabela) {
                 users.push({ id: userDoc.id, displayNome: userData.nometabela });
             }

@@ -1,5 +1,5 @@
 import { auth, db } from "../core/firebase.js";
-import { doc, getDoc, onSnapshot, serverTimestamp, updateDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+import { doc, getDoc, onSnapshot, serverTimestamp, setDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 import { MARKET_NOTIFICATIONS_DEFAULTS, MARKET_NOTIFICATIONS_VAPID_PUBLIC_KEY } from "../core/pwa/push-config.js";
 
 const GLOBAL_CONFIG_PATH = ['paineis', 'notificacoesMercado'];
@@ -71,7 +71,13 @@ function base64UrlToUint8Array(base64UrlValue) {
 }
 
 async function getServiceWorkerRegistration() {
-  return navigator.serviceWorker.register('./sw.js');
+  const registration = await navigator.serviceWorker.register('/sw.js', {
+    scope: '/',
+    updateViaCache: 'none'
+  });
+
+  await registration.update().catch(() => undefined);
+  return navigator.serviceWorker.ready;
 }
 
 async function getCurrentSubscription() {
@@ -146,14 +152,14 @@ async function upsertCurrentSubscription(subscription) {
   const nextSubscription = buildStoredSubscription(subscription);
   const nextSubscriptions = mergeSubscriptions(userSettings.pushSubscriptions, nextSubscription);
 
-  await updateDoc(userRef, {
+  await setDoc(userRef, {
     [USER_SETTINGS_FIELD]: {
       ...userSettings,
       pushEnabled: nextSubscriptions.length > 0,
       pushSubscriptions: nextSubscriptions,
       updatedAt: serverTimestamp()
     }
-  });
+  }, { merge: true });
 }
 
 async function removeCurrentSubscription(subscription) {
@@ -169,14 +175,14 @@ async function removeCurrentSubscription(subscription) {
     subscription.endpoint
   );
 
-  await updateDoc(userRef, {
+  await setDoc(userRef, {
     [USER_SETTINGS_FIELD]: {
       ...userSettings,
       pushEnabled: nextSubscriptions.length > 0,
       pushSubscriptions: nextSubscriptions,
       updatedAt: serverTimestamp()
     }
-  });
+  }, { merge: true });
 }
 
 async function syncDeviceState() {
@@ -191,7 +197,14 @@ async function syncDeviceState() {
   }
 
   enableDeviceButton.disabled = false;
-  currentDeviceSubscription = await getCurrentSubscription().catch(() => null);
+  try {
+    currentDeviceSubscription = await getCurrentSubscription();
+  } catch (error) {
+    console.error('Erro ao preparar o service worker das notificações:', error);
+    currentDeviceSubscription = null;
+    setDeviceStatus('Não foi possível preparar as notificações neste browser.', 'is-error');
+    return;
+  }
 
   if (Notification.permission === 'denied') {
     enableDeviceButton.disabled = true;
@@ -332,6 +345,9 @@ export async function initProfileNotifications(user) {
   userSettingsUnsubscribe = onSnapshot(userRef, async (snapshot) => {
     currentSettings = normalizeUserSettings(snapshot.data()?.[USER_SETTINGS_FIELD]);
     await syncDeviceState();
+  }, (error) => {
+    console.error('Erro ao ler as definições de notificações:', error);
+    setDeviceStatus('Não foi possível ler o estado das notificações.', 'is-error');
   });
 
   globalConfigUnsubscribe = onSnapshot(globalRef, (snapshot) => {
