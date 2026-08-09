@@ -563,6 +563,55 @@ exports.processMarketNotifications = onSchedule({
   return null;
 });
 
+exports.sendInboxNotification = onCall({
+  cors: [
+    "https://g-games-8a8fc.web.app",
+    "https://giriagames.com",
+    "http://127.0.0.1:5502",
+    "http://localhost:5502",
+    "http://127.0.0.1:5503",
+    "http://localhost:5503",
+  ],
+}, async (request) => {
+  await ensureAdminAccess(request.auth?.uid || null);
+
+  const message = sanitizeManualMessage(request.data?.message);
+  const targetUserIds = Array.isArray(request.data?.targetUserIds)
+    ? [...new Set(request.data.targetUserIds.filter((userId) => typeof userId === "string" && userId.trim()))]
+    : [];
+
+  if (targetUserIds.length === 0) {
+    throw new HttpsError("invalid-argument", "Seleciona pelo menos um destinat\u00e1rio.");
+  }
+
+  const users = await loadEligibleUsers();
+  const targetUsers = getInterestedUsers(users)
+    .filter((userEntry) => targetUserIds.includes(userEntry.id));
+
+  if (targetUsers.length === 0) {
+    return {
+      success: true,
+      deliveredTo: 0,
+      message: "N\u00e3o h\u00e1 dispositivos ativos para receber esta notifica\u00e7\u00e3o.",
+    };
+  }
+
+  const payload = {
+    title: ":: gGames :: Informa\u00e7\u00e3o",
+    body: message,
+    tag: `inbox-notification-${Date.now()}`,
+    url: "./profile.html",
+  };
+
+  const delivery = await sendPayloadToUsers(targetUsers, payload);
+
+  return {
+    success: true,
+    deliveredTo: delivery.delivered,
+    message: "Notifica\u00e7\u00e3o enviada com sucesso.",
+  };
+});
+
 exports.sendManualMarketNotification = onCall({
   cors: [
     "https://g-games-8a8fc.web.app",
@@ -588,7 +637,7 @@ exports.sendManualMarketNotification = onCall({
   }
 
   const payload = {
-    title: ":: gGames :: Informa\u00e7\u00e3o",
+    title: "gGames",
     body: message,
     tag: `market-manual-${Date.now()}`,
     url: "./market.html",

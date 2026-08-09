@@ -10,13 +10,44 @@ const fetch = require("node-fetch");
 const {
     processMarketNotifications,
     sendManualMarketNotification,
+    sendInboxNotification,
 } = require("./market-notifications");
 
 admin.initializeApp();
 const db = admin.firestore();
 
+function compactSeason(season) {
+    return String(season || '').replace(/\//g, '').trim();
+}
+
+function sortSeasons(seasons) {
+    return [...new Set((seasons || []).filter((season) => typeof season === 'string' && season.trim()))]
+        .sort((a, b) => {
+            const getEndYear = (value) => Number(value.match(/\d{4}\s*\/\s*(\d{4})/)?.[1] || 0);
+            return getEndYear(b) - getEndYear(a) || b.localeCompare(a);
+        });
+}
+
+async function getLatestSeason() {
+    const settingsSnapshot = await db.collection('settings').doc('temporadas').get();
+    const latestConfiguredSeason = sortSeasons(settingsSnapshot.data()?.temporadas)[0];
+    if (latestConfiguredSeason) return latestConfiguredSeason;
+
+    const configSnapshot = await db.collection('paineis').doc('configuracoes_gerais').get();
+    const fallbackSeason = configSnapshot.data()?.temporadaAtual;
+    if (fallbackSeason) return fallbackSeason;
+
+    throw new Error('Época mais recente não configurada.');
+}
+
+function getSeasonData(userData, season) {
+    const data = userData?.[season];
+    return data && typeof data === 'object' && !Array.isArray(data) ? data : {};
+}
+
 exports.processMarketNotifications = processMarketNotifications;
 exports.sendManualMarketNotification = sendManualMarketNotification;
+exports.sendInboxNotification = sendInboxNotification;
 
 // =====================================================================
 //   footballProxy — Proxy HTTP para SofaScore (sem CORS no servidor)
@@ -133,22 +164,6 @@ exports.footballProxy = onRequest({
 });
 
 
-// Função utilitária (sem alterações)
-function findLatestGcoinsField(userData) {
-    let latestSeason = 0;
-    let latestGcoinsField = null;
-    for (const key in userData) {
-        if (key.endsWith("GCoins")) {
-            const season = parseInt(key.slice(0, 8));
-            if (!isNaN(season) && season > latestSeason) {
-                latestSeason = season;
-                latestGcoinsField = key;
-            }
-        }
-    }
-    return latestGcoinsField;
-}
-
 // =================================================================
 //          FUNÇÃO ATUALIZADA: payDebt (v2 com CORS)
 // =================================================================
@@ -174,6 +189,7 @@ exports.payDebt = onCall({ cors: ["https://giriagames.com", "http://127.0.0.1:55
         if (paymentAmount > totalDebt) {
             throw new HttpsError("failed-precondition", "O pagamento não pode exceder a dívida total.");
         }
+        const latestSeason = await getLatestSeason();
         await db.runTransaction(async (transaction) => {
             const userRef = db.doc(`users/${userId}`);
             const bancaRef = db.doc("paineis/Banca");
@@ -183,11 +199,8 @@ exports.payDebt = onCall({ cors: ["https://giriagames.com", "http://127.0.0.1:55
             }
             const userData = userDoc.data();
             const userName = userData.nometabela || userId;
-            const latestGcoinsField = findLatestGcoinsField(userData);
-            if (!latestGcoinsField) {
-                 throw new HttpsError("failed-precondition", "Campo GCoins do utilizador não encontrado.");
-            }
-            const currentUserGCoins = userData[latestGcoinsField] || 0;
+            const latestSeasonData = getSeasonData(userData, latestSeason);
+            const currentUserGCoins = latestSeasonData.GCoins || 0;
             if (paymentAmount > currentUserGCoins) {
                 throw new HttpsError("failed-precondition", "Não tem GCoins suficientes.");
             }
@@ -197,8 +210,7 @@ exports.payDebt = onCall({ cors: ["https://giriagames.com", "http://127.0.0.1:55
                     userDebtDocuments.push({id: doc.id, ...doc.data()});
                 }
             });
-            const currentSeasonDoc = await db.collection("palpites").orderBy("temporada", "desc").limit(1).get();
-            const currentSeason = (currentSeasonDoc.docs[0]?.data()?.temporada || "").replace("/", "");
+            const currentSeason = compactSeason(latestSeason);
             transaction.set(db.collection("movimentos").doc(), {
                 userId: userId, valorreal: -paymentAmount, tipo: "Pagamento Dívida", estado: "Pago",
                 movimentoData: admin.firestore.FieldValue.serverTimestamp(), temporada: currentSeason, descricao: "Pagamento à Banca",
@@ -222,7 +234,12 @@ exports.payDebt = onCall({ cors: ["https://giriagames.com", "http://127.0.0.1:55
                 remainingPayment -= amountToPayFromThisDebt;
             }
             const newUserBalance = currentUserGCoins - paymentAmount;
-            transaction.update(userRef, {[latestGcoinsField]: newUserBalance});
+            transaction.update(userRef, {
+                [latestSeason]: {
+                    ...latestSeasonData,
+                    GCoins: newUserBalance
+                }
+            });
             const currentBancaValue = bancaSnap.exists ? (bancaSnap.data().valor || 0) : 0;
             const newBancaValue = currentBancaValue + paymentAmount;
             transaction.set(bancaRef, {valor: newBancaValue}, {merge: true});
@@ -251,6 +268,7 @@ exports.convertCoins = onCall({ cors: ["https://giriagames.com", "http://127.0.0
     if (typeof amountToConvert !== "number" || amountToConvert <= 0) throw new HttpsError("invalid-argument", "Valor inválido.");
 
     try {
+        const latestSeason = await getLatestSeason();
         await db.runTransaction(async (transaction) => {
             const userRef = db.doc(`users/${userId}`);
             const bancaRef = db.doc("paineis/Banca");
@@ -262,8 +280,9 @@ exports.convertCoins = onCall({ cors: ["https://giriagames.com", "http://127.0.0
             const userData = userDoc.data();
             const bancaData = bancaDoc.data();
             const configData = configDoc.data();
+            const latestSeasonData = getSeasonData(userData, latestSeason);
 
-            const currentUserMiniGCoins = userData.whowinsgCoins || 0;
+            const currentUserMiniGCoins = latestSeasonData.whowinsgCoins || 0;
             const conversionRate = bancaData.taxaWhoWins || 0;
             const bankFeeFactor = bancaData.taxaBanca || 0; // Fator decimal (Ex: 0.5 para 50%)
 
@@ -287,13 +306,15 @@ exports.convertCoins = onCall({ cors: ["https://giriagames.com", "http://127.0.0
 
             const finalUserGCoins = Math.round(userCut);
             const finalBankGCoins = Math.round(bankCut);
-            const currentSeason = (configData.temporadaAtual || "").replace("/", "");
-            const gcoinsField = `${currentSeason}GCoins`;
+            const currentSeason = compactSeason(latestSeason);
 
             // Atualizar User: Perde Mini-gCoins, Ganha GCoins Líquidos
             transaction.update(userRef, {
-                whowinsgCoins: currentUserMiniGCoins - amountToConvert,
-                [gcoinsField]: (userData[gcoinsField] || 0) + finalUserGCoins,
+                [latestSeason]: {
+                    ...latestSeasonData,
+                    whowinsgCoins: currentUserMiniGCoins - amountToConvert,
+                    GCoins: (latestSeasonData.GCoins || 0) + finalUserGCoins
+                }
             });
 
             // Atualizar Banca: Ganha a comissão
