@@ -3,6 +3,7 @@ import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/fi
 import { doc, getDoc, collection, getDocs, query, orderBy, limit, setDoc, addDoc, where, serverTimestamp, updateDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { initRivalSquadsView } from '../core/rival-squads-view.js';
 import { compactSeason, getLatestSeason, getSeasonData, mergeUserSeasonData } from '../core/user-season.js';
+import { checkPageContentAccess } from '../js/page-content-guard.js';
 
 // --- Sobrescrever window.alert com Modal Personalizado ---
 window.alert = function(message) {
@@ -1595,6 +1596,12 @@ onAuthStateChanged(auth, async (user) => {
                 } 
                 window.updateMenuVisibility(menuData); 
             } 
+            const hasContentAccess = await checkPageContentAccess('myteam', currentUserStatus, db);
+            if (!hasContentAccess) {
+                const loadingScreen = document.getElementById('loading-screen');
+                if (loadingScreen) loadingScreen.style.display = 'none';
+                return;
+            }
             await logUserAction(`Entrou em ${document.title}`);
             await Promise.all([ fetchCountries(), fetchUserOwnedPlayers(), fetchPlayerStyles(), fetchPaineisCoefficients() ]); 
             const [activeFormation, formationsFromUser] = await Promise.all([

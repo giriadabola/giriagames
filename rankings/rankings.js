@@ -1,6 +1,7 @@
 import { db, auth } from "../core/firebase.js";
 import { doc, getDoc, collection, getDocs, query, where, updateDoc, serverTimestamp, addDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { checkPageContentAccess } from "../js/page-content-guard.js";
 import { buildAlfredoGiftMessage, CADERNETA_GIFT_OFFERS_COLLECTION, CADERNETA_GIFT_REDIRECT_PARAM } from "../caderneta/pack-offers.js";
 import { getLatestSeason, mergeUserSeasonData } from "../core/user-season.js";
 
@@ -227,6 +228,12 @@ onAuthStateChanged(auth, async (user) => {
         const hasAccess = checkPageAccess(currentUserStatus, menuSettings);
 
         if (hasAccess) {
+            const hasContentAccess = await checkPageContentAccess('rankings', currentUserStatus, db);
+            if (!hasContentAccess) {
+                loadingScreen.style.display = 'none';
+                return;
+            }
+
             // Regista a entrada na página
             await logUserAction(`Entrou em ${document.title}`);
             

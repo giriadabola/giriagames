@@ -4,6 +4,7 @@ import { collection, getDocs, doc, getDoc, updateDoc, setDoc, Timestamp, addDoc,
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { fetchUniqueSeasons, getPlayerSeasonData, hasPlayerDataForSeason } from "../admin/js/player-season-helper.js";
 import { compactSeason, getLatestSeason, getSeasonData } from "../core/user-season.js";
+import { checkPageContentAccess } from "../js/page-content-guard.js";
 
 const activeListeners = new Map();
 
@@ -1125,6 +1126,12 @@ onAuthStateChanged(auth, async (user) => {
 
                 if (!checkPageAccess(currentUserEstatuto, menuSettings)) return;
                 updateLoadingProgress(10);
+
+                const hasContentAccess = await checkPageContentAccess('market', currentUserEstatuto, db);
+                if (!hasContentAccess) {
+                    if (loadingScreen) loadingScreen.style.display = 'none';
+                    return;
+                }
 
                 await logUserAction(`Entrou em ${document.title}`);
 

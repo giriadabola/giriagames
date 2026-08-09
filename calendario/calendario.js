@@ -1,6 +1,7 @@
 import { db, auth } from '../core/firebase.js';
 import { collection, getDocs, doc, getDoc, query, orderBy, addDoc, serverTimestamp, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { checkPageContentAccess } from "../js/page-content-guard.js";
 
 function logUserAction(actionDescription) {
     if (!auth.currentUser) {
@@ -186,6 +187,11 @@ onAuthStateChanged(auth, async (user) => {
         if (userInfo && userInfo.aceite === "Yes") {
             const menuSettings = await loadMenuSettings();
             if (checkPageAccess(userInfo.estatuto, menuSettings)) {
+                const hasContentAccess = await checkPageContentAccess('calendario', userInfo.estatuto, db);
+                if (!hasContentAccess) {
+                    loadingScreen.style.display = 'none';
+                    return;
+                }
                 await logUserAction(`Entrou em ${document.title}`);
                 mainContentWrapper.style.display = 'block';
                 window.updateMenuVisibility(menuSettings);

@@ -3,6 +3,7 @@ import { db, auth } from '../core/firebase.js';
 import { getDoc, doc, collection, query, where, getDocs, updateDoc, runTransaction, serverTimestamp, writeBatch, orderBy, addDoc, arrayUnion, limit } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { compactSeason, getLatestSeason as getConfiguredLatestSeason, getSeasonData, mergeUserSeasonData } from "../core/user-season.js";
+import { checkPageContentAccess } from "../js/page-content-guard.js";
 
 console.log("Manager Page Script: Module loading initiated.");
 
@@ -1396,6 +1397,9 @@ onAuthStateChanged(auth, async (user) => {
             const hasAccess = await checkPageAccess(currentUser, menuSettings);
             if (!hasAccess) { console.log("Access check failed."); hideLoadingScreen(); return; }
             console.log("Access check passed.");
+
+            const hasContentAccess = await checkPageContentAccess('manager', currentUser.estatuto, db);
+            if (!hasContentAccess) { hideLoadingScreen(); return; }
 
             await logUserAction(`Entrou em ${document.title}`);
             console.log("onAuthStateChanged: 'Entrou em Manager' logado.");

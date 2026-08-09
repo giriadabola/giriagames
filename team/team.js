@@ -2,6 +2,7 @@ import { db, auth } from '../core/firebase.js';
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { addDoc, collection, doc, getDoc, serverTimestamp, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { initRivalSquadsView } from '../core/rival-squads-view.js';
+import { checkPageContentAccess } from '../js/page-content-guard.js';
 
 const loadingScreen = document.getElementById('loading-screen');
 const content = document.querySelector('.content');
@@ -90,6 +91,12 @@ onAuthStateChanged(auth, async (user) => {
 
         if (!isUserAccepted || !canAccessTeamPage) {
             window.location.href = '404.html';
+            return;
+        }
+
+        const hasContentAccess = await checkPageContentAccess('team', userData.estatuto, db);
+        if (!hasContentAccess) {
+            loadingScreen.style.display = 'none';
             return;
         }
 

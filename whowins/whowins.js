@@ -2,6 +2,7 @@ import { db, auth } from "../core/firebase.js";
 import { collection, getDocs, doc, getDoc, Timestamp, setDoc, query, where, updateDoc, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { getLatestSeason, getSeasonData, mergeUserSeasonData } from '../core/user-season.js';
+import { checkPageContentAccess } from '../js/page-content-guard.js';
 
 let currentUserId = null;
 let gamesDataMap = {};
@@ -133,6 +134,12 @@ onAuthStateChanged(auth, async (user) => {
         const accessSettings = await loadAccessSettings();
         if (!checkPageAccess(userInfo, accessSettings)) { 
             window.location.href = '404.html';
+            return;
+        }
+        const hasContentAccess = await checkPageContentAccess('whowins', userInfo.estatuto, db);
+        if (!hasContentAccess) {
+            const loadingScreen = document.getElementById('loading-screen');
+            if (loadingScreen) loadingScreen.style.display = 'none';
             return;
         }
         await logUserAction(`Entrou em ${document.title}`);

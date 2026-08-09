@@ -2,6 +2,7 @@
 import { db, auth } from '../core/firebase.js';
 import { doc, getDoc, addDoc, collection, serverTimestamp, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { checkPageContentAccess } from "../js/page-content-guard.js";
 
 const loadingScreen = document.getElementById('loading-screen');
 const content = document.querySelector('.content');
@@ -320,6 +321,12 @@ onAuthStateChanged(auth, async (user) => {
         const paineisMenuSettings = await getPaineisMenuSettings();
         if (paineisMenuSettings.palpite !== "on" && currentUserStatus !== 'ruler') {
             window.location.href = '404.html';
+            return;
+        }
+
+        const hasContentAccess = await checkPageContentAccess('palpite', currentUserStatus, db);
+        if (!hasContentAccess) {
+            if (loadingScreen) loadingScreen.style.display = 'none';
             return;
         }
 
