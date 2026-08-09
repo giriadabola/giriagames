@@ -588,7 +588,7 @@ exports.sendManualMarketNotification = onCall({
   }
 
   const payload = {
-    title: "Mensagem do mercado",
+    title: ":: gGames :: Informa\u00e7\u00e3o",
     body: message,
     tag: `market-manual-${Date.now()}`,
     url: "./market.html",
