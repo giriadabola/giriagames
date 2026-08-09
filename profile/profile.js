@@ -5,6 +5,7 @@ import { doc, getDoc, collection, getDocs, query, orderBy, limit, where, updateD
 import { buildUserPredictionStats, renderUserStats } from "./profile-stats.js";
 import { initProfileNotifications } from "./profile-notifications.js";
 import { compactSeason, getLatestSeason, getSeasonData, mergeUserSeasonData } from "../core/user-season.js";
+import { checkPageContentAccess } from "../js/page-content-guard.js";
 
 const functions = getFunctions(app, 'us-central1');
 
@@ -767,9 +768,19 @@ onAuthStateChanged(auth, async (user) => {
             const userData = mergeUserSeasonData(userDocSnap.data(), latestSeason);
             const userStatus = userData.estatuto || null;
 
+            if (testMockBtn) {
+                testMockBtn.style.display = userStatus === 'ruler' ? 'inline-block' : 'none';
+            }
+
             if (menuSettings.profile !== 'on' && userStatus !== 'ruler') {
                 loadingScreen.style.display = 'none';
                 window.location.href = '404.html';
+                return;
+            }
+
+            const hasContentAccess = await checkPageContentAccess('profile', userStatus, db);
+            if (!hasContentAccess) {
+                loadingScreen.style.display = 'none';
                 return;
             }
 
