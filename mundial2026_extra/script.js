@@ -1,4 +1,0 @@
-/*
-  Script principal modularizado.
-  O codigo antigo foi dividido por responsabilidade e carregado diretamente no index.html.
-*/
