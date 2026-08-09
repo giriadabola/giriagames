@@ -264,7 +264,6 @@
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
         import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
         import { getFirestore, doc, getDoc, collection, query, where, getDocs, onSnapshot, orderBy, limit } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
-        import { getLatestSeason, getSeasonData } from './core/user-season.js';
 
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
@@ -374,7 +373,8 @@
                     if (menuSettings.bank !== 'on' && userDoc.data().estatuto !== 'ruler') { window.location.href = '404.html'; return; }
                     if (typeof updateMenuVisibility === 'function') updateMenuVisibility(menuSettings);
 
-                    currentSeason = await getLatestSeason(db);
+                    const configSnap = await getDoc(doc(db, 'paineis', 'configuracoes_gerais'));
+                    currentSeason = configSnap.exists() ? configSnap.data().temporadaAtual.replace('/', '') : '';
 
                     // Inicia o listener em tempo real
                     setupBancaListener();
@@ -392,7 +392,7 @@
             totalUserDebt = total;
             debtValueOnCard.textContent = total.toLocaleString('pt-PT') + ' ₲₵';
             const uSnap = await getDoc(doc(db, 'users', uid));
-            if (uSnap.exists()) currentUserGCoins = getSeasonData(uSnap.data(), currentSeason).GCoins || 0;
+            if (uSnap.exists()) currentUserGCoins = uSnap.data()[currentSeason + 'GCoins'] || 0;
         }
 
         // Eventos Exchange
@@ -406,9 +406,8 @@
             
             const uSnap = await getDoc(doc(db, 'users', auth.currentUser.uid));
             if (uSnap.exists()) {
-                const seasonData = getSeasonData(uSnap.data(), currentSeason);
-                currentUserMiniGCoins = seasonData.whowinsgCoins || 0;
-                currentUserGCoins = seasonData.GCoins || 0;
+                currentUserMiniGCoins = uSnap.data().whowinsgCoins || 0;
+                currentUserGCoins = uSnap.data()[currentSeason + 'GCoins'] || 0;
                 document.getElementById('currentMiniGCoins').textContent = currentUserMiniGCoins.toFixed(0);
                 document.getElementById('currentGCoins').textContent = currentUserGCoins.toFixed(0);
                 

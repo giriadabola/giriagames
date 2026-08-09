@@ -38,7 +38,7 @@ export async function checkPageContentAccess(pageKey, userStatus, db) {
  */
 export function showContentBlockedOverlay() {
     // Hide main content elements
-    const mainContentElements = document.querySelectorAll('main, .content, #content, .container, .main-container');
+    const mainContentElements = document.querySelectorAll('main, .content, #content, .container, .main-container, #main-content-wrapper');
     mainContentElements.forEach(el => {
         if (!el.classList.contains('top-menu') && !el.classList.contains('bottom-menu')) {
             el.style.display = 'none';
