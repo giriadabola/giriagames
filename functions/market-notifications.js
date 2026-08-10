@@ -564,6 +564,7 @@ exports.processMarketNotifications = onSchedule({
 });
 
 exports.sendInboxNotification = onCall({
+  invoker: "public",
   cors: [
     "https://g-games-8a8fc.web.app",
     "https://giriagames.com",
@@ -631,9 +632,24 @@ exports.sendManualMarketNotification = onCall({
 }, async (request) => {
   await ensureAdminAccess(request.auth?.uid || null);
 
-  const message = sanitizeManualMessage(request.data?.message);
+  const hasTargetFilter = Array.isArray(request.data?.targetUserIds);
+  const targetUserIds = hasTargetFilter
+    ? [...new Set(request.data.targetUserIds.filter((userId) => typeof userId === "string" && userId.trim()))]
+    : [];
+  const sender = typeof request.data?.sender === "string" ? request.data.sender.trim() : "";
+  const emailTitle = typeof request.data?.emailTitle === "string" ? request.data.emailTitle.trim() : "";
+  const rawMessage = typeof request.data?.message === "string" ? request.data.message : "";
+
+  if (hasTargetFilter && (targetUserIds.length === 0 || !sender || !emailTitle)) {
+    throw new HttpsError("invalid-argument", "O remetente, o título e os destinatários são obrigatórios.");
+  }
+
+  const message = hasTargetFilter
+    ? sanitizeManualMessage(`${emailTitle}\n${rawMessage}`)
+    : sanitizeManualMessage(request.data?.message);
   const users = await loadEligibleUsers();
-  const interestedUsers = getInterestedUsers(users);
+  const interestedUsers = getInterestedUsers(users)
+    .filter((userEntry) => !hasTargetFilter || targetUserIds.includes(userEntry.id));
 
   if (interestedUsers.length === 0) {
     return {
@@ -644,7 +660,7 @@ exports.sendManualMarketNotification = onCall({
   }
 
   const payload = {
-    title: "gGames",
+    title: hasTargetFilter ? `(${sender}) :: gGames` : "gGames",
     body: message,
     tag: `market-manual-${Date.now()}`,
     url: "./profile.html",
