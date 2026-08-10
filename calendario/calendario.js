@@ -2,6 +2,7 @@ import { db, auth } from '../core/firebase.js';
 import { collection, getDocs, doc, getDoc, query, orderBy, addDoc, serverTimestamp, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { checkPageContentAccess } from "../js/page-content-guard.js";
+import { getLatestSeason } from "../core/user-season.js";
 
 function logUserAction(actionDescription) {
     if (!auth.currentUser) {
@@ -28,22 +29,6 @@ async function getUserStatus(userId) { return getDoc(doc(db, 'users', userId)).t
 async function loadMenuSettings() { return getDoc(doc(db, 'paineis', 'paineis menu')).then(d => d.exists() ? d.data() : {}); }
 function checkPageAccess(userStatus, menuSettings) { return (menuSettings['calendario'] === 'on' || userStatus === 'ruler'); }
 
-async function getLatestSeason() {
-    try {
-        const settingsDoc = await getDoc(doc(db, 'settings', 'temporadas'));
-        if (settingsDoc.exists()) {
-            const data = settingsDoc.data();
-            if (Array.isArray(data.temporadas) && data.temporadas.length > 0) {
-                const seasons = data.temporadas.filter(s => s && typeof s === 'string' && s.trim() !== '').sort().reverse();
-                if (seasons.length > 0) return seasons[0];
-            }
-        }
-    } catch (err) {
-        console.warn("Erro ao obter temporada de settings/temporadas:", err);
-    }
-    return null;
-}
-
 async function loadCalendar() {
     const container = document.getElementById('calendar-container');
     container.innerHTML = '';
@@ -55,7 +40,12 @@ async function loadCalendar() {
         const querySnapshot = await getDocs(gamesQuery);
         const fetchedGames = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-        const latestSeason = await getLatestSeason();
+        let latestSeason = null;
+        try {
+            latestSeason = await getLatestSeason(db);
+        } catch (err) {
+            console.warn("Erro ao obter temporada mais recente de settings/temporadas:", err);
+        }
         let allGames = [];
         if (latestSeason) {
             allGames = fetchedGames.filter(g => g.temporada === latestSeason);
