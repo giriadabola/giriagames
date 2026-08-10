@@ -1315,6 +1315,29 @@ function showInboxConfirm(message, onConfirm, onCancel) {
     }
 }
 
+function formatInboxDate(rawDate) {
+    if (!rawDate) return '';
+    let d = null;
+    if (typeof rawDate.toDate === 'function') {
+        d = rawDate.toDate();
+    } else if (rawDate && typeof rawDate.seconds === 'number') {
+        d = new Date(rawDate.seconds * 1000);
+    } else if (rawDate instanceof Date) {
+        d = rawDate;
+    } else if (typeof rawDate === 'string' || typeof rawDate === 'number') {
+        d = new Date(rawDate);
+    }
+    if (!d || isNaN(d.getTime())) return '';
+    
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    
+    return `${day}/${month}/${year} ${hours}:${minutes}`;
+}
+
 async function loadInbox(userId) {
     const inboxSection = document.getElementById('inboxSection');
     const inboxGrid = document.getElementById('inboxGrid');
@@ -1392,6 +1415,9 @@ async function loadInbox(userId) {
                 card.style.cssText = 'background: #161b26; border: 1px solid rgba(255,255,255,0.08); padding: 15px; border-radius: 10px; color: white; display: flex; flex-direction: column; gap: 10px;';
                 
                 if (p.isEmail) {
+                    const rawDate = p.data.timestamp || p.data.data || p.data.createdAt || p.data.date;
+                    const dateStr = formatInboxDate(rawDate);
+
                     card.style.cssText = 'background: #1b160a; border: 1px solid rgba(241, 196, 15, 0.25); padding: 12px 18px; border-radius: 12px; color: white; display: flex; flex-direction: column; gap: 0; cursor: pointer; transition: background 0.2s;';
                     card.innerHTML = `
                         <!-- Cabeçalho (Sempre Visível) -->
@@ -1400,7 +1426,10 @@ async function loadInbox(userId) {
                                 <div style="width: 32px; height: 32px; border-radius: 50%; background: #ffb703; display: flex; align-items: center; justify-content: center; font-size: 13px; color: #090c10; border: 1.5px solid rgba(255,255,255,0.15); flex-shrink: 0;"><i class="fas fa-envelope"></i></div>
                                 <div style="min-width: 0; flex: 1;">
                                     <div style="font-weight: 700; font-size: 14px; color: #ffb703; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${p.data.titulo || 'Nova Mensagem'}</div>
-                                    <div style="font-size: 11px; color: #a0aec0;">De: <strong style="color: #e2e8f0;">${p.senderName}</strong></div>
+                                    <div style="font-size: 11px; color: #a0aec0; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                        <span>De: <strong style="color: #e2e8f0;">${p.senderName}</strong></span>
+                                        ${dateStr ? `<span style="color: #8892b0; font-size: 11px;">• ${dateStr}</span>` : ''}
+                                    </div>
                                 </div>
                             </div>
                             <div style="margin-left: 10px; color: #ffb703; font-size: 12px; display: flex; align-items: center; gap: 5px;">
@@ -1473,6 +1502,9 @@ async function loadInbox(userId) {
                 else if (p.player.casta === "Jogador Bronze") castaClassName = 'color: #cd7f32;';
                 else if (p.player.casta === "Jogador Platina") castaClassName = 'color: #e5e5e5;';
                 
+                const propRawDate = p.data.data || p.data.timestamp || p.data.createdAt || p.data.date;
+                const propDateStr = formatInboxDate(propRawDate);
+
                 card.innerHTML = `
                     <div style="display: flex; gap: 10px; align-items: center;">
                         <img src="${p.player.imagem || 'placeholder.png'}" alt="${p.player.nome}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 50%; background: #0c1017; border: 1.5px solid rgba(255,255,255,0.15);">
@@ -1481,8 +1513,9 @@ async function loadInbox(userId) {
                             <div style="font-size: 12px; color: #8892b0;">${p.player.posicao} | ${p.player.preco} GCoins</div>
                         </div>
                     </div>
-                    <div style="font-size: 13px; color: #8892b0; margin-top: 5px;">
-                        Proposta de venda recebida de: <strong style="color: white;">${p.senderName}</strong>
+                    <div style="font-size: 13px; color: #8892b0; margin-top: 5px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px;">
+                        <span>Proposta de venda recebida de: <strong style="color: white;">${p.senderName}</strong></span>
+                        ${propDateStr ? `<span style="color: #718096; font-size: 11px;">• ${propDateStr}</span>` : ''}
                     </div>
                     <div style="display: flex; gap: 10px; margin-top: 10px;">
                         <button class="accept-btn" style="flex: 1; background: #2ecc71; color: #090c10; border: none; padding: 8px; border-radius: 6px; font-weight: 700; cursor: pointer; font-size: 13px; transition: opacity 0.2s;">Aceitar</button>
