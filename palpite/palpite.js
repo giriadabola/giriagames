@@ -315,6 +315,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
+function logUserAction(actionDescription) {
+    if (!auth.currentUser) return;
+    try {
+        const eyeCollection = collection(db, 'eye');
+        void addDoc(eyeCollection, {
+            dataacao: serverTimestamp(),
+            acao: actionDescription,
+            userId: auth.currentUser.uid
+        }).catch((error) => console.error("Erro ao registar a ação na coleção 'eye':", error));
+    } catch (error) {
+        console.error("Erro ao registar ação na coleção 'eye':", error);
+    }
+}
+
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         currentUserStatus = await getUserStatus(user.uid);
@@ -336,6 +350,7 @@ onAuthStateChanged(auth, async (user) => {
 
         console.log(`User is logged in on palpite.html with status: ${currentUserStatus}`);
         await loadGameDetails();
+        await logUserAction(`Entrou em ${document.title}`);
         if (loadingScreen) loadingScreen.style.display = 'none';
         if (content) content.style.display = 'block';
     } else {

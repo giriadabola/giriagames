@@ -397,6 +397,7 @@ async function loadRankings(season) {
 let selectedRounds = {};
 
 async function togglePredictions(userId, season) {
+    logUserAction(`Clicou no ícone "i" da classificação para ver detalhes/palpites do utilizador (ID: ${userId})`);
     console.log(`%c[LOG] Iniciando busca de palpites para UserID: ${userId}, Época: ${season}`, 'background-color: #2176ff; color: white; padding: 2px 5px; border-radius: 3px;');
     const popup = document.getElementById('predictions-popup');
     const popupBody = document.getElementById('popup-predictions-body');

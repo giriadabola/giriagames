@@ -1,8 +1,21 @@
-// index/index.js
 import { db, auth } from '../core/firebase.js';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
-import { doc, setDoc, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+import { doc, setDoc, getDoc, addDoc, collection, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 import { getLatestSeason } from '../core/user-season.js';
+
+function logUserAction(actionDescription) {
+    if (!auth.currentUser) return;
+    try {
+        const eyeCollection = collection(db, 'eye');
+        void addDoc(eyeCollection, {
+            dataacao: serverTimestamp(),
+            acao: actionDescription,
+            userId: auth.currentUser.uid
+        }).catch((error) => console.error("Erro ao registar a ação na coleção 'eye':", error));
+    } catch (error) {
+        console.error("Erro ao registar ação na coleção 'eye':", error);
+    }
+}
 
 document.addEventListener('DOMContentLoaded', () => {
     const loader = document.getElementById('loader');
@@ -101,6 +114,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (docSnap.exists()) {
                 const userData = docSnap.data();
                 if (userData.aceite === 'Yes') {
+                    await logUserAction('Efetuou login na plataforma');
                     window.location.href = '1x.html';
                 } else {
                     loader.style.display = 'none';

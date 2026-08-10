@@ -983,6 +983,8 @@ async function initUserPredictions(userId) {
                 tabButtons.forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 const group = parseInt(btn.dataset.group);
+                const tabLabel = btn.querySelector('span')?.textContent?.trim() || `Grupo ${group}`;
+                logUserAction(`Mudou a aba de estatísticas no perfil para: ${tabLabel}`);
                 renderActiveTabPredictions(group);
             });
         });
@@ -1424,6 +1426,7 @@ async function loadInbox(userId) {
                         dismissBtn.style.opacity = '0.5';
                         try {
                             await updateDoc(doc(db, 'inbox', p.id), { status: false, estado: 'Lido' });
+                            logUserAction(`Marcou mensagem '${p.data.titulo || 'Sem título'}' como lida`);
                         } catch (err) {
                             console.error(err);
                             alert("Erro ao arquivar mensagem.");

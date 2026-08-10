@@ -175,6 +175,20 @@ const REVEAL_PACK_THEME = {
     }
 };
 
+function logUserAction(actionDescription) {
+    if (!currentUser) return;
+    try {
+        const eyeCollection = collection(db, 'eye');
+        void addDoc(eyeCollection, {
+            dataacao: serverTimestamp(),
+            acao: actionDescription,
+            userId: currentUser.uid
+        }).catch((error) => console.error("Erro ao registar a ação na coleção 'eye':", error));
+    } catch (error) {
+        console.error("Erro ao registar ação na coleção 'eye':", error);
+    }
+}
+
 // Initialize App
 onAuthStateChanged(auth, async (user) => {
     if (user) {
@@ -189,6 +203,7 @@ onAuthStateChanged(auth, async (user) => {
             updateShopAvailability();
             updateNavigation();
             hideLoader();
+            await logUserAction(`Entrou em ${document.title}`);
             await maybeProcessGiftPackOffersFromRankings();
         } catch (error) {
             console.error("Erro durante a inicialização:", error);
@@ -1801,6 +1816,7 @@ async function pasteSticker(playerId, slotEl) {
 
         // Local state update
         stickerDoc.Nacaderneta = true;
+        logUserAction(`Colou cromo no álbum da Caderneta`);
         
         // Re-render
         renderAlbumPage();
@@ -1899,6 +1915,7 @@ async function handlePackPurchase(packType) {
 
         // Execute Batch
         await batch.commit();
+        logUserAction(`Comprou saqueta (${packType}) na Caderneta`);
 
         // Update local balance
         if (isMiniGcoinsPurchase) {

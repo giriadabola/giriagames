@@ -1,6 +1,6 @@
 // core/top-bar-component.js
 import { db, auth } from './firebase.js';
-import { doc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { doc, onSnapshot, addDoc, collection, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { getLatestSeason, getSeasonData } from './user-season.js';
 
@@ -345,6 +345,25 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Run initial check
     checkAndShowTopBar();
+
+    // Registo de cliques nos ícones do topo na coleção 'eye'
+    if (topBar) {
+        topBar.querySelectorAll('a, button').forEach(el => {
+            el.addEventListener('click', () => {
+                if (!auth.currentUser) return;
+                const title = el.getAttribute('title') || el.textContent.trim() || 'Ícone do Topo';
+                try {
+                    void addDoc(collection(db, 'eye'), {
+                        dataacao: serverTimestamp(),
+                        acao: `Clicou no ícone do topo: ${title}`,
+                        userId: auth.currentUser.uid
+                    }).catch(e => console.error("Erro ao registar clique no topo:", e));
+                } catch (e) {
+                    console.error(e);
+                }
+            });
+        });
+    }
 
     // 3. Setup Logout Event Handlers (specifically for profile page)
     if (isProfilePage) {

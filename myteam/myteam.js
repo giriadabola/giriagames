@@ -1156,6 +1156,7 @@ async function handleSellToBanca(player) {
             }
 
             await batch.commit();
+            logUserAction(`Vendeu jogador ${player.nome} à Banca por ${finalPrice} gCoins`);
 
             const successMessage = document.createElement('div');
             successMessage.className = 'success-message';
@@ -1289,6 +1290,7 @@ async function showGPlayersListPopup(player) {
                         tipo: 'Venda',
                         data: serverTimestamp()
                     });
+                    logUserAction(`Enviou proposta de venda do jogador ${player.nome} a ${u.displayNome}`);
                     
                     listPopup.remove();
                     alert(`Proposta de venda do jogador ${player.nome} enviada com sucesso para ${u.displayNome}.`);
