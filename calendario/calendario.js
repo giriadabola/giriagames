@@ -159,12 +159,37 @@ async function loadCalendar() {
                 competitionList.innerHTML = `<div class="competition-header"><img src="${competition.image}" alt="${competition.name}"><h3>${competition.name}</h3></div>`;
 
                 for (const game of competition.games) {
+                    let homeLogo = '';
+                    let awayLogo = '';
+
+                    if (game.equipaCasaId) {
+                        const cacheKey = `club_${game.equipaCasaId}`;
+                        if (!dataCache.has(cacheKey)) {
+                            const clubDoc = await getDoc(doc(db, 'clubes', game.equipaCasaId));
+                            dataCache.set(cacheKey, clubDoc.exists() ? (clubDoc.data().imagem || '') : '');
+                        }
+                        homeLogo = dataCache.get(cacheKey);
+                    }
+
+                    if (game.equipaForaId) {
+                        const cacheKey = `club_${game.equipaForaId}`;
+                        if (!dataCache.has(cacheKey)) {
+                            const clubDoc = await getDoc(doc(db, 'clubes', game.equipaForaId));
+                            dataCache.set(cacheKey, clubDoc.exists() ? (clubDoc.data().imagem || '') : '');
+                        }
+                        awayLogo = dataCache.get(cacheKey);
+                    }
+
                     const gameDate = game.dataJogo.toDate();
                     const formattedDate = gameDate.toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' });
                     const formattedTime = gameDate.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
                     const gameElement = document.createElement('div');
                     gameElement.className = 'game-list-item';
-                    gameElement.innerHTML = `<div class="game-teams"><div class="team-row"><span class="team-name">${game.equipaCasa}</span> <span class="vs">vs</span></div><div class="team-row"><span class="team-name">${game.equipaFora}</span></div></div><div class="game-datetime">${formattedDate} - ${formattedTime}</div>`;
+
+                    const homeImgHtml = homeLogo ? `<img src="${homeLogo}" class="team-logo" alt="${game.equipaCasa}">` : '';
+                    const awayImgHtml = awayLogo ? `<img src="${awayLogo}" class="team-logo" alt="${game.equipaFora}">` : '';
+
+                    gameElement.innerHTML = `<div class="game-teams"><div class="team-row">${homeImgHtml}<span class="team-name">${game.equipaCasa}</span> <span class="vs">vs</span></div><div class="team-row">${awayImgHtml}<span class="team-name">${game.equipaFora}</span></div></div><div class="game-datetime">${formattedDate} - ${formattedTime}</div>`;
                     competitionList.appendChild(gameElement);
                 }
                 contentWrapper.appendChild(competitionList);
