@@ -28,6 +28,22 @@ async function getUserStatus(userId) { return getDoc(doc(db, 'users', userId)).t
 async function loadMenuSettings() { return getDoc(doc(db, 'paineis', 'paineis menu')).then(d => d.exists() ? d.data() : {}); }
 function checkPageAccess(userStatus, menuSettings) { return (menuSettings['calendario'] === 'on' || userStatus === 'ruler'); }
 
+async function getLatestSeason() {
+    try {
+        const settingsDoc = await getDoc(doc(db, 'settings', 'temporadas'));
+        if (settingsDoc.exists()) {
+            const data = settingsDoc.data();
+            if (Array.isArray(data.temporadas) && data.temporadas.length > 0) {
+                const seasons = data.temporadas.filter(s => s && typeof s === 'string' && s.trim() !== '').sort().reverse();
+                if (seasons.length > 0) return seasons[0];
+            }
+        }
+    } catch (err) {
+        console.warn("Erro ao obter temporada de settings/temporadas:", err);
+    }
+    return null;
+}
+
 async function loadCalendar() {
     const container = document.getElementById('calendar-container');
     container.innerHTML = '';
@@ -37,7 +53,20 @@ async function loadCalendar() {
     try {
         const gamesQuery = query(collection(db, 'jogos'), orderBy("dataJogo", "asc"));
         const querySnapshot = await getDocs(gamesQuery);
-        const allGames = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const fetchedGames = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+        const latestSeason = await getLatestSeason();
+        let allGames = [];
+        if (latestSeason) {
+            allGames = fetchedGames.filter(g => g.temporada === latestSeason);
+        } else {
+            const seasonsInGames = [...new Set(fetchedGames.map(g => g.temporada).filter(Boolean))].sort().reverse();
+            if (seasonsInGames.length > 0) {
+                allGames = fetchedGames.filter(g => g.temporada === seasonsInGames[0]);
+            } else {
+                allGames = fetchedGames;
+            }
+        }
 
         if (allGames.length === 0) {
             container.innerHTML = '<p class="no-games">Nenhum jogo encontrado no calendário.</p>';
