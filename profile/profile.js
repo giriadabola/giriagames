@@ -1439,16 +1439,27 @@ async function loadInbox(userId) {
                         const emailBody = card.querySelector('.email-body');
                         const toggleIcon = card.querySelector('.toggle-icon i');
                         
-                        if (emailBody.style.maxHeight === '0px' || !emailBody.style.maxHeight || emailBody.style.maxHeight === '0') {
-                            emailBody.style.maxHeight = emailBody.scrollHeight + 'px';
+                        const isClosed = emailBody.style.maxHeight === '0px' || !emailBody.style.maxHeight || emailBody.style.maxHeight === '0';
+                        if (isClosed) {
+                            emailBody.style.maxHeight = (emailBody.scrollHeight + 120) + 'px';
                             emailBody.style.marginTop = '8px';
                             toggleIcon.className = 'fas fa-chevron-up';
                             card.style.background = '#29210c';
+                            setTimeout(() => {
+                                if (emailBody.style.maxHeight !== '0px') {
+                                    emailBody.style.maxHeight = 'none';
+                                    emailBody.style.overflow = 'visible';
+                                }
+                            }, 320);
                         } else {
-                            emailBody.style.maxHeight = '0px';
-                            emailBody.style.marginTop = '0px';
-                            toggleIcon.className = 'fas fa-chevron-down';
-                            card.style.background = '#1b160a';
+                            emailBody.style.overflow = 'hidden';
+                            emailBody.style.maxHeight = emailBody.scrollHeight + 'px';
+                            setTimeout(() => {
+                                emailBody.style.maxHeight = '0px';
+                                emailBody.style.marginTop = '0px';
+                                toggleIcon.className = 'fas fa-chevron-down';
+                                card.style.background = '#1b160a';
+                            }, 10);
                         }
                     });
                     
