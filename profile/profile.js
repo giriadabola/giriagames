@@ -1411,7 +1411,7 @@ async function loadInbox(userId) {
                         <!-- Corpo e Ações (Colapsado por Padrão) -->
                         <div class="email-body" style="max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out, margin-top 0.3s ease-out; margin-top: 0;">
                             <div style="border-top: 1px solid rgba(255,255,255,0.08); padding-top: 12px; margin-top: 8px;">
-                                <div style="font-size: 24px; color: #e2e8f0; line-height: 1.5; margin-bottom: 12px; white-space: pre-wrap;">${parseInboxMessage(p.data.mensagem)}</div>
+                                <div style="font-size: 20px; color: #e2e8f0; line-height: 1.5; margin-bottom: 12px; white-space: pre-wrap;">${parseInboxMessage(p.data.mensagem)}</div>
                                 <div style="display: flex; justify-content: flex-end;">
                                     <button class="dismiss-btn" style="background: #ffb703; color: #090c10; border: none; padding: 6px 14px; border-radius: 6px; font-weight: 700; cursor: pointer; font-size: 12px; transition: opacity 0.2s;">Lido</button>
                                 </div>
