@@ -71,6 +71,35 @@
 
         .toast-msg { position: fixed; bottom: 20px; right: 20px; background-color: #2ecc71; color: white; padding: 12px 24px; border-radius: 8px; font-weight: bold; box-shadow: 0 4px 15px rgba(46, 204, 113, 0.3); display: none; z-index: 3000; animation: slideUp 0.3s ease; }
         @keyframes slideUp { from { transform: translateY(50px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+        /* Modal Popup Styles */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(4px); display: flex; justify-content: center; align-items: center; z-index: 2500; animation: fadeIn 0.2s ease; }
+        .modal-content { background: #111622; width: 90%; max-width: 440px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.1); padding: 24px; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6); animation: scaleUp 0.2s ease; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 16px; }
+        .modal-close-btn { background: none; border: none; color: #8892b0; font-size: 24px; cursor: pointer; transition: color 0.2s; line-height: 1; }
+        .modal-close-btn:hover { color: #ffffff; }
+
+        .modal-clube-search-input {
+            width: 100%;
+            padding: 11px 40px 11px 16px;
+            border: 1px solid rgba(33, 118, 255, 0.4);
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            background-color: #161c28;
+            color: #ffffff;
+            outline: none;
+            box-shadow: 0 0 10px rgba(33, 118, 255, 0.15);
+            transition: all 0.3s ease;
+        }
+        .modal-clube-search-input:focus {
+            border-color: #2176ff;
+            box-shadow: 0 0 16px rgba(33, 118, 255, 0.45);
+            background-color: #1a2234;
+        }
+
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes scaleUp { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
     </style>
     <link rel="stylesheet" href="css/admin-global.css">
     <script src="../core/pwa/loading-watchdog.js" defer></script>
@@ -84,7 +113,7 @@
             <a href="gerenciar-jogadores.html" class="menu-item" style="position: absolute; left: 0;"><i class="fas fa-arrow-left"></i> Voltar</a>
             <div>
                 <h1>Gerenciar Caderneta & Casta</h1>
-                <p class="subtitle">Ative cromos na Caderneta e defina a raridade específica para o Álbum.</p>
+                <p class="subtitle">Clique num jogador para editar ou utilize as definições na tabela.</p>
             </div>
         </div>
 
@@ -92,6 +121,12 @@
             <div class="search-wrapper">
                 <input type="text" class="search-input" placeholder="Pesquisar jogador..." id="tableSearch">
                 <i class="fas fa-search"></i>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <label for="filter-temporada" style="font-size: 13px; font-weight: 600; color: #8892b0; white-space: nowrap;"><i class="fas fa-calendar-alt" style="color: #2176ff; margin-right: 4px;"></i> Época:</label>
+                <select id="filter-temporada" class="filter-select" style="min-width: 140px; font-weight: 700; color: #2176ff; border-color: rgba(33, 118, 255, 0.4);" title="Selecionar Época a editar">
+                    <!-- Dinâmico -->
+                </select>
             </div>
             <select id="filter-clube" class="filter-select">
                 <option value="">Todos os Clubes</option>
@@ -127,6 +162,80 @@
         </div>
     </div>
 
+    <!-- Edit Player Caderneta Modal -->
+    <div id="player-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <img id="modal-player-img" src="" class="player-row-img" style="width: 44px; height: 44px; margin-right: 0;">
+                    <div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <h2 id="modal-player-name" style="font-size: 17px; color: #ffffff; font-weight: 700; margin: 0;"></h2>
+                            <a id="modal-sofascore-link" href="#" target="_blank" rel="noopener noreferrer" title="Ver no SofaScore" style="color: #2176ff; font-size: 13px; text-decoration: none; opacity: 0.85; transition: opacity 0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.85'">
+                                <i class="fas fa-external-link-alt"></i>
+                            </a>
+                        </div>
+                        <span id="modal-player-subtitle" style="font-size: 13px; color: #8892b0;"></span>
+                    </div>
+                </div>
+                <button id="modal-close-btn" class="modal-close-btn">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 20px 0;">
+                <div style="margin-bottom: 16px;">
+                    <label style="display: block; font-size: 13px; color: #8892b0; margin-bottom: 8px; font-weight: 600;"><i class="fas fa-calendar-alt" style="color: #2176ff; margin-right: 4px;"></i> Época a Editar</label>
+                    <select id="modal-temporada" class="filter-select" style="width: 100%; font-weight: 700; color: #2176ff; border-color: rgba(33, 118, 255, 0.4);">
+                        <!-- Dinâmico -->
+                    </select>
+                </div>
+                <div style="margin-bottom: 16px;">
+                    <label style="display: block; font-size: 13px; color: #8892b0; margin-bottom: 8px; font-weight: 600;"><i class="fas fa-shield-alt" style="color: #2176ff; margin-right: 4px;"></i> Equipa (Clube)</label>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <img id="modal-clube-img" src="" alt="Logo Clube" style="width: 38px; height: 38px; object-fit: contain; flex-shrink: 0; border-radius: 6px; background: rgba(255,255,255,0.05); padding: 3px; border: 1px solid rgba(255,255,255,0.1); display: none;">
+                        <div style="position: relative; flex: 1;">
+                            <input type="text" id="modal-clube-input" list="modal-clubs-list" class="modal-clube-search-input" placeholder="Pesquisar equipa/clube..." autocomplete="off">
+                            <i class="fas fa-search" style="position: absolute; right: 14px; top: 50%; transform: translateY(-50%); color: #2176ff; pointer-events: none; font-size: 14px;"></i>
+                            <datalist id="modal-clubs-list"></datalist>
+                        </div>
+                    </div>
+                </div>
+                <div style="margin-bottom: 16px;">
+                    <label style="display: block; font-size: 13px; color: #8892b0; margin-bottom: 8px; font-weight: 600;"><i class="fas fa-running" style="color: #2176ff; margin-right: 4px;"></i> Posição</label>
+                    <select id="modal-posicao-select" class="filter-select" style="width: 100%; font-weight: 600; border: 1px solid rgba(33, 118, 255, 0.4);">
+                        <option value="">Selecione a Posição...</option>
+                        <option value="Guarda-Redes">Guarda-Redes</option>
+                        <option value="Defesa">Defesa</option>
+                        <option value="Médio">Médio</option>
+                        <option value="Avançado">Avançado</option>
+                    </select>
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <label style="display: flex; align-items: center; justify-content: space-between; background: #161c28; padding: 14px 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06); cursor: pointer;">
+                        <span style="font-weight: 600; font-size: 14px; color: #ffffff;">Ativo na Caderneta</span>
+                        <label class="table-switch" onclick="event.stopPropagation();">
+                            <input type="checkbox" id="modal-caderneta-active">
+                            <span class="table-slider"></span>
+                        </label>
+                    </label>
+                </div>
+                <div>
+                    <label style="display: block; font-size: 13px; color: #8892b0; margin-bottom: 8px; font-weight: 600;">Raridade do Cromo (Casta Caderneta)</label>
+                    <select id="modal-caderneta-casta" class="filter-select" style="width: 100%;">
+                        <option value="comum" class="comum">Comum</option>
+                        <option value="raro" class="raro">Raro</option>
+                        <option value="epico" class="epico">Épico</option>
+                        <option value="lendario" class="lendario">Lendário</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 10px;">
+                <button id="modal-btn-cancel" style="background: transparent; color: #8892b0; border: 1px solid rgba(255,255,255,0.1); padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s;">Cancelar</button>
+                <button id="modal-btn-save" class="btn-save" style="margin-left: 0; padding: 10px 24px;">
+                    <i class="fas fa-save"></i> Salvar
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Loading Screen -->
     <div id="loading-screen" class="loading-screen-global">
         <div class="loading-spinner"></div>
@@ -138,13 +247,19 @@
 
     <script type="module">
         import { db } from './js/auth-guard.js';
-        import { collection, getDocs, doc, writeBatch } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        import { collection, getDocs, doc, writeBatch, setDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        import { fetchUniqueSeasons, getPlayerSeasonData, hasPlayerDataForSeason, buildPlayerSeasonUpdatePayload } from './js/player-season-helper.js';
 
+        let allRawPlayers = [];
         let allPlayers = [];
         let clubsMap = new Map();
+        let clubsByNameMap = new Map();
         let changedPlayers = new Map();
         let currentSortColumn = 'nome';
         let currentSortDirection = 'asc';
+        let seasonsList = [];
+        let currentSeason = '2025/2026';
+        let activeModalPlayerId = null;
 
         function normalizeMiniGamesForSave(originalMiniGames) {
             if (!originalMiniGames) return {};
@@ -166,7 +281,15 @@
             return {};
         }
 
+        const DEFAULT_AVATAR_SVG = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 24 24' fill='%238892b0'><path d='M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z'/></svg>";
+        const DEFAULT_CLUB_SVG = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 24 24' fill='%238892b0'><path d='M12 2L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-3z'/></svg>";
+
         window.resolvePlayerImage = function(img, code) {
+            if (!code || code === 'undefined' || code === 'null' || String(code).trim() === '') {
+                img.onerror = null;
+                img.src = DEFAULT_AVATAR_SVG;
+                return;
+            }
             if (!img.dataset.tryIndex) {
                 img.dataset.tryIndex = "0";
             }
@@ -178,58 +301,176 @@
                 img.src = `../assets/faces/face_${code}.${extensions[currentIndex]}`;
             } else {
                 img.onerror = null;
-                img.src = 'placeholder.jpg';
+                img.src = DEFAULT_AVATAR_SVG;
             }
         };
 
+        window.resolveClubImage = function(img, pais, code) {
+            if (!code || code === 'undefined' || code === 'null' || String(code).trim() === '') {
+                img.onerror = null;
+                img.src = DEFAULT_CLUB_SVG;
+                return;
+            }
+            if (!img.dataset.tryIndex) {
+                img.dataset.tryIndex = "0";
+            }
+            const extensions = ['webp', 'png', 'jpg', 'jpeg', 'svg'];
+            const currentIndex = parseInt(img.dataset.tryIndex);
+            
+            if (currentIndex < extensions.length) {
+                img.dataset.tryIndex = (currentIndex + 1).toString();
+                const paisPath = pais ? `${pais}/` : '';
+                img.src = `../assets/equipalogos/${paisPath}club_${code}.${extensions[currentIndex]}`;
+            } else {
+                img.onerror = null;
+                img.src = DEFAULT_CLUB_SVG;
+            }
+        };
+
+        function slugify(text) {
+            if (!text) return '';
+            return text
+                .toString()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .toLowerCase()
+                .trim()
+                .replace(/[^a-z0-9 -]/g, '')
+                .replace(/\s+/g, '-')
+                .replace(/-+/g, '-');
+        }
+
+        function getSofascoreUrl(player) {
+            if (!player) return 'https://www.sofascore.com';
+            const raw = player.rawData || {};
+            const sData = player.originalSeasonData || {};
+
+            const url = player.sofascoreUrl || sData.sofascoreUrl || raw.sofascoreUrl || 
+                        player.sofascoreLink || sData.sofascoreLink || raw.sofascoreLink ||
+                        player.urlSofascore || sData.urlSofascore || raw.urlSofascore ||
+                        player.linkSofascore || sData.linkSofascore || raw.linkSofascore ||
+                        player.sofascore || sData.sofascore || raw.sofascore;
+
+            if (url && typeof url === 'string' && url.trim().startsWith('http')) {
+                return url.trim();
+            }
+
+            const name = (sData.nome || player.nome || raw.nome || '').trim();
+            const slug = slugify(name);
+            const id = player.sofascoreId || sData.sofascoreId || raw.sofascoreId || player.codigoUrl || sData.codigoUrl || raw.codigoUrl;
+
+            if (id && String(id).trim() !== '') {
+                if (String(id).includes('/')) {
+                    return `https://www.sofascore.com/pt-pt/football/player/${id}`;
+                }
+                return `https://www.sofascore.com/pt-pt/football/player/${slug}/${id}`;
+            }
+
+            return slug ? `https://www.sofascore.com/pt-pt/football/player/${slug}` : 'https://www.sofascore.com';
+        }
+
+        function updateModalClubThumbnail(clubName) {
+            const imgEl = document.getElementById('modal-clube-img');
+            if (!imgEl) return;
+
+            if (!clubName || !clubName.trim() || clubName.trim() === 'N/A') {
+                imgEl.style.display = 'none';
+                imgEl.src = '';
+                return;
+            }
+
+            const clubObj = clubsByNameMap.get(clubName.toLowerCase().trim());
+            imgEl.style.display = 'block';
+            imgEl.removeAttribute('data-try-index');
+
+            if (clubObj) {
+                if (clubObj.imagem) {
+                    const src = (clubObj.imagem.startsWith('http') || clubObj.imagem.startsWith('data:'))
+                        ? clubObj.imagem
+                        : (clubObj.imagem.startsWith('/') || clubObj.imagem.startsWith('../') ? clubObj.imagem : '../' + clubObj.imagem);
+                    imgEl.onerror = () => window.resolveClubImage(imgEl, clubObj.pais || '', clubObj.codigoUrl || '');
+                    imgEl.src = src;
+                } else if (clubObj.codigoUrl) {
+                    imgEl.onerror = () => window.resolveClubImage(imgEl, clubObj.pais || '', clubObj.codigoUrl || '');
+                    const paisPath = clubObj.pais ? `${clubObj.pais}/` : '';
+                    imgEl.src = `../assets/equipalogos/${paisPath}club_${clubObj.codigoUrl}.webp`;
+                } else {
+                    imgEl.onerror = null;
+                    imgEl.src = DEFAULT_CLUB_SVG;
+                }
+            } else {
+                imgEl.onerror = null;
+                imgEl.src = DEFAULT_CLUB_SVG;
+            }
+        }
+
         async function initPage() {
             try {
-                // Fetch players and clubs in parallel
-                const [playersSnap, clubsSnap] = await Promise.all([
+                // Fetch seasons, players and clubs in parallel
+                const [seasons, playersSnap, clubsSnap] = await Promise.all([
+                    fetchUniqueSeasons(db),
                     getDocs(collection(db, 'jogadores')),
                     getDocs(collection(db, 'clubes'))
                 ]);
 
-                clubsSnap.forEach(d => clubsMap.set(d.id, d.data().nome));
+                seasonsList = seasons;
+                currentSeason = seasonsList[0] || '2025/2026';
 
-                // Process players
-                allPlayers = playersSnap.docs.map(doc => {
-                    const data = doc.data();
-                    
-                    // Safe parse of miniGames (might be array or object)
-                    let cadernetaActive = false;
-                    let cadernetaCasta = 'comum';
+                const filterTemporada = document.getElementById('filter-temporada');
+                const modalTemporada = document.getElementById('modal-temporada');
 
-                    if (data.miniGames) {
-                        if (Array.isArray(data.miniGames)) {
-                            cadernetaActive = data.miniGames.includes('caderneta');
-                        } else if (typeof data.miniGames === 'object') {
-                            const cad = data.miniGames.caderneta;
-                            if (cad && typeof cad === 'object') {
-                                cadernetaActive = cad.estado === true;
-                                cadernetaCasta = cad.casta || 'comum';
-                            } else {
-                                cadernetaActive = data.miniGames.caderneta === true;
-                            }
-                        }
+                if (filterTemporada) {
+                    filterTemporada.innerHTML = seasonsList.map(s => `<option value="${s}">${s}</option>`).join('');
+                    filterTemporada.value = currentSeason;
+                    filterTemporada.addEventListener('change', (e) => {
+                        currentSeason = e.target.value;
+                        if (modalTemporada) modalTemporada.value = currentSeason;
+                        changedPlayers.clear();
+                        updateSaveButtonState();
+                        processPlayersAndRender();
+                    });
+                }
+
+                if (modalTemporada) {
+                    modalTemporada.innerHTML = seasonsList.map(s => `<option value="${s}">${s}</option>`).join('');
+                }
+
+                clubsSnap.forEach(d => {
+                    const data = d.data();
+                    clubsMap.set(d.id, data.nome);
+                    if (data.nome) {
+                        clubsByNameMap.set(data.nome.toLowerCase().trim(), { id: d.id, ...data });
                     }
-
-                    return {
-                        id: doc.id,
-                        nome: data.nome || 'Sem Nome',
-                        clube: data.clube || 'N/A',
-                        posicao: data.posicao || 'N/A',
-                        casta: data.casta || 'Jogador Bronze',
-                        imagem: data.imagem || '',
-                        codigoUrl: data.codigoUrl || '',
-                        cadernetaActive,
-                        cadernetaCasta,
-                        originalData: data
-                    };
                 });
 
-                populateFilters();
-                renderTable();
+                let clubsDataEl = document.getElementById('ggames-clubs-data');
+                if (!clubsDataEl) {
+                    clubsDataEl = document.createElement('script');
+                    clubsDataEl.id = 'ggames-clubs-data';
+                    clubsDataEl.type = 'application/json';
+                    document.head.appendChild(clubsDataEl);
+                }
+                const clubsArray = Array.from(clubsByNameMap.values()).map(c => ({
+                    nome: c.nome || '',
+                    nome_en: c.nome_en || ''
+                }));
+                clubsDataEl.textContent = JSON.stringify(clubsArray);
+
+                const modalClubsListInit = document.getElementById('modal-clubs-list');
+                if (modalClubsListInit) {
+                    const clubsList = Array.from(clubsByNameMap.values())
+                        .filter(c => c && c.nome && c.nome !== 'N/A')
+                        .sort((a, b) => a.nome.localeCompare(b.nome));
+                    modalClubsListInit.innerHTML = clubsList.map(c => `<option value="${c.nome}" data-nome_en="${c.nome_en || ''}">`).join('');
+                }
+
+                // Store raw docs
+                allRawPlayers = playersSnap.docs.map(d => ({
+                    id: d.id,
+                    rawData: d.data()
+                }));
+
+                processPlayersAndRender();
 
                 document.getElementById('loading-screen').style.display = 'none';
                 document.body.style.display = 'block';
@@ -240,16 +481,70 @@
             }
         }
 
+        function processPlayersAndRender() {
+            const defaultBaseSeason = seasonsList[seasonsList.length - 1] || '2025/2026';
+            const filteredRaw = allRawPlayers.filter(item => hasPlayerDataForSeason(item.rawData, currentSeason, defaultBaseSeason));
+
+            allPlayers = filteredRaw.map(item => {
+                const sData = getPlayerSeasonData(item.rawData, currentSeason);
+
+                let cadernetaActive = false;
+                let cadernetaCasta = 'comum';
+
+                if (sData.miniGames) {
+                    if (Array.isArray(sData.miniGames)) {
+                        cadernetaActive = sData.miniGames.includes('caderneta');
+                    } else if (typeof sData.miniGames === 'object') {
+                        const cad = sData.miniGames.caderneta;
+                        if (cad && typeof cad === 'object') {
+                            cadernetaActive = cad.estado === true;
+                            cadernetaCasta = cad.casta || 'comum';
+                        } else {
+                            cadernetaActive = sData.miniGames.caderneta === true;
+                        }
+                    }
+                }
+
+                return {
+                    id: item.id,
+                    nome: sData.nome || item.rawData.nome || 'Sem Nome',
+                    clube: sData.clube || item.rawData.clube || 'N/A',
+                    posicao: sData.posicao || item.rawData.posicao || 'N/A',
+                    casta: sData.casta || item.rawData.casta || 'Jogador Bronze',
+                    imagem: sData.imagem || item.rawData.imagem || '',
+                    codigoUrl: sData.codigoUrl || item.rawData.codigoUrl || '',
+                    cadernetaActive,
+                    cadernetaCasta,
+                    originalSeasonData: sData,
+                    rawData: item.rawData
+                };
+            });
+
+            populateFilters();
+            renderTable();
+        }
+
         function populateFilters() {
             const clubes = [...new Set(allPlayers.map(p => p.clube).filter(c => c && c !== 'N/A'))].sort();
             const filterClube = document.getElementById('filter-clube');
+            const currentSelectedClube = filterClube.value;
+
             filterClube.innerHTML = '<option value="">Todos os Clubes</option>';
             clubes.forEach(c => {
                 const opt = document.createElement('option');
                 opt.value = c;
                 opt.textContent = c;
+                const clubObj = clubsByNameMap.get(c.toLowerCase().trim());
+                if (clubObj && clubObj.nome_en) {
+                    opt.setAttribute('data-nome_en', clubObj.nome_en);
+                }
                 filterClube.appendChild(opt);
             });
+            if (clubes.includes(currentSelectedClube)) {
+                filterClube.value = currentSelectedClube;
+            } else {
+                filterClube.value = '';
+            }
         }
 
         function getTierBadgeClass(casta) {
@@ -294,6 +589,7 @@
 
             filtered.forEach(p => {
                 const tr = document.createElement('tr');
+                tr.style.cursor = 'pointer';
 
                 // Determine image
                 let ext = 'webp';
@@ -301,9 +597,9 @@
                     const match = p.imagem.match(/face_(.+)\.(webp|png|jpe?g|svg)/i);
                     if (match) ext = match[2];
                 }
-                const displayImg = p.codigoUrl 
+                const displayImg = (p.codigoUrl && String(p.codigoUrl).trim() !== '')
                     ? `../assets/faces/face_${p.codigoUrl}.${ext}` 
-                    : '../assets/faces/face_placeholder.jpg';
+                    : DEFAULT_AVATAR_SVG;
 
                 // Rarity style
                 const isChecked = changedPlayers.has(p.id) ? changedPlayers.get(p.id).cadernetaActive : p.cadernetaActive;
@@ -335,6 +631,14 @@
                     </td>
                 `;
 
+                // Open modal when clicking on player row (unless clicking inline inputs)
+                tr.addEventListener('click', (e) => {
+                    if (e.target.closest('.table-switch') || e.target.closest('.select-casta')) {
+                        return;
+                    }
+                    openPlayerModal(p);
+                });
+
                 // Add Event Listeners for inline changes
                 tr.querySelector('.toggle-caderneta-active').addEventListener('change', (e) => {
                     updatePlayerChange(p.id, 'cadernetaActive', e.target.checked);
@@ -349,6 +653,209 @@
                 tableBody.appendChild(tr);
             });
         }
+
+        /* Modal Functions */
+        function openPlayerModal(player) {
+            activeModalPlayerId = player.id;
+            populateModalPlayerData(player);
+            document.getElementById('player-modal').style.display = 'flex';
+        }
+
+        function populateModalPlayerData(player, targetSeason = currentSeason) {
+            const rawItem = allRawPlayers.find(item => item.id === player.id);
+            const currentRawData = rawItem ? rawItem.rawData : player.rawData;
+            const seasonData = getPlayerSeasonData(currentRawData, targetSeason);
+
+            const miniGames = seasonData.miniGames || {};
+            let isChecked = false;
+            let activeCasta = 'comum';
+
+            if (miniGames.caderneta) {
+                if (typeof miniGames.caderneta === 'object') {
+                    isChecked = Boolean(miniGames.caderneta.estado);
+                    activeCasta = miniGames.caderneta.casta || 'comum';
+                } else {
+                    isChecked = Boolean(miniGames.caderneta);
+                }
+            }
+
+            if (targetSeason === currentSeason && changedPlayers.has(player.id)) {
+                isChecked = changedPlayers.get(player.id).cadernetaActive;
+                activeCasta = changedPlayers.get(player.id).cadernetaCasta;
+            }
+
+            let ext = 'webp';
+            const imgStr = seasonData.imagem || player.imagem;
+            if (imgStr) {
+                const match = imgStr.match(/face_(.+)\.(webp|png|jpe?g|svg)/i);
+                if (match) ext = match[2];
+            }
+            const codeUrl = seasonData.codigoUrl || player.codigoUrl;
+            const displayImg = (codeUrl && String(codeUrl).trim() !== '')
+                ? `../assets/faces/face_${codeUrl}.${ext}` 
+                : DEFAULT_AVATAR_SVG;
+
+            const modalImg = document.getElementById('modal-player-img');
+            modalImg.src = displayImg;
+            modalImg.onerror = () => window.resolvePlayerImage(modalImg, codeUrl);
+
+            document.getElementById('modal-player-name').textContent = seasonData.nome || player.nome;
+            document.getElementById('modal-player-subtitle').textContent = `${seasonData.clube || player.clube} • ${seasonData.posicao || player.posicao} (${getCastaShort(seasonData.casta || player.casta)})`;
+
+            const modalSofascoreLink = document.getElementById('modal-sofascore-link');
+            if (modalSofascoreLink) {
+                const playerName = seasonData.nome || player.nome;
+                modalSofascoreLink.href = `https://www.google.com/search?q=${encodeURIComponent('site:sofascore.com ' + playerName)}&cromo_ggames=1`;
+            }
+
+            const modalTemporada = document.getElementById('modal-temporada');
+            if (modalTemporada) {
+                modalTemporada.value = targetSeason;
+            }
+
+            const modalClubeInput = document.getElementById('modal-clube-input');
+            const modalClubsList = document.getElementById('modal-clubs-list');
+            if (modalClubeInput && modalClubsList) {
+                const clubsList = Array.from(clubsByNameMap.values())
+                    .filter(c => c && c.nome && c.nome !== 'N/A')
+                    .sort((a, b) => a.nome.localeCompare(b.nome));
+                modalClubsList.innerHTML = clubsList.map(c => `<option value="${c.nome}" data-nome_en="${c.nome_en || ''}">`).join('');
+                const currentClubName = (seasonData.clube || player.clube) && (seasonData.clube || player.clube) !== 'N/A' ? (seasonData.clube || player.clube) : '';
+                modalClubeInput.value = currentClubName;
+                updateModalClubThumbnail(currentClubName);
+            }
+
+            const modalPosicaoSelect = document.getElementById('modal-posicao-select');
+            if (modalPosicaoSelect) {
+                const rawPos = (seasonData.posicao || player.posicao || '').trim();
+                const options = Array.from(modalPosicaoSelect.options);
+                const matchedOpt = options.find(opt => opt.value.toLowerCase() === rawPos.toLowerCase());
+                if (matchedOpt) {
+                    modalPosicaoSelect.value = matchedOpt.value;
+                } else if (rawPos && rawPos !== 'N/A') {
+                    const newOpt = document.createElement('option');
+                    newOpt.value = rawPos;
+                    newOpt.textContent = rawPos;
+                    modalPosicaoSelect.appendChild(newOpt);
+                    modalPosicaoSelect.value = rawPos;
+                } else {
+                    modalPosicaoSelect.value = '';
+                }
+            }
+
+            document.getElementById('modal-caderneta-active').checked = isChecked;
+
+            const castaSelect = document.getElementById('modal-caderneta-casta');
+            castaSelect.value = activeCasta;
+            castaSelect.className = `filter-select select-casta ${activeCasta}`;
+        }
+
+        function closePlayerModal() {
+            document.getElementById('player-modal').style.display = 'none';
+            activeModalPlayerId = null;
+        }
+
+        document.getElementById('modal-close-btn').addEventListener('click', closePlayerModal);
+        document.getElementById('modal-btn-cancel').addEventListener('click', closePlayerModal);
+        document.getElementById('player-modal').addEventListener('click', (e) => {
+            if (e.target.id === 'player-modal') closePlayerModal();
+        });
+
+        const modalClubeInputEl = document.getElementById('modal-clube-input');
+        if (modalClubeInputEl) {
+            modalClubeInputEl.addEventListener('input', (e) => updateModalClubThumbnail(e.target.value));
+            modalClubeInputEl.addEventListener('change', (e) => updateModalClubThumbnail(e.target.value));
+        }
+
+        document.getElementById('modal-caderneta-casta').addEventListener('change', (e) => {
+            e.target.className = `filter-select select-casta ${e.target.value}`;
+        });
+
+        document.getElementById('modal-btn-save').addEventListener('click', async () => {
+            if (!activeModalPlayerId) return;
+
+            const rawItem = allRawPlayers.find(item => item.id === activeModalPlayerId);
+            if (!rawItem) {
+                console.error("Jogador não encontrado em allRawPlayers:", activeModalPlayerId);
+                alert("Erro: Jogador não encontrado.");
+                return;
+            }
+
+            const newActive = document.getElementById('modal-caderneta-active').checked;
+            const newCasta = document.getElementById('modal-caderneta-casta').value;
+            const typedClube = document.getElementById('modal-clube-input')?.value.trim();
+            const typedPosicao = document.getElementById('modal-posicao-select')?.value;
+            const selectedSeason = document.getElementById('modal-temporada')?.value || currentSeason;
+
+            document.getElementById('loading-screen').style.display = 'flex';
+
+            try {
+                const playerRef = doc(db, 'jogadores', rawItem.id);
+                const existingSeasonData = (rawItem.rawData[selectedSeason] && typeof rawItem.rawData[selectedSeason] === 'object')
+                    ? { ...rawItem.rawData[selectedSeason] }
+                    : {};
+
+                const newMiniGames = normalizeMiniGamesForSave(existingSeasonData.miniGames || {});
+                newMiniGames.caderneta = {
+                    estado: newActive,
+                    casta: newCasta
+                };
+
+                const seasonUpdate = {
+                    miniGames: newMiniGames,
+                    ultimaAtualizacao: new Date().toISOString()
+                };
+
+                if (typedPosicao) {
+                    seasonUpdate.posicao = typedPosicao;
+                }
+
+                if (typedClube && typedClube !== 'N/A') {
+                    seasonUpdate.clube = typedClube;
+                    for (const [id, name] of clubsMap.entries()) {
+                        if (name && name.toLowerCase() === typedClube.toLowerCase()) {
+                            seasonUpdate.clubeId = id;
+                            break;
+                        }
+                    }
+                }
+
+                const updatePayload = {
+                    [selectedSeason]: {
+                        ...existingSeasonData,
+                        ...seasonUpdate
+                    }
+                };
+
+                await setDoc(playerRef, updatePayload, { merge: true });
+
+                // Update local rawData memory
+                if (!rawItem.rawData[selectedSeason] || typeof rawItem.rawData[selectedSeason] !== 'object') {
+                    rawItem.rawData[selectedSeason] = {};
+                }
+                rawItem.rawData[selectedSeason] = {
+                    ...rawItem.rawData[selectedSeason],
+                    ...seasonUpdate
+                };
+
+                changedPlayers.delete(rawItem.id);
+                updateSaveButtonState();
+                closePlayerModal();
+
+                // Toast
+                const toast = document.getElementById('toast');
+                toast.style.display = 'block';
+                setTimeout(() => { toast.style.display = 'none'; }, 3000);
+
+                processPlayersAndRender();
+
+            } catch (err) {
+                console.error("Erro ao salvar jogador no modal:", err);
+                alert("Erro ao salvar alterações do jogador.");
+            } finally {
+                document.getElementById('loading-screen').style.display = 'none';
+            }
+        });
 
         function updatePlayerChange(playerId, field, value) {
             const player = allPlayers.find(p => p.id === playerId);
@@ -368,7 +875,10 @@
                 changedPlayers.set(playerId, change);
             }
 
-            // Update UI Button states
+            updateSaveButtonState();
+        }
+
+        function updateSaveButtonState() {
             const btnSave = document.getElementById('btnSave');
             const countSpan = document.getElementById('changes-count');
             countSpan.textContent = changedPlayers.size;
@@ -390,43 +900,63 @@
 
             try {
                 for (const [playerId, change] of changedPlayers.entries()) {
-                    const player = allPlayers.find(p => p.id === playerId);
-                    if (!player) continue;
+                    const rawItem = allRawPlayers.find(item => item.id === playerId);
+                    if (!rawItem) continue;
 
                     const playerRef = doc(db, 'jogadores', playerId);
-                    const newMiniGames = normalizeMiniGamesForSave(player.originalData.miniGames);
+                    const existingSeasonData = (rawItem.rawData[currentSeason] && typeof rawItem.rawData[currentSeason] === 'object')
+                        ? { ...rawItem.rawData[currentSeason] }
+                        : {};
 
+                    const newMiniGames = normalizeMiniGamesForSave(existingSeasonData.miniGames || {});
                     newMiniGames.caderneta = {
                         estado: change.cadernetaActive,
                         casta: change.cadernetaCasta
                     };
 
-                    batch.set(playerRef, {
+                    const seasonUpdate = {
                         miniGames: newMiniGames,
                         ultimaAtualizacao: new Date().toISOString()
-                    }, { merge: true });
+                    };
+
+                    const updatePayload = {
+                        [currentSeason]: {
+                            ...existingSeasonData,
+                            ...seasonUpdate
+                        }
+                    };
+
+                    batch.set(playerRef, updatePayload, { merge: true });
                 }
 
                 await batch.commit();
 
                 // Apply changes locally
                 for (const [playerId, change] of changedPlayers.entries()) {
+                    const rawItem = allRawPlayers.find(item => item.id === playerId);
                     const player = allPlayers.find(p => p.id === playerId);
-                    if (player) {
-                        player.cadernetaActive = change.cadernetaActive;
-                        player.cadernetaCasta = change.cadernetaCasta;
-                        if (!player.originalData.miniGames || Array.isArray(player.originalData.miniGames)) {
-                            player.originalData.miniGames = {};
+
+                    if (rawItem) {
+                        if (!rawItem.rawData[currentSeason] || typeof rawItem.rawData[currentSeason] !== 'object') {
+                            rawItem.rawData[currentSeason] = {};
                         }
-                        player.originalData.miniGames.caderneta = {
+                        const newMiniGames = normalizeMiniGamesForSave(rawItem.rawData[currentSeason].miniGames || {});
+                        newMiniGames.caderneta = {
                             estado: change.cadernetaActive,
                             casta: change.cadernetaCasta
                         };
+                        rawItem.rawData[currentSeason].miniGames = newMiniGames;
+                        rawItem.rawData[currentSeason].ultimaAtualizacao = new Date().toISOString();
+                    }
+
+                    if (player) {
+                        player.cadernetaActive = change.cadernetaActive;
+                        player.cadernetaCasta = change.cadernetaCasta;
                     }
                 }
 
                 changedPlayers.clear();
-                document.getElementById('changes-count').textContent = '0';
+                updateSaveButtonState();
                 
                 // Show Success Toast
                 const toast = document.getElementById('toast');

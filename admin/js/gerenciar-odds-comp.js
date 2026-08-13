@@ -5,7 +5,8 @@ import {
     collection,
     doc,
     getDocs,
-    updateDoc
+    updateDoc,
+    writeBatch
 } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
 const state = {
@@ -146,8 +147,8 @@ function renderFrozenRows(groups) {
 }
 
 function renderCompetitionRows(groups, competitions) {
-    return groups.map(({ children }) => {
-        const parentRow = `<tr class="odd-parent"><td colspan="${competitions.length}" aria-hidden="true"></td></tr>`;
+    return groups.map(({ parent, children }) => {
+        const parentRow = `<tr class="odd-parent">${competitions.map((competition) => `<td class="odd-cell">${renderSwitch(parent, competition)}</td>`).join('')}</tr>`;
         const childRows = children.map(({ odd, children: nested = [] }) => {
             const row = `<tr class="odd-row">${competitions.map((competition) => `<td class="odd-cell">${renderSwitch(odd, competition)}</td>`).join('')}</tr>`;
             const nestedRows = nested.map(({ odd: nestedOdd }) => `<tr class="odd-row">${competitions.map((competition) => `<td class="odd-cell">${renderSwitch(nestedOdd, competition)}</td>`).join('')}</tr>`).join('');
@@ -155,6 +156,20 @@ function renderCompetitionRows(groups, competitions) {
         }).join('');
         return parentRow + childRows;
     }).join('');
+}
+
+function getAffectedOdds(odd) {
+    if (odd.categoria_subcategoria_3cat === 'categoria') {
+        const children = state.odds.filter((item) => item.categoriapai === odd.id);
+        return [odd, ...children];
+    }
+
+    if (odd.categoria_subcategoria_3cat === 'subcategoria') {
+        const children = state.odds.filter((item) => item.categoria_subcategoria_3cat === '3cat' && item.subcategoriapai === odd.id);
+        return [odd, ...children];
+    }
+
+    return [odd];
 }
 
 function renderMatrix() {
@@ -207,23 +222,53 @@ async function handleAssociationChange(event) {
 
     if (!odd || !competitionName) return;
 
-    toggle.disabled = true;
+    const affectedOdds = getAffectedOdds(odd);
+    const affectedOddIds = new Set(affectedOdds.map((item) => item.id));
+
+    const affectedToggles = Array.from(
+        elements.matrix.querySelectorAll('.association-toggle')
+    ).filter((el) => el.dataset.competitionName === competitionName && affectedOddIds.has(el.dataset.oddId));
+
+    affectedToggles.forEach((el) => {
+        el.disabled = true;
+        el.checked = shouldAssociate;
+    });
+
     try {
-        await updateDoc(doc(db, 'oddcategorias', oddId), {
-            competicoes: shouldAssociate ? arrayUnion(competitionName) : arrayRemove(competitionName)
+        const batch = writeBatch(db);
+        affectedOdds.forEach((item) => {
+            const itemRef = doc(db, 'oddcategorias', item.id);
+            batch.update(itemRef, {
+                competicoes: shouldAssociate ? arrayUnion(competitionName) : arrayRemove(competitionName)
+            });
+        });
+        await batch.commit();
+
+        affectedOdds.forEach((item) => {
+            const currentCompetitions = Array.isArray(item.competicoes) ? item.competicoes : [];
+            item.competicoes = shouldAssociate
+                ? [...new Set([...currentCompetitions, competitionName])]
+                : currentCompetitions.filter((name) => name !== competitionName);
         });
 
-        const currentCompetitions = Array.isArray(odd.competicoes) ? odd.competicoes : [];
-        odd.competicoes = shouldAssociate
-            ? [...new Set([...currentCompetitions, competitionName])]
-            : currentCompetitions.filter((name) => name !== competitionName);
-        toggle.parentElement.title = `${shouldAssociate ? 'Desativar' : 'Ativar'} ${getOddName(odd)} em ${competitionName}`;
+        affectedToggles.forEach((el) => {
+            const item = state.odds.find((o) => o.id === el.dataset.oddId);
+            if (item && el.parentElement) {
+                el.parentElement.title = `${shouldAssociate ? 'Desativar' : 'Ativar'} ${getOddName(item)} em ${competitionName}`;
+            }
+        });
     } catch (error) {
-        console.error('Erro ao atualizar a associação da odd:', error);
-        toggle.checked = !shouldAssociate;
+        console.error('Erro ao atualizar a associação das odds:', error);
+        affectedToggles.forEach((el) => {
+            const item = state.odds.find((o) => o.id === el.dataset.oddId);
+            const isChecked = Array.isArray(item?.competicoes) && item.competicoes.includes(competitionName);
+            el.checked = isChecked;
+        });
         alert('Não foi possível atualizar esta associação. Tente novamente.');
     } finally {
-        toggle.disabled = false;
+        affectedToggles.forEach((el) => {
+            el.disabled = false;
+        });
     }
 }
 

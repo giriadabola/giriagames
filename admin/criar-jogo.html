@@ -192,7 +192,7 @@
                         <div class="form-group"><label for="mods">Mods</label><select id="mods" name="mods"><option value="">Selecione um mod (opcional)</option></select></div>
                         <input type="hidden" id="modId" name="modId">
                         <div class="form-group"><label for="anexado">Anexado</label><select id="anexado" name="anexado"><option value="1x"selected>1x</option><option value="world26">world26</option></select></div>
-                        <div class="form-group"><label for="temporada">Temporada</label><input type="text" id="temporada" name="temporada" value="2025/2026" required></div>
+                        <div class="form-group"><label for="temporada">Temporada</label><select id="temporada" name="temporada" required><option value="">A carregar temporadas...</option></select></div>
                         
                         <!-- NOVO CAMPO -->
                         <div class="form-group"><label for="notificacaoEnviada">Notificação Enviada</label><select id="notificacaoEnviada" name="notificacaoEnviada" required><option value="false" selected>Não</option><option value="true">Sim</option></select></div>
@@ -219,7 +219,8 @@
     <!-- Script de lógica da página -->
     <script type="module">
         import { db } from './js/auth-guard.js';
-        import { collection, addDoc, getDocs, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { collection, addDoc, getDocs, doc, getDoc, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { fetchUniqueSeasons } from './js/player-season-helper.js';
 
         const fallbackImg = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%238892b0"><path d="M12 2L2 5v6c0 5.52 4.48 10 10 10s10-4.48 10-10V5l-10-3zm0 18c-4.41 0-8-3.59-8-8V6.3l8-2.4 8 2.4V12c0 4.41-3.59 8-8 8z"/></svg>`;
 
@@ -296,9 +297,25 @@
         }
     }
 
-    async function getLatestRound() {
+    async function loadSeasons() {
+        const temporadaSelect = document.getElementById('temporada');
+        if (!temporadaSelect) return;
+        try {
+            const seasonsList = await fetchUniqueSeasons(db);
+            if (seasonsList && seasonsList.length > 0) {
+                temporadaSelect.innerHTML = seasonsList.map(s => `<option value="${s}">${s}</option>`).join('');
+                temporadaSelect.value = seasonsList[0];
+            }
+        } catch (error) {
+            console.error('Erro ao carregar temporadas:', error);
+        }
+    }
+
+    async function getLatestRound(selectedSeason) {
         const jogosRef = collection(db, 'jogos');
-        const querySnapshot = await getDocs(jogosRef);
+        const season = selectedSeason || document.getElementById('temporada')?.value;
+        const q = season ? query(jogosRef, where('temporada', '==', season)) : jogosRef;
+        const querySnapshot = await getDocs(q);
         let latestRound = 1;
         querySnapshot.forEach(doc => {
             const ronda = doc.data().ronda || 1;
@@ -328,6 +345,7 @@
         let selectedEquipaForaId = null;
 
         await loadCompetitions();
+        await loadSeasons();
 
         const latestRound = await getLatestRound();
         for (let i = 1; i <= 50; i++) {
@@ -336,6 +354,14 @@
             option.textContent = `Ronda ${i}`;
             if (i === latestRound) option.selected = true;
             roundSelect.appendChild(option);
+        }
+
+        const temporadaSelect = document.getElementById('temporada');
+        if (temporadaSelect) {
+            temporadaSelect.addEventListener('change', async () => {
+                const updatedRound = await getLatestRound(temporadaSelect.value);
+                if (roundSelect) roundSelect.value = updatedRound;
+            });
         }
 
         const mods = await getMods();

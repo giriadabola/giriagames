@@ -91,7 +91,7 @@
                 <div class="form-group" style="display: none;"><label for="anexado">Anexado</label><select id="anexado" name="anexado"><option value="whowins" selected>whowins</option></select></div>
                 <div class="form-group" style="display: none;"><label for="nome-jogo">Nome do Jogo</label><input type="text" id="nome-jogo" name="nome-jogo" required readonly></div>
                 <div class="form-group"><label for="ronda">Ronda</label><select id="ronda" name="ronda" required></select></div>
-                <div class="form-group"><label for="temporada">Temporada</label><input type="text" id="temporada" name="temporada" value="2025/2026" required></div>
+                <div class="form-group"><label for="temporada">Temporada</label><select id="temporada" name="temporada" required><option value="">A carregar temporadas...</option></select></div>
                 <button type="submit" class="submit-btn" id="submit-btn">Criar WhoWins</button>
                 <div id="validation-message"></div>
             </form>
@@ -139,6 +139,7 @@
         import { db, auth } from './js/auth-guard.js';
         import { collection, addDoc, getDocs, query, where, doc, getDoc, updateDoc, setDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { fetchUniqueSeasons } from './js/player-season-helper.js';
 
         // BOA PRÁTICA: Encapsula toda a lógica dentro deste evento para garantir que o HTML está pronto.
         document.addEventListener('DOMContentLoaded', async () => {
@@ -155,42 +156,61 @@
                 }
             }
             
-            async function setDefaultRonda() {
+            async function loadSeasons() {
                 try {
-                    const configRef = doc(db, 'paineis', 'configuracoes_gerais');
-                    const configSnap = await getDoc(configRef);
-                    if (!configSnap.exists() || !configSnap.data().temporadaAtual) {
-                        console.log("Temporada atual não configurada. Predefinindo como 0.");
-                        document.getElementById('ronda').value = 0;
-                        document.getElementById('multi-ronda').value = 0;
-                        return;
+                    const seasonsList = await fetchUniqueSeasons(db);
+                    if (seasonsList && seasonsList.length > 0) {
+                        const optionsHTML = seasonsList.map(s => `<option value="${s}">${s}</option>`).join('');
+                        const temporadaSelect = document.getElementById('temporada');
+                        const multiTemporadaSelect = document.getElementById('multi-temporada');
+                        
+                        if (temporadaSelect) {
+                            temporadaSelect.innerHTML = optionsHTML;
+                            temporadaSelect.value = seasonsList[0];
+                        }
+                        if (multiTemporadaSelect) {
+                            multiTemporadaSelect.innerHTML = optionsHTML;
+                            multiTemporadaSelect.value = seasonsList[0];
+                        }
                     }
-                    const temporadaAtual = configSnap.data().temporadaAtual;
-                    document.getElementById('temporada').value = temporadaAtual; 
-                    const multiTemporadaSelect = document.getElementById('multi-temporada');
-                    multiTemporadaSelect.innerHTML = ''; 
-                    const currentYear = new Date(temporadaAtual.split('/')[0], 8, 1).getFullYear();
-                    for(let i = -1; i < 4; i++) {
-                        const year = currentYear + i;
-                        const season = `${year}/${year + 1}`;
-                        const option = document.createElement('option');
-                        option.value = season;
-                        option.textContent = season;
-                        multiTemporadaSelect.appendChild(option);
-                    }
-                    multiTemporadaSelect.value = temporadaAtual;
+                } catch (error) {
+                    console.error("Erro ao carregar temporadas:", error);
+                }
+            }
+
+            async function updateRondaForSeason(season, targetRondaId) {
+                if (!season) return;
+                try {
                     const jogosRef = collection(db, 'whowinsJogos');
-                    const q = query(jogosRef, where('temporada', '==', temporadaAtual));
+                    const q = query(jogosRef, where('temporada', '==', season));
                     const querySnapshot = await getDocs(q);
                     let maxRonda = 0;
                     querySnapshot.forEach((doc) => {
                         const rondaNum = Number(doc.data().ronda);
                         if (!isNaN(rondaNum) && rondaNum > maxRonda) { maxRonda = rondaNum; }
                     });
-                    document.getElementById('ronda').value = maxRonda;
-                    document.getElementById('multi-ronda').value = maxRonda;
+                    const targetEl = document.getElementById(targetRondaId);
+                    if (targetEl) targetEl.value = maxRonda;
+                } catch (error) { console.error("Erro ao atualizar ronda para a temporada:", error); }
+            }
+
+            async function setDefaultRonda() {
+                try {
+                    await loadSeasons();
+                    const temporadaSelect = document.getElementById('temporada');
+                    const temporadaAtual = temporadaSelect ? temporadaSelect.value : "2025/2026";
+                    await updateRondaForSeason(temporadaAtual, 'ronda');
+                    await updateRondaForSeason(temporadaAtual, 'multi-ronda');
                 } catch (error) { console.error("Erro ao definir a ronda predefinida:", error); }
             }
+
+            document.getElementById('temporada')?.addEventListener('change', (e) => {
+                updateRondaForSeason(e.target.value, 'ronda');
+            });
+
+            document.getElementById('multi-temporada')?.addEventListener('change', (e) => {
+                updateRondaForSeason(e.target.value, 'multi-ronda');
+            });
 
             async function searchClubs(searchTerm) {
                 const clubesRef = collection(db, 'clubes');
