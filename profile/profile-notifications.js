@@ -2,7 +2,6 @@ import { auth, db } from "../core/firebase.js";
 import { doc, getDoc, onSnapshot, serverTimestamp, setDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 import { MARKET_NOTIFICATIONS_DEFAULTS, MARKET_NOTIFICATIONS_VAPID_PUBLIC_KEY } from "../core/pwa/push-config.js";
 
-const GLOBAL_CONFIG_PATH = ['paineis', 'notificacoesMercado'];
 const USER_SETTINGS_FIELD = 'notificacoesMercado';
 const NOTIFICATION_OPEN_EVENT = 'profile-notifications:open';
 
@@ -11,14 +10,11 @@ const closePopupButton = document.getElementById('closeNotificationsPopupIcon');
 const deviceStatus = document.getElementById('notificationsDeviceStatus');
 const enableDeviceButton = document.getElementById('enableDeviceNotificationsBtn');
 const disableDeviceButton = document.getElementById('disableDeviceNotificationsBtn');
-const globalNote = document.getElementById('notificationsGlobalNote');
 
 let activeUserId = null;
 let currentSettings = { ...MARKET_NOTIFICATIONS_DEFAULTS };
-let currentGlobalConfig = null;
 let currentDeviceSubscription = null;
 let userSettingsUnsubscribe = null;
-let globalConfigUnsubscribe = null;
 let areEventsBound = false;
 
 function isIosDevice() {
@@ -118,27 +114,6 @@ function setDeviceStatus(message, tone = '') {
   if (tone) {
     deviceStatus.classList.add(tone);
   }
-}
-
-function refreshGlobalTexts() {
-  const beforeHours = Number.isInteger(currentGlobalConfig?.beforeOpenHours)
-    ? currentGlobalConfig.beforeOpenHours
-    : 2;
-
-  const globalRules = [];
-  if (currentGlobalConfig?.beforeOpenEnabled) {
-    globalRules.push(`${beforeHours}h antes`);
-  }
-  if (currentGlobalConfig?.onOpenEnabled) {
-    globalRules.push('na abertura');
-  }
-  if (currentGlobalConfig?.onCloseEnabled) {
-    globalRules.push('no fecho');
-  }
-
-  globalNote.textContent = globalRules.length
-    ? `Regras globais ativas: ${globalRules.join(', ')}.`
-    : 'O admin tem todas as regras globais desligadas neste momento.';
 }
 
 async function upsertCurrentSubscription(subscription) {
@@ -321,11 +296,6 @@ function cleanupListeners() {
     userSettingsUnsubscribe();
     userSettingsUnsubscribe = null;
   }
-
-  if (typeof globalConfigUnsubscribe === 'function') {
-    globalConfigUnsubscribe();
-    globalConfigUnsubscribe = null;
-  }
 }
 
 export async function initProfileNotifications(user) {
@@ -340,7 +310,6 @@ export async function initProfileNotifications(user) {
   }
 
   const userRef = doc(db, 'users', activeUserId);
-  const globalRef = doc(db, ...GLOBAL_CONFIG_PATH);
 
   userSettingsUnsubscribe = onSnapshot(userRef, async (snapshot) => {
     currentSettings = normalizeUserSettings(snapshot.data()?.[USER_SETTINGS_FIELD]);
@@ -348,19 +317,6 @@ export async function initProfileNotifications(user) {
   }, (error) => {
     console.error('Erro ao ler as definições de notificações:', error);
     setDeviceStatus('Não foi possível ler o estado das notificações.', 'is-error');
-  });
-
-  globalConfigUnsubscribe = onSnapshot(globalRef, (snapshot) => {
-    currentGlobalConfig = snapshot.exists()
-      ? snapshot.data()
-      : {
-          beforeOpenEnabled: true,
-          beforeOpenHours: 2,
-          onOpenEnabled: true,
-          onCloseEnabled: true
-        };
-
-    refreshGlobalTexts();
   });
 }
 
