@@ -245,6 +245,21 @@
                     <textarea id="corpo" class="form-control" placeholder="Escreva aqui a sua mensagem..." required></textarea>
                 </div>
 
+                <!-- Campo de Agendamento -->
+                <div class="form-group" style="background: rgba(255,255,255,0.02); padding: 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06); margin-bottom: 22px;">
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; text-transform: none; font-size: 14px; margin-bottom: 0; color: #f0f2f5;">
+                        <input type="checkbox" id="agendarCheck" style="width: 18px; height: 18px; accent-color: #ffb703; cursor: pointer;">
+                        <span style="font-weight: 600;"><i class="fas fa-clock" style="color: #ffb703;"></i> Agendar envio deste email</span>
+                    </label>
+                    <div id="agendamentoGroup" style="display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.06);">
+                        <label for="dataAgendada" style="font-size: 12px; color: #8892b0; margin-bottom: 6px; display: block;">Data e Hora de Envio (Programada)</label>
+                        <input type="datetime-local" id="dataAgendada" class="form-control" style="color-scheme: dark;">
+                        <small style="color: #8892b0; font-size: 11px; margin-top: 4px; display: block;">
+                            <i class="fas fa-info-circle"></i> O email só ficará visível na Caixa de Entrada dos utilizadores a partir desta data e hora.
+                        </small>
+                    </div>
+                </div>
+
                 <button type="submit" id="sendBtn" class="submit-btn">
                     <i class="fas fa-paper-plane"></i> Enviar Mensagem
                 </button>
@@ -288,7 +303,7 @@
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
         import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
-        import { getFirestore, doc, getDoc, getDocs, collection, addDoc, query, where, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        import { getFirestore, doc, getDoc, getDocs, collection, addDoc, query, where, serverTimestamp, Timestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
         import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
 
         const firebaseConfig = {
@@ -373,6 +388,27 @@
             const destinatario = destinatarioSelect.value;
             const titulo = document.getElementById('titulo').value;
             const corpo = document.getElementById('corpo').value;
+            const isAgendado = document.getElementById('agendarCheck').checked;
+            const dataAgendadaVal = document.getElementById('dataAgendada').value;
+
+            let dataAgendadaTimestamp = null;
+            if (isAgendado) {
+                if (!dataAgendadaVal) {
+                    showToast('Por favor, selecione a data e hora para o agendamento do email.', 'error');
+                    return;
+                }
+                const scheduledDate = new Date(dataAgendadaVal);
+                if (isNaN(scheduledDate.getTime())) {
+                    showToast('Data de agendamento inválida.', 'error');
+                    return;
+                }
+                if (scheduledDate <= new Date()) {
+                    showToast('A data e hora de agendamento deve ser no futuro.', 'error');
+                    return;
+                }
+                dataAgendadaTimestamp = Timestamp.fromDate(scheduledDate);
+            }
+
             const targetUserIds = destinatario === 'todos'
                 ? allGPlayers.map(gp => gp.uid)
                 : [destinatario];
@@ -388,7 +424,7 @@
             sendWithNotificationBtn.disabled = true;
             const actionButton = withNotification ? sendWithNotificationBtn : sendBtn;
             const originalBtnHTML = actionButton.innerHTML;
-            actionButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> A enviar...';
+            actionButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> A processar...';
 
             try {
                 // Criar um ID único de grupo para agrupar estes envios no histórico
@@ -402,6 +438,8 @@
                     status: true,
                     estado: 'Pendente',
                     groupId: groupId,
+                    agendado: isAgendado,
+                    dataAgendada: dataAgendadaTimestamp,
                     timestamp: serverTimestamp()
                 };
 
@@ -414,14 +452,16 @@
                         });
                     });
                     await Promise.all(promises);
-                    showToast(`Mensagem enviada com sucesso para os ${allGPlayers.length} GPlayers!`);
+                    showToast(isAgendado 
+                        ? `Mensagem agendada com sucesso para ${allGPlayers.length} GPlayers!`
+                        : `Mensagem enviada com sucesso para os ${allGPlayers.length} GPlayers!`);
                 } else {
                     // Enviar para um GPlayer específico
                     await addDoc(collection(db, 'inbox'), {
                         ...messageData,
                         para: destinatario
                     });
-                    showToast("Mensagem enviada com sucesso!");
+                    showToast(isAgendado ? "Mensagem agendada com sucesso!" : "Mensagem enviada com sucesso!");
                 }
 
                 if (withNotification) {
@@ -436,7 +476,7 @@
                         showToast(
                             deliveredTo > 0
                                 ? `Mensagem e notificação enviadas (${deliveredTo} dispositivo(s)).`
-                                : 'Mensagem enviada, mas não há dispositivos ativos para notificar.',
+                                : 'Mensagem guardada, mas não há dispositivos ativos para notificar.',
                             deliveredTo > 0 ? 'success' : 'error'
                         );
                     } catch (notificationError) {
@@ -448,6 +488,9 @@
                 // Reset do formulário exceto remetente
                 document.getElementById('titulo').value = '';
                 document.getElementById('corpo').value = '';
+                document.getElementById('agendarCheck').checked = false;
+                document.getElementById('agendamentoGroup').style.display = 'none';
+                document.getElementById('dataAgendada').value = '';
 
                 // Recarrega histórico se estiver aberto
                 if (showingHistory) {
@@ -488,6 +531,8 @@
                             titulo: msg.titulo,
                             mensagem: msg.mensagem,
                             timestamp: msg.timestamp,
+                            agendado: msg.agendado,
+                            dataAgendada: msg.dataAgendada,
                             recipients: []
                         };
                     }
@@ -520,6 +565,24 @@
                     // Contar quem leu
                     const readCount = group.recipients.filter(r => !r.status || r.estado === 'Lido').length;
                     const totalCount = group.recipients.length;
+
+                    // Verificar estado de agendamento
+                    let scheduleBadgeHTML = '';
+                    if (group.dataAgendada) {
+                        let schedMs = 0;
+                        if (typeof group.dataAgendada.toMillis === 'function') schedMs = group.dataAgendada.toMillis();
+                        else if (group.dataAgendada.seconds) schedMs = group.dataAgendada.seconds * 1000;
+                        else if (typeof group.dataAgendada === 'string') schedMs = new Date(group.dataAgendada).getTime();
+
+                        const isFuture = schedMs > Date.now();
+                        const schedDateStr = schedMs ? new Date(schedMs).toLocaleString('pt-PT') : '';
+
+                        if (isFuture) {
+                            scheduleBadgeHTML = `<span style="font-size: 11px; background: rgba(45, 156, 219, 0.15); color: #2d9cdb; border: 1px solid rgba(45, 156, 219, 0.3); padding: 3px 8px; border-radius: 6px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;"><i class="fas fa-clock"></i> Agendado: ${schedDateStr}</span>`;
+                        } else {
+                            scheduleBadgeHTML = `<span style="font-size: 11px; background: rgba(46, 204, 113, 0.15); color: #2ecc71; border: 1px solid rgba(46, 204, 113, 0.3); padding: 3px 8px; border-radius: 6px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;"><i class="fas fa-check-circle"></i> Publicado (${schedDateStr})</span>`;
+                        }
+                    }
                     
                     groupEl.innerHTML = `
                         <div class="history-group-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; width: 100%;">
@@ -527,7 +590,8 @@
                                 <strong style="color: #ffb703; font-size: 15px;">${group.titulo}</strong>
                                 <div style="font-size: 11px; color: #8892b0; margin-top: 2px;">De: ${group.de} | ${date}</div>
                             </div>
-                            <div style="display: flex; align-items: center; gap: 10px;">
+                            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                                ${scheduleBadgeHTML}
                                 <span style="font-size: 11px; background: rgba(255,255,255,0.05); padding: 4px 8px; border-radius: 6px; color: #e2e8f0;">
                                     Lidos: <strong style="color: #2ecc71;">${readCount}</strong> / ${totalCount}
                                 </span>
@@ -712,6 +776,10 @@
             });
 
             document.getElementById('addManualBtn').addEventListener('click', openManualSelectModal);
+
+            document.getElementById('agendarCheck').addEventListener('change', (e) => {
+                document.getElementById('agendamentoGroup').style.display = e.target.checked ? 'block' : 'none';
+            });
 
             document.getElementById('closeManualSelectModalBtn').addEventListener('click', () => {
                 document.getElementById('manualSelectModal').style.display = 'none';
