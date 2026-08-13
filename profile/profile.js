@@ -1242,12 +1242,14 @@ function parseInboxMessage(text) {
         return `<img src="${url}" alt="${alt}" draggable="false" oncontextmenu="return false;" onselectstart="return false;" style="max-width: 100%; max-height: 250px; object-fit: contain; border-radius: 8px; margin-top: 8px; display: block; border: 1.5px solid rgba(255,255,255,0.1); pointer-events: none; -webkit-user-drag: none; -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none;">`;
     });
 
-    // Replace links: [text](url)
-    escaped = escaped.replace(/\[(.*?)\]\((.*?)\)/g, (match, label, url) => {
-        if (url.startsWith('manual:')) {
-            const manualId = url.replace('manual:', '').trim();
-            return `<a href="#" class="inbox-manual-link" data-manual-id="${manualId}" style="color: #ffb703; text-decoration: underline; font-weight: 700; cursor: pointer; background: rgba(255, 183, 3, 0.12); padding: 2px 8px; border-radius: 4px; display: inline-flex; align-items: center; gap: 5px; border: 1px solid rgba(255, 183, 3, 0.3); transition: background 0.2s;"><i class="fas fa-book" style="font-size: 11px;"></i>${label}</a>`;
-        }
+    // Replace manual links FIRST: [text](manual:id)
+    escaped = escaped.replace(/\[([^\]]+)\]\((manual:[^\)]+)\)/gi, (match, label, url) => {
+        const manualId = url.replace(/manual:/i, '').trim();
+        return `<a href="#" class="inbox-manual-link" data-manual-id="${manualId}" style="color: #ffb703; text-decoration: underline; font-weight: 700; cursor: pointer; padding: 0 2px;"><i class="fas fa-book" style="font-size: 11px; margin-right: 4px;"></i>${label}</a>`;
+    });
+
+    // Replace standard links SECOND: [text](url)
+    escaped = escaped.replace(/\[([^\]]+)\]\(([^\)]+)\)/gi, (match, label, url) => {
         return `<a href="${url}" target="_blank" style="color: #ffb703; text-decoration: underline; font-weight: 600;">${label}</a>`;
     });
 
