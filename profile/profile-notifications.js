@@ -166,7 +166,7 @@ async function syncDeviceState() {
   if (!supportState.supported) {
     enableDeviceButton.disabled = true;
     disableDeviceButton.disabled = true;
-    setDeviceStatus(supportState.message, 'is-warn');
+    setDeviceStatus('Desligado', 'is-error');
     currentDeviceSubscription = null;
     return;
   }
@@ -177,25 +177,25 @@ async function syncDeviceState() {
   } catch (error) {
     console.error('Erro ao preparar o service worker das notificações:', error);
     currentDeviceSubscription = null;
-    setDeviceStatus('Não foi possível preparar as notificações neste browser.', 'is-error');
+    setDeviceStatus('Desligado', 'is-error');
     return;
   }
 
   if (Notification.permission === 'denied') {
     enableDeviceButton.disabled = true;
     disableDeviceButton.disabled = true;
-    setDeviceStatus('As notificações foram bloqueadas neste browser/dispositivo.', 'is-error');
+    setDeviceStatus('Desligado', 'is-error');
     return;
   }
 
   if (currentDeviceSubscription) {
     disableDeviceButton.disabled = false;
-    setDeviceStatus('Este dispositivo está pronto para receber notificações.', 'is-ok');
+    setDeviceStatus('Ligado', 'is-ok');
     return;
   }
 
   disableDeviceButton.disabled = true;
-  setDeviceStatus('Ativa neste dispositivo para começares a receber avisos do mercado.', 'is-warn');
+  setDeviceStatus('Desligado', 'is-error');
 }
 
 async function enableNotificationsForDevice() {
