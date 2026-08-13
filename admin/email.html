@@ -237,9 +237,10 @@
 
                 <div class="form-group">
                     <label for="corpo">Corpo da Mensagem</label>
-                    <div style="display: flex; gap: 10px; margin-bottom: 8px;">
+                    <div style="display: flex; gap: 10px; margin-bottom: 8px; flex-wrap: wrap;">
                         <button type="button" id="addLinkBtn" class="form-control" style="width: auto; padding: 6px 12px; font-size: 13px; background: #0c1017; color: #ffb703; border-color: rgba(255,183,3,0.3); font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 5px;"><i class="fas fa-link"></i> Adicionar Link</button>
                         <button type="button" id="addImageBtn" class="form-control" style="width: auto; padding: 6px 12px; font-size: 13px; background: #0c1017; color: #ffb703; border-color: rgba(255,183,3,0.3); font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 5px;"><i class="fas fa-image"></i> Adicionar Imagem</button>
+                        <button type="button" id="addManualBtn" class="form-control" style="width: auto; padding: 6px 12px; font-size: 13px; background: #0c1017; color: #ffb703; border-color: rgba(255,183,3,0.3); font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 5px;"><i class="fas fa-book"></i> Anexar do Manual</button>
                     </div>
                     <textarea id="corpo" class="form-control" placeholder="Escreva aqui a sua mensagem..." required></textarea>
                 </div>
@@ -262,6 +263,22 @@
             <h2 style="font-size: 18px; color: #ffb703; margin-bottom: 20px; text-transform: uppercase; border-bottom: 1.5px solid rgba(255,255,255,0.08); padding-bottom: 8px;"><i class="fas fa-history"></i> Histórico de Envio</h2>
             <div id="historyList" style="display: flex; flex-direction: column; gap: 15px;">
                 <p style="text-align: center; color: #8892b0;">A carregar histórico...</p>
+            </div>
+        </div>
+
+        <!-- Modal para Selecionar Conteúdo do Manual -->
+        <div id="manualSelectModal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); z-index: 3000; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+            <div style="background: #161b26; border: 1px solid rgba(255, 183, 3, 0.4); border-radius: 16px; width: 90%; max-width: 550px; max-height: 85vh; display: flex; flex-direction: column; box-shadow: 0 15px 35px rgba(0,0,0,0.6); overflow: hidden;">
+                <div style="padding: 18px 24px; border-bottom: 1px solid rgba(255,255,255,0.08); display: flex; justify-content: space-between; align-items: center; background: #111622;">
+                    <h3 style="color: #ffb703; font-size: 18px; margin: 0; font-weight: 700; display: flex; align-items: center; gap: 8px;"><i class="fas fa-book"></i> Anexar do Manual</h3>
+                    <button id="closeManualSelectModalBtn" type="button" style="background: none; border: none; color: #8892b0; font-size: 20px; cursor: pointer;"><i class="fas fa-times"></i></button>
+                </div>
+                <div style="padding: 16px 24px; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                    <input type="text" id="manualSearchInput" class="form-control" placeholder="Pesquisar tópico ou explicação do manual..." style="font-size: 14px; padding: 10px 14px;">
+                </div>
+                <div id="manualSelectItemsList" style="padding: 16px 24px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 10px;">
+                    <p style="color: #8892b0; text-align: center;"><i class="fas fa-spinner fa-spin"></i> A carregar itens do manual...</p>
+                </div>
             </div>
         </div>
     </main>
@@ -577,6 +594,91 @@
             }
         }
 
+        let cachedManualItems = null;
+
+        async function openManualSelectModal() {
+            const modal = document.getElementById('manualSelectModal');
+            const itemsList = document.getElementById('manualSelectItemsList');
+            const searchInput = document.getElementById('manualSearchInput');
+            
+            modal.style.display = 'flex';
+            searchInput.value = '';
+
+            const textarea = document.getElementById('corpo');
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            const selectedText = textarea.value.substring(start, end).trim();
+
+            async function renderItems(filterQuery = '') {
+                itemsList.innerHTML = '<p style="color: #8892b0; text-align: center;"><i class="fas fa-spinner fa-spin"></i> A carregar itens do manual...</p>';
+                
+                if (!cachedManualItems) {
+                    try {
+                        const q = query(collection(db, 'manual'));
+                        const snapshot = await getDocs(q);
+                        cachedManualItems = [];
+                        snapshot.forEach(docSnap => {
+                            cachedManualItems.push({ id: docSnap.id, ...docSnap.data() });
+                        });
+                        cachedManualItems.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+                    } catch (err) {
+                        console.error("Erro ao procurar manual:", err);
+                        itemsList.innerHTML = '<p style="color: #e74c3c; text-align: center;">Erro ao carregar conteúdo do manual.</p>';
+                        return;
+                    }
+                }
+
+                const queryStr = filterQuery.toLowerCase().trim();
+                const filtered = cachedManualItems.filter(item => {
+                    const title = (item.title || '').toLowerCase();
+                    const type = (item.type || '').toLowerCase();
+                    const content = (item.content || '').toLowerCase().replace(/<[^>]*>?/gm, '');
+                    return !queryStr || title.includes(queryStr) || type.includes(queryStr) || content.includes(queryStr);
+                });
+
+                if (filtered.length === 0) {
+                    itemsList.innerHTML = '<p style="color: #8892b0; text-align: center;">Nenhum item encontrado no manual.</p>';
+                    return;
+                }
+
+                itemsList.innerHTML = '';
+                filtered.forEach(item => {
+                    const itemEl = document.createElement('div');
+                    itemEl.style.cssText = 'background: #0c1017; border: 1px solid rgba(255,255,255,0.08); padding: 12px 15px; border-radius: 8px; cursor: pointer; transition: all 0.2s; display: flex; justify-content: space-between; align-items: center; gap: 10px;';
+                    itemEl.innerHTML = `
+                        <div style="min-width: 0; flex: 1;">
+                            <div style="font-weight: 700; color: #ffffff; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${item.title || 'Sem título'}</div>
+                            ${item.content ? `<div style="font-size: 11px; color: #8892b0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 3px;">${item.content.replace(/<[^>]*>?/gm, '')}</div>` : ''}
+                        </div>
+                        <span style="font-size: 10px; background: rgba(255, 183, 3, 0.15); color: #ffb703; padding: 3px 8px; border-radius: 12px; font-weight: 700; flex-shrink: 0;">${item.type || 'Manual'}</span>
+                    `;
+
+                    itemEl.addEventListener('mouseenter', () => itemEl.style.borderColor = '#ffb703');
+                    itemEl.addEventListener('mouseleave', () => itemEl.style.borderColor = 'rgba(255,255,255,0.08)');
+
+                    itemEl.addEventListener('click', () => {
+                        let textToInsert = selectedText;
+                        if (!textToInsert) {
+                            const promptedText = prompt("Texto a exibir para o link do Manual:", item.title || "Ver Manual");
+                            if (promptedText === null) return;
+                            textToInsert = promptedText.trim() || item.title || "Ver Manual";
+                        }
+
+                        const value = textarea.value;
+                        textarea.value = value.substring(0, start) + `[${textToInsert}](manual:${item.id})` + value.substring(end);
+                        textarea.focus();
+                        modal.style.display = 'none';
+                    });
+
+                    itemsList.appendChild(itemEl);
+                });
+            }
+
+            renderItems();
+
+            searchInput.oninput = (e) => renderItems(e.target.value);
+        }
+
         function initializePage() {
             statusMessage.style.display = 'none';
             emailCard.style.display = 'block';
@@ -607,6 +709,17 @@
                 const value = textarea.value;
                 textarea.value = value.substring(0, start) + `![${alt || 'Imagem'}](${url})` + value.substring(end);
                 textarea.focus();
+            });
+
+            document.getElementById('addManualBtn').addEventListener('click', openManualSelectModal);
+
+            document.getElementById('closeManualSelectModalBtn').addEventListener('click', () => {
+                document.getElementById('manualSelectModal').style.display = 'none';
+            });
+            document.getElementById('manualSelectModal').addEventListener('click', (e) => {
+                if (e.target.id === 'manualSelectModal') {
+                    document.getElementById('manualSelectModal').style.display = 'none';
+                }
             });
             
             toggleHistoryBtn.addEventListener('click', () => {

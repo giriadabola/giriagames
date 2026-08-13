@@ -1237,18 +1237,110 @@ function parseInboxMessage(text) {
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
 
-    // Replace images: ![alt](url)
+    // Replace images: ![alt](url) - Protected against contextmenu / drag / URL copy
     escaped = escaped.replace(/!\[(.*?)\]\((.*?)\)/g, (match, alt, url) => {
-        return `<img src="${url}" alt="${alt}" style="max-width: 100%; max-height: 250px; object-fit: contain; border-radius: 8px; margin-top: 8px; display: block; border: 1.5px solid rgba(255,255,255,0.1);">`;
+        return `<img src="${url}" alt="${alt}" draggable="false" oncontextmenu="return false;" onselectstart="return false;" style="max-width: 100%; max-height: 250px; object-fit: contain; border-radius: 8px; margin-top: 8px; display: block; border: 1.5px solid rgba(255,255,255,0.1); pointer-events: none; -webkit-user-drag: none; -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none;">`;
     });
 
     // Replace links: [text](url)
     escaped = escaped.replace(/\[(.*?)\]\((.*?)\)/g, (match, label, url) => {
+        if (url.startsWith('manual:')) {
+            const manualId = url.replace('manual:', '').trim();
+            return `<a href="#" class="inbox-manual-link" data-manual-id="${manualId}" style="color: #ffb703; text-decoration: underline; font-weight: 700; cursor: pointer; background: rgba(255, 183, 3, 0.12); padding: 2px 8px; border-radius: 4px; display: inline-flex; align-items: center; gap: 5px; border: 1px solid rgba(255, 183, 3, 0.3); transition: background 0.2s;"><i class="fas fa-book" style="font-size: 11px;"></i>${label}</a>`;
+        }
         return `<a href="${url}" target="_blank" style="color: #ffb703; text-decoration: underline; font-weight: 600;">${label}</a>`;
     });
 
     return escaped;
 }
+
+// Bloquear clique direito e arrastar imagens na caixa de entrada para impedir copiar URL
+document.addEventListener('contextmenu', (e) => {
+    if (e.target.closest('#inboxSection img, #inboxGrid img, .inbox-card img, #manualPreviewBody img')) {
+        e.preventDefault();
+        return false;
+    }
+}, true);
+
+document.addEventListener('dragstart', (e) => {
+    if (e.target.closest('#inboxSection img, #inboxGrid img, .inbox-card img, #manualPreviewBody img')) {
+        e.preventDefault();
+        return false;
+    }
+}, true);
+
+async function openManualPreviewModal(manualId) {
+    let modal = document.getElementById('inboxManualPreviewModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'inboxManualPreviewModal';
+        modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(5px); z-index: 99999; display: flex; align-items: center; justify-content: center; padding: 20px;';
+        document.body.appendChild(modal);
+    }
+
+    modal.innerHTML = `
+        <div style="background: #161b26; border: 1.5px solid #ffb703; border-radius: 16px; width: 90%; max-width: 600px; max-height: 85vh; display: flex; flex-direction: column; box-shadow: 0 15px 35px rgba(0,0,0,0.6); overflow: hidden;">
+            <div style="padding: 18px 24px; border-bottom: 1px solid rgba(255,255,255,0.08); display: flex; justify-content: space-between; align-items: center; background: #111622;">
+                <h3 id="manualPreviewTitle" style="color: #ffb703; font-size: 18px; font-weight: 700; margin: 0; display: flex; align-items: center; gap: 8px;"><i class="fas fa-spinner fa-spin"></i> A carregar...</h3>
+                <button id="closeManualPreviewBtn" style="background: none; border: none; color: #8892b0; font-size: 22px; cursor: pointer; transition: color 0.2s;"><i class="fas fa-times"></i></button>
+            </div>
+            <div id="manualPreviewBody" style="padding: 20px 24px; overflow-y: auto; flex: 1; color: #e2e8f0; font-size: 14px; line-height: 1.6;">
+                <p style="text-align: center; color: #8892b0;"><i class="fas fa-spinner fa-spin"></i> A carregar informação do Manual...</p>
+            </div>
+            <div style="padding: 16px 24px; border-top: 1px solid rgba(255,255,255,0.08); background: #111622; display: flex; justify-content: flex-end; align-items: center; gap: 12px;">
+                <button id="closeManualPreviewSecondaryBtn" style="background: rgba(255,255,255,0.08); color: #e2e8f0; border: none; padding: 10px 18px; border-radius: 8px; font-weight: 600; cursor: pointer;">Fechar</button>
+                <a id="goToManualBtn" href="manual.html?item=${manualId}" style="background: linear-gradient(135deg, #ffb703, #e69c00); color: #090c10; text-decoration: none; padding: 10px 18px; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 4px 15px rgba(255, 183, 3, 0.25);">ver mais no Manual <i class="fas fa-chevron-right"></i></a>
+            </div>
+        </div>
+    `;
+
+    modal.style.display = 'flex';
+
+    const closeBtn = modal.querySelector('#closeManualPreviewBtn');
+    const closeSecBtn = modal.querySelector('#closeManualPreviewSecondaryBtn');
+    const closeModalHandler = () => { modal.style.display = 'none'; };
+    closeBtn.addEventListener('click', closeModalHandler);
+    closeSecBtn.addEventListener('click', closeModalHandler);
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeModalHandler();
+    });
+
+    try {
+        const docSnap = await getDoc(doc(db, 'manual', manualId));
+        const titleEl = modal.querySelector('#manualPreviewTitle');
+        const bodyEl = modal.querySelector('#manualPreviewBody');
+
+        if (docSnap.exists()) {
+            const data = docSnap.data();
+            titleEl.innerHTML = `<i class="fas fa-book"></i> ${data.title || 'Informação do Manual'}`;
+            bodyEl.innerHTML = `
+                ${data.type ? `<span style="display: inline-block; background: rgba(255, 183, 3, 0.15); color: #ffb703; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; text-transform: uppercase; margin-bottom: 12px;">${data.type}</span>` : ''}
+                <div>${data.content || '<p style="color: #8892b0;">Sem conteúdo disponível.</p>'}</div>
+            `;
+        } else {
+            titleEl.innerHTML = `<i class="fas fa-exclamation-triangle" style="color: #e74c3c;"></i> Item não encontrado`;
+            bodyEl.innerHTML = `<p style="color: #e74c3c;">O conteúdo especificado do manual não foi encontrado ou foi removido.</p>`;
+        }
+    } catch (err) {
+        console.error("Erro ao carregar item do manual:", err);
+        const titleEl = modal.querySelector('#manualPreviewTitle');
+        const bodyEl = modal.querySelector('#manualPreviewBody');
+        titleEl.innerHTML = `<i class="fas fa-exclamation-circle" style="color: #e74c3c;"></i> Erro`;
+        bodyEl.innerHTML = `<p style="color: #e74c3c;">Não foi possível carregar as informações do manual.</p>`;
+    }
+}
+
+document.addEventListener('click', (e) => {
+    const manualLink = e.target.closest('.inbox-manual-link');
+    if (manualLink) {
+        e.preventDefault();
+        e.stopPropagation();
+        const manualId = manualLink.dataset.manualId;
+        if (manualId) {
+            openManualPreviewModal(manualId);
+        }
+    }
+});
 
 let inboxUnsubscribe = null;
 

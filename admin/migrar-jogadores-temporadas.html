@@ -104,7 +104,7 @@
     <script type="module">
         import { db } from './js/auth-guard.js';
         import { collection, getDocs, writeBatch, doc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
-        import { fetchUniqueSeasons, isPlayerMigrated } from './js/player-season-helper.js';
+        import { fetchUniqueSeasons, isPlayerMigrated, ATEMPORAL_FIELDS } from './js/player-season-helper.js';
 
         let allPlayerDocs = [];
         let pendingPlayerDocs = [];
@@ -125,6 +125,7 @@
                 const seasons = await fetchUniqueSeasons(db);
                 const targetSelect = document.getElementById('targetSeasonSelect');
                 targetSelect.innerHTML = seasons.map(s => `<option value="${s}">${s}</option>`).join('');
+
                 addLog(`Temporadas detetadas na BD: ${seasons.join(', ')}`, 'info');
                 
                 await scanDatabase();
@@ -147,6 +148,7 @@
                     if (isPlayerMigrated(data)) {
                         migratedPlayerDocs.push(docSnap);
                     } else {
+                        // Inclui legados E também documentos onde os campos atemporais estão dentro da temporada
                         pendingPlayerDocs.push(docSnap);
                     }
                 });
@@ -190,7 +192,7 @@
 
             const total = pendingPlayerDocs.length;
             let processed = 0;
-            const batchSize = 300; // Batch limit safe size in Firestore is 500
+            const batchSize = 300;
 
             for (let i = 0; i < total; i += batchSize) {
                 const currentBatchDocs = pendingPlayerDocs.slice(i, i + batchSize);
@@ -200,15 +202,50 @@
                     const oldData = docSnap.data();
                     const playerRef = doc(db, 'jogadores', docSnap.id);
 
-                    // Cria nova estrutura limpando dados no nível raiz
-                    const migratedPayload = {
-                        [targetSeason]: {
-                            ...oldData,
-                            ultimaAtualizacao: new Date().toISOString()
-                        }
+                    const existingSeasonKeys = Object.keys(oldData).filter(k => /^\d{4}\/\d{4}$/.test(k));
+
+                    // Amostra de dados sazonais para copiar
+                    const sampleObj = (oldData[targetSeason] && typeof oldData[targetSeason] === 'object')
+                        ? oldData[targetSeason]
+                        : (existingSeasonKeys.length > 0 ? oldData[existingSeasonKeys[0]] : oldData);
+
+                    const rootAtemporal = {
+                        nome: oldData.nome ?? sampleObj.nome ?? '',
+                        codigoUrl: oldData.codigoUrl ?? sampleObj.codigoUrl ?? '',
+                        imagem: oldData.imagem ?? sampleObj.imagem ?? '',
+                        dataNascimento: oldData.dataNascimento ?? sampleObj.dataNascimento ?? '',
+                        altura: oldData.altura ?? sampleObj.altura ?? null,
+                        pais: oldData.pais ?? sampleObj.pais ?? '',
+                        paisId: oldData.paisId ?? sampleObj.paisId ?? '',
+                        ativo: oldData.ativo !== undefined ? oldData.ativo : (sampleObj.ativo !== undefined ? sampleObj.ativo : true),
+                        ultimaAtualizacao: new Date().toISOString()
                     };
 
-                    batch.set(playerRef, migratedPayload);
+                    const cleanDoc = {
+                        ...rootAtemporal
+                    };
+
+                    // Extrai e limpa os dados sazonais para a temporada alvo
+                    const cleanTargetSeasonObj = { ...(oldData[targetSeason] || sampleObj) };
+                    ATEMPORAL_FIELDS.forEach(field => delete cleanTargetSeasonObj[field]);
+                    delete cleanTargetSeasonObj.id;
+                    cleanTargetSeasonObj.ultimaAtualizacao = new Date().toISOString();
+
+                    if (existingSeasonKeys.length > 0) {
+                        // Mantém também as outras temporadas válidas existentes
+                        existingSeasonKeys.forEach(sKey => {
+                            const seasonCopy = { ...oldData[sKey] };
+                            ATEMPORAL_FIELDS.forEach(field => delete seasonCopy[field]);
+                            seasonCopy.ultimaAtualizacao = new Date().toISOString();
+                            cleanDoc[sKey] = seasonCopy;
+                        });
+                    }
+
+                    // Garante que a temporada alvo fica definida com os dados sazonais limpos
+                    cleanDoc[targetSeason] = cleanTargetSeasonObj;
+
+                    // Substitui o documento limpo
+                    batch.set(playerRef, cleanDoc);
                 });
 
                 try {
@@ -216,7 +253,7 @@
                     processed += currentBatchDocs.length;
                     const percent = Math.round((processed / total) * 100);
                     document.getElementById('progressBar').style.width = `${percent}%`;
-                    addLog(`Lote de ${currentBatchDocs.length} jogadores gravado com sucesso. (${processed}/${total} - ${percent}%)`, 'success');
+                    addLog(`Lote de ${currentBatchDocs.length} jogadores migrado com sucesso. (${processed}/${total} - ${percent}%)`, 'success');
                 } catch (err) {
                     console.error("Erro ao gravar lote:", err);
                     addLog(`Erro ao gravar lote: ${err.message}`, 'error');
