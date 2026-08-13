@@ -1430,6 +1430,21 @@ function formatInboxDate(rawDate) {
     return `${day}/${month}/${year} ${hours}:${minutes}`;
 }
 
+function isScheduledInFuture(data) {
+    if (!data || !data.dataAgendada) return false;
+    let scheduledMs = 0;
+    if (typeof data.dataAgendada.toMillis === 'function') {
+        scheduledMs = data.dataAgendada.toMillis();
+    } else if (data.dataAgendada && typeof data.dataAgendada.seconds === 'number') {
+        scheduledMs = data.dataAgendada.seconds * 1000;
+    } else if (typeof data.dataAgendada === 'number') {
+        scheduledMs = data.dataAgendada;
+    } else if (typeof data.dataAgendada === 'string') {
+        scheduledMs = new Date(data.dataAgendada).getTime();
+    }
+    return scheduledMs > Date.now();
+}
+
 async function loadInbox(userId) {
     const inboxSection = document.getElementById('inboxSection');
     const inboxGrid = document.getElementById('inboxGrid');
@@ -1457,6 +1472,9 @@ async function loadInbox(userId) {
             const promises = snapshot.docs.map(async (inboxDoc) => {
                 const data = inboxDoc.data();
                 
+                // Ignorar mensagens agendadas para o futuro
+                if (isScheduledInFuture(data)) return null;
+
                 // If it is a generic email/message
                 if (data.tipo === 'email' || !data.jogadorId) {
                     return {

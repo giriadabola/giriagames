@@ -16,7 +16,23 @@ function updateProfileMenuBadge(count) {
     }
 }
 
+function isScheduledInFuture(data) {
+    if (!data || !data.dataAgendada) return false;
+    let scheduledMs = 0;
+    if (typeof data.dataAgendada.toMillis === 'function') {
+        scheduledMs = data.dataAgendada.toMillis();
+    } else if (data.dataAgendada && typeof data.dataAgendada.seconds === 'number') {
+        scheduledMs = data.dataAgendada.seconds * 1000;
+    } else if (typeof data.dataAgendada === 'number') {
+        scheduledMs = data.dataAgendada;
+    } else if (typeof data.dataAgendada === 'string') {
+        scheduledMs = new Date(data.dataAgendada).getTime();
+    }
+    return scheduledMs > Date.now();
+}
+
 function isUnreadMessage(data) {
+    if (isScheduledInFuture(data)) return false;
     return data.tipo === 'email' || !data.jogadorId;
 }
 
