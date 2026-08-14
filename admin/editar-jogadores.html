@@ -225,6 +225,7 @@
                         <div class="form-group"><label for="playerTier">Casta do Jogador</label><select class="form-control" id="playerTier"><option value="Jogador Ouro">Jogador Ouro</option><option value="Jogador Prata">Jogador Prata</option><option value="Jogador Bronze">Jogador Bronze</option><option value="Jogador Platina">Jogador Platina</option></select></div>
                         <div class="form-group"><label for="playerMarket">No Mercado?</label><select class="form-control" id="playerMarket"><option value="Sim">Sim</option><option value="Não">Não</option></select></div>
                         <div class="form-group"><label for="playerActive">Ativo?</label><select class="form-control" id="playerActive"><option value="Sim">Sim</option><option value="Não">Não</option></select></div>
+                        <div class="form-group"><label for="playerRetired">Retirado?</label><select class="form-control" id="playerRetired"><option value="Não">Não</option><option value="Sim">Sim</option></select></div>
                         <div class="form-group"><label for="playerPrice">Preço</label><input type="number" class="form-control" id="playerPrice" min="0" max="1000"></div>
                         <div class="form-group"><label for="playerBuyer">Comprado por (Opcional)</label><select class="form-control" id="playerBuyer"><option value="">Ninguém</option></select></div>
                         <div class="form-group"><label>Mini Games? (Opcional)</label><div class="checkbox-group" id="minigames-container"><!-- Carregando mini-games... --></div></div>
@@ -710,6 +711,7 @@
             document.getElementById('playerTier').value = player.casta || 'Jogador Bronze';
             document.getElementById('playerMarket').value = player.noMercado ? 'Sim' : 'Não';
             document.getElementById('playerActive').value = player.ativo !== false ? 'Sim' : 'Não';
+            document.getElementById('playerRetired').value = player.retirado ? 'Sim' : 'Não';
             document.getElementById('playerStats').value = player.estatisticas || '';
             document.getElementById('playerPosition').value = player.posicao || '';
             document.getElementById('playerBirthDate').value = player.dataNascimento || '';
@@ -1058,6 +1060,14 @@
                     return;
                 }
 
+                const currentNameVal = (document.getElementById('playerName')?.value || '').trim();
+                const currentNameLower = currentNameVal.toLowerCase();
+                if (!currentNameVal || currentNameLower === 'sem nome' || currentNameLower === 'sem_nome' || currentNameLower === 'sem-nome') {
+                    alert('⚠️ [BLOQUEIO DE SEGURANÇA] O nome do jogador está vazio ou como "Sem Nome"! O processo foi imediatamente BLOQUEADO e a gravação cancelada.');
+                    console.error('[EDITAR-JOGADOR] Gravação bloqueada devido a nome inválido:', currentNameVal);
+                    return;
+                }
+
                 const submitBtns = document.querySelectorAll('button[form="editPlayerForm"], .btn-edit');
                 try {
                     isSubmitting = true;
@@ -1137,14 +1147,17 @@
                             ext = extMatch[1].toLowerCase();
                         }
                     }
+                    const isRetired = document.getElementById('playerRetired')?.value === 'Sim';
+
                     const playerData = {
                         nome: document.getElementById('playerName').value,
                         codigoUrl: imageCode,
                         imagem: imageCode ? `assets/faces/face_${imageCode}.${ext}` : '',
                         pais: countryName, 
                         paisId: paisId, 
-                        clube: newClubName,
-                        clubeId: clubeId, 
+                        clube: isRetired ? '' : newClubName,
+                        clubeId: isRetired ? '' : clubeId, 
+                        retirado: isRetired,
                         posicao: document.getElementById('playerPosition').value,
                         dataNascimento: document.getElementById('playerBirthDate').value,
                         altura: parseFloat(document.getElementById('playerHeight').value) || null,
@@ -1201,7 +1214,8 @@
                     
                 } catch (error) {
                     console.error('[EDITAR-JOGADOR] Erro ao atualizar jogador:', error);
-                    alert('Erro ao atualizar jogador');
+                    const errorDetail = error && error.message ? error.message : String(error);
+                    alert(`🛑 NÃO FOI POSSÍVEL GRAVAR O JOGADOR!\n\nMOTIVO DA FALHA:\n${errorDetail}\n\nPor favor, corrija este problema e tente novamente.`);
                 } finally {
                     isSubmitting = false;
                     submitBtns.forEach(btn => btn.disabled = false);

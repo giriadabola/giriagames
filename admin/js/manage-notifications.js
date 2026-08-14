@@ -144,6 +144,73 @@ function isValidHoursBefore(value) {
   return Number.isInteger(value) && value > 0 && value <= 48;
 }
 
+function parseDeviceInfo(subscription, index) {
+  const ua = subscription?.userAgent || '';
+  const platform = subscription?.platform || '';
+  const standalone = subscription?.standalone === true;
+
+  if (!ua && !platform) {
+    return {
+      label: `Dispositivo #${index + 1}`,
+      icon: 'fas fa-mobile-alt'
+    };
+  }
+
+  let os = 'Dispositivo';
+  let osIcon = 'fas fa-mobile-alt';
+  let browser = '';
+
+  if (/iphone|ipad|ipod/i.test(ua) || /iphone|ipad|ipod/i.test(platform)) {
+    os = 'iOS';
+    osIcon = 'fab fa-apple';
+  } else if (/android/i.test(ua)) {
+    os = 'Android';
+    osIcon = 'fab fa-android';
+  } else if (/win/i.test(platform) || /windows/i.test(ua)) {
+    os = 'Windows';
+    osIcon = 'fab fa-windows';
+  } else if (/mac/i.test(platform) || /macintosh|mac os/i.test(ua)) {
+    os = 'Mac';
+    osIcon = 'fab fa-apple';
+  } else if (/linux/i.test(platform) || /linux/i.test(ua)) {
+    os = 'Linux';
+    osIcon = 'fab fa-linux';
+  }
+
+  if (/edg/i.test(ua)) {
+    browser = 'Edge';
+  } else if (/opr|opera/i.test(ua)) {
+    browser = 'Opera';
+  } else if (/chrome|crios/i.test(ua)) {
+    browser = 'Chrome';
+  } else if (/firefox|fxios/i.test(ua)) {
+    browser = 'Firefox';
+  } else if (/safari/i.test(ua)) {
+    browser = 'Safari';
+  }
+
+  const appTag = standalone ? ' App' : '';
+  const name = browser ? `${browser} em ${os}${appTag}` : `${os}${appTag}`;
+
+  return {
+    label: name,
+    icon: osIcon
+  };
+}
+
+function renderDevicesCell(subscriptions) {
+  if (!subscriptions || subscriptions.length === 0) {
+    return '<span class="table-muted">Nenhum</span>';
+  }
+
+  const chipsHtml = subscriptions.map((sub, index) => {
+    const info = parseDeviceInfo(sub, index);
+    return `<span class="device-chip" title="${sub.updatedAtIso ? 'Atualizado a: ' + new Date(sub.updatedAtIso).toLocaleString('pt-PT') : ''}"><i class="${info.icon}"></i> ${info.label}</span>`;
+  }).join('');
+
+  return `<div class="device-chips-list">${chipsHtml}</div>`;
+}
+
 function renderUsersTable() {
   const searchTerm = searchInput.value.trim().toLowerCase();
   const filteredUsers = latestUsers.filter((user) => {
@@ -172,7 +239,7 @@ function renderUsersTable() {
           <td>${getUserDisplayName(user)}</td>
           <td class="table-muted">${user.email || 'Sem email'}</td>
           <td><span class="table-badge ${pushReady ? 'is-on' : 'is-off'}">${pushReady ? 'Ligado' : 'Desligado'}</span></td>
-          <td class="table-muted">${settings.pushSubscriptions.length}</td>
+          <td>${renderDevicesCell(settings.pushSubscriptions)}</td>
         </tr>
       `;
     })

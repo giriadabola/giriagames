@@ -14,6 +14,7 @@ export const ATEMPORAL_FIELDS = [
     'pais',
     'paisId',
     'ativo',
+    'retirado',
     'ultimaAtualizacao'
 ];
 
@@ -138,6 +139,7 @@ export function getPlayerSeasonData(playerDocData, targetSeason) {
         pais: playerDocData.pais ?? sampleSeasonObj.pais ?? '',
         paisId: playerDocData.paisId ?? sampleSeasonObj.paisId ?? '',
         ativo: playerDocData.ativo !== undefined ? Boolean(playerDocData.ativo) : (sampleSeasonObj.ativo !== undefined ? Boolean(sampleSeasonObj.ativo) : true),
+        retirado: playerDocData.retirado !== undefined ? Boolean(playerDocData.retirado) : (sampleSeasonObj.retirado !== undefined ? Boolean(sampleSeasonObj.retirado) : false),
         ultimaAtualizacao: playerDocData.ultimaAtualizacao ?? sampleSeasonObj.ultimaAtualizacao ?? ''
     };
 
@@ -187,6 +189,12 @@ export function getPlayerSeasonData(playerDocData, targetSeason) {
  * Separa os campos atemporais na raiz e os campos sazonais sob a chave [season].
  */
 export function buildPlayerSeasonUpdatePayload(season, playerData) {
+    const nomeVal = (playerData.nome || '').trim();
+    const nomeLower = nomeVal.toLowerCase();
+    if (!nomeVal || nomeLower === 'sem nome' || nomeLower === 'sem_nome' || nomeLower === 'sem-nome') {
+        throw new Error(`[BLOQUEIO DE SEGURANÇA] O campo "nome" não pode ficar vazio ou "Sem Nome". Gravação cancelada.`);
+    }
+
     const { id, ...cleanData } = playerData;
     const now = new Date().toISOString();
 
