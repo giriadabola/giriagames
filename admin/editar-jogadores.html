@@ -144,6 +144,70 @@
         .table-switch input:checked + .table-slider:before {
             transform: translateX(22px);
         }
+
+        /* Pagination Container */
+        .pagination-wrapper {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+            margin-top: 20px;
+            margin-bottom: 30px;
+            padding: 14px 20px;
+            background-color: #111622;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+        }
+        .pagination-info {
+            font-size: 14px;
+            color: #8892b0;
+        }
+        .pagination-info strong {
+            color: #ffffff;
+        }
+        .pagination-controls {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .pagination-btn {
+            background-color: #161c28;
+            color: #ffffff;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 7px 14px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            user-select: none;
+        }
+        .pagination-btn:hover:not(:disabled) {
+            background-color: #2176ff;
+            border-color: #2176ff;
+            color: #ffffff;
+            transform: translateY(-1px);
+        }
+        .pagination-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .pagination-btn.active {
+            background-color: #2176ff;
+            border-color: #2176ff;
+            color: #ffffff;
+        }
+        .pagination-ellipsis {
+            color: #8892b0;
+            padding: 0 4px;
+            font-size: 14px;
+        }
     </style>
 
     <link rel="stylesheet" href="css/admin-global.css">
@@ -191,6 +255,10 @@
                     <!-- Loaded dynamically -->
                 </tbody>
             </table>
+        </div>
+
+        <div class="pagination-wrapper" id="pagination-controls">
+            <!-- Dinâmico -->
         </div>
     </div>
 
@@ -255,6 +323,8 @@
         let currentSortColumn = 'nome';
         let currentSortDirection = 'asc';
         let activeMiniGames = [];
+        let currentPage = 1;
+        const ITEMS_PER_PAGE = 50;
 
         const DEFAULT_SVG_PLACEHOLDER = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="100%" height="100%" fill="%23161c28"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%238892b0" font-size="11">Sem Imagem</text></svg>';
 
@@ -488,6 +558,7 @@
                 };
             });
 
+            currentPage = 1;
             populateFilters();
             renderPlayersTable();
         }
@@ -539,11 +610,6 @@
                 return matchesSearch && matchesPais && matchesPosicao;
             });
 
-            if (filtered.length === 0) {
-                tableBody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #8892b0; padding: 20px;">Nenhum jogador encontrado para a temporada selecionada.</td></tr>`;
-                return;
-            }
-
             filtered.sort((a, b) => {
                 let valA = a[currentSortColumn] || '';
                 let valB = b[currentSortColumn] || '';
@@ -556,62 +622,130 @@
                 }
 
                 return currentSortDirection === 'asc' ? comparison : -comparison;
-            }).forEach(p => {
-                const tr = document.createElement('tr');
-                
-                const posClassMap = {
-                    'Guarda-Redes': 'guarda-redes',
-                    'Defesa': 'defesa',
-                    'Médio': 'medio',
-                    'Avançado': 'avancado'
-                };
-                const badgeClass = posClassMap[p.posicao] || '';
-
-                const displayImg = p.imagem ? (p.imagem.startsWith('http') || p.imagem.startsWith('data:') ? p.imagem : '../' + p.imagem) : 'placeholder.jpg';
-                const isChecked = p.ativo !== false ? 'checked' : '';
-                
-                const codeMatch = p.imagem ? p.imagem.match(/face_(.+)\.(webp|png|jpe?g|svg)/i) : null;
-                const playerCode = codeMatch ? codeMatch[1] : p.codigoUrl;
-
-                tr.innerHTML = `
-                    <td>
-                        <img src="${displayImg}" class="player-row-img" onerror="resolvePlayerImage(this, '${playerCode}')">
-                        <span class="player-row-name">${p.nome}</span>
-                    </td>
-                    <td>${p.paisNome}</td>
-                    <td>${p.clube}</td>
-                    <td><span class="pos-badge ${badgeClass}">${p.posicao}</span></td>
-                    <td style="text-align: center; font-weight: bold; color: #2ecc71;">${p.overall || 0}</td>
-                    <td style="text-align: center;">
-                        <label class="table-switch">
-                            <input type="checkbox" class="ativo-toggle" ${isChecked}>
-                            <span class="table-slider"></span>
-                        </label>
-                    </td>
-                `;
-                
-                const toggleSwitch = tr.querySelector('.table-switch');
-                toggleSwitch.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                });
-                const toggleInput = tr.querySelector('.ativo-toggle');
-                toggleInput.addEventListener('change', async (e) => {
-                    const activeState = e.target.checked;
-                    try {
-                        const playerRef = doc(db, 'jogadores', p.id);
-                        const updatePayload = buildPlayerSeasonUpdatePayload(currentSeason, { ...p, ativo: activeState });
-                        await setDoc(playerRef, updatePayload, { merge: true });
-                        p.ativo = activeState; // Update local cache
-                    } catch (err) {
-                        console.error("Erro ao atualizar o estado ativo do jogador:", err);
-                        e.target.checked = !activeState; // Revert
-                    }
-                });
-                
-                tr.addEventListener('click', () => openEditModal(p));
-                tableBody.appendChild(tr);
             });
+
+            const totalItems = filtered.length;
+            const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE) || 1;
+
+            if (currentPage > totalPages) currentPage = totalPages;
+            if (currentPage < 1) currentPage = 1;
+
+            const startIndex = totalItems > 0 ? (currentPage - 1) * ITEMS_PER_PAGE : 0;
+            const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, totalItems);
+            const pageItems = filtered.slice(startIndex, endIndex);
+
+            if (totalItems === 0) {
+                tableBody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #8892b0; padding: 20px;">Nenhum jogador encontrado para a temporada selecionada.</td></tr>`;
+            } else {
+                pageItems.forEach(p => {
+                    const tr = document.createElement('tr');
+                    
+                    const posClassMap = {
+                        'Guarda-Redes': 'guarda-redes',
+                        'Defesa': 'defesa',
+                        'Médio': 'medio',
+                        'Avançado': 'avancado'
+                    };
+                    const badgeClass = posClassMap[p.posicao] || '';
+
+                    const displayImg = p.imagem ? (p.imagem.startsWith('http') || p.imagem.startsWith('data:') ? p.imagem : '../' + p.imagem) : 'placeholder.jpg';
+                    const isChecked = p.ativo !== false ? 'checked' : '';
+                    
+                    const codeMatch = p.imagem ? p.imagem.match(/face_(.+)\.(webp|png|jpe?g|svg)/i) : null;
+                    const playerCode = codeMatch ? codeMatch[1] : p.codigoUrl;
+
+                    tr.innerHTML = `
+                        <td>
+                            <img src="${displayImg}" class="player-row-img" onerror="resolvePlayerImage(this, '${playerCode}')">
+                            <span class="player-row-name">${p.nome}</span>
+                        </td>
+                        <td>${p.paisNome}</td>
+                        <td>${p.clube}</td>
+                        <td><span class="pos-badge ${badgeClass}">${p.posicao}</span></td>
+                        <td style="text-align: center; font-weight: bold; color: #2ecc71;">${p.overall || 0}</td>
+                        <td style="text-align: center;">
+                            <label class="table-switch">
+                                <input type="checkbox" class="ativo-toggle" ${isChecked}>
+                                <span class="table-slider"></span>
+                            </label>
+                        </td>
+                    `;
+                    
+                    const toggleSwitch = tr.querySelector('.table-switch');
+                    toggleSwitch.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                    });
+                    const toggleInput = tr.querySelector('.ativo-toggle');
+                    toggleInput.addEventListener('change', async (e) => {
+                        const activeState = e.target.checked;
+                        try {
+                            const playerRef = doc(db, 'jogadores', p.id);
+                            const updatePayload = buildPlayerSeasonUpdatePayload(currentSeason, { ...p, ativo: activeState });
+                            await setDoc(playerRef, updatePayload, { merge: true });
+                            p.ativo = activeState; // Update local cache
+                        } catch (err) {
+                            console.error("Erro ao atualizar o estado ativo do jogador:", err);
+                            e.target.checked = !activeState; // Revert
+                        }
+                    });
+                    
+                    tr.addEventListener('click', () => openEditModal(p));
+                    tableBody.appendChild(tr);
+                });
+            }
+
+            renderPagination(totalItems, totalPages);
         }
+
+        function renderPagination(totalItems, totalPages) {
+            const container = document.getElementById('pagination-controls');
+            if (!container) return;
+
+            if (totalItems === 0) {
+                container.innerHTML = `<div class="pagination-info">Sem resultados</div>`;
+                return;
+            }
+
+            const startIndex = (currentPage - 1) * ITEMS_PER_PAGE + 1;
+            const endIndex = Math.min(currentPage * ITEMS_PER_PAGE, totalItems);
+
+            let buttonsHtml = '';
+            
+            // Button Previous
+            buttonsHtml += `<button class="pagination-btn" ${currentPage === 1 ? 'disabled' : ''} onclick="window.changeEditPage(${currentPage - 1})"><i class="fas fa-chevron-left"></i> Anterior</button>`;
+
+            // Page numbers
+            let pagesToDisplay = [];
+            for (let i = 1; i <= totalPages; i++) {
+                if (i === 1 || i === totalPages || (i >= currentPage - 1 && i <= currentPage + 1)) {
+                    pagesToDisplay.push(i);
+                }
+            }
+
+            let lastPage = 0;
+            pagesToDisplay.forEach(p => {
+                if (lastPage > 0 && p - lastPage > 1) {
+                    buttonsHtml += `<span class="pagination-ellipsis">...</span>`;
+                }
+                buttonsHtml += `<button class="pagination-btn ${p === currentPage ? 'active' : ''}" onclick="window.changeEditPage(${p})">${p}</button>`;
+                lastPage = p;
+            });
+
+            // Button Next
+            buttonsHtml += `<button class="pagination-btn" ${currentPage === totalPages ? 'disabled' : ''} onclick="window.changeEditPage(${currentPage + 1})">Próxima <i class="fas fa-chevron-right"></i></button>`;
+
+            container.innerHTML = `
+                <div class="pagination-info">Mostrando <strong>${startIndex}</strong> a <strong>${endIndex}</strong> de <strong>${totalItems}</strong> jogadores</div>
+                <div class="pagination-controls">${buttonsHtml}</div>
+            `;
+        }
+
+        window.changeEditPage = function(page) {
+            currentPage = page;
+            renderPlayersTable();
+            const tableEl = document.querySelector('.table-container');
+            if (tableEl) tableEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        };
 
         function updateSortHeaders() {
             const headers = document.querySelectorAll('.excel-table th[data-sort]');
@@ -930,16 +1064,19 @@
             const playerClub = document.getElementById('playerClub');
 
             tableSearch.addEventListener('input', () => {
+                currentPage = 1;
                 renderPlayersTable();
             });
 
             const filterPaisSelect = document.getElementById('filter-pais');
             filterPaisSelect.addEventListener('change', () => {
+                currentPage = 1;
                 renderPlayersTable();
             });
 
             const filterPosicaoSelect = document.getElementById('filter-posicao');
             filterPosicaoSelect.addEventListener('change', () => {
+                currentPage = 1;
                 renderPlayersTable();
             });
 

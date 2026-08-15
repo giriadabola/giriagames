@@ -100,6 +100,70 @@
 
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes scaleUp { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+        /* Pagination Container */
+        .pagination-wrapper {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+            margin-top: 20px;
+            margin-bottom: 30px;
+            padding: 14px 20px;
+            background-color: #111622;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+        }
+        .pagination-info {
+            font-size: 14px;
+            color: #8892b0;
+        }
+        .pagination-info strong {
+            color: #ffffff;
+        }
+        .pagination-controls {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .pagination-btn {
+            background-color: #161c28;
+            color: #ffffff;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 7px 14px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            user-select: none;
+        }
+        .pagination-btn:hover:not(:disabled) {
+            background-color: #2176ff;
+            border-color: #2176ff;
+            color: #ffffff;
+            transform: translateY(-1px);
+        }
+        .pagination-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .pagination-btn.active {
+            background-color: #2176ff;
+            border-color: #2176ff;
+            color: #ffffff;
+        }
+        .pagination-ellipsis {
+            color: #8892b0;
+            padding: 0 4px;
+            font-size: 14px;
+        }
     </style>
     <link rel="stylesheet" href="css/admin-global.css">
     <script src="../core/pwa/loading-watchdog.js" defer></script>
@@ -159,6 +223,10 @@
                     <!-- Dinâmico -->
                 </tbody>
             </table>
+        </div>
+
+        <div class="pagination-wrapper" id="pagination-controls">
+            <!-- Dinâmico -->
         </div>
     </div>
 
@@ -260,6 +328,8 @@
         let seasonsList = [];
         let currentSeason = '2025/2026';
         let activeModalPlayerId = null;
+        let currentPage = 1;
+        const ITEMS_PER_PAGE = 50;
 
         function normalizeMiniGamesForSave(originalMiniGames) {
             if (!originalMiniGames) return {};
@@ -520,6 +590,7 @@
                 };
             });
 
+            currentPage = 1;
             populateFilters();
             renderTable();
         }
@@ -560,6 +631,27 @@
             return casta ? casta.replace('Jogador ', '') : 'Bronze';
         }
 
+        function getActiveCountForClub(clubName, excludePlayerId = null) {
+            if (!clubName || clubName === 'N/A') return 0;
+            const normClub = clubName.trim().toLowerCase();
+
+            let count = 0;
+            allPlayers.forEach(p => {
+                if (excludePlayerId && p.id === excludePlayerId) return;
+                if (!p.clube || p.clube.trim().toLowerCase() !== normClub) return;
+
+                const isActive = changedPlayers.has(p.id) 
+                    ? changedPlayers.get(p.id).cadernetaActive 
+                    : p.cadernetaActive;
+
+                if (isActive) {
+                    count++;
+                }
+            });
+
+            return count;
+        }
+
         function renderTable() {
             const tableBody = document.getElementById('players-table-body');
             tableBody.innerHTML = '';
@@ -587,72 +679,146 @@
                 }
             });
 
-            filtered.forEach(p => {
-                const tr = document.createElement('tr');
-                tr.style.cursor = 'pointer';
+            const totalItems = filtered.length;
+            const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE) || 1;
 
-                // Determine image
-                let ext = 'webp';
-                if (p.imagem) {
-                    const match = p.imagem.match(/face_(.+)\.(webp|png|jpe?g|svg)/i);
-                    if (match) ext = match[2];
-                }
-                const displayImg = (p.codigoUrl && String(p.codigoUrl).trim() !== '')
-                    ? `../assets/faces/face_${p.codigoUrl}.${ext}` 
-                    : DEFAULT_AVATAR_SVG;
+            if (currentPage > totalPages) currentPage = totalPages;
+            if (currentPage < 1) currentPage = 1;
 
-                // Rarity style
-                const isChecked = changedPlayers.has(p.id) ? changedPlayers.get(p.id).cadernetaActive : p.cadernetaActive;
-                const activeCasta = changedPlayers.has(p.id) ? changedPlayers.get(p.id).cadernetaCasta : p.cadernetaCasta;
+            const startIndex = totalItems > 0 ? (currentPage - 1) * ITEMS_PER_PAGE : 0;
+            const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, totalItems);
+            const pageItems = filtered.slice(startIndex, endIndex);
 
-                tr.innerHTML = `
-                    <td>
-                        <img src="${displayImg}" class="player-row-img" onerror="window.resolvePlayerImage(this, '${p.codigoUrl}')">
-                        <span class="player-row-name">${p.nome}</span>
-                    </td>
-                    <td>${p.clube}</td>
-                    <td>${p.posicao}</td>
-                    <td>
-                        <span class="badge ${getTierBadgeClass(p.casta)}">${getCastaShort(p.casta)}</span>
-                    </td>
-                    <td style="text-align: center;">
-                        <label class="table-switch">
-                            <input type="checkbox" class="toggle-caderneta-active" data-id="${p.id}" ${isChecked ? 'checked' : ''}>
-                            <span class="table-slider"></span>
-                        </label>
-                    </td>
-                    <td style="text-align: center;">
-                        <select class="select-casta ${activeCasta}" data-id="${p.id}">
-                            <option value="comum" class="comum" ${activeCasta === 'comum' ? 'selected' : ''}>Comum</option>
-                            <option value="raro" class="raro" ${activeCasta === 'raro' ? 'selected' : ''}>Raro</option>
-                            <option value="epico" class="epico" ${activeCasta === 'epico' ? 'selected' : ''}>Épico</option>
-                            <option value="lendario" class="lendario" ${activeCasta === 'lendario' ? 'selected' : ''}>Lendário</option>
-                        </select>
-                    </td>
-                `;
+            if (totalItems === 0) {
+                tableBody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #8892b0; padding: 20px;">Nenhum jogador encontrado.</td></tr>`;
+            } else {
+                pageItems.forEach(p => {
+                    const tr = document.createElement('tr');
+                    tr.style.cursor = 'pointer';
 
-                // Open modal when clicking on player row (unless clicking inline inputs)
-                tr.addEventListener('click', (e) => {
-                    if (e.target.closest('.table-switch') || e.target.closest('.select-casta')) {
-                        return;
+                    // Determine image
+                    let ext = 'webp';
+                    if (p.imagem) {
+                        const match = p.imagem.match(/face_(.+)\.(webp|png|jpe?g|svg)/i);
+                        if (match) ext = match[2];
                     }
-                    openPlayerModal(p);
-                });
+                    const displayImg = (p.codigoUrl && String(p.codigoUrl).trim() !== '')
+                        ? `../assets/faces/face_${p.codigoUrl}.${ext}` 
+                        : DEFAULT_AVATAR_SVG;
 
-                // Add Event Listeners for inline changes
-                tr.querySelector('.toggle-caderneta-active').addEventListener('change', (e) => {
-                    updatePlayerChange(p.id, 'cadernetaActive', e.target.checked);
-                });
+                    // Rarity style
+                    const isChecked = changedPlayers.has(p.id) ? changedPlayers.get(p.id).cadernetaActive : p.cadernetaActive;
+                    const activeCasta = changedPlayers.has(p.id) ? changedPlayers.get(p.id).cadernetaCasta : p.cadernetaCasta;
 
-                tr.querySelector('.select-casta').addEventListener('change', (e) => {
-                    const select = e.target;
-                    select.className = `select-casta ${select.value}`;
-                    updatePlayerChange(p.id, 'cadernetaCasta', select.value);
-                });
+                    tr.innerHTML = `
+                        <td>
+                            <img src="${displayImg}" class="player-row-img" onerror="window.resolvePlayerImage(this, '${p.codigoUrl}')">
+                            <span class="player-row-name">${p.nome}</span>
+                        </td>
+                        <td>${p.clube}</td>
+                        <td>${p.posicao}</td>
+                        <td>
+                            <span class="badge ${getTierBadgeClass(p.casta)}">${getCastaShort(p.casta)}</span>
+                        </td>
+                        <td style="text-align: center;">
+                            <label class="table-switch">
+                                <input type="checkbox" class="toggle-caderneta-active" data-id="${p.id}" ${isChecked ? 'checked' : ''}>
+                                <span class="table-slider"></span>
+                            </label>
+                        </td>
+                        <td style="text-align: center;">
+                            <select class="select-casta ${activeCasta}" data-id="${p.id}">
+                                <option value="comum" class="comum" ${activeCasta === 'comum' ? 'selected' : ''}>Comum</option>
+                                <option value="raro" class="raro" ${activeCasta === 'raro' ? 'selected' : ''}>Raro</option>
+                                <option value="epico" class="epico" ${activeCasta === 'epico' ? 'selected' : ''}>Épico</option>
+                                <option value="lendario" class="lendario" ${activeCasta === 'lendario' ? 'selected' : ''}>Lendário</option>
+                            </select>
+                        </td>
+                    `;
 
-                tableBody.appendChild(tr);
-            });
+                    // Open modal when clicking on player row (unless clicking inline inputs)
+                    tr.addEventListener('click', (e) => {
+                        if (e.target.closest('.table-switch') || e.target.closest('.select-casta')) {
+                            return;
+                        }
+                        openPlayerModal(p);
+                    });
+
+                    // Add Event Listeners for inline changes
+                    tr.querySelector('.toggle-caderneta-active').addEventListener('change', (e) => {
+                        if (e.target.checked) {
+                            const activeCount = getActiveCountForClub(p.clube, p.id);
+                            if (activeCount >= 10) {
+                                alert("Equipa Já com 10 cromos");
+                                e.target.checked = false;
+                                return;
+                            }
+                        }
+                        updatePlayerChange(p.id, 'cadernetaActive', e.target.checked);
+                    });
+
+                    tr.querySelector('.select-casta').addEventListener('change', (e) => {
+                        const select = e.target;
+                        select.className = `select-casta ${select.value}`;
+                        updatePlayerChange(p.id, 'cadernetaCasta', select.value);
+                    });
+
+                    tableBody.appendChild(tr);
+                });
+            }
+
+            renderPagination(totalItems, totalPages);
         }
+
+        function renderPagination(totalItems, totalPages) {
+            const container = document.getElementById('pagination-controls');
+            if (!container) return;
+
+            if (totalItems === 0) {
+                container.innerHTML = `<div class="pagination-info">Sem resultados</div>`;
+                return;
+            }
+
+            const startIndex = (currentPage - 1) * ITEMS_PER_PAGE + 1;
+            const endIndex = Math.min(currentPage * ITEMS_PER_PAGE, totalItems);
+
+            let buttonsHtml = '';
+            
+            // Button Previous
+            buttonsHtml += `<button class="pagination-btn" ${currentPage === 1 ? 'disabled' : ''} onclick="window.changeCadernetaPage(${currentPage - 1})"><i class="fas fa-chevron-left"></i> Anterior</button>`;
+
+            // Page numbers
+            let pagesToDisplay = [];
+            for (let i = 1; i <= totalPages; i++) {
+                if (i === 1 || i === totalPages || (i >= currentPage - 1 && i <= currentPage + 1)) {
+                    pagesToDisplay.push(i);
+                }
+            }
+
+            let lastPage = 0;
+            pagesToDisplay.forEach(p => {
+                if (lastPage > 0 && p - lastPage > 1) {
+                    buttonsHtml += `<span class="pagination-ellipsis">...</span>`;
+                }
+                buttonsHtml += `<button class="pagination-btn ${p === currentPage ? 'active' : ''}" onclick="window.changeCadernetaPage(${p})">${p}</button>`;
+                lastPage = p;
+            });
+
+            // Button Next
+            buttonsHtml += `<button class="pagination-btn" ${currentPage === totalPages ? 'disabled' : ''} onclick="window.changeCadernetaPage(${currentPage + 1})">Próxima <i class="fas fa-chevron-right"></i></button>`;
+
+            container.innerHTML = `
+                <div class="pagination-info">Mostrando <strong>${startIndex}</strong> a <strong>${endIndex}</strong> de <strong>${totalItems}</strong> jogadores</div>
+                <div class="pagination-controls">${buttonsHtml}</div>
+            `;
+        }
+
+        window.changeCadernetaPage = function(page) {
+            currentPage = page;
+            renderTable();
+            const tableEl = document.querySelector('.table-container');
+            if (tableEl) tableEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        };
 
         /* Modal Functions */
         function openPlayerModal(player) {
@@ -771,6 +937,19 @@
             e.target.className = `filter-select select-casta ${e.target.value}`;
         });
 
+        document.getElementById('modal-caderneta-active').addEventListener('change', (e) => {
+            if (e.target.checked && activeModalPlayerId) {
+                const typedClube = document.getElementById('modal-clube-input')?.value.trim();
+                const currentPlayer = allPlayers.find(p => p.id === activeModalPlayerId);
+                const targetClub = (typedClube && typedClube !== 'N/A') ? typedClube : (currentPlayer ? currentPlayer.clube : '');
+                const activeCount = getActiveCountForClub(targetClub, activeModalPlayerId);
+                if (activeCount >= 10) {
+                    alert("Equipa Já com 10 cromos");
+                    e.target.checked = false;
+                }
+            }
+        });
+
         document.getElementById('modal-btn-save').addEventListener('click', async () => {
             if (!activeModalPlayerId) return;
 
@@ -786,6 +965,16 @@
             const typedClube = document.getElementById('modal-clube-input')?.value.trim();
             const typedPosicao = document.getElementById('modal-posicao-select')?.value;
             const selectedSeason = document.getElementById('modal-temporada')?.value || currentSeason;
+
+            if (newActive) {
+                const currentPlayer = allPlayers.find(p => p.id === activeModalPlayerId);
+                const targetClub = (typedClube && typedClube !== 'N/A') ? typedClube : (currentPlayer ? currentPlayer.clube : '');
+                const activeCount = getActiveCountForClub(targetClub, activeModalPlayerId);
+                if (activeCount >= 10) {
+                    alert("Equipa Já com 10 cromos");
+                    return;
+                }
+            }
 
             document.getElementById('loading-screen').style.display = 'flex';
 
@@ -974,9 +1163,9 @@
         });
 
         // Set up search and filters
-        document.getElementById('tableSearch').addEventListener('input', renderTable);
-        document.getElementById('filter-clube').addEventListener('change', renderTable);
-        document.getElementById('filter-posicao').addEventListener('change', renderTable);
+        document.getElementById('tableSearch').addEventListener('input', () => { currentPage = 1; renderTable(); });
+        document.getElementById('filter-clube').addEventListener('change', () => { currentPage = 1; renderTable(); });
+        document.getElementById('filter-posicao').addEventListener('change', () => { currentPage = 1; renderTable(); });
 
         // Sorting
         document.querySelectorAll('.excel-table th[data-sort]').forEach(th => {
