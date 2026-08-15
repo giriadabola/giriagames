@@ -97,8 +97,8 @@
                 <input type="text" class="search-input" placeholder="Pesquisar por equipa ou competição..." id="tableSearch">
                 <i class="fas fa-search"></i>
             </div>
-            <select id="filter-ano" class="filter-select">
-                <option value="">Todos os Anos</option>
+            <select id="filter-temporada" class="filter-select">
+                <option value="">Todas as Temporadas</option>
             </select>
             <select id="filter-competicao" class="filter-select">
                 <option value="">Todas as Competições</option>
@@ -262,6 +262,7 @@
     <script type="module">
         import { db } from './js/auth-guard.js';
         import { collection, addDoc, query, where, getDocs, doc, getDoc, updateDoc, deleteDoc, setDoc, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { fetchUniqueSeasons } from './js/player-season-helper.js';
 
         let allGames = [];
         let clubsMap = new Map();
@@ -434,7 +435,7 @@
                     };
                 });
 
-                populateFilters();
+                await populateFilters();
                 renderGamesTable();
 
             } catch (error) {
@@ -443,28 +444,29 @@
             }
         }
 
-        function populateFilters() {
-            const filterAno = document.getElementById('filter-ano');
+        async function populateFilters() {
+            const filterTemporada = document.getElementById('filter-temporada');
             const filterCompeticao = document.getElementById('filter-competicao');
 
-            const currentYearStr = new Date().getFullYear().toString();
+            const seasonsFromDb = await fetchUniqueSeasons(db);
+            const seasonsSet = new Set(seasonsFromDb);
 
-            // Extract unique years from games
-            const years = new Set([currentYearStr]);
             allGames.forEach(g => {
-                if (g.dataJogo && typeof g.dataJogo.getFullYear === 'function') {
-                    years.add(g.dataJogo.getFullYear().toString());
+                if (g.temporada && typeof g.temporada === 'string' && g.temporada.trim() !== '' && g.temporada !== 'N/A') {
+                    seasonsSet.add(g.temporada.trim());
                 }
             });
 
-            // Populate Year filter
-            filterAno.innerHTML = '<option value="">Todos os Anos</option>';
-            Array.from(years).sort().reverse().forEach(yr => {
+            const sortedSeasons = Array.from(seasonsSet).sort((a, b) => b.localeCompare(a));
+
+            // Populate Temporada filter
+            filterTemporada.innerHTML = '<option value="">Todas as Temporadas</option>';
+            sortedSeasons.forEach((s, idx) => {
                 const opt = document.createElement('option');
-                opt.value = yr;
-                opt.textContent = yr;
-                if (yr === currentYearStr) opt.selected = true; // Default year
-                filterAno.appendChild(opt);
+                opt.value = s;
+                opt.textContent = s;
+                if (idx === 0) opt.selected = true; // Default to most recent season
+                filterTemporada.appendChild(opt);
             });
 
             // Populate Competitions filter
@@ -482,14 +484,13 @@
         }
 
         function populateRondasFilter() {
-            const filterAno = document.getElementById('filter-ano').value;
+            const filterTemporada = document.getElementById('filter-temporada').value;
             const filterRonda = document.getElementById('filter-ronda');
             
             const rounds = new Set();
             allGames.forEach(g => {
-                const gameYear = g.dataJogo && typeof g.dataJogo.getFullYear === 'function' ? g.dataJogo.getFullYear().toString() : '';
-                const matchesAno = !filterAno || gameYear === filterAno;
-                if (matchesAno && g.ronda) {
+                const matchesTemporada = !filterTemporada || g.temporada === filterTemporada;
+                if (matchesTemporada && g.ronda) {
                     rounds.add(g.ronda);
                 }
             });
@@ -508,7 +509,7 @@
 
         function renderGamesTable() {
             const queryText = document.getElementById('tableSearch').value.toLowerCase();
-            const filterAno = document.getElementById('filter-ano').value;
+            const filterTemporada = document.getElementById('filter-temporada').value;
             const filterComp = document.getElementById('filter-competicao').value;
             const filterRonda = document.getElementById('filter-ronda').value;
             const tableBody = document.getElementById('games-table-body');
@@ -519,12 +520,11 @@
                                      g.equipaFora.toLowerCase().includes(queryText) || 
                                      g.competicao.toLowerCase().includes(queryText);
                 
-                const gameYear = g.dataJogo && typeof g.dataJogo.getFullYear === 'function' ? g.dataJogo.getFullYear().toString() : '';
-                const matchesAno = !filterAno || gameYear === filterAno;
+                const matchesTemporada = !filterTemporada || g.temporada === filterTemporada;
                 const matchesComp = !filterComp || g.competicaoId === filterComp;
                 const matchesRonda = !filterRonda || g.ronda.toString() === filterRonda;
 
-                return matchesSearch && matchesAno && matchesComp && matchesRonda;
+                return matchesSearch && matchesTemporada && matchesComp && matchesRonda;
             });
 
             if (filtered.length === 0) {
@@ -795,7 +795,7 @@
 
             // Control listeners
             document.getElementById('tableSearch').addEventListener('input', renderGamesTable);
-            document.getElementById('filter-ano').addEventListener('change', () => {
+            document.getElementById('filter-temporada').addEventListener('change', () => {
                 populateRondasFilter();
                 renderGamesTable();
             });
