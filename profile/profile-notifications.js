@@ -16,7 +16,9 @@ let currentSettings = { ...MARKET_NOTIFICATIONS_DEFAULTS };
 let currentDeviceSubscription = null;
 let userSettingsUnsubscribe = null;
 let allUsersAvatarsUnsubscribe = null;
+let profilePanelUnsubscribe = null;
 let occupiedAvatars = {};
+let avatarFuseEnabled = true;
 let areEventsBound = false;
 
 // --- 20 AVATARES DE JOGADORES E ARQUÉTIPOS DE FUTEBOL AUTÊNTICOS ---
@@ -601,6 +603,39 @@ function updateAvatarPreview(url) {
   }
 }
 
+function updateAvatarFuseUI() {
+  const saveBtn = document.getElementById('saveAvatarBtn');
+  const removeBtn = document.getElementById('removeAvatarBtn');
+  const grid = document.getElementById('presetAvatarsGrid');
+  const tabPaneAvatar = document.getElementById('tabPaneAvatar');
+
+  let warningEl = document.getElementById('avatarFuseDisabledMsg');
+
+  if (!avatarFuseEnabled) {
+    if (!warningEl && tabPaneAvatar) {
+      warningEl = document.createElement('div');
+      warningEl.id = 'avatarFuseDisabledMsg';
+      warningEl.className = 'avatar-fuse-disabled-warning';
+      warningEl.innerHTML = '<i class="fas fa-lock"></i> A escolha de avatares está temporariamente desativada pelo administrador.';
+      warningEl.style.cssText = 'background: rgba(231, 76, 60, 0.15); border: 1px solid rgba(231, 76, 60, 0.4); color: #ff6b6b; padding: 10px 14px; border-radius: 10px; font-size: 13px; font-weight: 600; margin-bottom: 14px; text-align: center; display: flex; align-items: center; justify-content: center; gap: 8px;';
+      tabPaneAvatar.prepend(warningEl);
+    } else if (warningEl) {
+      warningEl.style.display = 'flex';
+    }
+
+    if (saveBtn) saveBtn.disabled = true;
+    if (removeBtn) removeBtn.disabled = true;
+    if (grid) grid.style.pointerEvents = 'none';
+  } else {
+    if (warningEl) {
+      warningEl.style.display = 'none';
+    }
+    if (saveBtn) saveBtn.disabled = false;
+    if (removeBtn) removeBtn.disabled = false;
+    if (grid) grid.style.pointerEvents = 'auto';
+  }
+}
+
 function renderPresetAvatars() {
   const grid = document.getElementById('presetAvatarsGrid');
   if (!grid) return;
@@ -617,7 +652,10 @@ function renderPresetAvatars() {
 
     const isOccupiedByOther = occupiedAvatars[preset.url] || occupiedAvatars[preset.id];
 
-    if (isOccupiedByOther) {
+    if (!avatarFuseEnabled) {
+      item.classList.add('disabled-occupied');
+      item.title = 'Seleção de avatares desativada';
+    } else if (isOccupiedByOther) {
       item.classList.add('disabled-occupied');
       item.title = `${preset.name} (Em uso por outro utilizador)`;
 
@@ -660,6 +698,11 @@ function setupAvatarListeners() {
   saveBtn?.addEventListener('click', async () => {
     if (!activeUserId) return;
 
+    if (!avatarFuseEnabled) {
+      setAvatarStatus('A escolha de avatares está desativada pelo administrador.', 'is-error');
+      return;
+    }
+
     if (pendingAvatarUrl && (occupiedAvatars[pendingAvatarUrl] || occupiedAvatars[pendingAvatarUrl])) {
       setAvatarStatus('Este avatar já está a ser utilizado por outro utilizador!', 'is-error');
       return;
@@ -689,6 +732,12 @@ function setupAvatarListeners() {
 
   removeBtn?.addEventListener('click', async () => {
     if (!activeUserId) return;
+
+    if (!avatarFuseEnabled) {
+      setAvatarStatus('A escolha de avatares está desativada pelo administrador.', 'is-error');
+      return;
+    }
+
     removeBtn.disabled = true;
     setAvatarStatus('A remover avatar...', '');
 
@@ -760,6 +809,10 @@ function cleanupListeners() {
     allUsersAvatarsUnsubscribe();
     allUsersAvatarsUnsubscribe = null;
   }
+  if (typeof profilePanelUnsubscribe === 'function') {
+    profilePanelUnsubscribe();
+    profilePanelUnsubscribe = null;
+  }
 }
 
 export async function initProfileNotifications(user) {
@@ -772,6 +825,16 @@ export async function initProfileNotifications(user) {
     currentSettings = { ...MARKET_NOTIFICATIONS_DEFAULTS };
     return;
   }
+
+  // Listener do fusível 'paineis perfil' (campo 'avatar')
+  const profilePanelRef = doc(db, 'paineis', 'paineis perfil');
+  profilePanelUnsubscribe = onSnapshot(profilePanelRef, (snap) => {
+    const data = snap.data();
+    avatarFuseEnabled = data?.avatar !== 'off';
+    updateAvatarFuseUI();
+  }, (error) => {
+    console.error('Erro ao ouvir fusível de avatares:', error);
+  });
 
   // Ouvinte em tempo real da coleção 'users' para identificar avatares já ocupados por outros utilizadores
   const usersCollRef = collection(db, 'users');
