@@ -196,6 +196,7 @@ onAuthStateChanged(auth, async (user) => {
         try {
             showLoader();
             await loadSeasonAndUserGcoins();
+            await applyMenuVisibilitySettings();
             await loadCadernetaPackPricing();
             await loadUserSeasonPredictionCount();
             await loadDatabaseData();
@@ -214,6 +215,20 @@ onAuthStateChanged(auth, async (user) => {
         window.location.href = "index.html";
     }
 });
+
+async function applyMenuVisibilitySettings() {
+    try {
+        const menuSettingsSnap = await getDoc(doc(db, 'paineis', 'paineis menu'));
+        if (menuSettingsSnap.exists()) {
+            const menuSettings = menuSettingsSnap.data();
+            if (typeof window.updateMenuVisibility === 'function') {
+                window.updateMenuVisibility(menuSettings);
+            }
+        }
+    } catch (err) {
+        console.error("Erro ao carregar configurações do menu:", err);
+    }
+}
 
 // Load the current season and GCoins field
 async function loadSeasonAndUserGcoins() {
