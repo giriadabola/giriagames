@@ -201,10 +201,6 @@
                 <option value="Defesa">Defesa</option>
                 <option value="Médio">Médio</option>
                 <option value="Avançado">Avançado</option>
-            </select>
-            <button id="btnSave" class="btn-save" disabled>
-                <i class="fas fa-save"></i> Salvar Alterações (<span id="changes-count">0</span>)
-            </button>
         </div>
 
         <div class="table-container">
@@ -315,14 +311,13 @@
 
     <script type="module">
         import { db } from './js/auth-guard.js';
-        import { collection, getDocs, doc, writeBatch, setDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
-        import { fetchUniqueSeasons, getPlayerSeasonData, hasPlayerDataForSeason, buildPlayerSeasonUpdatePayload } from './js/player-season-helper.js';
+        import { collection, getDocs, doc, setDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        import { fetchUniqueSeasons, getPlayerSeasonData, hasPlayerDataForSeason } from './js/player-season-helper.js';
 
         let allRawPlayers = [];
         let allPlayers = [];
         let clubsMap = new Map();
         let clubsByNameMap = new Map();
-        let changedPlayers = new Map();
         let currentSortColumn = 'nome';
         let currentSortDirection = 'asc';
         let seasonsList = [];
@@ -349,6 +344,60 @@
             }
 
             return {};
+        }
+
+        async function savePlayerInlineCaderneta(playerId, newActive, newCasta) {
+            const rawItem = allRawPlayers.find(item => item.id === playerId);
+            const player = allPlayers.find(p => p.id === playerId);
+            if (!rawItem || !player) return;
+
+            try {
+                const playerRef = doc(db, 'jogadores', playerId);
+                const existingSeasonData = (rawItem.rawData[currentSeason] && typeof rawItem.rawData[currentSeason] === 'object')
+                    ? { ...rawItem.rawData[currentSeason] }
+                    : {};
+
+                const newMiniGames = normalizeMiniGamesForSave(existingSeasonData.miniGames || {});
+                newMiniGames.caderneta = {
+                    estado: newActive,
+                    casta: newCasta
+                };
+
+                const seasonUpdate = {
+                    miniGames: newMiniGames,
+                    ultimaAtualizacao: new Date().toISOString()
+                };
+
+                const updatePayload = {
+                    [currentSeason]: {
+                        ...existingSeasonData,
+                        ...seasonUpdate
+                    }
+                };
+
+                await setDoc(playerRef, updatePayload, { merge: true });
+
+                if (!rawItem.rawData[currentSeason] || typeof rawItem.rawData[currentSeason] !== 'object') {
+                    rawItem.rawData[currentSeason] = {};
+                }
+                rawItem.rawData[currentSeason].miniGames = newMiniGames;
+                rawItem.rawData[currentSeason].ultimaAtualizacao = seasonUpdate.ultimaAtualizacao;
+
+                player.cadernetaActive = newActive;
+                player.cadernetaCasta = newCasta;
+
+                const toast = document.getElementById('toast');
+                if (toast) {
+                    toast.textContent = "Alterações gravadas com sucesso!";
+                    toast.style.display = 'block';
+                    setTimeout(() => { toast.style.display = 'none'; }, 2000);
+                }
+
+            } catch (err) {
+                console.error("Erro ao gravar cromo do jogador:", err);
+                alert("Erro ao gravar cromo do jogador.");
+                renderTable();
+            }
         }
 
         const DEFAULT_AVATAR_SVG = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 24 24' fill='%238892b0'><path d='M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z'/></svg>";
@@ -495,8 +544,6 @@
                     filterTemporada.addEventListener('change', (e) => {
                         currentSeason = e.target.value;
                         if (modalTemporada) modalTemporada.value = currentSeason;
-                        changedPlayers.clear();
-                        updateSaveButtonState();
                         processPlayersAndRender();
                     });
                 }
@@ -640,11 +687,7 @@
                 if (excludePlayerId && p.id === excludePlayerId) return;
                 if (!p.clube || p.clube.trim().toLowerCase() !== normClub) return;
 
-                const isActive = changedPlayers.has(p.id) 
-                    ? changedPlayers.get(p.id).cadernetaActive 
-                    : p.cadernetaActive;
-
-                if (isActive) {
+                if (p.cadernetaActive) {
                     count++;
                 }
             });
@@ -706,9 +749,8 @@
                         ? `../assets/faces/face_${p.codigoUrl}.${ext}` 
                         : DEFAULT_AVATAR_SVG;
 
-                    // Rarity style
-                    const isChecked = changedPlayers.has(p.id) ? changedPlayers.get(p.id).cadernetaActive : p.cadernetaActive;
-                    const activeCasta = changedPlayers.has(p.id) ? changedPlayers.get(p.id).cadernetaCasta : p.cadernetaCasta;
+                    const isChecked = p.cadernetaActive;
+                    const activeCasta = p.cadernetaCasta;
 
                     tr.innerHTML = `
                         <td>
@@ -744,9 +786,10 @@
                         openPlayerModal(p);
                     });
 
-                    // Add Event Listeners for inline changes
-                    tr.querySelector('.toggle-caderneta-active').addEventListener('change', (e) => {
-                        if (e.target.checked) {
+                    // Add Event Listeners for inline changes with auto-save
+                    tr.querySelector('.toggle-caderneta-active').addEventListener('change', async (e) => {
+                        const isChecked = e.target.checked;
+                        if (isChecked) {
                             const activeCount = getActiveCountForClub(p.clube, p.id);
                             if (activeCount >= 10) {
                                 alert("Equipa Já com 10 cromos");
@@ -754,13 +797,13 @@
                                 return;
                             }
                         }
-                        updatePlayerChange(p.id, 'cadernetaActive', e.target.checked);
+                        await savePlayerInlineCaderneta(p.id, isChecked, p.cadernetaCasta);
                     });
 
-                    tr.querySelector('.select-casta').addEventListener('change', (e) => {
+                    tr.querySelector('.select-casta').addEventListener('change', async (e) => {
                         const select = e.target;
                         select.className = `select-casta ${select.value}`;
-                        updatePlayerChange(p.id, 'cadernetaCasta', select.value);
+                        await savePlayerInlineCaderneta(p.id, p.cadernetaActive, select.value);
                     });
 
                     tableBody.appendChild(tr);
@@ -843,11 +886,6 @@
                 } else {
                     isChecked = Boolean(miniGames.caderneta);
                 }
-            }
-
-            if (targetSeason === currentSeason && changedPlayers.has(player.id)) {
-                isChecked = changedPlayers.get(player.id).cadernetaActive;
-                activeCasta = changedPlayers.get(player.id).cadernetaCasta;
             }
 
             let ext = 'webp';
@@ -937,19 +975,6 @@
             e.target.className = `filter-select select-casta ${e.target.value}`;
         });
 
-        document.getElementById('modal-caderneta-active').addEventListener('change', (e) => {
-            if (e.target.checked && activeModalPlayerId) {
-                const typedClube = document.getElementById('modal-clube-input')?.value.trim();
-                const currentPlayer = allPlayers.find(p => p.id === activeModalPlayerId);
-                const targetClub = (typedClube && typedClube !== 'N/A') ? typedClube : (currentPlayer ? currentPlayer.clube : '');
-                const activeCount = getActiveCountForClub(targetClub, activeModalPlayerId);
-                if (activeCount >= 10) {
-                    alert("Equipa Já com 10 cromos");
-                    e.target.checked = false;
-                }
-            }
-        });
-
         document.getElementById('modal-btn-save').addEventListener('click', async () => {
             if (!activeModalPlayerId) return;
 
@@ -1027,136 +1052,21 @@
                     ...seasonUpdate
                 };
 
-                changedPlayers.delete(rawItem.id);
-                updateSaveButtonState();
                 closePlayerModal();
 
                 // Toast
                 const toast = document.getElementById('toast');
-                toast.style.display = 'block';
-                setTimeout(() => { toast.style.display = 'none'; }, 3000);
+                if (toast) {
+                    toast.textContent = "Alterações gravadas com sucesso!";
+                    toast.style.display = 'block';
+                    setTimeout(() => { toast.style.display = 'none'; }, 2000);
+                }
 
                 processPlayersAndRender();
 
             } catch (err) {
                 console.error("Erro ao salvar jogador no modal:", err);
                 alert("Erro ao salvar alterações do jogador.");
-            } finally {
-                document.getElementById('loading-screen').style.display = 'none';
-            }
-        });
-
-        function updatePlayerChange(playerId, field, value) {
-            const player = allPlayers.find(p => p.id === playerId);
-            if (!player) return;
-
-            let change = changedPlayers.get(playerId) || {
-                cadernetaActive: player.cadernetaActive,
-                cadernetaCasta: player.cadernetaCasta
-            };
-
-            change[field] = value;
-
-            // If it is identical to database data, remove the change tracking
-            if (change.cadernetaActive === player.cadernetaActive && change.cadernetaCasta === player.cadernetaCasta) {
-                changedPlayers.delete(playerId);
-            } else {
-                changedPlayers.set(playerId, change);
-            }
-
-            updateSaveButtonState();
-        }
-
-        function updateSaveButtonState() {
-            const btnSave = document.getElementById('btnSave');
-            const countSpan = document.getElementById('changes-count');
-            countSpan.textContent = changedPlayers.size;
-            
-            if (changedPlayers.size > 0) {
-                btnSave.removeAttribute('disabled');
-            } else {
-                btnSave.setAttribute('disabled', 'true');
-            }
-        }
-
-        // Save batch
-        document.getElementById('btnSave').addEventListener('click', async () => {
-            const btnSave = document.getElementById('btnSave');
-            btnSave.setAttribute('disabled', 'true');
-            document.getElementById('loading-screen').style.display = 'flex';
-
-            const batch = writeBatch(db);
-
-            try {
-                for (const [playerId, change] of changedPlayers.entries()) {
-                    const rawItem = allRawPlayers.find(item => item.id === playerId);
-                    if (!rawItem) continue;
-
-                    const playerRef = doc(db, 'jogadores', playerId);
-                    const existingSeasonData = (rawItem.rawData[currentSeason] && typeof rawItem.rawData[currentSeason] === 'object')
-                        ? { ...rawItem.rawData[currentSeason] }
-                        : {};
-
-                    const newMiniGames = normalizeMiniGamesForSave(existingSeasonData.miniGames || {});
-                    newMiniGames.caderneta = {
-                        estado: change.cadernetaActive,
-                        casta: change.cadernetaCasta
-                    };
-
-                    const seasonUpdate = {
-                        miniGames: newMiniGames,
-                        ultimaAtualizacao: new Date().toISOString()
-                    };
-
-                    const updatePayload = {
-                        [currentSeason]: {
-                            ...existingSeasonData,
-                            ...seasonUpdate
-                        }
-                    };
-
-                    batch.set(playerRef, updatePayload, { merge: true });
-                }
-
-                await batch.commit();
-
-                // Apply changes locally
-                for (const [playerId, change] of changedPlayers.entries()) {
-                    const rawItem = allRawPlayers.find(item => item.id === playerId);
-                    const player = allPlayers.find(p => p.id === playerId);
-
-                    if (rawItem) {
-                        if (!rawItem.rawData[currentSeason] || typeof rawItem.rawData[currentSeason] !== 'object') {
-                            rawItem.rawData[currentSeason] = {};
-                        }
-                        const newMiniGames = normalizeMiniGamesForSave(rawItem.rawData[currentSeason].miniGames || {});
-                        newMiniGames.caderneta = {
-                            estado: change.cadernetaActive,
-                            casta: change.cadernetaCasta
-                        };
-                        rawItem.rawData[currentSeason].miniGames = newMiniGames;
-                        rawItem.rawData[currentSeason].ultimaAtualizacao = new Date().toISOString();
-                    }
-
-                    if (player) {
-                        player.cadernetaActive = change.cadernetaActive;
-                        player.cadernetaCasta = change.cadernetaCasta;
-                    }
-                }
-
-                changedPlayers.clear();
-                updateSaveButtonState();
-                
-                // Show Success Toast
-                const toast = document.getElementById('toast');
-                toast.style.display = 'block';
-                setTimeout(() => { toast.style.display = 'none'; }, 3000);
-
-                renderTable();
-
-            } catch (err) {
-                console.error("Erro ao gravar alterações:", err);
-                alert("Erro ao gravar alterações. Verifique o console.");
             } finally {
                 document.getElementById('loading-screen').style.display = 'none';
             }

@@ -120,6 +120,70 @@
         .table-switch input:checked + .table-slider:before {
             transform: translateX(22px);
         }
+
+        /* Pagination Container */
+        .pagination-wrapper {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+            margin-top: 20px;
+            margin-bottom: 30px;
+            padding: 14px 20px;
+            background-color: #111622;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+        }
+        .pagination-info {
+            font-size: 14px;
+            color: #8892b0;
+        }
+        .pagination-info strong {
+            color: #ffffff;
+        }
+        .pagination-controls {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .pagination-btn {
+            background-color: #161c28;
+            color: #ffffff;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 7px 14px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            user-select: none;
+        }
+        .pagination-btn:hover:not(:disabled) {
+            background-color: #2176ff;
+            border-color: #2176ff;
+            color: #ffffff;
+            transform: translateY(-1px);
+        }
+        .pagination-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .pagination-btn.active {
+            background-color: #2176ff;
+            border-color: #2176ff;
+            color: #ffffff;
+        }
+        .pagination-ellipsis {
+            color: #8892b0;
+            padding: 0 4px;
+            font-size: 14px;
+        }
     </style>
 
     <link rel="stylesheet" href="css/admin-global.css">
@@ -162,8 +226,9 @@
                 </tbody>
             </table>
         </div>
-        <div style="text-align: center; margin-bottom: 30px;">
-            <button id="btn-load-more" class="btn secondary" style="display: none; margin: 0 auto; padding: 10px 30px; font-weight: bold;">Carregar mais</button>
+
+        <div class="pagination-wrapper" id="pagination-controls">
+            <!-- Dinâmico -->
         </div>
     </div>
 
@@ -257,7 +322,8 @@
         let originalCompeticaoId = null;
         let currentSortColumn = 'nome';
         let currentSortDirection = 'asc';
-        let displayLimit = 200;
+        let currentPage = 1;
+        const ITEMS_PER_PAGE = 50;
 
         const fallbackImg = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%238892b0"><path d="M12 2L2 5v6c0 5.52 4.48 10 10 10s10-4.48 10-10V5l-10-3zm0 18c-4.41 0-8-3.59-8-8V6.3l8-2.4 8 2.4V12c0 4.41-3.59 8-8 8z"/></svg>`;
 
@@ -302,6 +368,7 @@
                         ativo: data.ativo !== false
                     };
                 });
+                currentPage = 1;
                 populateFilters();
                 renderClubsTable();
             } catch (error) {
@@ -357,12 +424,6 @@
                 return matchesSearch && matchesPais && matchesCompeticao;
             });
 
-            if (filtered.length === 0) {
-                tableBody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #8892b0; padding: 20px;">Nenhum clube encontrado.</td></tr>`;
-                document.getElementById('btn-load-more').style.display = 'none';
-                return;
-            }
-
             filtered.sort((a, b) => {
                 let valA = a[currentSortColumn] || '';
                 let valB = b[currentSortColumn] || '';
@@ -376,61 +437,119 @@
                 return currentSortDirection === 'asc' ? comparison : -comparison;
             });
 
-            const displayed = filtered.slice(0, displayLimit);
-            displayed.forEach(club => {
-                const tr = document.createElement('tr');
-                const localImg = club.imagem ? (club.imagem.startsWith('http') || club.imagem.startsWith('data:') ? club.imagem : '../' + club.imagem) : fallbackImg;
-                const isChecked = club.ativo !== false ? 'checked' : '';
-                
-                const codeMatch = club.imagem ? club.imagem.match(/club_(.+)\.(webp|png|jpe?g|svg)/i) : null;
-                const clubCode = codeMatch ? codeMatch[1] : club.codigoUrl;
+            const totalItems = filtered.length;
+            const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE) || 1;
 
-                tr.innerHTML = `
-                    <td>
-                        <img src="${localImg}" alt="${club.nome}" class="club-row-img" onerror="resolveClubImage(this, '${club.pais}', '${clubCode}')">
-                        <span class="club-row-name">${club.nome}</span>
-                    </td>
-                    <td>${club.nome_en || '-'}</td>
-                    <td>${club.pais}</td>
-                    <td>${club.competicao}</td>
-                    <td>${club.tipo}</td>
-                    <td>${club.genero}</td>
-                    <td style="text-align: center;">
-                        <label class="table-switch">
-                            <input type="checkbox" class="ativo-toggle" ${isChecked}>
-                            <span class="table-slider"></span>
-                        </label>
-                    </td>
-                `;
+            if (currentPage > totalPages) currentPage = totalPages;
+            if (currentPage < 1) currentPage = 1;
 
-                const toggleSwitch = tr.querySelector('.table-switch');
-                toggleSwitch.addEventListener('click', (e) => {
-                    e.stopPropagation();
+            const startIndex = totalItems > 0 ? (currentPage - 1) * ITEMS_PER_PAGE : 0;
+            const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, totalItems);
+            const pageItems = filtered.slice(startIndex, endIndex);
+
+            if (totalItems === 0) {
+                tableBody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: #8892b0; padding: 20px;">Nenhum clube encontrado.</td></tr>`;
+            } else {
+                pageItems.forEach(club => {
+                    const tr = document.createElement('tr');
+                    const localImg = club.imagem ? (club.imagem.startsWith('http') || club.imagem.startsWith('data:') ? club.imagem : '../' + club.imagem) : fallbackImg;
+                    const isChecked = club.ativo !== false ? 'checked' : '';
+                    
+                    const codeMatch = club.imagem ? club.imagem.match(/club_(.+)\.(webp|png|jpe?g|svg)/i) : null;
+                    const clubCode = codeMatch ? codeMatch[1] : club.codigoUrl;
+
+                    tr.innerHTML = `
+                        <td>
+                            <img src="${localImg}" alt="${club.nome}" class="club-row-img" onerror="resolveClubImage(this, '${club.pais}', '${clubCode}')">
+                            <span class="club-row-name">${club.nome}</span>
+                        </td>
+                        <td>${club.nome_en || '-'}</td>
+                        <td>${club.pais}</td>
+                        <td>${club.competicao}</td>
+                        <td>${club.tipo}</td>
+                        <td>${club.genero}</td>
+                        <td style="text-align: center;">
+                            <label class="table-switch">
+                                <input type="checkbox" class="ativo-toggle" ${isChecked}>
+                                <span class="table-slider"></span>
+                            </label>
+                        </td>
+                    `;
+
+                    const toggleSwitch = tr.querySelector('.table-switch');
+                    toggleSwitch.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                    });
+                    const toggleInput = tr.querySelector('.ativo-toggle');
+                    toggleInput.addEventListener('change', async (e) => {
+                        const activeState = e.target.checked;
+                        try {
+                            const clubRef = doc(db, 'clubes', club.id);
+                            await updateDoc(clubRef, { ativo: activeState });
+                            club.ativo = activeState; // Update local cache
+                        } catch (err) {
+                            console.error("Erro ao atualizar o estado ativo do clube:", err);
+                            e.target.checked = !activeState; // Revert
+                        }
+                    });
+
+                    tr.addEventListener('click', () => openEditModal(club));
+                    tableBody.appendChild(tr);
                 });
-                const toggleInput = tr.querySelector('.ativo-toggle');
-                toggleInput.addEventListener('change', async (e) => {
-                    const activeState = e.target.checked;
-                    try {
-                        const clubRef = doc(db, 'clubes', club.id);
-                        await updateDoc(clubRef, { ativo: activeState });
-                        club.ativo = activeState; // Update local cache
-                    } catch (err) {
-                        console.error("Erro ao atualizar o estado ativo do clube:", err);
-                        e.target.checked = !activeState; // Revert
-                    }
-                });
+            }
 
-                tr.addEventListener('click', () => openEditModal(club));
-                tableBody.appendChild(tr);
+            renderPagination(totalItems, totalPages);
+        }
+
+        function renderPagination(totalItems, totalPages) {
+            const container = document.getElementById('pagination-controls');
+            if (!container) return;
+
+            if (totalItems === 0) {
+                container.innerHTML = `<div class="pagination-info">Sem resultados</div>`;
+                return;
+            }
+
+            const startIndex = (currentPage - 1) * ITEMS_PER_PAGE + 1;
+            const endIndex = Math.min(currentPage * ITEMS_PER_PAGE, totalItems);
+
+            let buttonsHtml = '';
+            
+            // Button Previous
+            buttonsHtml += `<button class="pagination-btn" ${currentPage === 1 ? 'disabled' : ''} onclick="window.changeClubPage(${currentPage - 1})"><i class="fas fa-chevron-left"></i> Anterior</button>`;
+
+            // Page numbers
+            let pagesToDisplay = [];
+            for (let i = 1; i <= totalPages; i++) {
+                if (i === 1 || i === totalPages || (i >= currentPage - 1 && i <= currentPage + 1)) {
+                    pagesToDisplay.push(i);
+                }
+            }
+
+            let lastPage = 0;
+            pagesToDisplay.forEach(p => {
+                if (lastPage > 0 && p - lastPage > 1) {
+                    buttonsHtml += `<span class="pagination-ellipsis">...</span>`;
+                }
+                buttonsHtml += `<button class="pagination-btn ${p === currentPage ? 'active' : ''}" onclick="window.changeClubPage(${p})">${p}</button>`;
+                lastPage = p;
             });
 
-            const loadMoreBtn = document.getElementById('btn-load-more');
-            if (filtered.length > displayLimit) {
-                loadMoreBtn.style.display = 'block';
-            } else {
-                loadMoreBtn.style.display = 'none';
-            }
+            // Button Next
+            buttonsHtml += `<button class="pagination-btn" ${currentPage === totalPages ? 'disabled' : ''} onclick="window.changeClubPage(${currentPage + 1})">Próxima <i class="fas fa-chevron-right"></i></button>`;
+
+            container.innerHTML = `
+                <div class="pagination-info">Mostrando <strong>${startIndex}</strong> a <strong>${endIndex}</strong> de <strong>${totalItems}</strong> clubes</div>
+                <div class="pagination-controls">${buttonsHtml}</div>
+            `;
         }
+
+        window.changeClubPage = function(page) {
+            currentPage = page;
+            renderClubsTable();
+            const tableEl = document.querySelector('.table-container');
+            if (tableEl) tableEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        };
 
         function openEditModal(club) {
             selectedClubId = club.id;
@@ -495,19 +614,19 @@
 
             const tableSearch = document.getElementById('tableSearch');
             tableSearch.addEventListener('input', () => {
-                displayLimit = 200;
+                currentPage = 1;
                 renderClubsTable();
             });
 
             const filterPaisSelect = document.getElementById('filter-pais');
             filterPaisSelect.addEventListener('change', () => {
-                displayLimit = 200;
+                currentPage = 1;
                 renderClubsTable();
             });
 
             const filterCompeticaoSelect = document.getElementById('filter-competicao');
             filterCompeticaoSelect.addEventListener('change', () => {
-                displayLimit = 200;
+                currentPage = 1;
                 renderClubsTable();
             });
 
@@ -529,16 +648,8 @@
                     const icon = th.querySelector('i');
                     icon.className = currentSortDirection === 'asc' ? 'fas fa-sort-up' : 'fas fa-sort-down';
 
-                    displayLimit = 200;
                     renderClubsTable();
                 });
-            });
-
-            // Button load more listener
-            const loadMoreBtn = document.getElementById('btn-load-more');
-            loadMoreBtn.addEventListener('click', () => {
-                displayLimit += 200;
-                renderClubsTable();
             });
 
             // Modal elements
