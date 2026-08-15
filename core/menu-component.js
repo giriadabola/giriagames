@@ -24,7 +24,18 @@ document.addEventListener("DOMContentLoaded", () => {
                     <span class="pitch-icon__circle"></span>
                 </span>
             </a>
-            <a href="empire.html" class="menu-item" data-menu-key="empire"><i class="fas fa-landmark empire-icon"></i></a>
+            <a href="manager.html" class="menu-item" data-menu-key="empire" aria-label="Manager">
+                <span class="stadium-icon empire-icon" aria-hidden="true">
+                    <svg viewBox="0 0 100 90" fill="currentColor">
+                        <path d="M 21 15 L 21 34 M 21 15 L 38 21 L 21 27" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="currentColor"/>
+                        <path d="M 48 9 L 48 28 M 48 9 L 65 15 L 48 21" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="currentColor"/>
+                        <path d="M 75 15 L 75 34 M 75 15 L 92 21 L 75 27" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="currentColor"/>
+                        <path fill-rule="evenodd" d="M 10 47 C 10 30, 90 30, 90 47 L 90 64 C 90 83, 10 83, 10 64 Z M 21 47 C 21 41, 79 41, 79 47 C 79 53, 21 53, 21 47 Z M 40 84 L 40 67 C 40 60, 60 60, 60 67 L 60 84 Z" fill="currentColor"/>
+                        <line x1="33" y1="49" x2="23" y2="38" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
+                        <line x1="67" y1="49" x2="77" y2="38" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
+                    </svg>
+                </span>
+            </a>
             <a href="rankings.html" class="menu-item" data-menu-key="rankings"><i class="fas fa-list"></i></a>
             <a href="profile.html" class="menu-item" data-menu-key="profile">
                 <i class="fas fa-user"></i>
@@ -133,13 +144,28 @@ document.addEventListener("DOMContentLoaded", () => {
             border-radius: 50%;
             transform: translate(-50%, -50%);
         }
+        .stadium-icon,
         .empire-icon {
-            font-size: 42px; color: #2176ff; transform: translateY(-3px);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 26px;
+            margin-bottom: 4px;
+            color: #2176ff;
+            transform: translateY(-3px);
             filter: drop-shadow(0 0 8px rgba(33, 118, 255, 0.4));
             transition: all 0.3s ease;
         }
-        .empire-icon:hover {
-            color: #0056d6; transform: translateY(-8px);
+        .stadium-icon svg {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        .stadium-icon:hover, .menu-item.active .stadium-icon,
+        .empire-icon:hover, .menu-item.active .empire-icon {
+            color: #0056d6;
+            transform: translateY(-8px);
             filter: drop-shadow(0 0 12px rgba(33, 118, 255, 0.6));
         }
 
@@ -219,6 +245,8 @@ function setActiveMenuItem() {
         'myteam.html': 'team',
         'empire': 'empire',
         'empire.html': 'empire',
+        'manager': 'empire',
+        'manager.html': 'empire',
         'rankings': 'rankings',
         'rankings.html': 'rankings',
         'profile': 'profile',

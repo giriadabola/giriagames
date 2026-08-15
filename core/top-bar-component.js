@@ -276,7 +276,7 @@ document.addEventListener("DOMContentLoaded", () => {
             </a>
 
             ${isProfilePage ? `
-            <button class="top-menu-btn" id="top-notifications-btn" title="Notificações">
+            <button class="top-menu-btn" id="top-notifications-btn" title="Definições">
                 <i class="fas fa-cog"></i>
             </button>
             ` : ''}
