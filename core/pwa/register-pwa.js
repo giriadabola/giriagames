@@ -9,7 +9,7 @@ function registerPwaServiceWorker() {
     navigator.serviceWorker.register(PWA_SERVICE_WORKER_URL, {
       scope: '/',
       updateViaCache: 'none'
-    }).then((registration) => registration.update()).catch((error) => {
+    }).catch((error) => {
       console.error('PWA service worker registration failed:', error);
     });
   });
