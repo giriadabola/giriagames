@@ -335,7 +335,6 @@ async function getServiceWorkerRegistration() {
     updateViaCache: 'none'
   });
 
-  await registration.update().catch(() => undefined);
   return navigator.serviceWorker.ready;
 }
 

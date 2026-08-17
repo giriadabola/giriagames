@@ -91,6 +91,27 @@ async function staleWhileRevalidate(request) {
   }
 }
 
+async function cacheFirst(request) {
+  const cache = await caches.open(APP_SHELL_CACHE);
+  const cachedResponse = await cache.match(request);
+
+  if (cachedResponse) {
+    return cachedResponse;
+  }
+
+  try {
+    const response = await fetch(request);
+
+    if (response.ok) {
+      await cache.put(request, response.clone());
+    }
+
+    return response;
+  } catch (error) {
+    return Response.error();
+  }
+}
+
 function refreshCacheInBackground(promise) {
   promise.catch(() => Promise.resolve());
 }
@@ -165,7 +186,12 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  if (['script', 'style', 'image'].includes(event.request.destination)) {
+  if (event.request.destination === 'image') {
+    event.respondWith(cacheFirst(event.request));
+    return;
+  }
+
+  if (['script', 'style'].includes(event.request.destination)) {
     event.respondWith(staleWhileRevalidate(event.request));
     return;
   }
