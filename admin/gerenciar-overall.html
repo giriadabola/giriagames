@@ -1,0 +1,1587 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerenciar Overall - G EMPIRE</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <link rel="stylesheet" href="css/menu-admin.css">
+    <script type="module" src="js/auth-guard.js"></script>
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { min-height: 100vh; background-color: #090c10; font-family: 'Poppins', Arial, sans-serif; color: #f0f2f5; }
+        
+        .content { padding: 110px 20px 40px; max-width: 1200px; margin: 0 auto; }
+        h1 { color: #ffffff; text-align: center; margin-bottom: 24px; font-weight: 700; font-size: 28px; letter-spacing: 0.5px; }
+
+        /* Controls / Search Bar */
+        .controls-row { display: flex; gap: 16px; margin-bottom: 24px; align-items: center; flex-wrap: wrap; }
+        .search-wrapper { position: relative; width: 320px; }
+        .search-wrapper i { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); color: #8892b0; }
+        .search-input { width: 100%; padding: 12px 42px 12px 16px; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; font-size: 15px; outline: none; background-color: #111622; color: #ffffff; transition: all 0.3s ease; }
+        .search-input:focus { border-color: rgba(33, 118, 255, 0.5); box-shadow: 0 0 10px rgba(33, 118, 255, 0.15); }
+        .table-filter-select { padding: 12px 16px; border-radius: 8px; background-color: #111622; border: 1px solid rgba(255, 255, 255, 0.08); color: #ffffff; font-size: 15px; outline: none; transition: all 0.3s ease; cursor: pointer; min-width: 180px; }
+        .table-filter-select:focus { border-color: rgba(33, 118, 255, 0.5); }
+
+        /* Excel-like Table Container */
+        .table-container { background-color: #111622; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.06); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45); overflow-x: auto; margin-bottom: 30px; }
+        .excel-table { width: 100%; border-collapse: collapse; text-align: left; min-width: 800px; }
+        .excel-table th, .excel-table td { padding: 12px 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.04); font-size: 14px; }
+        .excel-table th { background-color: #161c28; color: #8892b0; font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px; border-bottom: 2px solid rgba(255, 255, 255, 0.08); user-select: none; }
+        .excel-table th i { margin-left: 6px; font-size: 10px; transition: color 0.2s; }
+        .excel-table tr { cursor: pointer; transition: background-color 0.2s ease; }
+        .excel-table tr:hover { background-color: rgba(33, 118, 255, 0.08); }
+        .excel-table tr:last-child td { border-bottom: none; }
+        
+        .player-row-img { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 1px solid rgba(255, 255, 255, 0.1); margin-right: 8px; vertical-align: middle; }
+        .player-row-name { font-weight: 600; color: #ffffff; display: inline-block; vertical-align: middle; }
+        .pos-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; }
+        .pos-badge.guarda-redes { background-color: rgba(46, 204, 113, 0.15); color: #2ecc71; border: 1px solid rgba(46, 204, 113, 0.2); }
+        .pos-badge.defesa { background-color: rgba(52, 152, 219, 0.15); color: #3498db; border: 1px solid rgba(52, 152, 219, 0.2); }
+        .pos-badge.medio { background-color: rgba(241, 196, 15, 0.15); color: #f1c40f; border: 1px solid rgba(241, 196, 15, 0.2); }
+        .pos-badge.avancado { background-color: rgba(231, 76, 60, 0.15); color: #e74c3c; border: 1px solid rgba(231, 76, 60, 0.2); }
+
+        /* Main Modal Overlay */
+        .overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.75); z-index: 1000; backdrop-filter: blur(4px); justify-content: center; align-items: center; }
+        .overlay.active { display: flex; }
+        .modal-content { background: #111622; width: 90%; max-width: 700px; border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 15px 45px rgba(0,0,0,0.6); display: flex; flex-direction: column; max-height: 90vh; animation: zoomIn 0.3s ease; }
+        @keyframes zoomIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        
+        .modal-header { padding: 20px; border-bottom: 1px solid rgba(255,255,255,0.06); display: flex; justify-content: space-between; align-items: center; }
+        .modal-player-info { display: flex; align-items: center; gap: 12px; }
+        .modal-player-img { width: 50px; height: 50px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255, 255, 255, 0.1); }
+        .modal-player-details h3 { font-size: 18px; color: #ffffff; font-weight: bold; }
+        .modal-player-details p { font-size: 13px; color: #8892b0; }
+        
+        .modal-controls { display: flex; align-items: center; gap: 12px; }
+        .season-select { padding: 8px 12px; border-radius: 8px; background-color: #161c28; border: 1px solid rgba(255, 255, 255, 0.08); color: #ffffff; font-size: 14px; font-weight: 600; outline: none; }
+        .icon-btn { background: #161c28; border: 1px solid rgba(255, 255, 255, 0.08); color: #ffffff; width: 38px; height: 38px; border-radius: 8px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 16px; transition: all 0.2s ease; }
+        .icon-btn:hover { background-color: #1d2639; color: #2176ff; border-color: rgba(33, 118, 255, 0.3); }
+
+        .modal-body { padding: 20px; overflow-y: auto; flex-grow: 1; }
+        
+        /* Coefficients Interactive Layout */
+        .coefs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+        .coef-box { background-color: #161c28; border-radius: 8px; padding: 12px; border: 1px solid rgba(255, 255, 255, 0.04); display: flex; justify-content: space-between; align-items: center; transition: all 0.2s ease; opacity: 0.55; }
+        
+        /* Highlight specific position coefficients */
+        .coef-box.active { opacity: 1; border-color: rgba(255, 255, 255, 0.12); box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15); }
+        .coef-box.active.guarda-redes-highlight { border-left: 4px solid #2ecc71; background-color: rgba(46, 204, 113, 0.03); }
+        .coef-box.active.defesa-highlight { border-left: 4px solid #3498db; background-color: rgba(52, 152, 219, 0.03); }
+        .coef-box.active.medio-highlight { border-left: 4px solid #f1c40f; background-color: rgba(241, 196, 15, 0.03); }
+        .coef-box.active.avancado-highlight { border-left: 4px solid #e74c3c; background-color: rgba(231, 76, 60, 0.03); }
+        
+        .coef-name { font-size: 13px; color: #ffffff; font-weight: 500; }
+        .coef-values { display: flex; gap: 8px; align-items: center; }
+        .coef-factor { font-size: 11px; background-color: #111622; color: #8892b0; padding: 2px 6px; border-radius: 4px; font-weight: bold; border: 1px solid rgba(255,255,255,0.03); }
+        .coef-stat { font-size: 14px; font-weight: 700; color: #2176ff; }
+        
+        .totals-summary { background-color: #161c28; border-radius: 8px; padding: 16px; border: 1px solid rgba(255, 255, 255, 0.06); display: flex; justify-content: space-around; text-align: center; margin-bottom: 20px; }
+        .summary-item h4 { font-size: 11px; color: #8892b0; text-transform: uppercase; margin-bottom: 4px; letter-spacing: 0.5px; }
+        .summary-item p { font-size: 22px; font-weight: bold; color: #ffffff; }
+
+        .modal-footer { padding: 16px 20px; border-top: 1px solid rgba(255,255,255,0.06); display: flex; justify-content: flex-end; gap: 12px; }
+        .btn { border: none; padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s ease; text-transform: uppercase; letter-spacing: 0.5px; }
+        .btn.secondary { background-color: #161c28; color: #8892b0; border: 1px solid rgba(255, 255, 255, 0.08); }
+        .btn.secondary:hover { background-color: #1d2639; color: #ffffff; }
+        .btn.primary { background-color: #2176ff; color: #ffffff; box-shadow: 0 4px 15px rgba(33, 118, 255, 0.25); }
+        .btn.primary:hover { background-color: #1a5cc4; transform: translateY(-1px); box-shadow: 0 6px 20px rgba(33, 118, 255, 0.4); }
+
+        /* Sub-modal Overlay */
+        .sub-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.8); z-index: 1100; backdrop-filter: blur(4px); justify-content: center; align-items: center; }
+        .sub-overlay.active { display: flex; }
+        .sub-modal-content { background: #111622; width: 90%; max-width: 500px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 15px 35px rgba(0,0,0,0.5); padding: 24px; animation: zoomIn 0.25s ease; }
+        .sub-modal-content h3 { font-size: 18px; color: #ffffff; margin-bottom: 16px; font-weight: bold; }
+        .stats-textarea { width: 100%; height: 200px; padding: 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.08); background-color: #161c28; color: #ffffff; outline: none; font-family: monospace; font-size: 13px; line-height: 1.4; resize: none; margin-bottom: 20px; }
+        .stats-textarea:focus { border-color: rgba(33, 118, 255, 0.5); }
+        .sub-modal-buttons { display: flex; justify-content: flex-end; gap: 12px; }
+
+        /* Loading Spinner */
+        .loading-screen-global { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #090c10; display: flex; justify-content: center; align-items: center; z-index: 2000; }
+        .loading-spinner { border: 6px solid #1a1f2c; border-top: 6px solid #2176ff; border-radius: 50%; width: 80px; height: 80px; animation: spin 1.2s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* === CONFIGURAÇÕES DE PARÂMETROS POPUP STYLE === */
+        .gear-icon {
+            font-size: 24px;
+            color: #666;
+            cursor: pointer;
+            transition: color 0.3s ease;
+            margin-left: 10px;
+            vertical-align: middle;
+        }
+        .gear-icon:hover {
+            color: #2176ff;
+        }
+
+        .params-popup {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 90%;
+            max-width: 800px;
+            max-height: 80vh;
+            overflow-y: auto;
+            z-index: 2001;
+            padding: 25px;
+        }
+
+        .params-popup.active {
+            display: block;
+        }
+
+        .param-section {
+            margin-bottom: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 8px;
+            padding: 20px;
+            background-color: #161c28;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.25);
+            text-align: left;
+        }
+
+        .param-section h3 {
+            margin-bottom: 15px;
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            padding-bottom: 10px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+            position: relative;
+            text-align: left;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #8892b0;
+            font-weight: 500;
+        }
+
+        .form-group input[type="text"],
+        .form-group input[type="number"],
+        .form-group select
+        {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background-color: #161c28;
+            color: #ffffff;
+            border-radius: 4px;
+            font-size: 16px;
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .form-group input[type="text"]:focus,
+        .form-group input[type="number"]:focus,
+        .form-group select:focus
+        {
+            outline: none;
+            border-color: #2176ff;
+            box-shadow: 0 0 5px rgba(33, 118, 255, 0.5);
+        }
+
+        .checkbox-group {
+            display: flex;
+            flex-direction: row;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-top: 5px;
+        }
+
+        .checkbox-group label {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            cursor: pointer;
+            color: #8892b0;
+            font-size: 14px;
+            white-space: nowrap;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            width: 18px;
+            height: 18px;
+            border: 2px solid rgba(255, 255, 255, 0.15);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s ease, border-color 0.3s ease;
+        }
+
+        .checkbox-group input[type="checkbox"]:checked {
+            background-color: #2176ff;
+            border-color: #2176ff;
+        }
+
+        .checkbox-group input[type="checkbox"]:checked::before {
+            content: '\f00c';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            font-size: 12px;
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            height: 100%;
+        }
+
+        .add-category-btn {
+            background-color: #2176ff;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        .add-category-btn:disabled {
+            background-color: #333d52;
+            color: #666;
+            cursor: not-allowed;
+        }
+        .add-category-btn:hover {
+            background-color: #1a5cc4;
+        }
+
+        .message-error {
+            color: #e74c3c;
+            margin-top: 5px;
+            font-size: 14px;
+        }
+
+        .save-params-btn {
+            background-color: #2ecc71;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s ease;
+            display: block;
+            width: 100%;
+            margin-top: 20px;
+        }
+        .save-params-btn:hover {
+            background-color: #27ae60;
+        }
+
+        .categories-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .categories-list > h4 {
+            margin-bottom: 10px;
+            padding: 10px;
+            border-radius: 8px;
+            background-color: #161c28;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+            font-size: 18px;
+            font-weight: bold;
+            color: #ffffff;
+        }
+
+        .subcategories-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .subcategory-card {
+            background-color: #161c28;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 5px;
+            padding: 10px;
+            cursor: pointer;
+            width: 150px;
+            text-align: center;
+            color: #f0f2f5;
+            transition: all 0.3s ease;
+        }
+
+        .subcategory-card:hover {
+            background-color: rgba(33, 118, 255, 0.15);
+            border-color: #2176ff;
+        }
+
+        .subcategory-name {
+            font-weight: bold;
+        }
+
+        .popup-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.75);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 2002;
+        }
+
+        .detailed-info-popup {
+            background-color: #111622;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            width: 80%;
+            max-width: 600px;
+            text-align: center;
+            z-index: 2003;
+            color: #f0f2f5;
+        }
+
+        .detailed-info-popup h3 {
+            margin-bottom: 15px;
+            color: #ffffff;
+        }
+
+        .detailed-info-popup p {
+            margin-bottom: 8px;
+            text-align: left;
+            color: #8892b0;
+        }
+
+        .detailed-info-popup p strong {
+            color: #ffffff;
+        }
+
+        .detailed-info-popup button {
+            margin: 5px;
+        }
+
+        .detailed-info-popup .button-group {
+            margin-top: 15px;
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .close-popup {
+            background-color: #333d52;
+            color: #f0f2f5;
+        }
+        .close-popup:hover {
+            background-color: #4f5b66;
+        }
+
+        .detailed-info-popup .edit-mode {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 8px;
+            background-color: #161c28;
+            text-align: left;
+            margin-top: 10px;
+            color: #f0f2f5;
+        }
+
+        .detailed-info-popup .edit-mode input[type="text"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background-color: #111622;
+            color: #ffffff;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .detailed-info-popup .edit-mode .checkbox-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 5px;
+        }
+
+        .detailed-info-popup .edit-mode .checkbox-group label {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .detailed-info-popup .edit-mode .button-group {
+            margin-top: 15px;
+            justify-content: flex-end;
+        }
+
+        .edit-btn, .delete-btn, .save-btn, .cancel-btn, .close-popup {
+            padding: 8px 16px;
+            border-radius: 4px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background-color 0.2s ease, color 0.2s ease;
+            border: none;
+            margin-left: 5px;
+            margin-right: 5px;
+            font-weight: 600;
+        }
+
+        .edit-btn { background-color: #2176ff; color: white; }
+        .edit-btn:hover { background-color: #1a5cc4; }
+        .delete-btn { background-color: #e74c3c; color: white; }
+        .delete-btn:hover { background-color: #c0392b; }
+        .save-btn { background-color: #2ecc71; color: white; }
+        .save-btn:hover { background-color: #27ae60; }
+        .cancel-btn, .close-popup { background-color: #333d52; color: #f0f2f5; }
+        .cancel-btn:hover, .close-popup:hover { background-color: #4f5b66; }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+        }
+
+        .toggle-icon {
+            transition: transform 0.3s ease;
+        }
+
+        .toggle-icon.rotate {
+            transform: rotate(180deg);
+        }
+
+        .section-content {
+            padding-top: 10px;
+            overflow: hidden;
+        }
+
+        .search-container {
+            display: flex;
+            align-items: center;
+            margin-top: 15px;
+            margin-bottom: 10px;
+        }
+
+        #subcategory-search {
+            flex-grow: 1;
+            padding: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background-color: #161c28;
+            color: #ffffff;
+            border-radius: 4px 0 0 4px;
+            font-size: 14px;
+        }
+
+        .search-icon {
+            background-color: #333d52;
+            color: #f0f2f5;
+            padding: 8px 12px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-left: none;
+            border-radius: 0 4px 4px 0;
+            cursor: text;
+        }
+
+    </style>
+    <link rel="stylesheet" href="css/admin-global.css">
+</head>
+<body style="display: none;">
+
+    <div class="loading-screen-global" id="global-loading">
+        <div class="loading-spinner"></div>
+    </div>
+
+    <nav id="menu-placeholder" class="top-menu"></nav>
+
+    <main class="content">
+        <h1>Gerenciar Overall <i class="fas fa-cog gear-icon" id="params-settings-icon"></i></h1>
+        
+        <div class="controls-row">
+            <div class="search-wrapper">
+                <input type="text" class="search-input" placeholder="Pesquisar jogador pelo nome, clube ou posição..." id="tableSearch">
+                <i class="fas fa-search"></i>
+            </div>
+            <select class="table-filter-select" id="tableSeasonFilter"></select>
+        </div>
+
+        <div class="table-container">
+            <table class="excel-table">
+                <thead>
+                    <tr>
+                        <th data-sort="nome" style="cursor: pointer;">Nome <i class="fas fa-sort"></i></th>
+                        <th data-sort="paisNome" style="cursor: pointer;">País <i class="fas fa-sort"></i></th>
+                        <th data-sort="clube" style="cursor: pointer;">Clube <i class="fas fa-sort"></i></th>
+                        <th data-sort="posicao" style="cursor: pointer;">Posição <i class="fas fa-sort"></i></th>
+                        <th data-sort="overall" style="cursor: pointer; text-align: center;">Overall <i class="fas fa-sort"></i></th>
+                    </tr>
+                </thead>
+                <tbody id="players-table-body">
+                    <!-- Loaded dynamically -->
+                </tbody>
+            </table>
+        </div>
+    </main>
+
+    <!-- MAIN OVERLAY POPUP -->
+    <div class="overlay" id="coefficients-popup">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-player-info">
+                    <img src="" alt="" class="modal-player-img" id="modalPlayerImg">
+                    <div class="modal-player-details">
+                        <h3 id="modalPlayerName">Nome do Jogador</h3>
+                        <p id="modalPlayerMeta">Posição | Clube</p>
+                    </div>
+                </div>
+                <div class="modal-controls">
+                    <select class="season-select" id="modalSeasonSelect">
+                        <!-- Loaded dynamically -->
+                    </select>
+                    <button class="icon-btn" id="openStatsInputBtn" title="Inserir Estatísticas"><i class="fas fa-edit"></i></button>
+                </div>
+            </div>
+            
+            <div class="modal-body">
+                <div class="totals-summary">
+                    <div class="summary-item">
+                        <h4>Soma Total</h4>
+                        <p id="summaryTotalSum">0.00</p>
+                    </div>
+                    <div class="summary-item">
+                        <h4>Coef. Casta</h4>
+                        <p id="summaryCastaCoef">0.00</p>
+                    </div>
+                    <div class="summary-item">
+                        <h4>Overall Final</h4>
+                        <p id="summaryOverall" style="color: #2ecc71;">0</p>
+                    </div>
+                </div>
+
+                <div class="coefs-grid" id="coefficients-list">
+                    <!-- Interactive coefficients loaded dynamically -->
+                </div>
+            </div>
+            
+            <div class="modal-footer">
+                <button class="btn secondary" id="closeModalBtn">Fechar</button>
+                <button class="btn primary" id="saveOverallBtn">Gravar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SUB OVERLAY STATS INPUT -->
+    <div class="sub-overlay" id="stats-input-popup">
+        <div class="sub-modal-content">
+            <h3>Inserir Estatísticas Opcionais</h3>
+            <textarea class="stats-textarea" id="statsInputTextarea" placeholder="Cole a lista de estatísticas aqui...&#10;Exemplo:&#10;Golos&#10;5&#10;Assistências&#10;3"></textarea>
+            <div class="sub-modal-buttons">
+                <button class="btn secondary" id="closeSubModalBtn">Cancelar</button>
+                <button class="btn primary" id="applyStatsBtn">Recalcular</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Overlay and Popup for Parameters Settings (Cloned) -->
+    <div class="overlay" id="params-overlay"></div>
+    <div class="params-popup" id="params-popup">
+         <i class="fas fa-times close-btn" id="close-params-popup"></i>
+        <h2><i class="fas fa-cog"></i> Configurações de Parâmetros</h2>
+        <div id="params-container">
+            <!-- Adicionar Categoria e Subcategoria -->
+            <div class="param-section add-category-section">
+                <div class="section-header">
+                    <h3>
+                        <i class="fas fa-plus-circle"></i> Adicionar Categoria/Subcategoria
+                        <i class="fas fa-chevron-down toggle-icon"></i>
+                    </h3>
+                </div>
+                <div class="section-content" style="display: none;">
+                    <div class="form-group">
+                        <label for="categoria-nome">Nome da Categoria:</label>
+                        <input type="text" id="categoria-nome" name="categoria-nome">
+                    </div>
+                    <div class="form-group">
+                        <label for="subcategoria-nome">Nome da Subcategoria:</label>
+                        <input type="text" id="subcategoria-nome" name="subcategoria-nome">
+                    </div>
+                    <!-- Checkboxes para Casta -->
+                    <div class="form-group">
+                        <label>Casta:</label>
+                        <div class="checkbox-group">
+                            <label><input type="checkbox" name="subcategoria-casta" value="Jogador Ouro"> <i class="fas fa-medal" style="color: gold;"></i> Jogador Ouro</label>
+                            <label><input type="checkbox" name="subcategoria-casta" value="Jogador Prata"> <i class="fas fa-medal" style="color: silver;"></i> Jogador Prata</label>
+                            <label><input type="checkbox" name="subcategoria-casta" value="Jogador Bronze"> <i class="fas fa-medal" style="color: #cd7f32;"></i> Jogador Bronze</label>
+                            <label><input type="checkbox" name="subcategoria-casta" value="Jogador Platina"> <i class="fas fa-medal" style="color: #e5e4e2;"></i> Jogador Platina</label>
+                        </div>
+                    </div>
+                    <!-- Checkboxes para Tipo de Jogador -->
+                    <div class="form-group">
+                        <label>Tipo de Jogador:</label>
+                        <div class="checkbox-group">
+                            <label><input type="checkbox" name="subcategoria-tipo" value="Guarda-Redes"> <i class="fas fa-hands"></i> Guarda-Redes</label>
+                            <label><input type="checkbox" name="subcategoria-tipo" value="Defesa"> <i class="fas fa-shield-alt"></i> Defesa</label>
+                            <label><input type="checkbox" name="subcategoria-tipo" value="Médio"> <i class="fas fa-running"></i> Médio</label>
+                            <label><input type="checkbox" name="subcategoria-tipo" value="Avançado"> <i class="fas fa-futbol"></i> Avançado</label>
+                        </div>
+                    </div>
+                    <button class="add-category-btn" id="add-category-btn"><i class="fas fa-plus"></i> Adicionar</button>
+                    <div id="category-message" class="message-error"></div>
+                </div>
+            </div>
+            <!-- Lista de Categorias e Subcategorias -->
+            <div class="param-section existing-categories-section">
+                <h3><i class="fas fa-list-ul"></i> Categorias e Subcategorias Existentes</h3>
+                <div class="search-container">
+                    <input type="text" id="subcategory-search" placeholder="Pesquisar Subcategoria...">
+                    <i class="fas fa-search search-icon"></i>
+                </div>
+               <ul id="categories-list" class="categories-list">
+                   <!-- As categorias e subcategorias serão inseridas aqui dinamicamente -->
+               </ul>
+            </div>
+        </div>
+        <button class="save-params-btn" id="save-params-btn"><i class="fas fa-save"></i> Salvar Configurações</button>
+    </div>
+
+    <script type="module">
+        import { db, auth } from './js/auth-guard.js';
+        import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { collection, getDocs, doc, getDoc, updateDoc, setDoc, query, where, Timestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        // Global state variables
+        let allPlayers = [];
+        let countriesMap = new Map();
+        let seasons = [];
+        let paineisCoeficienteData = null;
+        let overallLimitsData = null;
+        
+        let currentPlayer = null;
+        let currentPastedStats = "";
+        let calculatedOverallResult = 0;
+        let seasonOverallsMap = new Map();
+        let currentSortColumn = 'nome';
+        let currentSortDirection = 'asc';
+
+        // Block page if not ruler (admin-guard check, matching other manager pages)
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                try {
+                    const userDoc = await getDoc(doc(db, "users", user.uid));
+                    if (!userDoc.exists() || userDoc.data().estatuto !== "ruler") {
+                        window.location.replace("engrenagem.html");
+                    } else {
+                        await initPage();
+                    }
+                } catch (e) {
+                    console.error("Erro ao validar permissões:", e);
+                    window.location.replace("engrenagem.html");
+                }
+            }
+        });
+
+        // Initialize all page data
+        async function initPage() {
+            try {
+                // Parallel fetch
+                const [playersSnap, countriesSnap, gamesSnap, coefSnap, limitsSnap] = await Promise.all([
+                    getDocs(collection(db, 'jogadores')),
+                    getDocs(collection(db, 'paises')),
+                    getDocs(collection(db, 'jogos')),
+                    getDoc(doc(db, 'paineis', 'paineis coeficiente')),
+                    getDoc(doc(db, 'paineis', 'paineis overall'))
+                ]);
+
+                // Map countries
+                countriesSnap.forEach(d => countriesMap.set(d.id, d.data().nome));
+
+                // Process seasons from games (jogos)
+                seasons = [...new Set(gamesSnap.docs.map(doc => doc.data().temporada).filter(Boolean))].sort().reverse();
+                
+                // Set default seasons config if empty
+                if (seasons.length === 0) {
+                    seasons = ["2025/2026", "2024/2025"];
+                }
+
+                // Populate Modal Season Dropdown
+                const seasonSelect = document.getElementById('modalSeasonSelect');
+                seasonSelect.innerHTML = seasons.map(s => `<option value="${s}">${s}</option>`).join('');
+
+                // Populate Table Season Filter Dropdown
+                const tableSeasonFilter = document.getElementById('tableSeasonFilter');
+                tableSeasonFilter.innerHTML = seasons.map(s => `<option value="${s}">${s}</option>`).join('');
+
+                // Process players
+                allPlayers = playersSnap.docs.map(doc => {
+                    const data = doc.data();
+                    return {
+                        id: doc.id,
+                        nome: data.nome || 'Sem Nome',
+                        paisId: data.paisId || '',
+                        paisNome: countriesMap.get(data.paisId) || data.pais || 'N/A',
+                        clube: data.clube || 'N/A',
+                        posicao: data.posicao || 'N/A',
+                        overall: data.overall || 0,
+                        casta: data.casta || '',
+                        imagem: data.imagem || '',
+                        estatisticas: data.estatisticas || ''
+                    };
+                });
+
+                // Load initial overall statistics for the most recent season
+                const defaultSeason = seasons[0];
+                if (defaultSeason) {
+                    await loadSeasonOverallsForTable(defaultSeason);
+                }
+
+                // Display
+                renderPlayersTable();
+                
+                // Hide global loading screen
+                document.getElementById('global-loading').style.display = 'none';
+
+                // Setup events
+                document.getElementById('tableSearch').addEventListener('input', renderPlayersTable);
+                document.getElementById('modalSeasonSelect').addEventListener('change', handleSeasonChange);
+                document.getElementById('tableSeasonFilter').addEventListener('change', handleTableSeasonFilterChange);
+
+                // Setup header sorting click events
+                document.querySelectorAll('.excel-table th[data-sort]').forEach(th => {
+                    th.addEventListener('click', () => {
+                        const col = th.getAttribute('data-sort');
+                        if (currentSortColumn === col) {
+                            currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
+                        } else {
+                            currentSortColumn = col;
+                            currentSortDirection = 'asc';
+                        }
+                        updateSortHeaders();
+                        renderPlayersTable();
+                    });
+                });
+                updateSortHeaders();
+
+                // Load coefficients and limits for modals
+                paineisCoeficienteData = coefSnap.exists() ? coefSnap.data().paineis_coeficiente : null;
+                overallLimitsData = limitsSnap.exists() ? limitsSnap.data() : null;
+
+            } catch (error) {
+                console.error("Erro ao carregar página de gerenciamento de overall:", error);
+                alert("Erro ao carregar os dados. Verifique a consola.");
+                document.getElementById('global-loading').style.display = 'none';
+            }
+        }
+
+        // Render Excel list of players
+        function renderPlayersTable() {
+            const queryText = document.getElementById('tableSearch').value.toLowerCase();
+            const tableBody = document.getElementById('players-table-body');
+            tableBody.innerHTML = '';
+
+            const filtered = allPlayers.filter(p => {
+                return p.nome.toLowerCase().includes(queryText) || 
+                       p.clube.toLowerCase().includes(queryText) || 
+                       p.posicao.toLowerCase().includes(queryText) ||
+                       p.paisNome.toLowerCase().includes(queryText);
+            });
+
+            if (filtered.length === 0) {
+                tableBody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: #8892b0; padding: 20px;">Nenhum jogador encontrado.</td></tr>`;
+                return;
+            }
+
+            filtered.sort((a, b) => {
+                let valA, valB;
+                if (currentSortColumn === 'overall') {
+                    valA = seasonOverallsMap.has(a.id) ? seasonOverallsMap.get(a.id) : (a.overall || 0);
+                    valB = seasonOverallsMap.has(b.id) ? seasonOverallsMap.get(b.id) : (b.overall || 0);
+                    if (valA === '-') valA = -1;
+                    if (valB === '-') valB = -1;
+                } else {
+                    valA = a[currentSortColumn] || '';
+                    valB = b[currentSortColumn] || '';
+                }
+
+                let comparison = 0;
+                if (typeof valA === 'number' && typeof valB === 'number') {
+                    comparison = valA - valB;
+                } else {
+                    comparison = valA.toString().localeCompare(valB.toString(), 'pt', { sensitivity: 'base' });
+                }
+
+                return currentSortDirection === 'asc' ? comparison : -comparison;
+            }).forEach(p => {
+                const tr = document.createElement('tr');
+                
+                const posClassMap = {
+                    'Guarda-Redes': 'guarda-redes',
+                    'Defesa': 'defesa',
+                    'Médio': 'medio',
+                    'Avançado': 'avancado'
+                };
+                const badgeClass = posClassMap[p.posicao] || '';
+
+                const overallVal = seasonOverallsMap.has(p.id) ? seasonOverallsMap.get(p.id) : '-';
+
+                const displayImg = p.imagem ? (p.imagem.startsWith('http') || p.imagem.startsWith('data:') ? p.imagem : '../' + p.imagem) : 'https://via.placeholder.com/100';
+
+                tr.innerHTML = `
+                    <td>
+                        <img src="${displayImg}" class="player-row-img">
+                        <span class="player-row-name">${p.nome}</span>
+                    </td>
+                    <td>${p.paisNome}</td>
+                    <td>${p.clube}</td>
+                    <td><span class="pos-badge ${badgeClass}">${p.posicao}</span></td>
+                    <td style="text-align: center; font-weight: bold; color: #2ecc71;">${overallVal}</td>
+                `;
+                
+                tr.addEventListener('click', () => openPlayerModal(p));
+                tableBody.appendChild(tr);
+            });
+        }
+
+        // Open modal and load coefficients & stats for player
+        async function openPlayerModal(player) {
+            currentPlayer = player;
+            currentPastedStats = player.estatisticas || '';
+            calculatedOverallResult = player.overall;
+
+            const modalImg = player.imagem ? (player.imagem.startsWith('http') || player.imagem.startsWith('data:') ? player.imagem : '../' + player.imagem) : 'https://via.placeholder.com/100';
+            document.getElementById('modalPlayerImg').src = modalImg;
+            document.getElementById('modalPlayerName').textContent = player.nome;
+            document.getElementById('modalPlayerMeta').textContent = `${player.posicao} | ${player.clube}`;
+
+            // Trigger season change / check subcollection
+            const defaultSeason = document.getElementById('tableSeasonFilter').value || document.getElementById('modalSeasonSelect').value;
+            document.getElementById('modalSeasonSelect').value = defaultSeason;
+            await loadSeasonStatsAndCalculate(player.id, defaultSeason);
+
+            document.getElementById('coefficients-popup').classList.add('active');
+        }
+
+        // Load stats from subcollection for the chosen season
+        async function loadSeasonStatsAndCalculate(playerId, season) {
+            const docId = season.replace(/\//g, '-');
+            const subDocRef = doc(db, 'jogadores', playerId, 'overall', docId);
+            try {
+                const subSnap = await getDoc(subDocRef);
+                if (subSnap.exists()) {
+                    const subData = subSnap.data();
+                    currentPastedStats = subData.estatisticas || '';
+                } else {
+                    // Fallback to player main document statistics
+                    currentPastedStats = currentPlayer.estatisticas || '';
+                }
+            } catch (err) {
+                console.warn("Could not fetch subcollection overall details, using main document stats instead:", err);
+                currentPastedStats = currentPlayer.estatisticas || '';
+            }
+
+            document.getElementById('statsInputTextarea').value = currentPastedStats;
+            calculateAndDisplayData();
+        }
+
+        // Dropdown season change handler
+        async function handleSeasonChange(e) {
+            if (!currentPlayer) return;
+            const newSeason = e.target.value;
+            await loadSeasonStatsAndCalculate(currentPlayer.id, newSeason);
+        }
+
+        // Helper to load season overalls document by document
+        async function loadSeasonOverallsForTable(season) {
+            const docId = season.replace(/\//g, '-');
+            seasonOverallsMap.clear();
+            const promises = allPlayers.map(async (p) => {
+                const subDocRef = doc(db, 'jogadores', p.id, 'overall', docId);
+                try {
+                    const snap = await getDoc(subDocRef);
+                    if (snap.exists()) {
+                        seasonOverallsMap.set(p.id, snap.data().overall);
+                    } else {
+                        // Fallback to player default overall if no record exists for this season
+                        seasonOverallsMap.set(p.id, p.overall || 0);
+                    }
+                } catch (err) {
+                    console.warn(`Erro ao carregar overall da temporada para jogador ${p.id}:`, err);
+                    seasonOverallsMap.set(p.id, p.overall || 0);
+                }
+            });
+            await Promise.all(promises);
+        }
+
+        // Helper to update sorting header icons visually
+        function updateSortHeaders() {
+            const headers = document.querySelectorAll('.excel-table th[data-sort]');
+            headers.forEach(th => {
+                const col = th.getAttribute('data-sort');
+                const icon = th.querySelector('i');
+                if (icon) {
+                    if (col === currentSortColumn) {
+                        icon.className = currentSortDirection === 'asc' ? 'fas fa-sort-up' : 'fas fa-sort-down';
+                        icon.style.color = '#2176ff';
+                    } else {
+                        icon.className = 'fas fa-sort';
+                        icon.style.color = '#8892b0';
+                    }
+                }
+            });
+        }
+
+        // Table season filter dropdown change handler
+        async function handleTableSeasonFilterChange(e) {
+            const selected = e.target.value;
+            document.getElementById('global-loading').style.display = 'flex';
+            try {
+                await loadSeasonOverallsForTable(selected);
+                renderPlayersTable();
+            } catch (err) {
+                console.error("Erro ao filtrar temporada:", err);
+            }
+            document.getElementById('global-loading').style.display = 'none';
+        }
+
+        // Helper to determine casta from limits
+        function determineCastaFromOverall(overall, limits) {
+            if (!limits) return "";
+            const [platinaLimit] = limits.Platina || [null];
+            const [ouroLower, ouroUpper] = limits.Ouro || [null, null];
+            const [prataLower, prataUpper] = limits.Prata || [null, null];
+            const [bronzeLimit] = limits.Bronze || [null];
+            
+            if (platinaLimit !== null && overall >= platinaLimit) return "Jogador Platina";
+            if (ouroLower !== null && ouroUpper !== null && overall >= ouroLower && overall <= ouroUpper) return "Jogador Ouro";
+            if (prataLower !== null && prataUpper !== null && overall >= prataLower && overall <= prataUpper) return "Jogador Prata";
+            if (bronzeLimit !== null && overall <= bronzeLimit) return "Jogador Bronze";
+            return "";
+        }
+
+        // Recalculates stats, highlights and populates modal content
+        function calculateAndDisplayData() {
+            const listContainer = document.getElementById('coefficients-list');
+            listContainer.innerHTML = '';
+
+            if (!paineisCoeficienteData) {
+                listContainer.innerHTML = '<p style="color: #ef4444; width: 100%; text-align: center;">Erro: Coeficientes não carregados.</p>';
+                return;
+            }
+
+            const position = currentPlayer.posicao;
+            const highlightClassMap = {
+                'Guarda-Redes': 'guarda-redes-highlight',
+                'Defesa': 'defesa-highlight',
+                'Médio': 'medio-highlight',
+                'Avançado': 'avancado-highlight'
+            };
+            const posHighlightClass = highlightClassMap[position] || '';
+
+            let totalSum = 0;
+            const cardCoefs = [];
+
+            // Parse text statistics
+            const parsedStats = {};
+            if (currentPastedStats) {
+                const lines = currentPastedStats.split('\n');
+                for (let i = 0; i < lines.length; i++) {
+                    const line = lines[i].trim();
+                    if (line) {
+                        const nextLine = lines[i + 1]?.trim() || '';
+                        const numberMatch = nextLine.match(/^(\d+(\.\d+)?)/);
+                        if (numberMatch) {
+                            parsedStats[line.toLowerCase()] = parseFloat(numberMatch[1].replace(',', '.'));
+                        }
+                    }
+                }
+            }
+
+            // Loop and build cards
+            for (const category in paineisCoeficienteData) {
+                for (const subcategoryName in paineisCoeficienteData[category]) {
+                    const subcategory = paineisCoeficienteData[category][subcategoryName];
+                    if (subcategory.tipo) {
+                        // Find coefficient factor for current player position
+                        const matchItem = subcategory.tipo.find(item => item.name === position);
+                        const isActive = !!matchItem;
+                        const firebaseValue = matchItem ? (matchItem.text || '0') : '0';
+                        const coefVal = parseFloat(firebaseValue.replace(',', '.'));
+                        
+                        let statNumber = 0;
+                        let displayStat = '-';
+                        
+                        if (parsedStats[subcategoryName.toLowerCase()] !== undefined) {
+                            statNumber = parsedStats[subcategoryName.toLowerCase()];
+                            displayStat = statNumber.toString();
+                        }
+
+                        if (isActive && !isNaN(coefVal)) {
+                            totalSum += (coefVal * statNumber);
+                        }
+
+                        cardCoefs.push({
+                            name: subcategoryName,
+                            factor: firebaseValue,
+                            stat: displayStat,
+                            isActive: isActive
+                        });
+                    }
+                }
+            }
+
+            // Sort alphabetically and render
+            cardCoefs.sort((a,b) => a.name.localeCompare(b.name)).forEach(coef => {
+                const box = document.createElement('div');
+                box.className = `coef-box ${coef.isActive ? 'active ' + posHighlightClass : ''}`;
+                
+                box.innerHTML = `
+                    <div class="coef-name">${coef.name}</div>
+                    <div class="coef-values">
+                        <span class="coef-factor">${coef.factor}</span>
+                        <span class="coef-stat" style="color: ${coef.isActive ? '#2176ff' : '#8892b0'};">${coef.stat}</span>
+                    </div>
+                `;
+                listContainer.appendChild(box);
+            });
+
+            // Casta determination
+            let determinedCasta = currentPlayer.casta;
+            if (overallLimitsData && overallLimitsData[position]) {
+                const computedCasta = determineCastaFromOverall(totalSum, overallLimitsData[position]);
+                if (computedCasta) determinedCasta = computedCasta;
+            }
+
+            // Find casting multiplier
+            let castingCoef = 0;
+            if (paineisCoeficienteData?.['Coeficiente']?.['Coeficiente']?.casta) {
+                const castaItem = paineisCoeficienteData['Coeficiente']['Coeficiente'].casta.find(item => item.name === determinedCasta);
+                if (castaItem && castaItem.text) {
+                    castingCoef = parseFloat(castaItem.text.replace(',', '.'));
+                }
+            }
+
+            // Final Overall Calculation
+            let finalOverall = 0;
+            if (!isNaN(castingCoef) && !isNaN(totalSum)) {
+                finalOverall = Math.round(castingCoef * totalSum);
+            }
+
+            calculatedOverallResult = finalOverall;
+
+            // Fill UI elements
+            document.getElementById('summaryTotalSum').textContent = totalSum.toFixed(2);
+            document.getElementById('summaryCastaCoef').textContent = castingCoef.toFixed(2);
+            document.getElementById('summaryOverall').textContent = finalOverall;
+        }
+
+        // Sub-modal overlay (Stats Input) toggle
+        document.getElementById('openStatsInputBtn').addEventListener('click', () => {
+            document.getElementById('stats-input-popup').classList.add('active');
+        });
+        document.getElementById('closeSubModalBtn').addEventListener('click', () => {
+            document.getElementById('stats-input-popup').classList.remove('active');
+        });
+        document.getElementById('applyStatsBtn').addEventListener('click', () => {
+            currentPastedStats = document.getElementById('statsInputTextarea').value;
+            calculateAndDisplayData();
+            document.getElementById('stats-input-popup').classList.remove('active');
+        });
+
+        // Close main modal
+        document.getElementById('closeModalBtn').addEventListener('click', () => {
+            document.getElementById('coefficients-popup').classList.remove('active');
+            currentPlayer = null;
+        });
+
+        // Save Button Handler (Gravar)
+        document.getElementById('saveOverallBtn').addEventListener('click', async () => {
+            if (!currentPlayer) return;
+
+            const saveBtn = document.getElementById('saveOverallBtn');
+            const originalText = saveBtn.textContent;
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Gravando...';
+
+            const selectedSeason = document.getElementById('modalSeasonSelect').value;
+
+            try {
+                // 1. Update player main document: overall and estatisticas
+                const playerRef = doc(db, 'jogadores', currentPlayer.id);
+                await updateDoc(playerRef, {
+                    estatisticas: currentPastedStats,
+                    overall: calculatedOverallResult
+                });
+
+                // 2. Add/Update document in the subcollection "overall"
+                const docId = selectedSeason.replace(/\//g, '-');
+                const subDocRef = doc(db, 'jogadores', currentPlayer.id, 'overall', docId);
+                
+                await setDoc(subDocRef, {
+                    temporada: selectedSeason,
+                    estatisticas: currentPastedStats,
+                    overall: calculatedOverallResult,
+                    timestamp: Timestamp.now()
+                }, { merge: true });
+
+                // 3. Update local cache to reflect in main list
+                const cachedPlayer = allPlayers.find(p => p.id === currentPlayer.id);
+                if (cachedPlayer) {
+                    cachedPlayer.overall = calculatedOverallResult;
+                    cachedPlayer.estatisticas = currentPastedStats;
+                }
+
+                renderPlayersTable();
+                alert("Dados de overall e estatísticas gravados com sucesso!");
+                document.getElementById('coefficients-popup').classList.remove('active');
+
+            } catch (err) {
+                console.error("Erro ao gravar dados:", err);
+                alert("Ocorreu um erro ao gravar as informações. Tente de novo.");
+            } finally {
+                saveBtn.disabled = false;
+                saveBtn.textContent = originalText;
+            }
+        });
+
+        // Parameters setting cloned logic
+        const paramsSettingsIcon = document.getElementById('params-settings-icon');
+        const paramsOverlay = document.getElementById('params-overlay');
+        const paramsPopup = document.getElementById('params-popup');
+        const closeParamsPopup = document.getElementById('close-params-popup');
+        const saveParamsBtn = document.getElementById('save-params-btn');
+        const addCategoryBtn = document.getElementById('add-category-btn');
+        const categoriesList = document.getElementById('categories-list');
+        const categoriaNomeInput = document.getElementById('categoria-nome');
+        const subcategoriaNomeInput = document.getElementById('subcategoria-nome');
+        const categoryMessage = document.getElementById('category-message');
+
+        function openParamsPopup() {
+            paramsOverlay.classList.add('active');
+            paramsPopup.classList.add('active');
+        }
+
+        function closeParamsPopupFunction() {
+            paramsOverlay.classList.remove('active');
+            paramsPopup.classList.remove('active');
+        }
+
+        async function fetchAndDisplayCategories() {
+            try {
+                const paineisRef = doc(db, 'paineis', 'paineis coeficiente');
+                const paineisDoc = await getDoc(paineisRef);
+
+                if (paineisDoc.exists() && paineisDoc.data().paineis_coeficiente) {
+                    const paineisCoeficiente = paineisDoc.data().paineis_coeficiente;
+                    categoriesList.innerHTML = '';
+
+                    for (const categoria in paineisCoeficiente) {
+                        if (paineisCoeficiente.hasOwnProperty(categoria)) {
+                            const categoriaTitle = document.createElement('h4');
+                            categoriaTitle.textContent = categoria;
+                            categoriesList.appendChild(categoriaTitle);
+
+                            const subcategoriesContainer = document.createElement('div');
+                            subcategoriesContainer.className = 'subcategories-container';
+                            categoriesList.appendChild(subcategoriesContainer);
+
+                            const subcategorias = paineisCoeficiente[categoria];
+                            if (subcategorias && typeof subcategorias === 'object') {
+                                for (const subcategoriaNome in subcategorias) {
+                                    if (subcategorias.hasOwnProperty(subcategoriaNome)) {
+                                        const subcategoriaData = subcategorias[subcategoriaNome];
+                                        const subcategoryCard = document.createElement('div');
+                                        subcategoryCard.className = 'subcategory-card';
+
+                                        const subcategoryNameSpan = document.createElement('span');
+                                        subcategoryNameSpan.className = 'subcategory-name';
+                                        subcategoryNameSpan.textContent = subcategoriaNome;
+                                        subcategoryCard.appendChild(subcategoryNameSpan);
+
+                                        subcategoryCard.addEventListener('click', () => {
+                                            openDetailedInfoPopup(categoria, subcategoriaNome, subcategoriaData);
+                                        });
+
+                                        subcategoriesContainer.appendChild(subcategoryCard);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    categoriesList.innerHTML = '<li>Nenhuma categoria/subcategoria encontrada.</li>';
+                }
+            } catch (error) {
+                console.error("Erro ao buscar categorias:", error);
+                categoryMessage.textContent = "Erro ao carregar categorias.";
+            }
+        }
+
+        function openDetailedInfoPopup(categoria, subcategoriaNome, subcategoriaData) {
+            const popupOverlay = document.createElement('div');
+            popupOverlay.className = 'popup-overlay';
+            const popupContainer = document.createElement('div');
+            popupContainer.className = 'detailed-info-popup';
+
+            popupContainer.innerHTML = `
+                <h3>${subcategoriaNome}</h3>
+                <p><strong>Categoria:</strong> ${categoria}</p>
+                <p><strong>Casta:</strong> ${subcategoriaData.casta ? subcategoriaData.casta.map(item => typeof item === 'object' ? `${item.name} (${item.text || '-'})` : item).join(', ') : 'N/A'}</p>
+                <p><strong>Tipo:</strong> ${formatTipoInfo(subcategoriaData.tipo) || 'N/A'}</p>
+                <div class="button-group">
+                    <button class="edit-btn">Editar</button>
+                    <button class="delete-btn">Excluir</button>
+                    <button class="close-popup">Fechar</button>
+                </div>
+            `;
+
+            function formatTipoInfo(tipoData) {
+                if (!tipoData) return 'N/A';
+                if (Array.isArray(tipoData)) {
+                    return tipoData.map(item => {
+                        if (typeof item === 'string') return item;
+                        return `${item.name} (${item.text || '-'})`;
+                    }).join(', ');
+                }
+                return 'N/A';
+            }
+
+            const editBtn = popupContainer.querySelector('.edit-btn');
+            editBtn.addEventListener('click', (event) => {
+                event.stopPropagation();
+                popupContainer.innerHTML = `
+                    <h3>Editar ${subcategoriaNome}</h3>
+                    <p><strong>Categoria:</strong> ${categoria}</p>
+                    <div class="edit-mode">
+                        Subcategoria: <input type="text" class="edit-subcategoria-nome" value="${subcategoriaNome}">
+                        <div class="checkbox-group">
+                            Casta: ${createCastaCheckboxes(subcategoriaData.casta, categoria, subcategoriaNome)}
+                        </div>
+                        <div class="checkbox-group">
+                            Tipo: ${createTipoCheckboxes(subcategoriaData.tipo)}
+                        </div>
+                        <div class="button-group">
+                            <button class="save-btn">Salvar</button>
+                            <button class="cancel-btn">Cancelar</button>
+                        </div>
+                    </div>
+                `;
+                const saveBtn = popupContainer.querySelector('.save-btn');
+                saveBtn.addEventListener('click', async () => {
+                    const newSubcategoriaNome = popupContainer.querySelector('.edit-subcategoria-nome').value.trim();
+                    const newCasta = getCastaValuesFromEdit(categoria, subcategoriaNome, popupContainer.querySelector('.edit-mode'));
+                    const newTipo = getTipoValuesFromEdit(popupContainer.querySelector('.edit-mode'));
+
+                    if (newSubcategoriaNome) {
+                        await updateSubcategory(categoria, subcategoriaNome, newSubcategoriaNome, newCasta, newTipo);
+                        paineisCoeficienteData = await fetchPaineisCoefficients();
+                        fetchAndDisplayCategories();
+                        if (currentPlayer) calculateAndDisplayData();
+                        closePopup();
+                    } else {
+                        alert('O nome da subcategoria não pode estar vazio.');
+                    }
+                });
+
+                const cancelBtn = popupContainer.querySelector('.cancel-btn');
+                cancelBtn.addEventListener('click', () => {
+                     closePopup();
+                });
+            });
+
+            const deleteBtn = popupContainer.querySelector('.delete-btn');
+            deleteBtn.addEventListener('click', async (event) => {
+                event.stopPropagation();
+                if (confirm(`Tem certeza que deseja excluir a subcategoria "${subcategoriaNome}"?`)) {
+                    await deleteSubcategory(categoria, subcategoriaNome);
+                    paineisCoeficienteData = await fetchPaineisCoefficients();
+                    fetchAndDisplayCategories();
+                    if (currentPlayer) calculateAndDisplayData();
+                    closePopup();
+                }
+            });
+
+            const closeBtn = popupContainer.querySelector('.close-popup');
+            closeBtn.addEventListener('click', closePopup);
+
+            popupOverlay.appendChild(popupContainer);
+            document.body.appendChild(popupOverlay);
+
+            function closePopup() {
+                document.body.removeChild(popupOverlay);
+            }
+        }
+
+        async function fetchPaineisCoefficients() {
+            const paineisRef = doc(db, 'paineis', 'paineis coeficiente');
+            const paineisDoc = await getDoc(paineisRef);
+            if (paineisDoc.exists() && paineisDoc.data().paineis_coeficiente) {
+                return paineisDoc.data().paineis_coeficiente;
+            } else {
+                return null;
+            }
+        }
+
+        function createCastaCheckboxes(selectedCasta, categoria, subcategoriaNome) {
+            const castas = ["Jogador Ouro", "Jogador Prata", "Jogador Bronze", "Jogador Platina"];
+            let html = '';
+            castas.forEach(casta => {
+                let isChecked = false;
+                let textValue = '';
+
+                if (Array.isArray(selectedCasta)) {
+                    const foundCasta = selectedCasta.find(item => 
+                        (typeof item === 'string' && item === casta) || 
+                        (typeof item === 'object' && item.name === casta)
+                    );
+
+                    if (foundCasta) {
+                        isChecked = true;
+                        if (typeof foundCasta === 'object') {
+                            textValue = foundCasta.text || '';
+                        }
+                    }
+                }
+                
+                const checkedAttribute = isChecked ? 'checked' : '';
+
+                html += `<label>`;
+                html += `<input type="checkbox" name="casta" value="${casta}" ${checkedAttribute}> ${casta}`;
+                if (categoria === 'Coeficiente' && subcategoriaNome === 'Coeficiente') {
+                    html += `<input type="text" name="casta-text" class="casta-text-input" maxlength="5" value="${textValue}" style="margin-left: 5px; width: 50px;">`;
+                }
+                html += `</label>`;
+            });
+            return html;
+        }
+
+        function createTipoCheckboxes(selectedTipo) {
+            const tipos = ["Guarda-Redes", "Defesa", "Médio", "Avançado"];
+            let html = '';
+            tipos.forEach(tipo => {
+                let isChecked = false;
+                let textValue = '';
+
+                if (Array.isArray(selectedTipo)) {
+                    for (const selectedItem of selectedTipo) {
+                        if (typeof selectedItem === 'object' && selectedItem.name === tipo) {
+                            isChecked = true;
+                            textValue = selectedItem.text || '';
+                            break;
+                        }
+                    }
+                }
+
+                const checkedAttribute = isChecked ? 'checked' : '';
+
+                html += `<label>`;
+                html += `<input type="checkbox" name="tipo" value="${tipo}" ${checkedAttribute}> ${tipo}`;
+                html += `<input type="text" name="tipo-text" class="tipo-text-input" maxlength="5" value="${textValue}" style="margin-left: 5px; width: 50px;">`;
+                html += `</label>`;
+            });
+            return html;
+        }
+
+        function getCheckedValues(container, name) {
+            const checkboxes = container.querySelectorAll(`input[name="${name}"]:checked`);
+            return Array.from(checkboxes).map(cb => cb.value);
+        }
+
+        function getCastaValuesFromEdit(categoria, subcategoriaNome, container) {
+            const castaCheckboxes = Array.from(container.querySelectorAll('input[name="casta"]:checked'));
+            if (categoria === 'Coeficiente' && subcategoriaNome === 'Coeficiente') {
+                return castaCheckboxes.map(checkbox => {
+                    const castaName = checkbox.value;
+                    const textInput = checkbox.parentElement.querySelector('input[name="casta-text"]');
+                    const textValue = textInput ? textInput.value.trim() : '';
+                    return { name: castaName, text: textValue };
+                });
+            } else {
+                return getCheckedValues(container, 'casta');
+            }
+        }
+
+        function getTipoValuesFromEdit(container) {
+            const tipoCheckboxes = Array.from(container.querySelectorAll('input[name="tipo"]:checked'));
+            return tipoCheckboxes.map(checkbox => {
+                const tipoName = checkbox.value;
+                const textInput = checkbox.parentElement.querySelector('input[name="tipo-text"]');
+                const textValue = textInput ? textInput.value.trim() : '';
+                return { name: tipoName, text: textValue };
+            });
+        }
+
+        async function updateSubcategory(categoria, oldSubcategoriaNome, newSubcategoriaNome, newCasta, newTipo) {
+            const paineisRef = doc(db, 'paineis', 'paineis coeficiente');
+            const paineisDoc = await getDoc(paineisRef);
+
+            if (paineisDoc.exists()) {
+                const paineisCoeficiente = { ...paineisDoc.data().paineis_coeficiente };
+
+                if (paineisCoeficiente[categoria] && paineisCoeficiente[categoria][oldSubcategoriaNome]) {
+                    delete paineisCoeficiente[categoria][oldSubcategoriaNome];
+
+                    paineisCoeficiente[categoria][newSubcategoriaNome] = {
+                        casta: newCasta,
+                        tipo: newTipo
+                    };
+
+                    await updateDoc(paineisRef, { paineis_coeficiente: paineisCoeficiente });
+                }
+            }
+        }
+
+        async function deleteSubcategory(categoria, subcategoriaNome) {
+            const paineisRef = doc(db, 'paineis', 'paineis coeficiente');
+            const paineisDoc = await getDoc(paineisRef);
+
+            if (paineisDoc.exists()) {
+                const paineisCoeficiente = { ...paineisDoc.data().paineis_coeficiente };
+                if (paineisCoeficiente[categoria] && paineisCoeficiente[categoria][subcategoriaNome]) {
+                    delete paineisCoeficiente[categoria][subcategoriaNome];
+                    await updateDoc(paineisRef, { paineis_coeficiente: paineisCoeficiente });
+                }
+            }
+        }
+
+        function getTipoValuesFromSave() {
+            const tipoCheckboxes = document.querySelectorAll('input[name="subcategoria-tipo"]');
+            return Array.from(tipoCheckboxes).map(checkbox => {
+                const tipoName = checkbox.value;
+                const textInput = checkbox.parentElement.querySelector('input[name="tipo-text-new"]');
+                const textValue = textInput ? textInput.value.trim() : '';
+                return checkbox.checked ? { name: tipoName, text: textValue } : null;
+            }).filter(item => item !== null);
+        }
+
+        async function saveCategories() {
+            const categoriaNome = categoriaNomeInput.value.trim();
+            const subcategoriaNome = subcategoriaNomeInput.value.trim();
+
+            const subcategoriaCasta = [];
+            const castaCheckboxes = document.getElementsByName('subcategoria-casta');
+            for (let i = 0; i < castaCheckboxes.length; i++) {
+                if (castaCheckboxes[i].checked) {
+                    subcategoriaCasta.push(castaCheckboxes[i].value);
+                }
+            }
+
+            const subcategoriaTipo = getTipoValuesFromSave();
+
+            if (!categoriaNome) {
+                categoryMessage.textContent = "Por favor, insira o nome da categoria.";
+                return;
+            }
+            categoryMessage.textContent = "";
+
+            try {
+                const paineisRef = doc(db, 'paineis', 'paineis coeficiente');
+                const paineisDoc = await getDoc(paineisRef);
+                let updatedPaineisCoeficiente = {};
+
+                if (paineisDoc.exists() && paineisDoc.data().paineis_coeficiente) {
+                    updatedPaineisCoeficiente = { ...paineisDoc.data().paineis_coeficiente };
+                }
+
+                if (!updatedPaineisCoeficiente[categoriaNome]) {
+                    updatedPaineisCoeficiente[categoriaNome] = {};
+                }
+
+                if (subcategoriaNome) {
+                    if (subcategoriaCasta.length === 0 && subcategoriaTipo.length === 0 && updatedPaineisCoeficiente[categoriaNome][subcategoriaNome]) {
+                        delete updatedPaineisCoeficiente[categoriaNome][subcategoriaNome];
+                    }
+                    else {
+                        updatedPaineisCoeficiente[categoriaNome][subcategoriaNome] = {
+                            casta: subcategoriaCasta,
+                            tipo: subcategoriaTipo
+                        };
+                    }
+                }
+
+                await setDoc(paineisRef, { paineis_coeficiente: updatedPaineisCoeficiente }, { merge: true });
+
+                categoriaNomeInput.value = '';
+                subcategoriaNomeInput.value = '';
+                castaCheckboxes.forEach(checkbox => checkbox.checked = false);
+
+                paineisCoeficienteData = await fetchPaineisCoefficients();
+                fetchAndDisplayCategories();
+                if (currentPlayer) calculateAndDisplayData();
+                categoryMessage.textContent = "Categoria/Subcategoria salva com sucesso!";
+
+            } catch (error) {
+                console.error("Erro ao salvar categoria/subcategoria:", error);
+                categoryMessage.textContent = "Erro ao salvar. Verifique o console.";
+            }
+        }
+
+        // DOM Setup for parameters popup
+        paramsSettingsIcon.addEventListener('click', () => {
+            openParamsPopup();
+            fetchAndDisplayCategories();
+        });
+        closeParamsPopup.addEventListener('click', closeParamsPopupFunction);
+        paramsOverlay.addEventListener('click', closeParamsPopupFunction);
+        saveParamsBtn.addEventListener('click', () => {
+            closeParamsPopupFunction();
+        });
+        addCategoryBtn.addEventListener('click', saveCategories);
+
+        const subcategorySearchInput = document.getElementById('subcategory-search');
+        const categoriesListContainer = document.getElementById('categories-list');
+        const addCategorySection = document.querySelector('.add-category-section');
+        const sectionContent = document.querySelector('.add-category-section .section-content');
+        const toggleIcon = document.querySelector('.add-category-section .toggle-icon');
+
+        addCategorySection.addEventListener('click', (event) => {
+            if (event.target.closest('input, button, label, .checkbox-group')) {
+                return;
+            }
+            const isHidden = sectionContent.style.display === 'none' || sectionContent.style.display === '';
+            sectionContent.style.display = isHidden ? 'block' : 'none';
+            toggleIcon.classList.toggle('rotate', isHidden);
+        });
+
+        subcategorySearchInput.addEventListener('input', () => {
+            const searchTerm = subcategorySearchInput.value.trim().toLowerCase();
+            const categorySections = Array.from(categoriesListContainer.children);
+            categorySections.forEach(section => {
+                if (section.tagName === 'H4') {
+                    const categoryTitle = section;
+                    const subcategoriesContainer = categoryTitle.nextElementSibling;
+                    if (!subcategoriesContainer || !subcategoriesContainer.classList.contains('subcategories-container')) return;
+                    let categoryHasMatch = false;
+                    const subcategoryCards = subcategoriesContainer.querySelectorAll('.subcategory-card');
+                    subcategoryCards.forEach(card => {
+                        const subcategoryName = card.querySelector('.subcategory-name').textContent.toLowerCase();
+                        const matchesSearch = subcategoryName.includes(searchTerm);
+                        card.style.display = matchesSearch ? '' : 'none';
+                        if (matchesSearch) categoryHasMatch = true;
+                    });
+                    categoryTitle.style.display = categoryHasMatch ? '' : 'none';
+                    subcategoriesContainer.style.display = categoryHasMatch ? '' : 'none';
+                }
+            });
+        });
+
+    </script>
+
+    <!-- Script loader for the admin menu -->
+    <script src="js/menuadmin-loader.js"></script>
+
+</body>
+</html>

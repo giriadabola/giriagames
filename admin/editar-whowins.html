@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Editar WhoWins - G EMPIRE</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    
+    <!-- Estilos do menu -->
+    <link rel="stylesheet" href="css/menu-admin.css">
+
+    <!-- Guardião de segurança central -->
+    <script type="module" src="./js/auth-guard.js"></script>
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { min-height: 100vh; background-color: #090c10; font-family: 'Poppins', Arial, sans-serif; color: #f0f2f5; }
+        
+        .content { padding: 110px 20px 40px; max-width: 1200px; margin: 0 auto; }
+        .cards-container { display: flex; flex-wrap: wrap; gap: 20px; justify-content: flex-start; margin-top: 20px; }
+        .card { background: #111622; border-radius: 12px; padding: 24px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45); border: 1px solid rgba(255, 255, 255, 0.06); width: 100%; margin-bottom: 0; }
+        h1 { color: #ffffff; margin-bottom: 30px; text-align: center; font-weight: 700; font-size: 28px; }
+        
+        .card-title { font-size: 18px; font-weight: 600; color: #2176ff; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 2px solid rgba(255, 255, 255, 0.05); }
+        .form-group { margin-bottom: 16px; }
+        .form-group:last-child { margin-bottom: 0; }
+        .form-group label { display: block; margin-bottom: 8px; color: #8892b0; font-weight: 500; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; }
+        
+        .form-control { width: 100%; padding: 10px; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; font-size: 15px; transition: border-color 0.2s ease; background-color: #161c28; color: #ffffff; outline: none; }
+        .form-control:focus { border-color: rgba(33, 118, 255, 0.5); }
+        
+        .dropdown { position: relative; }
+        .dropdown-results { position: absolute; top: 100%; left: 0; right: 0; background: #161c28; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; max-height: 200px; overflow-y: auto; z-index: 1000; display: none; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5); }
+        .dropdown-item { padding: 10px 12px; cursor: pointer; color: #ffffff; }
+        .dropdown-item:hover { background-color: rgba(33, 118, 255, 0.15); }
+        
+        .btn-edit { background: linear-gradient(135deg, #2ecc71, #27ae60); color: white; border: none; padding: 12px 24px; border-radius: 8px; font-size: 16px; font-weight: 700; cursor: pointer; width: 100%; transition: all 0.3s ease; text-transform: uppercase; letter-spacing: 0.5px; box-shadow: 0 4px 15px rgba(46, 204, 113, 0.2); }
+        .btn-edit:hover { background: linear-gradient(135deg, #27ae60, #219653); transform: translateY(-1px); box-shadow: 0 6px 20px rgba(46, 204, 113, 0.35); }
+        
+        /* Controls / Search Bar */
+        .controls-row { display: flex; gap: 16px; margin-bottom: 24px; align-items: center; flex-wrap: wrap; }
+        .search-wrapper { position: relative; width: 320px; }
+        .search-wrapper i { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); color: #8892b0; }
+        .search-input { width: 100%; padding: 12px 42px 12px 16px; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; font-size: 15px; outline: none; background-color: #111622; color: #ffffff; transition: all 0.3s ease; }
+        .search-input:focus { border-color: rgba(33, 118, 255, 0.5); box-shadow: 0 0 10px rgba(33, 118, 255, 0.15); }
+        .filter-select { padding: 12px 36px 12px 16px; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; font-size: 15px; outline: none; background-color: #111622; color: #ffffff; transition: all 0.3s ease; cursor: pointer; min-width: 180px; appearance: none; -webkit-appearance: none; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%238892b0' viewBox='0 0 16 16'><path fill-rule='evenodd' d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/></svg>"); background-repeat: no-repeat; background-position: calc(100% - 14px) center; }
+        .filter-select:focus { border-color: rgba(33, 118, 255, 0.5); box-shadow: 0 0 10px rgba(33, 118, 255, 0.15); }
+
+        /* Excel-like Table Container */
+        .table-container { background-color: #111622; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.06); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45); overflow-x: auto; margin-bottom: 30px; }
+        .excel-table { width: 100%; border-collapse: collapse; text-align: left; min-width: 900px; }
+        .excel-table th, .excel-table td { padding: 12px 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.04); font-size: 14px; }
+        .excel-table th { background-color: #161c28; color: #8892b0; font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px; border-bottom: 2px solid rgba(255, 255, 255, 0.08); user-select: none; }
+        .excel-table th i { margin-left: 6px; font-size: 10px; transition: color 0.2s; }
+        .excel-table tr { cursor: pointer; transition: background-color 0.2s ease; }
+        .excel-table tr:hover { background-color: rgba(33, 118, 255, 0.08); }
+        .excel-table tr:last-child td { border-bottom: none; }
+        
+        .club-row-img { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; border: 1px solid rgba(255, 255, 255, 0.1); margin-right: 8px; vertical-align: middle; }
+        .game-row-team { font-weight: 600; color: #ffffff; display: inline-block; vertical-align: middle; }
+        .vs-badge { display: inline-block; margin: 0 8px; color: #8892b0; font-weight: bold; font-size: 12px; }
+
+        /* Main Modal Overlay */
+        .overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.75); z-index: 1000; backdrop-filter: blur(4px); justify-content: center; align-items: center; }
+        .overlay.active { display: flex; }
+        .modal-content { background: #111622; width: 95%; max-width: 950px; border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 15px 45px rgba(0,0,0,0.6); display: flex; flex-direction: column; max-height: 90vh; animation: zoomIn 0.3s ease; }
+        @keyframes zoomIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        
+        .modal-header { padding: 20px; border-bottom: 1px solid rgba(255,255,255,0.06); display: flex; justify-content: space-between; align-items: center; }
+        .modal-header h3 { font-size: 18px; color: #ffffff; font-weight: bold; }
+        .modal-body { padding: 20px; overflow-y: auto; flex-grow: 1; }
+        .modal-footer { padding: 16px 20px; border-top: 1px solid rgba(255,255,255,0.06); display: flex; justify-content: flex-end; gap: 12px; }
+        
+        .btn { padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; transition: all 0.2s; display: inline-flex; align-items: center; gap: 8px; }
+        .btn.secondary { background-color: #161c28; color: #8892b0; border: 1px solid rgba(255, 255, 255, 0.08); }
+        .btn.secondary:hover { background-color: #1d2639; color: #ffffff; }
+        .btn.danger { background-color: #dc3545; color: white; }
+        .btn.danger:hover { background-color: #c82333; }
+
+        .club-image { width: 36px; height: 36px; border-radius: 4px; object-fit: cover; border: 1px solid rgba(255,255,255,0.08); }
+        .club-image.placeholder { background-color: #161c28; display: flex; align-items: center; justify-content: center; color: #8892b0; }
+
+        .menu-top-btn { display: inline-flex; align-items: center; gap: 8px; text-decoration: none; background: #161c28; border: 1px solid rgba(255,255,255,0.08); color: #ffffff; padding: 10px 18px; border-radius: 8px; font-size: 14px; font-weight: 600; transition: all 0.3s ease; margin-bottom: 20px; }
+        .menu-top-btn:hover { background: #2176ff; border-color: #2176ff; }
+
+        /* Confirmation Delete Modal Customization */
+        .confirm-modal-content { background: #111622; padding: 25px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 15px 45px rgba(0,0,0,0.6); max-width: 450px; text-align: center; color: #ffffff; }
+        .confirm-modal-content h3 { font-size: 20px; font-weight: 700; margin-bottom: 12px; color: #ffffff; }
+        .confirm-modal-content p { font-size: 14px; margin-bottom: 24px; color: #8892b0; line-height: 1.5; }
+    </style>
+
+    <link rel="stylesheet" href="css/admin-global.css">
+</head>
+<body style="display: none;">
+    
+    <nav id="menu-placeholder" class="top-menu"></nav>
+
+    <div class="content">
+        <a href="criar-whowins.html" class="menu-top-btn"><i class="fas fa-plus"></i> CRIAR WHOWINS</a>
+        <h1>Editar WhoWins</h1>
+        
+        <div class="controls-row">
+            <div class="search-wrapper">
+                <input type="text" class="search-input" placeholder="Pesquisar por equipa ou competição..." id="tableSearch">
+                <i class="fas fa-search"></i>
+            </div>
+            <select id="filter-ano" class="filter-select">
+                <option value="">Todos os Anos</option>
+            </select>
+            <select id="filter-competicao" class="filter-select">
+                <option value="">Todas as Competições</option>
+            </select>
+            <select id="filter-ronda" class="filter-select">
+                <option value="">Todas as Rondas</option>
+            </select>
+        </div>
+
+        <div class="table-container">
+            <table class="excel-table">
+                <thead>
+                    <tr>
+                        <th data-sort="equipaCasa" style="cursor: pointer;">Equipa Casa <i class="fas fa-sort"></i></th>
+                        <th style="width: 50px; text-align: center;">VS</th>
+                        <th data-sort="equipaFora" style="cursor: pointer;">Equipa Fora <i class="fas fa-sort"></i></th>
+                        <th data-sort="competicao" style="cursor: pointer;">Competição <i class="fas fa-sort"></i></th>
+                        <th data-sort="ronda" style="cursor: pointer; text-align: center;">Ronda <i class="fas fa-sort"></i></th>
+                        <th data-sort="temporada" style="cursor: pointer; text-align: center;">Temporada <i class="fas fa-sort"></i></th>
+                        <th data-sort="dataJogo" style="cursor: pointer; text-align: center;">Data / Hora <i class="fas fa-sort"></i></th>
+                    </tr>
+                </thead>
+                <tbody id="games-table-body">
+                    <!-- Loaded dynamically -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- MAIN OVERLAY EDIT POPUP -->
+    <div class="overlay" id="edit-game-popup">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Editar Detalhes do WhoWins</h3>
+                <div style="display: flex; gap: 10px;">
+                    <button type="submit" form="editar-whowins-form" class="btn-edit" style="width: auto; padding: 8px 24px; font-size: 14px; display: inline-block;">Salvar Alterações</button>
+                    <button id="delete-whowins-btn" class="btn danger" style="padding: 8px 16px; font-size: 14px;"><i class="fas fa-trash-alt"></i> Eliminar</button>
+                </div>
+                <button class="btn secondary" id="closeModalBtn" style="padding: 5px 10px; min-width: auto;"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <form id="editar-whowins-form" class="cards-container" style="margin-top: 0;">
+                    
+                    <!-- Card 1: Informações do Jogo -->
+                    <div class="card" style="width: calc(50% - 10px); min-width: 300px; margin-bottom: 0;">
+                        <div class="card-title">Equipas e Competição</div>
+                        
+                        <div class="form-group">
+                            <label for="equipa-casa">Equipa Casa</label>
+                            <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 8px;">
+                                <div class="club-image placeholder" id="equipa-casa-image"><i class="fas fa-shield-alt"></i></div>
+                                <div class="dropdown" style="flex: 1;">
+                                    <input type="text" class="form-control" id="equipa-casa" placeholder="Digite para pesquisar..." required autocomplete="off">
+                                    <div class="dropdown-results" id="equipa-casa-list"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="equipa-fora">Equipa Fora</label>
+                            <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 8px;">
+                                <div class="club-image placeholder" id="equipa-fora-image"><i class="fas fa-shield-alt"></i></div>
+                                <div class="dropdown" style="flex: 1;">
+                                    <input type="text" class="form-control" id="equipa-fora" placeholder="Digite para pesquisar..." required autocomplete="off">
+                                    <div class="dropdown-results" id="equipa-fora-list"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="competicao">Competição</label>
+                            <div style="display: flex; gap: 10px; align-items: center;">
+                                <div class="club-image placeholder" id="competicao-image"><i class="fas fa-trophy"></i></div>
+                                <select class="form-control" id="competicao" required style="flex: 1;">
+                                    <option value="">Selecione uma competição</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="ronda">Ronda</label>
+                            <select class="form-control" id="ronda" required></select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="nome-jogo">Nome do Jogo</label>
+                            <input type="text" class="form-control" id="nome-jogo" required>
+                        </div>
+                    </div>
+
+                    <!-- Card 2: Datas & Configurações adicionais -->
+                    <div class="card" style="width: calc(50% - 10px); min-width: 300px; margin-bottom: 0;">
+                        <div class="card-title">Datas e Configurações</div>
+                        
+                        <div class="form-group">
+                            <label for="data-jogo">Data do Jogo</label>
+                            <input type="date" class="form-control" id="data-jogo" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="hora-jogo">Hora do Jogo</label>
+                            <input type="time" class="form-control" id="hora-jogo" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="inicio-palpite">Início dos Palpites</label>
+                            <input type="datetime-local" class="form-control" id="inicio-palpite" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="fim-palpite">Fim dos Palpites</label>
+                            <input type="datetime-local" class="form-control" id="fim-palpite" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="temporada">Temporada</label>
+                            <input type="text" class="form-control" id="temporada" required>
+                        </div>
+
+                        <div class="form-group" style="display: none;">
+                            <label for="anexado">Anexado</label>
+                            <select class="form-control" id="anexado">
+                                <option value="whowins" selected>whowins</option>
+                            </select>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn secondary" id="cancelModalBtn">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- CONFIRMATION DELETE MODAL -->
+    <div id="confirmation-modal" class="overlay">
+        <div class="confirm-modal-content">
+            <h3>Confirmar Eliminação</h3>
+            <p>Esta ação é irreversível. Irá eliminar o jogo e todos os palpites associados. Tem a certeza?</p>
+            <div style="display: flex; justify-content: center; gap: 15px;">
+                <button id="confirm-delete-btn" class="btn danger">Sim, eliminar</button>
+                <button id="cancel-delete-btn" class="btn secondary">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { auth, db } from './js/auth-guard.js';
+        import { collection, addDoc, query, where, getDocs, doc, getDoc, updateDoc, deleteDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+
+        let currentUser = null;
+        let allGames = [];
+        let clubsMap = new Map();
+        let competitionsMap = new Map();
+        
+        let selectedWhoWinsId = null;
+        let selectedEquipaCasaId = null;
+        let selectedEquipaForaId = null;
+        let originalEquipaCasaId = null;
+        let originalEquipaForaId = null;
+
+        let currentSortColumn = 'dataJogo';
+        let currentSortDirection = 'desc';
+
+        onAuthStateChanged(auth, (user) => {
+            currentUser = user;
+        });
+
+        const fallbackImg = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%238892b0"><path d="M12 2L2 5v6c0 5.52 4.48 10 10 10s10-4.48 10-10V5l-10-3zm0 18c-4.41 0-8-3.59-8-8V6.3l8-2.4 8 2.4V12c0 4.41-3.59 8-8 8z"/></svg>`;
+
+        window.resolveClubImage = function(img, pais, code) {
+            if (!img.dataset.tryIndex) {
+                img.dataset.tryIndex = "0";
+            }
+            const extensions = ['webp', 'png', 'jpg', 'jpeg', 'svg'];
+            const currentIndex = parseInt(img.dataset.tryIndex);
+            
+            if (currentIndex < extensions.length) {
+                img.dataset.tryIndex = (currentIndex + 1).toString();
+                img.src = `../assets/equipalogos/${pais}/club_${code}.${extensions[currentIndex]}`;
+            } else {
+                img.onerror = null;
+                img.src = fallbackImg;
+            }
+        };
+
+        window.resolveFallbackImage = function(img) {
+            img.onerror = null;
+            img.src = fallbackImg;
+        };
+
+        function formatDateToLocalInput(date, type = 'datetime') {
+            if (!date || !(date instanceof Date)) return '';
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+
+            if (type === 'date') return `${year}-${month}-${day}`;
+            if (type === 'time') return `${hours}:${minutes}`;
+            return `${year}-${month}-${day}T${hours}:${minutes}`;
+        }
+
+        function updateFimPalpite() {
+            const gameDate = document.getElementById('data-jogo').value;
+            const gameTime = document.getElementById('hora-jogo').value;
+            if (gameDate && gameTime) {
+                const gameDateTime = new Date(gameDate + 'T' + gameTime);
+                gameDateTime.setHours(gameDateTime.getHours() - 1);
+                document.getElementById('fim-palpite').value = gameDateTime.toISOString().slice(0, 16);
+            }
+        }
+
+        function updateGameName() {
+            const equipaCasa = document.getElementById('equipa-casa').value;
+            const equipaFora = document.getElementById('equipa-fora').value;
+            const dataJogo = document.getElementById('data-jogo').value;
+            if (equipaCasa && equipaFora && dataJogo) {
+                const formattedDate = new Date(dataJogo).toLocaleDateString('pt-PT');
+                document.getElementById('nome-jogo').value = `${equipaCasa} x ${equipaFora} - ${formattedDate}`;
+            } else {
+                document.getElementById('nome-jogo').value = '';
+            }
+        }
+
+        function validateForm() {
+            const dataJogo = new Date(document.getElementById('data-jogo').value + 'T' + document.getElementById('hora-jogo').value);
+            const inicioPalpite = new Date(document.getElementById('inicio-palpite').value);
+            const fimPalpite = new Date(document.getElementById('fim-palpite').value);
+
+            if (inicioPalpite >= fimPalpite) {
+                alert('O início dos palpites deve ser anterior ao fim dos palpites.');
+                return false;
+            }
+            if (fimPalpite >= dataJogo) {
+                alert('O fim dos palpites deve ser anterior à data/hora do jogo.');
+                return false;
+            }
+            if (!selectedEquipaCasaId || !selectedEquipaForaId) {
+                alert('Selecione os times para prosseguir.');
+                return false;
+            }
+            return true;
+        }
+
+        async function initPage() {
+            try {
+                const [clubsSnap, competitionsSnap, gamesSnap] = await Promise.all([
+                    getDocs(collection(db, 'clubes')),
+                    getDocs(collection(db, 'competicoes')),
+                    getDocs(collection(db, 'whowinsJogos'))
+                ]);
+
+                // Map clubs
+                clubsSnap.forEach(d => clubsMap.set(d.id, { id: d.id, ...d.data() }));
+
+                // Map competitions and populate selector inside modal
+                const compSelect = document.getElementById('competicao');
+                competitionsSnap.forEach(d => {
+                    const compData = d.data();
+                    competitionsMap.set(d.id, { id: d.id, ...compData });
+                    
+                    const opt = document.createElement('option');
+                    opt.value = d.id;
+                    opt.textContent = compData.nome;
+                    compSelect.appendChild(opt);
+                });
+
+                // Populate round choices in popup modal
+                const roundSelect = document.getElementById('ronda');
+                roundSelect.innerHTML = '';
+                for (let i = 1; i <= 50; i++) {
+                    const opt = document.createElement('option');
+                    opt.value = i;
+                    opt.textContent = `Ronda ${i}`;
+                    roundSelect.appendChild(opt);
+                }
+
+                // Process games
+                allGames = gamesSnap.docs.map(doc => {
+                    const data = doc.data();
+                    let dateObj = null;
+                    if (data.dataJogo) {
+                        try {
+                            if (typeof data.dataJogo.toDate === 'function') {
+                                dateObj = data.dataJogo.toDate();
+                            } else if (data.dataJogo.seconds !== undefined) {
+                                dateObj = new Date(data.dataJogo.seconds * 1000);
+                            } else {
+                                dateObj = new Date(data.dataJogo);
+                            }
+                        } catch (e) {
+                            console.warn("Falha ao converter dataJogo:", data.dataJogo, e);
+                        }
+                    }
+                    return {
+                        ...data,
+                        id: doc.id,
+                        equipaCasaId: data.equipaCasaId || '',
+                        equipaCasa: data.equipaCasa || 'N/A',
+                        equipaForaId: data.equipaForaId || '',
+                        equipaFora: data.equipaFora || 'N/A',
+                        competicaoId: data.competicaoId || '',
+                        competicao: data.competicao || 'N/A',
+                        ronda: data.ronda || 1,
+                        dataJogo: dateObj,
+                        temporada: data.temporada || 'N/A',
+                        inicioIntervalo: data.inicioIntervalo,
+                        fimIntervalo: data.fimIntervalo,
+                        nomeJogo: data.nomeJogo || ''
+                    };
+                });
+
+                populateFilters();
+                renderGamesTable();
+
+            } catch (error) {
+                console.error("Erro ao carregar dados da página:", error);
+                alert("Erro ao carregar dados dos jogos.");
+            }
+        }
+
+        function populateFilters() {
+            const filterAno = document.getElementById('filter-ano');
+            const filterCompeticao = document.getElementById('filter-competicao');
+
+            const currentYearStr = new Date().getFullYear().toString();
+
+            // Extract unique years from games
+            const years = new Set([currentYearStr]);
+            allGames.forEach(g => {
+                if (g.dataJogo && typeof g.dataJogo.getFullYear === 'function') {
+                    years.add(g.dataJogo.getFullYear().toString());
+                }
+            });
+
+            // Populate Year filter
+            filterAno.innerHTML = '<option value="">Todos os Anos</option>';
+            Array.from(years).sort().reverse().forEach(yr => {
+                const opt = document.createElement('option');
+                opt.value = yr;
+                opt.textContent = yr;
+                if (yr === currentYearStr) opt.selected = true; // Default year
+                filterAno.appendChild(opt);
+            });
+
+            // Populate Competitions filter
+            filterCompeticao.innerHTML = '<option value="">Todas as Competições</option>';
+            Array.from(competitionsMap.values())
+                .sort((a, b) => a.nome.localeCompare(b.nome))
+                .forEach(comp => {
+                    const opt = document.createElement('option');
+                    opt.value = comp.id;
+                    opt.textContent = comp.nome;
+                    filterCompeticao.appendChild(opt);
+                });
+
+            populateRondasFilter();
+        }
+
+        function populateRondasFilter() {
+            const filterAno = document.getElementById('filter-ano').value;
+            const filterRonda = document.getElementById('filter-ronda');
+            
+            const rounds = new Set();
+            allGames.forEach(g => {
+                const gameYear = g.dataJogo && typeof g.dataJogo.getFullYear === 'function' ? g.dataJogo.getFullYear().toString() : '';
+                const matchesAno = !filterAno || gameYear === filterAno;
+                if (matchesAno && g.ronda) {
+                    rounds.add(g.ronda);
+                }
+            });
+
+            filterRonda.innerHTML = '<option value="">Todas as Rondas</option>';
+            const roundsArray = Array.from(rounds).sort((a, b) => a - b);
+            const maxRound = roundsArray.length > 0 ? Math.max(...roundsArray) : null;
+            roundsArray.forEach(r => {
+                const opt = document.createElement('option');
+                opt.value = r;
+                opt.textContent = `Ronda ${r}`;
+                if (r === maxRound) opt.selected = true;
+                filterRonda.appendChild(opt);
+            });
+        }
+
+        function renderGamesTable() {
+            const queryText = document.getElementById('tableSearch').value.toLowerCase();
+            const filterAno = document.getElementById('filter-ano').value;
+            const filterComp = document.getElementById('filter-competicao').value;
+            const filterRonda = document.getElementById('filter-ronda').value;
+            const tableBody = document.getElementById('games-table-body');
+            tableBody.innerHTML = '';
+
+            const filtered = allGames.filter(g => {
+                const matchesSearch = g.equipaCasa.toLowerCase().includes(queryText) || 
+                                     g.equipaFora.toLowerCase().includes(queryText) || 
+                                     g.competicao.toLowerCase().includes(queryText) ||
+                                     (g.nomeJogo && g.nomeJogo.toLowerCase().includes(queryText));
+                
+                const gameYear = g.dataJogo && typeof g.dataJogo.getFullYear === 'function' ? g.dataJogo.getFullYear().toString() : '';
+                const matchesAno = !filterAno || gameYear === filterAno;
+                const matchesComp = !filterComp || g.competicaoId === filterComp;
+                const matchesRonda = !filterRonda || g.ronda.toString() === filterRonda;
+
+                return matchesSearch && matchesAno && matchesComp && matchesRonda;
+            });
+
+            if (filtered.length === 0) {
+                tableBody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: #8892b0; padding: 20px;">Nenhum jogo WhoWins encontrado.</td></tr>`;
+                return;
+            }
+
+            // Sorting
+            filtered.sort((a, b) => {
+                let valA = a[currentSortColumn];
+                let valB = b[currentSortColumn];
+
+                if (currentSortColumn === 'dataJogo') {
+                    valA = valA ? valA.getTime() : 0;
+                    valB = valB ? valB.getTime() : 0;
+                } else {
+                    valA = valA || '';
+                    valB = valB || '';
+                }
+
+                let comparison = 0;
+                if (typeof valA === 'number' && typeof valB === 'number') {
+                    comparison = valA - valB;
+                } else {
+                    comparison = valA.toString().localeCompare(valB.toString(), 'pt', { sensitivity: 'base' });
+                }
+
+                return currentSortDirection === 'asc' ? comparison : -comparison;
+            });
+
+            filtered.forEach(g => {
+                const tr = document.createElement('tr');
+                
+                const homeClub = clubsMap.get(g.equipaCasaId);
+                const awayClub = clubsMap.get(g.equipaForaId);
+                const comp = competitionsMap.get(g.competicaoId);
+
+                let homeImg = fallbackImg;
+                let homeOnerror = `onerror="window.resolveFallbackImage(this)"`;
+                if (homeClub) {
+                    if (homeClub.imagem) {
+                        homeImg = homeClub.imagem.startsWith('http') || homeClub.imagem.startsWith('data:') ? homeClub.imagem : '../' + homeClub.imagem;
+                        homeOnerror = `onerror="window.resolveClubImage(this, '${homeClub.pais || ''}', '${homeClub.codigoUrl || ''}')"`;
+                    } else if (homeClub.codigoUrl) {
+                        homeImg = `../assets/equipalogos/${homeClub.pais || ''}/club_${homeClub.codigoUrl}.webp`;
+                        homeOnerror = `onerror="window.resolveClubImage(this, '${homeClub.pais || ''}', '${homeClub.codigoUrl || ''}')"`;
+                    }
+                }
+
+                let awayImg = fallbackImg;
+                let awayOnerror = `onerror="window.resolveFallbackImage(this)"`;
+                if (awayClub) {
+                    if (awayClub.imagem) {
+                        awayImg = awayClub.imagem.startsWith('http') || awayClub.imagem.startsWith('data:') ? awayClub.imagem : '../' + awayClub.imagem;
+                        awayOnerror = `onerror="window.resolveClubImage(this, '${awayClub.pais || ''}', '${awayClub.codigoUrl || ''}')"`;
+                    } else if (awayClub.codigoUrl) {
+                        awayImg = `../assets/equipalogos/${awayClub.pais || ''}/club_${awayClub.codigoUrl}.webp`;
+                        awayOnerror = `onerror="window.resolveClubImage(this, '${awayClub.pais || ''}', '${awayClub.codigoUrl || ''}')"`;
+                    }
+                }
+
+                let compImg = fallbackImg;
+                if (comp && comp.imagem) {
+                    compImg = comp.imagem.startsWith('http') || comp.imagem.startsWith('data:') ? comp.imagem : '../' + comp.imagem;
+                }
+
+                const displayDate = g.dataJogo ? 
+                    g.dataJogo.toLocaleDateString('pt-BR') + ' ' + g.dataJogo.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) 
+                    : 'N/A';
+
+                tr.innerHTML = `
+                    <td>
+                        <img src="${homeImg}" class="club-row-img" ${homeOnerror}>
+                        <span class="game-row-team">${g.equipaCasa}</span>
+                    </td>
+                    <td style="text-align: center;"><span class="vs-badge">VS</span></td>
+                    <td>
+                        <img src="${awayImg}" class="club-row-img" ${awayOnerror}>
+                        <span class="game-row-team">${g.equipaFora}</span>
+                    </td>
+                    <td>
+                        <img src="${compImg}" class="club-row-img" onerror="window.resolveFallbackImage(this)" style="width: 24px; height: 24px;">
+                        <span>${g.competicao}</span>
+                    </td>
+                    <td style="text-align: center;">Ronda ${g.ronda}</td>
+                    <td style="text-align: center;">${g.temporada}</td>
+                    <td style="text-align: center; color: #2176ff; font-weight: 500;">${displayDate}</td>
+                `;
+
+                tr.addEventListener('click', () => openEditModal(g));
+                tableBody.appendChild(tr);
+            });
+        }
+
+        function updateSortHeaders() {
+            const headers = document.querySelectorAll('.excel-table th[data-sort]');
+            headers.forEach(th => {
+                const col = th.getAttribute('data-sort');
+                const icon = th.querySelector('i');
+                if (icon) {
+                    if (col === currentSortColumn) {
+                        icon.className = currentSortDirection === 'asc' ? 'fas fa-sort-up' : 'fas fa-sort-down';
+                        icon.style.color = '#2176ff';
+                    } else {
+                        icon.className = 'fas fa-sort';
+                        icon.style.color = '#8892b0';
+                    }
+                }
+            });
+        }
+
+        function openEditModal(game) {
+            loadWhoWinsForEdit(game);
+            document.getElementById('edit-game-popup').classList.add('active');
+        }
+
+        function closeEditModal() {
+            document.getElementById('edit-game-popup').classList.remove('active');
+            document.getElementById('editar-whowins-form').reset();
+            
+            document.getElementById('equipa-casa-image').innerHTML = '<i class="fas fa-shield-alt"></i>';
+            document.getElementById('equipa-casa-image').className = 'club-image placeholder';
+            document.getElementById('equipa-fora-image').innerHTML = '<i class="fas fa-shield-alt"></i>';
+            document.getElementById('equipa-fora-image').className = 'club-image placeholder';
+            document.getElementById('competicao-image').innerHTML = '<i class="fas fa-trophy"></i>';
+            document.getElementById('competicao-image').className = 'club-image placeholder';
+
+            selectedWhoWinsId = null;
+        }
+
+        async function loadWhoWinsForEdit(game) {
+            selectedWhoWinsId = game.id;
+            originalEquipaCasaId = game.equipaCasaId;
+            originalEquipaForaId = game.equipaForaId;
+            selectedEquipaCasaId = game.equipaCasaId;
+            selectedEquipaForaId = game.equipaForaId;
+
+            document.getElementById('equipa-casa').value = game.equipaCasa;
+            document.getElementById('equipa-fora').value = game.equipaFora;
+            document.getElementById('competicao').value = game.competicaoId;
+            document.getElementById('ronda').value = game.ronda;
+            document.getElementById('nome-jogo').value = game.nomeJogo;
+
+            // Formatar datas para inputs locais
+            document.getElementById('data-jogo').value = formatDateToLocalInput(game.dataJogo, 'date');
+            document.getElementById('hora-jogo').value = formatDateToLocalInput(game.dataJogo, 'time');
+
+            let startInterval = null;
+            if (game.inicioIntervalo) {
+                startInterval = game.inicioIntervalo.toDate ? game.inicioIntervalo.toDate() : new Date(game.inicioIntervalo);
+            }
+            let endInterval = null;
+            if (game.fimIntervalo) {
+                endInterval = game.fimIntervalo.toDate ? game.fimIntervalo.toDate() : new Date(game.fimIntervalo);
+            }
+
+            document.getElementById('inicio-palpite').value = formatDateToLocalInput(startInterval, 'datetime');
+            document.getElementById('fim-palpite').value = formatDateToLocalInput(endInterval, 'datetime');
+
+            document.getElementById('anexado').value = game.anexado || 'whowins';
+            document.getElementById('temporada').value = game.temporada || '2025/2026';
+
+            // Preview de imagens
+            const homeClub = clubsMap.get(game.equipaCasaId);
+            const awayClub = clubsMap.get(game.equipaForaId);
+            const comp = competitionsMap.get(game.competicaoId);
+
+            const equipaCasaImage = document.getElementById('equipa-casa-image');
+            if (homeClub) {
+                let homeImg = homeClub.imagem ? (homeClub.imagem.startsWith('http') || homeClub.imagem.startsWith('data:') ? homeClub.imagem : '../' + homeClub.imagem) : `../assets/equipalogos/${homeClub.pais || ''}/club_${homeClub.codigoUrl || ''}.webp`;
+                equipaCasaImage.innerHTML = `<img src="${homeImg}" class="club-image" alt="${homeClub.nome}" onerror="window.resolveClubImage(this, '${homeClub.pais || ''}', '${homeClub.codigoUrl || ''}')">`;
+                equipaCasaImage.className = 'club-image';
+            } else {
+                equipaCasaImage.innerHTML = '<i class="fas fa-shield-alt"></i>';
+                equipaCasaImage.className = 'club-image placeholder';
+            }
+
+            const equipaForaImage = document.getElementById('equipa-fora-image');
+            if (awayClub) {
+                let awayImg = awayClub.imagem ? (awayClub.imagem.startsWith('http') || awayClub.imagem.startsWith('data:') ? awayClub.imagem : '../' + awayClub.imagem) : `../assets/equipalogos/${awayClub.pais || ''}/club_${awayClub.codigoUrl || ''}.webp`;
+                equipaForaImage.innerHTML = `<img src="${awayImg}" class="club-image" alt="${awayClub.nome}" onerror="window.resolveClubImage(this, '${awayClub.pais || ''}', '${awayClub.codigoUrl || ''}')">`;
+                equipaForaImage.className = 'club-image';
+            } else {
+                equipaForaImage.innerHTML = '<i class="fas fa-shield-alt"></i>';
+                equipaForaImage.className = 'club-image placeholder';
+            }
+
+            const competicaoImage = document.getElementById('competicao-image');
+            if (comp) {
+                let compImg = comp.imagem ? (comp.imagem.startsWith('http') || comp.imagem.startsWith('data:') ? comp.imagem : '../' + comp.imagem) : fallbackImg;
+                competicaoImage.innerHTML = `<img src="${compImg}" class="club-image" alt="${comp.nome}" onerror="window.resolveFallbackImage(this)">`;
+                competicaoImage.className = 'club-image';
+            } else {
+                competicaoImage.innerHTML = '<i class="fas fa-trophy"></i>';
+                competicaoImage.className = 'club-image placeholder';
+            }
+        }
+
+        async function searchClubsInput(searchTerm, inputId, resultsListId, imageElementId, isHomeTeam) {
+            const resultsList = document.getElementById(resultsListId);
+            if (!searchTerm) {
+                resultsList.innerHTML = '';
+                resultsList.style.display = 'none';
+                return;
+            }
+
+            const searchTermLower = searchTerm.toLowerCase();
+            const filteredClubs = Array.from(clubsMap.values()).filter(c => c.nome.toLowerCase().includes(searchTermLower));
+
+            resultsList.innerHTML = '';
+            if (filteredClubs.length > 0) {
+                filteredClubs.forEach(club => {
+                    const div = document.createElement('div');
+                    div.className = 'dropdown-item';
+                    div.textContent = club.nome;
+                    div.addEventListener('click', () => {
+                        document.getElementById(inputId).value = club.nome;
+                        resultsList.style.display = 'none';
+                        
+                        const imgDiv = document.getElementById(imageElementId);
+                        let clubImg = club.imagem ? (club.imagem.startsWith('http') || club.imagem.startsWith('data:') ? club.imagem : '../' + club.imagem) : `../assets/equipalogos/${club.pais || ''}/club_${club.codigoUrl || ''}.webp`;
+                        imgDiv.innerHTML = `<img src="${clubImg}" class="club-image" alt="${club.nome}" onerror="window.resolveClubImage(this, '${club.pais || ''}', '${club.codigoUrl || ''}')">`;
+                        imgDiv.className = 'club-image';
+                        
+                        if (isHomeTeam) {
+                            selectedEquipaCasaId = club.id;
+                        } else {
+                            selectedEquipaForaId = club.id;
+                        }
+                        updateGameName();
+                    });
+                    resultsList.appendChild(div);
+                });
+                resultsList.style.display = 'block';
+            } else {
+                resultsList.style.display = 'none';
+            }
+        }
+
+        async function deleteWhoWinsAndPalpites(whoWinsId) {
+            if (!whoWinsId) {
+                alert('ID do jogo não encontrado. Ação cancelada.');
+                return;
+            }
+
+            const confirmationModal = document.getElementById('confirmation-modal');
+            confirmationModal.classList.remove('active'); // Esconde o modal
+
+            try {
+                console.log(`Procurando palpites para o jogo WhoWins com ID: ${whoWinsId}`);
+                const palpitesRef = collection(db, 'palpiteswhowins');
+                const q = query(palpitesRef, where('jogoId', '==', whoWinsId));
+                const palpitesSnapshot = await getDocs(q);
+
+                const deletePromises = [];
+                palpitesSnapshot.forEach((docSnap) => {
+                    console.log(`A apagar palpite com ID: ${docSnap.id}`);
+                    deletePromises.push(deleteDoc(docSnap.ref));
+                });
+                await Promise.all(deletePromises);
+                console.log(`${deletePromises.length} palpites apagados.`);
+
+                console.log(`A apagar o jogo principal com ID: ${whoWinsId}`);
+                await deleteDoc(doc(db, 'whowinsJogos', whoWinsId));
+
+                // Remover do cache local
+                allGames = allGames.filter(g => g.id !== whoWinsId);
+
+                closeEditModal();
+                populateFilters();
+                renderGamesTable();
+                alert('Jogo e todos os palpites associados foram eliminados com sucesso!');
+
+            } catch (error) {
+                console.error('Erro ao eliminar o jogo e os palpites:', error);
+                alert('Ocorreu um erro ao tentar eliminar o jogo.');
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initPage();
+
+            // Control listeners
+            document.getElementById('tableSearch').addEventListener('input', renderGamesTable);
+            document.getElementById('filter-ano').addEventListener('change', () => {
+                populateRondasFilter();
+                renderGamesTable();
+            });
+            document.getElementById('filter-competicao').addEventListener('change', renderGamesTable);
+            document.getElementById('filter-ronda').addEventListener('change', renderGamesTable);
+
+            // Sorting listeners
+            document.querySelectorAll('.excel-table th[data-sort]').forEach(th => {
+                th.addEventListener('click', () => {
+                    const col = th.getAttribute('data-sort');
+                    if (currentSortColumn === col) {
+                        currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        currentSortColumn = col;
+                        currentSortDirection = 'asc';
+                    }
+                    updateSortHeaders();
+                    renderGamesTable();
+                });
+            });
+
+            // Modal listeners
+            document.getElementById('closeModalBtn').addEventListener('click', closeEditModal);
+            document.getElementById('cancelModalBtn').addEventListener('click', closeEditModal);
+
+            // Club searching inputs
+            document.getElementById('equipa-casa').addEventListener('input', (e) => {
+                searchClubsInput(e.target.value.trim(), 'equipa-casa', 'equipa-casa-list', 'equipa-casa-image', true);
+            });
+            document.getElementById('equipa-fora').addEventListener('input', (e) => {
+                searchClubsInput(e.target.value.trim(), 'equipa-fora', 'equipa-fora-list', 'equipa-fora-image', false);
+            });
+
+            // Update image preview on competition change
+            document.getElementById('competicao').addEventListener('change', (e) => {
+                const compId = e.target.value;
+                const comp = competitionsMap.get(compId);
+                const competicaoImage = document.getElementById('competicao-image');
+                competicaoImage.innerHTML = comp?.imagem ? `<img src="${comp.imagem}" class="club-image" alt="${comp.nome}">` : '<i class="fas fa-trophy"></i>';
+                competicaoImage.className = comp?.imagem ? 'club-image' : 'club-image placeholder';
+            });
+
+            // Auto datetime-local and names updates listeners
+            document.getElementById('data-jogo').addEventListener('change', () => {
+                updateGameName();
+                updateFimPalpite();
+            });
+            document.getElementById('hora-jogo').addEventListener('change', () => {
+                updateGameName();
+                updateFimPalpite();
+            });
+
+            // Submission logic
+            document.getElementById('editar-whowins-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                if (!selectedWhoWinsId) {
+                    alert('Nenhum WhoWins selecionado para edição.');
+                    return;
+                }
+                if (!validateForm()) {
+                    return;
+                }
+
+                try {
+                    const compId = document.getElementById('competicao').value;
+                    const comp = competitionsMap.get(compId);
+                    
+                    const updatedData = {
+                        equipaCasa: document.getElementById('equipa-casa').value,
+                        equipaFora: document.getElementById('equipa-fora').value,
+                        competicaoId: compId,
+                        competicao: comp ? comp.nome : 'N/A',
+                        ronda: parseInt(document.getElementById('ronda').value) || 1,
+                        dataJogo: new Date(document.getElementById('data-jogo').value + 'T' + document.getElementById('hora-jogo').value),
+                        inicioIntervalo: new Date(document.getElementById('inicio-palpite').value),
+                        fimIntervalo: new Date(document.getElementById('fim-palpite').value),
+                        anexado: document.getElementById('anexado').value,
+                        nomeJogo: document.getElementById('nome-jogo').value,
+                        temporada: document.getElementById('temporada').value,
+                        equipaCasaId: selectedEquipaCasaId,
+                        equipaForaId: selectedEquipaForaId,
+                        ultimaAtualizacao: new Date().toISOString()
+                    };
+
+                    await updateDoc(doc(db, 'whowinsJogos', selectedWhoWinsId), updatedData);
+
+                    // Atualizar cache local
+                    const cacheIndex = allGames.findIndex(g => g.id === selectedWhoWinsId);
+                    if (cacheIndex !== -1) {
+                        allGames[cacheIndex] = {
+                            ...allGames[cacheIndex],
+                            ...updatedData
+                        };
+                    }
+
+                    closeEditModal();
+                    populateFilters();
+                    renderGamesTable();
+                    alert('WhoWins atualizado com sucesso!');
+
+                } catch (error) {
+                    console.error('Error updating WhoWins:', error);
+                    alert('Falha ao atualizar WhoWins.');
+                }
+            });
+
+            // Delete modal trigger listeners
+            const deleteBtn = document.getElementById('delete-whowins-btn');
+            const confirmationModal = document.getElementById('confirmation-modal');
+            const confirmDeleteBtn = document.getElementById('confirm-delete-btn');
+            const cancelDeleteBtn = document.getElementById('cancel-delete-btn');
+
+            deleteBtn.addEventListener('click', () => {
+                if (selectedWhoWinsId) {
+                    confirmationModal.classList.add('active');
+                } else {
+                    alert('Nenhum jogo selecionado para eliminar.');
+                }
+            });
+
+            cancelDeleteBtn.addEventListener('click', () => {
+                confirmationModal.classList.remove('active');
+            });
+
+            confirmationModal.addEventListener('click', (e) => {
+                if (e.target.id === 'confirmation-modal') {
+                    confirmationModal.classList.remove('active');
+                }
+            });
+
+            confirmDeleteBtn.addEventListener('click', () => {
+                deleteWhoWinsAndPalpites(selectedWhoWinsId);
+            });
+
+            // Close dropdowns on click outside
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('.dropdown')) {
+                    document.getElementById('equipa-casa-list').style.display = 'none';
+                    document.getElementById('equipa-fora-list').style.display = 'none';
+                }
+            });
+        });
+    </script>
+
+    <script src="js/menuadmin-loader.js"></script>
+</body>
+</html>

@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <title>Conversor de Estrutura `palpitesmods`</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; background-color: #f4f4f9; color: #333; max-width: 800px; margin: 20px auto; padding: 20px; }
+        h1 { color: #2c3e50; }
+        .instructions { background-color: #ecf0f1; padding: 15px; border-radius: 5px; border-left: 5px solid #3498db; margin-bottom: 20px;}
+        button { display: block; width: 100%; padding: 15px; font-size: 1.2em; font-weight: bold; color: white; background-color: #27ae60; border: none; border-radius: 5px; cursor: pointer; transition: background-color 0.3s; }
+        button:hover:not(:disabled) { background-color: #219150; }
+        button:disabled { background-color: #95a5a6; cursor: not-allowed; }
+        #log-container { margin-top: 20px; background-color: #fff; border: 1px solid #ccc; border-radius: 5px; padding: 15px; height: 300px; overflow-y: scroll; font-family: monospace; font-size: 0.9em; white-space: pre-wrap; }
+        .log-info { color: #3498db; }
+        .log-success { color: #27ae60; font-weight: bold; }
+        .log-skip { color: #f39c12; }
+        .log-error { color: #e74c3c; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <h1>Conversor de Estrutura `palpitesmods`</h1>
+    <div class="instructions">
+        <p>Esta ferramenta irá ligar-se automaticamente ao seu projeto Firebase (g-games-8a8fc) e corrigir os documentos na coleção <code>palpitesmods</code>.</p>
+        <p>Basta clicar no botão abaixo para iniciar o processo.</p>
+    </div>
+    
+    <button id="convert-button">Iniciar Conversão</button>
+
+    <p><b>Log do Processo:</b></p>
+    <div id="log-container">A aguardar início...</div>
+
+    <script type="module">
+        // Importar as funções necessárias do SDK do Firebase
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, collection, getDocs, doc, writeBatch } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        // Configuração do Firebase já incorporada no código
+        const firebaseConfig = {
+          apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0",
+          authDomain: "g-games-8a8fc.firebaseapp.com",
+          projectId: "g-games-8a8fc",
+          storageBucket: "g-games-8a8fc.appspot.com",
+          messagingSenderId: "689897349449",
+          appId: "1:689897349449:web:536599794579901beb7a98",
+          measurementId: "G-GTTPJ6G5MD"
+        };
+
+        const convertButton = document.getElementById('convert-button');
+        const logContainer = document.getElementById('log-container');
+
+        // Função para adicionar mensagens ao log
+        function logMessage(message, type = 'info') {
+            console.log(message);
+            const p = document.createElement('p');
+            p.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            p.className = `log-${type}`;
+            logContainer.appendChild(p);
+            logContainer.scrollTop = logContainer.scrollHeight; // Auto-scroll para a última mensagem
+        }
+
+        convertButton.addEventListener('click', async () => {
+            convertButton.disabled = true;
+            convertButton.textContent = 'A processar...';
+            logContainer.innerHTML = ''; // Limpar log anterior
+
+            try {
+                // ETAPA 1: Inicializar o Firebase com a configuração incorporada
+                logMessage('A inicializar a aplicação Firebase...');
+                const app = initializeApp(firebaseConfig);
+                const db = getFirestore(app);
+                logMessage('Firebase inicializado com sucesso!', 'success');
+
+                // ETAPA 2: Buscar todos os documentos da coleção
+                logMessage('A buscar todos os documentos da coleção `palpitesmods`...');
+                const palpitesModsRef = collection(db, 'palpitesmods');
+                const querySnapshot = await getDocs(palpitesModsRef);
+                logMessage(`Encontrados ${querySnapshot.size} documentos.`);
+
+                if (querySnapshot.empty) {
+                    logMessage('Nenhum documento para processar.', 'skip');
+                    return;
+                }
+                
+                // ETAPA 3: Preparar o 'batch' para atualizações em massa
+                const batch = writeBatch(db);
+                let convertedCount = 0;
+                let skippedCount = 0;
+
+                // ETAPA 4: Iterar e converter cada documento, se necessário
+                for (const docSnap of querySnapshot.docs) {
+                    const data = docSnap.data();
+                    const selecoes = data.selecoes;
+
+                    // A verificação crucial: Se 'selecoes' não existe ou JÁ É um array, ignora.
+                    if (!selecoes || Array.isArray(selecoes)) {
+                        logMessage(`Ignorando doc ${docSnap.id}: Já está no formato correto ou não tem 'selecoes'.`, 'skip');
+                        skippedCount++;
+                        continue;
+                    }
+
+                    // Se chegamos aqui, 'selecoes' é um objeto (formato antigo) e precisa ser convertido.
+                    logMessage(`Convertendo doc ${docSnap.id}...`);
+                    convertedCount++;
+
+                    const newSelecoesArray = [];
+                    // Iterar sobre as chaves do objeto antigo (que são os jogoIds)
+                    for (const jogoId of Object.keys(selecoes)) {
+                        const selecaoData = selecoes[jogoId];
+                        
+                        // Criar o novo objeto para o array
+                        newSelecoesArray.push({
+                            jogoId: jogoId, // A chave do objeto antigo agora é um valor no novo objeto
+                            copiedFromUserId: selecaoData.copiedFromUserId,
+                            palpiteSelecionado: selecaoData.palpiteSelecionado
+                        });
+                    }
+
+                    // Adicionar a operação de atualização ao 'batch'
+                    const docRef = doc(db, 'palpitesmods', docSnap.id);
+                    batch.update(docRef, { selecoes: newSelecoesArray });
+                }
+
+                // ETAPA 5: Enviar o 'batch' para o Firestore se houver alterações
+                if (convertedCount > 0) {
+                    logMessage(`A enviar ${convertedCount} atualizações para o Firestore...`);
+                    await batch.commit();
+                    logMessage('Todas as alterações foram guardadas com sucesso!', 'success');
+                } else {
+                    logMessage('Nenhum documento precisou de ser convertido.', 'info');
+                }
+                
+                logMessage(`--- Processo Concluído ---`, 'success');
+                logMessage(`Documentos convertidos: ${convertedCount}`, 'success');
+                logMessage(`Documentos ignorados: ${skippedCount}`, 'success');
+
+            } catch (error) {
+                logMessage(`ERRO: ${error.message}`, 'error');
+                console.error(error);
+            } finally {
+                convertButton.disabled = false;
+                convertButton.textContent = 'Iniciar Conversão';
+            }
+        });
+    </script>
+
+</body>
+</html>

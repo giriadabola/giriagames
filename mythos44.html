@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Framework de Mundo 3D com Iluminação Realista</title>
+    <style>
+        body { margin: 0; background-color: #000; overflow: hidden; }
+        canvas { display: block; }
+        #loader {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            color: white; font-family: sans-serif;
+            font-size: 20px; text-shadow: 1px 1px 2px black;
+        }
+    </style>
+</head>
+<body>
+    <div id="loader">A carregar bibliotecas e texturas de alta qualidade...</div>
+    <canvas id="webgl-canvas"></canvas>
+
+    <script type="importmap">
+    { "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+        "lil-gui": "https://unpkg.com/lil-gui@0.19.1/dist/lil-gui.esm.js"
+    }}
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { SimplexNoise } from 'three/addons/math/SimplexNoise.js';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { Sky } from 'three/addons/objects/Sky.js';
+        import GUI from 'lil-gui';
+
+        let scene, camera, renderer, controls, terrain, material, sunLight;
+        let gltfLoader, raycaster, mouse, sky, sun;
+
+        const params = {
+            seed: 754, frequence: 0.032, roughness: 43,
+            turbidity: 10, rayleigh: 3, elevation: 10, azimuth: 180,
+            objectToPlace: 'Pinheiro'
+        };
+        const models = {
+            'Nenhum': null,
+            'Pinheiro': 'https://unpkg.com/three-assets@1.0.1/models/low-poly-nature/tree_pine.glb',
+            'Rocha Grande': 'https://unpkg.com/three-assets@1.0.1/models/low-poly-nature/rock_large.glb',
+            'Montanha': 'https://unpkg.com/three-assets@1.0.1/models/low-poly-nature/mountain.glb'
+        };
+
+        function init() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 2000);
+            renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('webgl-canvas'), antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.shadowMap.enabled = true; // Ligar as sombras!
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.maxPolarAngle = Math.PI * 0.495;
+
+            const loadingManager = new THREE.LoadingManager(() => {
+                document.getElementById('loader').style.display = 'none';
+            });
+            gltfLoader = new GLTFLoader(loadingManager);
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2();
+
+            // --- LUZ E CÉU ---
+            sunLight = new THREE.DirectionalLight(0xffffff, 3.5);
+            sunLight.castShadow = true; // O sol projeta sombras
+            sunLight.shadow.mapSize.width = 2048;
+            sunLight.shadow.mapSize.height = 2048;
+            scene.add(sunLight);
+            
+            initSky();
+            
+            // --- MATERIAL PBR COMPLETO E ROBUSTO ---
+            const textureLoader = new THREE.TextureLoader(loadingManager);
+            const baseUrl = 'https://unpkg.com/three-assets@1.0.1/textures/pbr-terrain/rock/';
+            const loadTexture = (path) => {
+                const texture = textureLoader.load(baseUrl + path);
+                texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+                texture.repeat.set(15, 15);
+                return texture;
+            };
+            
+            material = new THREE.MeshStandardMaterial({
+                map: loadTexture('rock_albedo_2k.jpg'),
+                normalMap: loadTexture('rock_normal_gl_2k.jpg'),
+                roughnessMap: loadTexture('rock_roughness_2k.jpg'),
+                aoMap: loadTexture('rock_ao_2k.jpg'),
+            });
+
+            generateTerrain();
+            initGUI();
+            
+            camera.position.set(0, 80, 120);
+            window.addEventListener('mousedown', onMouseDown);
+            animate();
+        }
+
+        function initSky() {
+            sky = new Sky();
+            sky.scale.setScalar(1000);
+            scene.add(sky);
+            sun = new THREE.Vector3();
+            updateSun(); // Chamar uma vez para definir a posição inicial
+        }
+
+        function updateSun() {
+            const uniforms = sky.material.uniforms;
+            uniforms['turbidity'].value = params.turbidity;
+            uniforms['rayleigh'].value = params.rayleigh;
+
+            const phi = THREE.MathUtils.degToRad(90 - params.elevation);
+            const theta = THREE.MathUtils.degToRad(params.azimuth);
+            sun.setFromSphericalCoords(1, phi, theta);
+            uniforms['sunPosition'].value.copy(sun);
+
+            // CORREÇÃO CRÍTICA: Sincronizar a luz real com o sol visual
+            sunLight.position.copy(sun).multiplyScalar(100);
+        }
+
+        function generateTerrain() {
+            if (terrain) {
+                terrain.geometry.dispose();
+                scene.remove(terrain);
+            }
+            const geometry = new THREE.PlaneGeometry(300, 300, 256, 256);
+            const noise = new SimplexNoise();
+            const posAttr = geometry.attributes.position;
+            for (let i = 0; i < posAttr.count; i++) {
+                const x = posAttr.getX(i), y = posAttr.getY(i);
+                const h = noise.noise(x * params.frequence + params.seed, y * params.frequence + params.seed) * params.roughness;
+                posAttr.setZ(i, h);
+            }
+            geometry.computeVertexNormals();
+            terrain = new THREE.Mesh(geometry, material);
+            terrain.rotation.x = -Math.PI / 2;
+            terrain.receiveShadow = true; // O terreno recebe sombras
+            scene.add(terrain);
+        }
+
+        function onMouseDown(event) {
+            if (event.button !== 0 || !models[params.objectToPlace]) return;
+
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+
+            const intersects = raycaster.intersectObject(terrain);
+            if (intersects.length > 0) {
+                placeObject(models[params.objectToPlace], intersects[0].point, intersects[0].face.normal);
+            }
+        }
+
+        function placeObject(modelPath, position, normal) {
+            gltfLoader.load(modelPath, (gltf) => {
+                const object = gltf.scene;
+                object.position.copy(position);
+                
+                const up = new THREE.Vector3(0, 1, 0);
+                const quaternion = new THREE.Quaternion().setFromUnitVectors(up, normal);
+                object.quaternion.copy(quaternion);
+
+                const scale = Math.random() * 0.5 + 0.75;
+                object.scale.set(scale, scale, scale);
+                
+                // Ativar sombras para cada objeto filho do modelo
+                object.traverse((child) => {
+                    if (child.isMesh) {
+                        child.castShadow = true;
+                    }
+                });
+                
+                scene.add(object);
+            });
+        }
+
+        function initGUI() {
+            const gui = new GUI({ title: "Controlos do Mundo" });
+            const terrainFolder = gui.addFolder('Terreno');
+            terrainFolder.add(params, 'seed', 0, 1000).name('Semente').onChange(generateTerrain);
+            terrainFolder.add(params, 'frequence', 0.005, 0.05).name('Frequência').onChange(generateTerrain);
+            terrainFolder.add(params, 'roughness', 5, 50).name('Relevo').onChange(generateTerrain);
+            
+            const skyFolder = gui.addFolder('Céu e Sol');
+            skyFolder.add(params, 'elevation', 0, 90, 0.1).name('Elevação Sol').onChange(updateSun);
+            skyFolder.add(params, 'azimuth', -180, 180, 0.1).name('Azimute Sol').onChange(updateSun);
+            
+            const objectsFolder = gui.addFolder('Adicionar Objetos');
+            objectsFolder.add(params, 'objectToPlace', Object.keys(models)).name('Objeto');
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        init();
+    </script>
+</body>
+</html>

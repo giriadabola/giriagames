@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Text to Table</title>
+<style>
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin-bottom: 20px;
+  }
+  th, td {
+    border: 1px solid black;
+    padding: 8px;
+    text-align: left; /* Default alignment */
+  }
+  th {
+    background-color: #f2f2f2;
+    text-align: center; /* Center category header text */
+  }
+  /* Align second and third columns to the right */
+  td:nth-child(2), /* Second data column (Odd) */
+  td:nth-child(3)  /* Third data column (Calculation) */
+   {
+    text-align: right;
+  }
+
+  .filter-container {
+    display: flex;
+    justify-content: flex-end; /* Align right */
+    align-items: center; /* Align vertically center */
+    margin-bottom: 10px; /* Space below dropdown */
+  }
+
+  .filter-container label {
+    margin-right: 10px; /* Space between label and dropdown */
+  }
+</style>
+</head>
+<body>
+
+<h2>Text to Table Converter</h2>
+
+<textarea id="inputTextArea" rows="20" cols="60" placeholder="Enter text here (e.g., Subcategory Name followed by Option text lines and Odd lines)"></textarea>
+<br><br>
+<button onclick="window.convertToTable()">Convert to Table</button>
+
+<div class="filter-container">
+  <label for="categoryFilter">Filter by Category:</label>
+  <select id="categoryFilter" onchange="window.filterTables()">
+    <option value="all">All Categories</option>
+    <option value="Resultado Final">1. Resultado Final</option>
+    <option value="Golos">2. Golos</option>
+    <option value="Handicap">3. Handicap</option>
+    <option value="Intervalo/Fim do Jogo (HT/FT)">4. Intervalo/Fim do Jogo (HT/FT)</option>
+    <option value="Resultado Exato (Placar)">5. Resultado Exato (Placar)</option>
+    <option value="Específicos por Equipa">6. Específicos por Equipa</option>
+    <option value="Mercados Combinados">7. Mercados Combinados</option>
+    <option value="Tempo (Timing)">8. Tempo (Timing)</option>
+    <option value="Por Parte (1ª Parte / 2ª Parte)">9. Por Parte (1ª Parte / 2ª Parte)</option>
+    <option value="Mercados Especiais / Eventos">10. Mercados Especiais / Eventos</option>
+    <option value="Cantos">11. Cantos</option>
+    <option value="Cartões Amarelos">12. Cartões Amarelos</option>
+    <option value="Remates à Baliza">13. Remates à Baliza</option>
+    <option value="Faltas">14. Faltas</option>
+    <option value="Remates Totais">15. Remates Totais</option>
+    <option value="16. Jogadores (Totais)">16. Jogadores (Totais)</option> <!-- Added New Category -->
+  </select>
+</div>
+
+<div id="outputTables"></div>
+
+<script>
+    (function() { // Self-executing anonymous function for the converter
+
+// Listas de categorias (fixas, especiais, mapa) - inclua suas listas completas aqui
+const categories = [ /* ... lista completa omitida mas necessária ... */
+     // 1. Resultado Final
+     "Result", "Double Chance", "Draw No Bet",
+     // 2. Golos (Excluindo "Total", "Asian Total")
+     "Both Teams to Score", /*"Asian Total",*/ "Total Odd/Even", "1st Goal", "2nd Goal", "3rd Goal", "4th Goal", "5th Goal", "Last Goal", "Goal in Both Halves", "Both Halves Over 1.5", "Both Halves Under 1.5", "Both Halves Over 2.5", "Both Halves Under 2.5", "Both Teams to Score in Both Halves", "Total Goals", "Total Goals 0 - 1", "Total Goals 1 - 2", "Total Goals 1 - 3", "Total Goals 2 - 3", "Total Goals 2 - 4", "Total Goals 2 - 5", "Total Goals 2 - 6", "Total Goals 3 - 4", "Total Goals 3 - 5", "Total Goals 4 - 5", "Total Goals 4 - 6", "Scoring draw", "Only One Team to Score", "Both Teams to Score at Least 1 Half", "Race to 2 Goals", "Race to 3 Goals", "1st Goal to Score", "2nd Goal to Score", "Total", // Added Total here conceptually, though mapped elsewhere
+     // 3. Handicap (Excluindo "Handicap", "Asian Handicap")
+      "European Handicap (0:1)", "European Handicap (0:2)", "European Handicap (1:0)", "European Handicap (2:0)",
+     // 4. Intervalo/Fim do Jogo (HT/FT)
+     "Half time/Full time", "Half time/Full time - Home/Home", "Half time/Full time - Draw/Home", "Half time/Full time - Draw/Draw", "Half time/Full time - Draw/Away", "Half time/Full time - Away/Away", "Half time/Full time Double Chance",
+     // 5. Resultado Exato (Placar)
+     "Correct Score", "Match Score 1:0, 2:0 or 2:1", "Match Score 0:0, 1:0 or 2:0", "Match Score 1:0, 2:0 or 1:1", "Match Score 1:0, 2:0 or 3:0", "Match Score 2:0, 3:0 or 3:1", "Match Score 1:0, 0:0 or 0:1", "Match Score 0:1, 0:2 or 1:2", "Match Score 0:0, 0:1 or 0:2", "Match Score 0:1, 0:2 or 1:1", "Match Score 0:1, 0:2 or 0:3", "Match Score 0:2, 0:3 or 1:3",
+     // 6. Específicos por Equipa
+     "Total Team 1", "Total Team 2", "Total Goals Team 1", "Total Goals Team 2", "Team 1 to Score", "Team 2 to Score", "Goal in Both Halves: Team 1", "Goal in Both Halves: Team 2", "Team 1: Total Goals 0 - 1", "Team 1: Total Goals 1 - 2", "Team 1: Total Goals 1 - 3", "Team 1: Total Goals 1 - 4", "Team 1: Total Goals 2 - 3", "Team 1: Total Goals 2 - 4", "Team 1: Total Goals 3 - 4", "Team 1: Total Goals 3 - 6", "Team 2: Total Goals 0 - 1", "Team 2: Total Goals 1 - 2", "Team 2: Total Goals 1 - 3", "Team 2: Total Goals 1 - 4", "Team 2: Total Goals 2 - 3", "Team 2: Total Goals 2 - 4", "Team 2: Total Goals 3 - 4", "Team 2: Total Goals 3 - 6", "Each Team Over 1.5", "Each Team Under 1.5", "Team 1 to Score 2 Goals in a Row", "Team 1 to Score 3 Goals in a Row", "Team 2 to Score 2 Goals in a Row", "Team 2 to Score 3 Goals in a Row", "Win 1 at Least 1 Half", "Win 2 at Least 1 Half", "Win 1 in Both Halves", "Team 1 Highest Scoring Half", "Team 2 Highest Scoring Half",
+     "Team 1 Score Its 1st Goal", "Team 1 Score Its 2nd Goal", "Team 2 to Score Its 1st Goal", "Team 2 to Score Its 2nd Goal",
+     // 7. Mercados Combinados
+     "Both Teams to Score and Total", "Result and Total", "Double Chance & Total", "Result and Both Teams to Score:", "Double Chance and Both Teams to Score", "Result or Total", "Result or Both Teams To Score:", "Total or Both Teams to Score:", "Team 1 Win 1st Half & Not Win Match", "Team 2 Win 1st Half & Not Win Match", "Team 1 to Score First & Win", "Team 1 to Score First & Not Win", "Team 2 to Score First & Win", "Team 2 to Score First & Not Win", "Team 1 to Win to Nil", "Team 2 to Win to Nil", "1st half Over (0.5) and 2nd half Over (1.5)", "1st half Over (1.5) and 2nd half Over (0.5)", "Total Over (3.5) and 1st half Over (1.5)", "Win1 and 1st half Over (1.5)", "Win2 and 1st half Over (1.5)", "Win1 and 1st half H1 (-1.5)", "Win2 and 1st half H2 (-1.5)", "H1 (-2.5) and 1st half Win1", "H2 (-2.5) and 1st half Win2", "H1 (-1.5) and 1st half Win1", "H2 (-1.5) and 1st half Win2", "Win1 and Team1 Over (1.5)", "Win2 and Team2 Over (1.5)", "Team 1 to Score First and", "Team 2 to Score First and", "Team 1 to Score First and Total", "Team 2 to Score First and Total", "Half time/Full time and Total", "Win1 and Total Goals 2 - 3", "Win2 and Total Goals 2 - 3", "1st Half/2nd Half Both Teams to Score", "1st Half Result or Both Teams To Score:", "2nd Half Result or Both Teams To Score:", "Half time/Full time and Both Teams to Score", "Penalty & Sending Off", "Penalty or Sending Off",
+     // 8. Tempo (Timing)
+     "Highest Scoring Half", "1st Goal Minute", "2nd Goal Minute", "Goal from 1 to 10 min.", "Goal from 1 to 15 min.", "Goal from 1 to 20 min.", "Goal from 1 to 25 min.", "Goal from 1 to 30 min.", "Goal from 1 to 35 min.", "Goal from 1 to 40 min.", "Goal from 46 to 60 min.", "Goal from 46 to 65 min.", "Goal from 46 to 70 min.", "Goal from 46 to 75 min.", "Goal from 46 to 80 min.", "Goal from 46 to 85 min.", "Goal from 76 to 90+ min.", "Result from 1 to 10 min.", "Result from 1 to 30 min.", "Result from 1 to 50 min.", "Result from 1 to 60 min.", "Result from 1 to 70 min", "Result from 1 to 75 min", "1-15 min.", "16-30 min.", "31-45+ min.", "46-60 min.", "61-75 min.", "76-90+ min.", "Total Goal Minutes",
+     // 9. Por Parte (1ª Parte / 2ª Parte) (Excluindo Handicaps/Totals especiais)
+     "1st Half: Goal", "2nd Half: Goal", "1st Half: Sending Off", "2nd Half: Sending Off", "1st Half: Penalty", "2nd Half: Penalty", "1st half: Both Teams to Score", "2nd half: Both Teams to Score", /*"1st half: Total",*/ "1st half: Total Team 1", "1st half: Total Team 2", /*"1st half: Asian Total",*/ "1st half: Total Even/Odd", /*"2nd half: Total",*/ "2nd half: Total Team 1", "2nd half: Total Team 2", /*"2nd half: Asian Total",*/ "2nd half: Total Even/Odd", /*"1st half: Handicap", "1st half: Asian Handicap", "2nd half: Handicap", "2nd half: Asian Handicap",*/ "1st half: Correct Score", "2nd half: Correct Score", "1st half: Result", "1st half: Double Chance", "1st half: Team 1 to Score", "1st half: Team 2 to Score", "1st half: Result and Total", "1st half: Result and Both Teams to Score:", "1st half: 1st Goal", "1st half: 2nd Goal", "1st half: 3rd Goal", "1st half: European Handicap (0:1)", "1st half: European Handicap (1:0)", "1st half: Total Goals 0 - 1", "1st half: Total Goals 1 - 2", "1st half: Total Goals 1 - 3", "1st half: Total Goals 2 - 3", "1st half: Total Goals 2 - 4", "1st half: Total Goals 2 - 5", "1st half: Total Goals 2 - 6", "1st half: Total Goals 3 - 4", "1st half: Total Goals 3 - 5", "1st half: Team 1: Total Goals 0 - 1", "1st half: Team 1: Total Goals 1 - 2", "1st half: Team 1: Total Goals 1 - 3", "1st half: Team 1: Total Goals 1 - 4", "1st half: Team 1: Total Goals 2 - 3", "1st half: Team 1: Total Goals 2 - 4", "1st half: Team 2: Total Goals 0 - 1", "1st half: Team 2: Total Goals 1 - 2", "1st half: Team 2: Total Goals 1 - 3", "1st half: Team 2: Total Goals 1 - 4", "1st half: Team 2: Total Goals 2 - 3", "1st half: Team 2: Total Goals 2 - 4", "1st half: Total Goals Team 1", "1st half: Total Goals Team 2", "1st half: Total Goals", "1st half: Team 1 to Win to Nil", "1st half: Team 2 to Win to Nil", "1st half: Last Goal", "2nd half: Result", "2nd half: Double Chance", "2nd half: Team 1 to Score", "2nd half: Team 2 to Score", "2nd half: 1st Goal", "2nd half: 2nd Goal", "2nd half: 3rd Goal", "2nd half: European Handicap (0:1)", "2nd half: European Handicap (1:0)", "2nd half: Total Goals 0 - 1", "2nd half: Total Goals 1 - 2", "2nd half: Total Goals 1 - 3", "2nd half: Total Goals 2 - 3", "2nd half: Total Goals 2 - 4", "2nd half: Total Goals 2 - 5", "2nd half: Total Goals 2 - 6", "2nd half: Total Goals 3 - 4", "2nd half: Total Goals 3 - 5", "2nd half: Team 1: Total Goals 0 - 1", "2nd half: Team 1: Total Goals 1 - 2", "2nd half: Team 1: Total Goals 1 - 3", "2nd half: Team 1: Total Goals 1 - 4", "2nd half: Team 1: Total Goals 2 - 3", "2nd half: Team 1: Total Goals 2 - 4", "2nd half: Team 2: Total Goals 0 - 1", "2nd half: Team 2: Total Goals 1 - 2", "2nd half: Team 2: Total Goals 1 - 3", "2nd half: Team 2: Total Goals 1 - 4", "2nd half: Team 2: Total Goals 2 - 3", "2nd half: Team 2: Total Goals 2 - 4", "2nd half: Total Goals Team 1", "2nd half: Total Goals Team 2", "2nd half: Total Goals", "2nd half: Team 1 to Win to Nil", "2nd half: Team 2 to Win to Nil", "2nd half: Last Goal", "1st half or match",
+     // 10. Mercados Especiais / Eventos
+     "Tie Breaker", "Penalty", "Sending Off", "Sending Off Team 1", "Sending Off Team 2", "1st to Happen:", "How is Scored 1st Goal", "Team 1 Winning Margin 1 Goal", "Team 1 Winning Margin 2 Goals", "Team 1 Winning Margin 1 or 2 Goals", "Team 1 Winning Margin 2 or 3 Goals", "Team 1 Winning Margin 2 or more Goals", "Team 1 Winning Margin 1 Goal or Draw", "Team 1 Winning Margin 2 Goals or Draw", "Team 2 Winning Margin 1 Goal", "Team 2 Winning Margin 2 Goals", "Team 2 Winning Margin 1 or 2 Goals", "Team 2 Winning Margin 2 or 3 Goals", "Team 2 Winning Margin 2 or more Goals", "Team 2 Winning Margin 1 Goal or Draw", "Team 2 Winning Margin 2 Goals or Draw", "Draw in at least one of the Halves", "Any Team Winning Margin 1", "Any Team Winning Margin 2", "Any Team Winning Margin 3", "Any Team Winning Margin 2 & more", "Any Team Winning Margin 3 & more", "Team 1 win from Behind", "Team 2 Win from Behind", "Own Goal", "Double", "1:1 During The Match", "2:0 or 0:2 During The Match", "2:0 During The Match", "0:2 During The Match", "To Miss A Penalty", "To Score A Penalty", "Red card in both teams",
+     // 11. Cantos (Excluindo "Corners: Total", "Corners: Handicap")
+     /*"Corners: Total",*/ "Corners: Total Team 1", "Corners: Total Team 2", "Corners: Total Even/Odd", "Corners: 1st Half: Total:", "Corners: 1st Half: Total Team 1", "Corners: 1st Half: Total Team 2", "Corners: 2nd Half: Total", "Corners: 2nd Half: Total Team 1", "Corners: 2nd Half: Total Team 2", "Corners: Total (3 way)", /*"Corners: Handicap",*/ "Corners: 1st Half: Handicap", "Corners: 2nd Half: Handicap", "Corners: Result", "Corners: 1st Half: Result", "Corners: 2nd Half: Result", "Corners: Highest Scoring Half", "Corners: 1st Corner", "Corners: Last Corner:", "Corners: 10 Minutes Corners (00:00-9:59)", "Corners: Race to Corners",
+     // 12. Cartões Amarelos (Excluindo "Yellow Cards: Total", "Yellow Cards: Handicap")
+     /*"Yellow Cards: Total",*/ "Yellow Cards: Total Team 1", "Yellow Cards: Total Team 2", "Yellow Cards: Total Odd/Even", "Yellow Cards: 1st Half: Total:", "Yellow Cards: 1st Half: Total Team 1", "Yellow Cards: 1st Half: Total Team 2", "Yellow Cards: 2nd Half: Total", /*"Yellow Cards: Handicap",*/ "Yellow Cards: 1st Half: Handicap", "Yellow Cards: 2nd Half: Handicap", "Yellow Cards: Result", "Yellow Cards: Double Chance", "Yellow Cards: 1st Half: Result", "Yellow Cards: 1st Half: Double Chance", "Yellow Cards: 2nd Half: Result", "Yellow Cards: 2nd Half: Double Chance", "Yellow Cards: Highest Scoring Half", "Yellow Cards: 1st Yellow Card Minute", "Yellow Cards: Both Teams to Receive Cards", "Yellow Cards: Both Teams to Receive 2 or More Cards",
+     // 13. Remates à Baliza
+     "Shots on target: Total", "Shots on target: Total Team 1", "Shots on target: Total Team 2", "Shots on target: Total Even/Odd", "Shots on target: 1st Half: Total:", "Shots on target: 1st Half: Total Team 1", "Shots on target: 1st Half: Total Team 2", "Shots on target: Handicap", "Shots on target: 1st Half: Handicap", "Shots on target: Result", "Shots on target: Double Chance", "Shots on target: 1st Half: Result", "Shots on target: 1st Half: Double Chance", "Shots on target: Highest Scoring Half",
+     // 14. Faltas
+     "Fouls: Total", "Fouls: Total Team 1", "Fouls: Total Team 2", "Fouls: Total Even/Odd", "Fouls: Handicap", "Fouls: Result", "Fouls: Double Chance", "Fouls: Highest Scoring Half",
+     "Offsides: Total", "Offsides: Total Team 1", "Offsides: Total Team 2", "Offsides: Total Even/Odd", "Offsides: Handicap", "Offsides: Result", "Offsides: Double Chance",
+     // 15. Remates Totais
+     "Shots: Total", "Shots: Total Team 1", "Shots: Total Team 2", "Shots: Total Even/Odd", "Shots: 1st Half: Total Team 1", "Shots: 1st Half: Total Team 2", "Shots: Handicap", "Shots: 1st Half: Handicap", "Shots: Result", "Shots: Double Chance", "Shots: 1st Half: Result", "Shots: 1st Half: Double Chance", "Shots: Highest Scoring Half",
+     // --- NOVAS Subcategorias "Specials:" ---
+     "Specials: Total Headed Goals",
+     "Specials: To Occur First - Corner or Goal:",
+     "Specials: To Occur First - Throw in or Foul:",
+     "Specials: 1st half 1X and Corners under 10.5 and Yellow Cards over 3.5:",
+     "Specials: Over 9.5 corners & over 4.5 yellow cards:",
+     "Specials: Over 9.5 corners & over 3.5 yellow cards:",
+     "Specials: Win1, over 10.5 corners & over 3.5 yellow cards:",
+     "Specials: Win1, over 9.5 corners & over 3.5 yellow cards:",
+     "Specials: Win1, over 1.5 1st half goals & over 3.5 yellow cards:",
+     "Specials: Over 1.5 1st half goals, over 3.5 yellow cards & over 10.5 corners",
+     "Specials: Over 3.5 goals & over 10.5 corners:",
+     "Specials: Over 2.5 goals & over 10.5 corners:",
+     "Specials: Win1 & over 9.5 corners:",
+     "Specials: Over 3.5 Goals, Over 9.5 Corners & Over 3.5 Yellow Card",
+     "Specials: Under 3.5 goals, under 9.5 corners & under 3.5 yellow cards:",
+     "Specials: Win1, corners win1 & yellow cards win1:",
+     "Specials: Over 3.5 goals & under 10.5 corners:",
+     "Specials: X2, yellow cards-win2 and corners over 9.5",
+     "Specials: Win1 & over 3.5 yellow cards:",
+     "Specials: Win1 & over 4.5 yellow cards:",
+     "Specials: Win1 & over 10.5 corners:",
+     "Specials: The medical team will appear on the field",
+     "Specials: Goal from outside the penalty area:",
+     "Specials: The goalkeeper will get a red card:",
+     // 16. Jogadores
+     "Players:" // Base for player markets
+];
+
+// Lista DEFINITIVA de categorias ESPECIAIS (max 1 principal, max 1 alternativa)
+const specialCategories = new Set([ /* ... lista completa omitida mas necessária ... */
+    "Total", // Movida para Resultado Final no map, mas ainda especial para lógica
+    "Asian Total",
+    "Handicap",
+    "Asian Handicap",
+    "1st half: Total",
+    "1st half: Asian Total",
+    "1st half: Handicap",
+    "1st half: Asian Handicap",
+    "2nd half: Total",
+    "2nd half: Asian Total",
+    "2nd half: Handicap",
+    "2nd half: Asian Handicap",
+    "Corners: Total",
+    "Corners: Handicap",
+    "Yellow Cards: Total",
+    "Yellow Cards: Handicap"
+]);
+
+// Mapeamento das subcategorias para as categorias principais do Filtro
+const categoryMap = { /* ... mapa completo omitido mas necessário ... */
+     // 1. Resultado Final
+     "Result": "Resultado Final", "Double Chance": "Resultado Final", "Draw No Bet": "Resultado Final",
+     // Total movido para Golos
+     // 2. Golos
+     "Total": "Golos", // <-- ALTERADO AQUI
+     "Both Teams to Score": "Golos", "Asian Total": "Golos", "Total Odd/Even": "Golos", "1st Goal": "Golos", "2nd Goal": "Golos", "3rd Goal": "Golos", "4th Goal": "Golos", "5th Goal": "Golos", "Last Goal": "Golos", "Goal in Both Halves": "Golos", "Both Halves Over 1.5": "Golos", "Both Halves Under 1.5": "Golos", "Both Halves Over 2.5": "Golos", "Both Halves Under 2.5": "Golos", "Both Teams to Score in Both Halves": "Golos", "Total Goals": "Golos", "Total Goals 0 - 1": "Golos", "Total Goals 1 - 2": "Golos", "Total Goals 1 - 3": "Golos", "Total Goals 2 - 3": "Golos", "Total Goals 2 - 4": "Golos", "Total Goals 2 - 5": "Golos", "Total Goals 2 - 6": "Golos", "Total Goals 3 - 4": "Golos", "Total Goals 3 - 5": "Golos", "Total Goals 4 - 5": "Golos", "Total Goals 4 - 6": "Golos", "Scoring draw": "Golos", "Only One Team to Score": "Golos", "Both Teams to Score at Least 1 Half": "Golos", "Race to 2 Goals": "Golos", "Race to 3 Goals": "Golos", "1st Goal to Score": "Golos", "2nd Goal to Score": "Golos",
+     // 3. Handicap
+     "Handicap": "Handicap", "Asian Handicap": "Handicap", "European Handicap (0:1)": "Handicap", "European Handicap (0:2)": "Handicap", "European Handicap (1:0)": "Handicap", "European Handicap (2:0)": "Handicap",
+     // 4. Intervalo/Fim do Jogo (HT/FT)
+     "Half time/Full time": "Intervalo/Fim do Jogo (HT/FT)", "Half time/Full time - Home/Home": "Intervalo/Fim do Jogo (HT/FT)", "Half time/Full time - Draw/Home": "Intervalo/Fim do Jogo (HT/FT)", "Half time/Full time - Draw/Draw": "Intervalo/Fim do Jogo (HT/FT)", "Half time/Full time - Draw/Away": "Intervalo/Fim do Jogo (HT/FT)", "Half time/Full time - Away/Away": "Intervalo/Fim do Jogo (HT/FT)", "Half time/Full time Double Chance": "Intervalo/Fim do Jogo (HT/FT)",
+     // 5. Resultado Exato (Placar)
+     "Correct Score": "Resultado Exato (Placar)", "Match Score 1:0, 2:0 or 2:1": "Resultado Exato (Placar)", "Match Score 0:0, 1:0 or 2:0": "Resultado Exato (Placar)", "Match Score 1:0, 2:0 or 1:1": "Resultado Exato (Placar)", "Match Score 1:0, 2:0 or 3:0": "Resultado Exato (Placar)", "Match Score 2:0, 3:0 or 3:1": "Resultado Exato (Placar)", "Match Score 1:0, 0:0 or 0:1": "Resultado Exato (Placar)", "Match Score 0:1, 0:2 or 1:2": "Resultado Exato (Placar)", "Match Score 0:0, 0:1 or 0:2": "Resultado Exato (Placar)", "Match Score 0:1, 0:2 or 1:1": "Resultado Exato (Placar)", "Match Score 0:1, 0:2 or 0:3": "Resultado Exato (Placar)", "Match Score 0:2, 0:3 or 1:3": "Resultado Exato (Placar)",
+     // 6. Específicos por Equipa
+     "Total Team 1": "Específicos por Equipa", "Total Team 2": "Específicos por Equipa", "Total Goals Team 1": "Específicos por Equipa", "Total Goals Team 2": "Específicos por Equipa", "Team 1 to Score": "Específicos por Equipa", "Team 2 to Score": "Específicos por Equipa", "Goal in Both Halves: Team 1": "Específicos por Equipa", "Goal in Both Halves: Team 2": "Específicos por Equipa", "Team 1: Total Goals 0 - 1": "Específicos por Equipa", "Team 1: Total Goals 1 - 2": "Específicos por Equipa", "Team 1: Total Goals 1 - 3": "Específicos por Equipa", "Team 1: Total Goals 1 - 4": "Específicos por Equipa", "Team 1: Total Goals 2 - 3": "Específicos por Equipa", "Team 1: Total Goals 2 - 4": "Específicos por Equipa", "Team 1: Total Goals 3 - 4": "Específicos por Equipa", "Team 1: Total Goals 3 - 6": "Específicos por Equipa", "Team 2: Total Goals 0 - 1": "Específicos por Equipa", "Team 2: Total Goals 1 - 2": "Específicos por Equipa", "Team 2: Total Goals 1 - 3": "Específicos por Equipa", "Team 2: Total Goals 1 - 4": "Específicos por Equipa", "Team 2: Total Goals 2 - 3": "Específicos por Equipa", "Team 2: Total Goals 2 - 4": "Específicos por Equipa", "Team 2: Total Goals 3 - 4": "Específicos por Equipa", "Team 2: Total Goals 3 - 6": "Específicos por Equipa", "Each Team Over 1.5": "Específicos por Equipa", "Each Team Under 1.5": "Específicos por Equipa", "Team 1 to Score 2 Goals in a Row": "Específicos por Equipa", "Team 1 to Score 3 Goals in a Row": "Específicos por Equipa", "Team 2 to Score 2 Goals in a Row": "Específicos por Equipa", "Team 2 to Score 3 Goals in a Row": "Específicos por Equipa", "Win 1 at Least 1 Half": "Específicos por Equipa", "Win 2 at Least 1 Half": "Específicos por Equipa", "Win 1 in Both Halves": "Específicos por Equipa", "Team 1 Highest Scoring Half": "Específicos por Equipa", "Team 2 Highest Scoring Half": "Específicos por Equipa",
+     "Team 1 Score Its 1st Goal": "Específicos por Equipa", "Team 1 Score Its 2nd Goal": "Específicos por Equipa", "Team 2 to Score Its 1st Goal": "Específicos por Equipa", "Team 2 to Score Its 2nd Goal": "Específicos por Equipa",
+     // 7. Mercados Combinados
+     "Both Teams to Score and Total": "Mercados Combinados", "Result and Total": "Mercados Combinados", "Double Chance & Total": "Mercados Combinados", "Result and Both Teams to Score:": "Mercados Combinados", "Double Chance and Both Teams to Score": "Mercados Combinados", "Result or Total": "Mercados Combinados", "Result or Both Teams To Score:": "Mercados Combinados", "Total or Both Teams to Score:": "Mercados Combinados", "Team 1 Win 1st Half & Not Win Match": "Mercados Combinados", "Team 2 Win 1st Half & Not Win Match": "Mercados Combinados", "Team 1 to Score First & Win": "Mercados Combinados", "Team 1 to Score First & Not Win": "Mercados Combinados", "Team 2 to Score First & Win": "Mercados Combinados", "Team 2 to Score First & Not Win": "Mercados Combinados", "Team 1 to Win to Nil": "Mercados Combinados", "Team 2 to Win to Nil": "Mercados Combinados", "1st half Over (0.5) and 2nd half Over (1.5)": "Mercados Combinados", "1st half Over (1.5) and 2nd half Over (0.5)": "Mercados Combinados", "Total Over (3.5) and 1st half Over (1.5)": "Mercados Combinados", "Win1 and 1st half Over (1.5)": "Mercados Combinados", "Win2 and 1st half Over (1.5)": "Mercados Combinados", "Win1 and 1st half H1 (-1.5)": "Mercados Combinados", "Win2 and 1st half H2 (-1.5)": "Mercados Combinados", "H1 (-2.5) and 1st half Win1": "Mercados Combinados", "H2 (-2.5) and 1st half Win2": "Mercados Combinados", "H1 (-1.5) and 1st half Win1": "Mercados Combinados", "H2 (-1.5) and 1st half Win2": "Mercados Combinados", "Win1 and Team1 Over (1.5)": "Mercados Combinados", "Win2 and Team2 Over (1.5)": "Mercados Combinados", "Team 1 to Score First and": "Mercados Combinados", "Team 2 to Score First and": "Mercados Combinados", "Team 1 to Score First and Total": "Mercados Combinados", "Team 2 to Score First and Total": "Mercados Combinados", "Half time/Full time and Total": "Mercados Combinados", "Win1 and Total Goals 2 - 3": "Mercados Combinados", "Win2 and Total Goals 2 - 3": "Mercados Combinados", "1st Half/2nd Half Both Teams to Score": "Mercados Combinados", "1st Half Result or Both Teams To Score:": "Mercados Combinados", "2nd Half Result or Both Teams To Score:": "Mercados Combinados", "Half time/Full time and Both Teams to Score": "Mercados Combinados", "Penalty & Sending Off": "Mercados Combinados", "Penalty or Sending Off": "Mercados Combinados",
+     "Specials: 1st half 1X and Corners under 10.5 and Yellow Cards over 3.5:": "Mercados Combinados", "Specials: Over 9.5 corners & over 4.5 yellow cards:": "Mercados Combinados", "Specials: Over 9.5 corners & over 3.5 yellow cards:": "Mercados Combinados", "Specials: Win1, over 10.5 corners & over 3.5 yellow cards:": "Mercados Combinados", "Specials: Win1, over 9.5 corners & over 3.5 yellow cards:": "Mercados Combinados", "Specials: Win1, over 1.5 1st half goals & over 3.5 yellow cards:": "Mercados Combinados", "Specials: Over 1.5 1st half goals, over 3.5 yellow cards & over 10.5 corners": "Mercados Combinados", "Specials: Over 3.5 goals & over 10.5 corners:": "Mercados Combinados", "Specials: Over 2.5 goals & over 10.5 corners:": "Mercados Combinados", "Specials: Win1 & over 9.5 corners:": "Mercados Combinados", "Specials: Over 3.5 Goals, Over 9.5 Corners & Over 3.5 Yellow Card": "Mercados Combinados", "Specials: Under 3.5 goals, under 9.5 corners & under 3.5 yellow cards:": "Mercados Combinados", "Specials: Win1, corners win1 & yellow cards win1:": "Mercados Combinados", "Specials: Over 3.5 goals & under 10.5 corners:": "Mercados Combinados", "Specials: X2, yellow cards-win2 and corners over 9.5": "Mercados Combinados", "Specials: Win1 & over 3.5 yellow cards:": "Mercados Combinados", "Specials: Win1 & over 4.5 yellow cards:": "Mercados Combinados", "Specials: Win1 & over 10.5 corners:": "Mercados Combinados",
+     // 8. Tempo (Timing)
+     "Highest Scoring Half": "Tempo (Timing)", "1st Goal Minute": "Tempo (Timing)", "2nd Goal Minute": "Tempo (Timing)", "Goal from 1 to 10 min.": "Tempo (Timing)", "Goal from 1 to 15 min.": "Tempo (Timing)", "Goal from 1 to 20 min.": "Tempo (Timing)", "Goal from 1 to 25 min.": "Tempo (Timing)", "Goal from 1 to 30 min.": "Tempo (Timing)", "Goal from 1 to 35 min.": "Tempo (Timing)", "Goal from 1 to 40 min.": "Tempo (Timing)", "Goal from 46 to 60 min.": "Tempo (Timing)", "Goal from 46 to 65 min.": "Tempo (Timing)", "Goal from 46 to 70 min.": "Tempo (Timing)", "Goal from 46 to 75 min.": "Tempo (Timing)", "Goal from 46 to 80 min.": "Tempo (Timing)", "Goal from 46 to 85 min.": "Tempo (Timing)", "Goal from 76 to 90+ min.": "Tempo (Timing)", "Result from 1 to 10 min.": "Tempo (Timing)", "Result from 1 to 30 min.": "Tempo (Timing)", "Result from 1 to 50 min.": "Tempo (Timing)", "Result from 1 to 60 min.": "Tempo (Timing)", "Result from 1 to 70 min": "Tempo (Timing)", "Result from 1 to 75 min": "Tempo (Timing)", "1-15 min.": "Tempo (Timing)", "16-30 min.": "Tempo (Timing)", "31-45+ min.": "Tempo (Timing)", "46-60 min.": "Tempo (Timing)", "61-75 min.": "Tempo (Timing)", "76-90+ min.": "Tempo (Timing)", "Total Goal Minutes": "Tempo (Timing)",
+     // 9. Por Parte (1ª Parte / 2ª Parte)
+     "1st Half: Goal": "Por Parte (1ª Parte / 2ª Parte)", "2nd Half: Goal": "Por Parte (1ª Parte / 2ª Parte)", "1st Half: Sending Off": "Por Parte (1ª Parte / 2ª Parte)", "2nd Half: Sending Off": "Por Parte (1ª Parte / 2ª Parte)", "1st Half: Penalty": "Por Parte (1ª Parte / 2ª Parte)", "2nd Half: Penalty": "Por Parte (1ª Parte / 2ª Parte)", "1st half: Both Teams to Score": "Por Parte (1ª Parte / 2ª Parte)", "2nd half: Both Teams to Score": "Por Parte (1ª Parte / 2ª Parte)", "1st half: Total": "Por Parte (1ª Parte / 2ª Parte)", "1st half: Total Team 1": "Por Parte (1ª Parte / 2ª Parte)", "1st half: Total Team 2": "Por Parte (1ª Parte / 2ª Parte)", "1st half: Asian Total": "Por Parte (1ª Parte / 2ª Parte)", "1st half: Total Even/Odd": "Por Parte (1ª Parte / 2ª Parte)", "2nd half: Total": "Por Parte (1ª Parte / 2ª Parte)", "2nd half: Total Team 1": "Por Parte (1ª Parte / 2ª Parte)", "2nd half: Total Team 2": "Por Parte (1ª Parte / 2ª Parte)", "2nd half: Asian Total": "Por Parte (1ª Parte / 2ª Parte)", "2nd half: Total Even/Odd": "Por Parte (1ª Parte / 2ª Parte)", "1st half: Handicap": "Por Parte (1ª Parte / 2ª Parte)", "1st half: Asian Handicap": "Por Parte (1ª Parte / 2ª Parte)", "2nd half: Handicap": "Por Parte (1ª Parte / 2ª Parte)", "2nd half: Asian Handicap": "Por Parte (1ª Parte / 2ª Parte)", "1st half: Correct Score": "Por Parte (1ª Parte / 2ª Parte)", "2nd half: Correct Score": "Por Parte (1ª Parte / 2ª Parte)", "1st half: Result": "Por Parte (1ª Parte / 2ª Parte)", "1st half: Double Chance": "Por Parte (1ª Parte / 2ª Parte)", "1st half: Team 1 to Score": "Por Parte (1ª Parte / 2ª Parte)", "1st half: Team 2 to Score": "Por Parte (1ª Parte / 2ª Parte)", "1st half: Result and Total": "Por Parte (1ª Parte / 2ª Parte)", "1st half: Result and Both Teams to Score:": "Por Parte (1ª Parte / 2ª Parte)", "1st half: 1st Goal": "Por Parte (1ª Parte / 2ª Parte)", "1st half: 2nd Goal": "Por Parte (1ª Parte / 2ª Parte)", "1st half: 3rd Goal": "Por Parte (1ª Parte / 2ª Parte)", "1st half: European Handicap (0:1)": "Por Parte (1ª Parte / 2ª Parte)", "1st half: European Handicap (1:0)": "Por Parte (1ª Parte / 2ª Parte)", "1st half: Total Goals 0 - 1": "Por Parte (1ª Parte / 2ª Parte)", "1st half: Total Goals 1 - 2": "Por Parte (1ª Parte / 2ª Parte)", "1st half: Total Goals 1 - 3": "Por Parte (1ª Parte / 2ª Parte)", "1st half: Total Goals 2 - 3": "Por Parte (1ª Parte / 2ª Parte)", "1st half: Total Goals 2 - 4": "Por Parte (1ª Parte / 2ª Parte)", "1st half: Total Goals 2 - 5": "Por Parte (1ª Parte / 2ª Parte)", "1st half: Total Goals 2 - 6": "Por Parte (1ª Parte / 2ª Parte)", "1st half: Total Goals 3 - 4": "Por Parte (1ª Parte / 2ª Parte)", "1st half: Total Goals 3 - 5": "Por Parte (1ª Parte / 2ª Parte)", "1st half: Team 1: Total Goals 0 - 1": "Por Parte (1ª Parte / 2ª Parte)", "1st half: Team 1: Total Goals 1 - 2": "Por Parte (1ª Parte / 2ª Parte)", "1st half: Team 1: Total Goals 1 - 3": "Por Parte (1ª Parte / 2ª Parte)", "1st half: Team 1: Total Goals 1 - 4": "Por Parte (1ª Parte / 2ª Parte)", "1st half: Team 1: Total Goals 2 - 3": "Por Parte (1ª Parte / 2ª Parte)", "1st half: Team 1: Total Goals 2 - 4": "Por Parte (1ª Parte / 2ª Parte)", "1st half: Team 2: Total Goals 0 - 1": "Por Parte (1ª Parte / 2ª Parte)", "1st half: Team 2: Total Goals 1 - 2": "Por Parte (1ª Parte / 2ª Parte)", "1st half: Team 2: Total Goals 1 - 3": "Por Parte (1ª Parte / 2ª Parte)", "1st half: Team 2: Total Goals 1 - 4": "Por Parte (1ª Parte / 2ª Parte)", "1st half: Team 2: Total Goals 2 - 3": "Por Parte (1ª Parte / 2ª Parte)", "1st half: Team 2: Total Goals 2 - 4": "Por Parte (1ª Parte / 2ª Parte)", "1st half: Total Goals Team 1": "Por Parte (1ª Parte / 2ª Parte)", "1st half: Total Goals Team 2": "Por Parte (1ª Parte / 2ª Parte)", "1st half: Total Goals": "Por Parte (1ª Parte / 2ª Parte)", "1st half: Team 1 to Win to Nil": "Por Parte (1ª Parte / 2ª Parte)", "1st half: Team 2 to Win to Nil": "Por Parte (1ª Parte / 2ª Parte)", "1st half: Last Goal": "Por Parte (1ª Parte / 2ª Parte)", "2nd half: Result": "Por Parte (1ª Parte / 2ª Parte)", "2nd half: Double Chance": "Por Parte (1ª Parte / 2ª Parte)", "2nd half: Team 1 to Score": "Por Parte (1ª Parte / 2ª Parte)", "2nd half: Team 2 to Score": "Por Parte (1ª Parte / 2ª Parte)", "2nd half: 1st Goal": "Por Parte (1ª Parte / 2ª Parte)", "2nd half: 2nd Goal": "Por Parte (1ª Parte / 2ª Parte)", "2nd half: 3rd Goal": "Por Parte (1ª Parte / 2ª Parte)", "2nd half: European Handicap (0:1)": "Por Parte (1ª Parte / 2ª Parte)", "2nd half: European Handicap (1:0)": "Por Parte (1ª Parte / 2ª Parte)", "2nd half: Total Goals 0 - 1": "Por Parte (1ª Parte / 2ª Parte)", "2nd half: Total Goals 1 - 2": "Por Parte (1ª Parte / 2ª Parte)", "2nd half: Total Goals 1 - 3": "Por Parte (1ª Parte / 2ª Parte)", "2nd half: Total Goals 2 - 3": "Por Parte (1ª Parte / 2ª Parte)", "2nd half: Total Goals 2 - 4": "Por Parte (1ª Parte / 2ª Parte)", "2nd half: Total Goals 2 - 5": "Por Parte (1ª Parte / 2ª Parte)", "2nd half: Total Goals 2 - 6": "Por Parte (1ª Parte / 2ª Parte)", "2nd half: Total Goals 3 - 4": "Por Parte (1ª Parte / 2ª Parte)", "2nd half: Total Goals 3 - 5": "Por Parte (1ª Parte / 2ª Parte)", "2nd half: Team 1: Total Goals 0 - 1": "Por Parte (1ª Parte / 2ª Parte)", "2nd half: Team 1: Total Goals 1 - 2": "Por Parte (1ª Parte / 2ª Parte)", "2nd half: Team 1: Total Goals 1 - 3": "Por Parte (1ª Parte / 2ª Parte)", "2nd half: Team 1: Total Goals 1 - 4": "Por Parte (1ª Parte / 2ª Parte)", "2nd half: Team 1: Total Goals 2 - 3": "Por Parte (1ª Parte / 2ª Parte)", "2nd half: Team 1: Total Goals 2 - 4": "Por Parte (1ª Parte / 2ª Parte)", "2nd half: Team 2: Total Goals 0 - 1": "Por Parte (1ª Parte / 2ª Parte)", "2nd half: Team 2: Total Goals 1 - 2": "Por Parte (1ª Parte / 2ª Parte)", "2nd half: Team 2: Total Goals 1 - 3": "Por Parte (1ª Parte / 2ª Parte)", "2nd half: Team 2: Total Goals 1 - 4": "Por Parte (1ª Parte / 2ª Parte)", "2nd half: Team 2: Total Goals 2 - 3": "Por Parte (1ª Parte / 2ª Parte)", "2nd half: Team 2: Total Goals 2 - 4": "Por Parte (1ª Parte / 2ª Parte)", "2nd half: Total Goals Team 1": "Por Parte (1ª Parte / 2ª Parte)", "2nd half: Total Goals Team 2": "Por Parte (1ª Parte / 2ª Parte)", "2nd half: Total Goals": "Por Parte (1ª Parte / 2ª Parte)", "2nd half: Team 1 to Win to Nil": "Por Parte (1ª Parte / 2ª Parte)", "2nd half: Team 2 to Win to Nil": "Por Parte (1ª Parte / 2ª Parte)", "2nd half: Last Goal": "Por Parte (1ª Parte / 2ª Parte)", "1st half or match": "Por Parte (1ª Parte / 2ª Parte)",
+     // 10. Mercados Especiais / Eventos
+     "Tie Breaker": "Mercados Especiais / Eventos", "Penalty": "Mercados Especiais / Eventos", "Sending Off": "Mercados Especiais / Eventos", "Sending Off Team 1": "Mercados Especiais / Eventos", "Sending Off Team 2": "Mercados Especiais / Eventos", "1st to Happen:": "Mercados Especiais / Eventos", "How is Scored 1st Goal": "Mercados Especiais / Eventos", "Team 1 Winning Margin 1 Goal": "Mercados Especiais / Eventos", "Team 1 Winning Margin 2 Goals": "Mercados Especiais / Eventos", "Team 1 Winning Margin 1 or 2 Goals": "Mercados Especiais / Eventos", "Team 1 Winning Margin 2 or 3 Goals": "Mercados Especiais / Eventos", "Team 1 Winning Margin 2 or more Goals": "Mercados Especiais / Eventos", "Team 1 Winning Margin 1 Goal or Draw": "Mercados Especiais / Eventos", "Team 1 Winning Margin 2 Goals or Draw": "Mercados Especiais / Eventos", "Team 2 Winning Margin 1 Goal": "Mercados Especiais / Eventos", "Team 2 Winning Margin 2 Goals": "Mercados Especiais / Eventos", "Team 2 Winning Margin 1 or 2 Goals": "Mercados Especiais / Eventos", "Team 2 Winning Margin 2 or 3 Goals": "Mercados Especiais / Eventos", "Team 2 Winning Margin 2 or more Goals": "Mercados Especiais / Eventos", "Team 2 Winning Margin 1 Goal or Draw": "Mercados Especiais / Eventos", "Team 2 Winning Margin 2 Goals or Draw": "Mercados Especiais / Eventos", "Draw in at least one of the Halves": "Mercados Especiais / Eventos", "Any Team Winning Margin 1": "Mercados Especiais / Eventos", "Any Team Winning Margin 2": "Mercados Especiais / Eventos", "Any Team Winning Margin 3": "Mercados Especiais / Eventos", "Any Team Winning Margin 2 & more": "Mercados Especiais / Eventos", "Any Team Winning Margin 3 & more": "Mercados Especiais / Eventos", "Team 1 win from Behind": "Mercados Especiais / Eventos", "Team 2 Win from Behind": "Mercados Especiais / Eventos", "Own Goal": "Mercados Especiais / Eventos", "Double": "Mercados Especiais / Eventos", "1:1 During The Match": "Mercados Especiais / Eventos", "2:0 or 0:2 During The Match": "Mercados Especiais / Eventos", "2:0 During The Match": "Mercados Especiais / Eventos", "0:2 During The Match": "Mercados Especiais / Eventos", "To Miss A Penalty": "Mercados Especiais / Eventos", "To Score A Penalty": "Mercados Especiais / Eventos", "Red card in both teams": "Mercados Especiais / Eventos",
+     "Specials: Total Headed Goals": "Mercados Especiais / Eventos", "Specials: To Occur First - Corner or Goal:": "Mercados Especiais / Eventos", "Specials: To Occur First - Throw in or Foul:": "Mercados Especiais / Eventos", "Specials: The medical team will appear on the field": "Mercados Especiais / Eventos", "Specials: Goal from outside the penalty area:": "Mercados Especiais / Eventos", "Specials: The goalkeeper will get a red card:": "Mercados Especiais / Eventos",
+     // 11. Cantos
+     "Corners: Total": "Cantos", "Corners: Total Team 1": "Cantos", "Corners: Total Team 2": "Cantos", "Corners: Total Even/Odd": "Cantos", "Corners: 1st Half: Total:": "Cantos", "Corners: 1st Half: Total Team 1": "Cantos", "Corners: 1st Half: Total Team 2": "Cantos", "Corners: 2nd Half: Total": "Cantos", "Corners: 2nd Half: Total Team 1": "Cantos", "Corners: 2nd Half: Total Team 2": "Cantos", "Corners: Total (3 way)": "Cantos", "Corners: Handicap": "Cantos", "Corners: 1st Half: Handicap": "Cantos", "Corners: 2nd Half: Handicap": "Cantos", "Corners: Result": "Cantos", "Corners: 1st Half: Result": "Cantos", "Corners: 2nd Half: Result": "Cantos", "Corners: Highest Scoring Half": "Cantos", "Corners: 1st Corner": "Cantos", "Corners: Last Corner:": "Cantos", "Corners: 10 Minutes Corners (00:00-9:59)": "Cantos", "Corners: Race to Corners": "Cantos",
+     // 12. Cartões Amarelos
+     "Yellow Cards: Total": "Cartões Amarelos", "Yellow Cards: Total Team 1": "Cartões Amarelos", "Yellow Cards: Total Team 2": "Cartões Amarelos", "Yellow Cards: Total Odd/Even": "Cartões Amarelos", "Yellow Cards: 1st Half: Total:": "Cartões Amarelos", "Yellow Cards: 1st Half: Total Team 1": "Cartões Amarelos", "Yellow Cards: 1st Half: Total Team 2": "Cartões Amarelos", "Yellow Cards: 2nd Half: Total": "Cartões Amarelos", "Yellow Cards: Handicap": "Cartões Amarelos", "Yellow Cards: 1st Half: Handicap": "Cartões Amarelos", "Yellow Cards: 2nd Half: Handicap": "Cartões Amarelos", "Yellow Cards: Result": "Cartões Amarelos", "Yellow Cards: Double Chance": "Cartões Amarelos", "Yellow Cards: 1st Half: Result": "Cartões Amarelos", "Yellow Cards: 1st Half: Double Chance": "Cartões Amarelos", "Yellow Cards: 2nd Half: Result": "Cartões Amarelos", "Yellow Cards: 2nd Half: Double Chance": "Cartões Amarelos", "Yellow Cards: Highest Scoring Half": "Cartões Amarelos", "Yellow Cards: 1st Yellow Card Minute": "Cartões Amarelos", "Yellow Cards: Both Teams to Receive Cards": "Cartões Amarelos", "Yellow Cards: Both Teams to Receive 2 or More Cards": "Cartões Amarelos",
+     // 13. Remates à Baliza
+     "Shots on target: Total": "Remates à Baliza", "Shots on target: Total Team 1": "Remates à Baliza", "Shots on target: Total Team 2": "Remates à Baliza", "Shots on target: Total Even/Odd": "Remates à Baliza", "Shots on target: 1st Half: Total:": "Remates à Baliza", "Shots on target: 1st Half: Total Team 1": "Remates à Baliza", "Shots on target: 1st Half: Total Team 2": "Remates à Baliza", "Shots on target: Handicap": "Remates à Baliza", "Shots on target: 1st Half: Handicap": "Remates à Baliza", "Shots on target: Result": "Remates à Baliza", "Shots on target: Double Chance": "Remates à Baliza", "Shots on target: 1st Half: Result": "Remates à Baliza", "Shots on target: 1st Half: Double Chance": "Remates à Baliza", "Shots on target: Highest Scoring Half": "Remates à Baliza",
+     // 14. Faltas
+     "Fouls: Total": "Faltas", "Fouls: Total Team 1": "Faltas", "Fouls: Total Team 2": "Faltas", "Fouls: Total Even/Odd": "Faltas", "Fouls: Handicap": "Faltas", "Fouls: Result": "Faltas", "Fouls: Double Chance": "Faltas", "Fouls: Highest Scoring Half": "Faltas",
+     "Offsides: Total": "Faltas", "Offsides: Total Team 1": "Faltas", "Offsides: Total Team 2": "Faltas", "Offsides: Total Even/Odd": "Faltas", "Offsides: Handicap": "Faltas", "Offsides: Result": "Faltas", "Offsides: Double Chance": "Faltas",
+     // 15. Remates Totais
+     "Shots: Total": "Remates Totais", "Shots: Total Team 1": "Remates Totais", "Shots: Total Team 2": "Remates Totais", "Shots: Total Even/Odd": "Remates Totais", "Shots: 1st Half: Total Team 1": "Remates Totais", "Shots: 1st Half: Total Team 2": "Remates Totais", "Shots: Handicap": "Remates Totais", "Shots: 1st Half: Handicap": "Remates Totais", "Shots: Result": "Remates Totais", "Shots: Double Chance": "Remates Totais", "Shots: 1st Half: Result": "Remates Totais", "Shots: 1st Half: Double Chance": "Remates Totais", "Shots: Highest Scoring Half": "Remates Totais",
+     // 16. Jogadores (Totais)
+     "Players:": "16. Jogadores (Totais)", // Catch-all for player markets
+     // *** NEW: Add mapping for our pattern ***
+     "Pattern: Team Scores Only One Half": "Específicos por Equipa" // Map to appropriate filter category
+};
+
+// --- CONSTANTE para frases a ignorar ---
+const ignorePhrases = new Set([ /* ... lista completa omitida mas necessária ... */
+    "Live Info", "Live TV", "Bet Slip", "Odds:", "TOTAL WIN", "Log in", "Handicap:Handicap 1 (-1)", "1 000", "LIVE TV IS UNAVAILABLE!",
+    "Stake", "Multi System", "Single", "Place bet", "Place", "Log in to watch live matches by using your username and password."
+]);
+
+// --- Funções auxiliares (isOddNumber, classifySpecialBlock, createCategoryTable, addTableRow) ---
+function isOddNumber(str) {
+     if (!str) return false;
+     // Check if it's a number, potentially with a decimal point
+     return /^\s*\d+(\.\d+)?\s*$/.test(str);
+ }
+
+ function classifySpecialBlock(header, pairs) {
+     const numPairs = pairs.length;
+      // Heuristic: Differentiate based on the number of pairs common for these types
+      if (header.includes("Corners: Total") || header.includes("Yellow Cards: Total")) {
+           // Typically Over/Under (2 pairs) is principal, 3-way (3 pairs) is alternative? Or vice-versa?
+           // Let's assume 2 pairs = principal (Over/Under)
+          return numPairs === 2 ? 'principal' : 'alternative';
+     } else if (header.includes("Handicap") || header.includes("Total")) { // Covers Total, Asian Total, 1st half: Total etc.
+           // Standard Handicap/Total usually has 2 options (e.g., H1/H2 or Over/Under)
+          return numPairs === 2 ? 'principal' : 'alternative';
+     }
+     // Fallback for unexpected special categories
+     // console.warn("ClassifySpecialBlock fallback (treating as principal) for:", header);
+     return 'principal'; // Treat unknown specials as principal by default
+ }
+
+  function createCategoryTable(headerText) {
+     const table = document.createElement('table');
+     table.style.display = 'none'; // Initially hide tables until filtered
+     const thead = document.createElement('thead');
+     const headerRow = document.createElement('tr');
+     const headerCell = document.createElement('th');
+     headerCell.colSpan = 3; // Span across Option, Odd, Score columns
+     headerCell.textContent = headerText;
+     headerRow.appendChild(headerCell);
+
+     // Add sub-headers for columns
+     const subHeaderRow = document.createElement('tr');
+     const optionTh = document.createElement('th');
+     optionTh.textContent = 'Opção';
+     optionTh.style.textAlign = 'left';
+     const oddTh = document.createElement('th');
+     oddTh.textContent = 'Odd';
+     oddTh.style.textAlign = 'right';
+     const scoreTh = document.createElement('th');
+     scoreTh.textContent = 'Score';
+     scoreTh.style.textAlign = 'right';
+     subHeaderRow.appendChild(optionTh);
+     subHeaderRow.appendChild(oddTh);
+     subHeaderRow.appendChild(scoreTh);
+
+     thead.appendChild(headerRow);
+     table.appendChild(thead);
+     const tbody = document.createElement('tbody');
+     table.appendChild(tbody);
+     return table;
+ }
+
+ function addTableRow(table, optionText, oddValue) {
+     const tbody = table.querySelector('tbody');
+     if (!tbody) return;
+
+     const row = document.createElement('tr');
+     const textCell = document.createElement('td');
+     textCell.textContent = optionText.trim();
+
+     const numberCell = document.createElement('td');
+     numberCell.textContent = oddValue.trim();
+     numberCell.style.textAlign = 'right'; // Align odd right
+
+     const calculationCell = document.createElement('td');
+     calculationCell.style.textAlign = 'right'; // Align score right
+     const odd = parseFloat(oddValue.trim());
+
+     if (!isNaN(odd)) {
+         // Define the logarithmic scale parameters
+         const oddMin = 1.01; // Minimum odd to start scaling from 1
+         const oddMax = 15.0; // Odd value that corresponds to score 10
+         const scoreMin = 1;   // Minimum score
+         const scoreMax = 10;  // Maximum score
+
+         let score;
+
+         if (odd < 0.5) {
+             score = 0; // Odds below 0.5 get score 0
+         } else if (odd < oddMin) {
+             score = 1; // Odds between 0.5 and 1.01 (exclusive) get score 1
+         } else if (odd >= oddMax) {
+             score = 10; // Odds 15 or higher get score 10
+         } else {
+             // Apply logarithmic scaling between oddMin and oddMax
+             const logOdd = Math.log(odd);
+             const logOddMin = Math.log(oddMin);
+             const logOddMax = Math.log(oddMax);
+
+             // Avoid division by zero if logOddMax happens to equal logOddMin (unlikely with chosen values)
+             if (logOddMax > logOddMin) {
+                  // Calculate the score on a scale from scoreMin to scoreMax
+                 score = scoreMin + (scoreMax - scoreMin) * (logOdd - logOddMin) / (logOddMax - logOddMin);
+             } else {
+                 // Fallback if min/max odds are too close or equal
+                 score = (odd >= oddMin) ? scoreMax : scoreMin;
+             }
+
+             // Round up to the nearest integer and clamp between min/max scores
+             score = Math.ceil(score);
+             score = Math.max(scoreMin, Math.min(score, scoreMax));
+         }
+
+         const boldText = document.createElement('b');
+         boldText.textContent = score;
+         calculationCell.appendChild(boldText);
+     } else {
+         calculationCell.textContent = "-"; // Placeholder if odd is not a number
+     }
+     row.appendChild(textCell);
+     row.appendChild(numberCell);
+     row.appendChild(calculationCell);
+     tbody.appendChild(row);
+ }
+
+
+// *** NEW FUNCTION: Applies title search to VISIBLE tables ***
+function applyTitleSearchToVisibleTables() {
+    const searchInput = document.getElementById("searchSubcategoryInput");
+    if (!searchInput) return; // Exit if search input doesn't exist yet
+
+    const searchTerm = searchInput.value.toLowerCase().trim();
+    // Only select tables that are NOT currently display:none (i.e., visible after category filter)
+    const visibleTables = document.querySelectorAll("#settings-popup #outputTables table:not([style*='display: none'])");
+
+    visibleTables.forEach(table => {
+        const headerCell = table.querySelector('thead th[colspan="3"]'); // Get the main header cell
+        let matchesSearch = true; // Assume match if search term is empty
+
+        if (headerCell && searchTerm !== '') { // Check only if search term exists
+            const headerText = headerCell.textContent.toLowerCase();
+            matchesSearch = headerText.includes(searchTerm);
+        }
+
+        // Hide the table if it doesn't match the search term
+        if (!matchesSearch) {
+            table.style.display = 'none';
+        }
+        // No 'else' needed: if it matches, it remains visible (as it was selected by the querySelector)
+    });
+}
+
+
+ // Make filterTables globally accessible on the window object
+ // This function now handles BOTH category and title search filtering
+ window.filterTables = function() {
+     var selectedCategoryValue = document.getElementById("categoryFilter").value;
+     var tables = document.querySelectorAll("#settings-popup #outputTables table");
+
+     // 1. Apply Category Filter First
+     tables.forEach(function(table) {
+         const tableCategory = table.getAttribute('data-category');
+         if (selectedCategoryValue === 'all' || tableCategory === selectedCategoryValue) {
+             table.style.display = ''; // Show table based on category
+         } else {
+             table.style.display = 'none'; // Hide table based on category
+         }
+     });
+
+     // 2. Apply Title Search Filter to the result of the Category Filter
+     applyTitleSearchToVisibleTables();
+ }
+
+
+// *** MODIFIED: Define the Regex for the pattern ***
+const teamScoresOneHalfRegex = /^(.+)\s+to score in only one of halves$/i; // i for case-insensitive
+
+// Make convertToTable globally accessible on the window object
+window.convertToTable = function() {
+    var inputText = document.getElementById("inputTextArea").value;
+    var lines = inputText.split('\n');
+    var outputDiv = document.getElementById("outputTables");
+    outputDiv.innerHTML = ''; // Clear previous tables
+    // *** Reset search input when creating new tables ***
+    const searchInput = document.getElementById("searchSubcategoryInput");
+    if (searchInput) searchInput.value = '';
+
+
+    let allParsedBlocks = [];
+    let currentBlockData = null;
+    const playersPrefix = "Players:";
+    const playersCategory = "16. Jogadores (Totais)";
+
+    // --- Pass 1: Parse ALL blocks and classify ---
+    for (const line of lines) {
+        let trimmedLine = line.trim();
+
+        // Skip ignored phrases and special characters/empty lines
+        if (ignorePhrases.has(trimmedLine) || ["Ù", "Ã", "Á", ""].includes(trimmedLine) || trimmedLine.length === 0) {
+            continue;
+        }
+
+        let isHeader = false;
+        let potentialHeader = null; // The exact line matched
+        let canonicalHeader = null; // The consistent internal name
+        let mainCategory = null;
+        let isSpecial = false;
+        let isPatternMatch = false; // Flag for our specific pattern
+
+        // *** MODIFIED: Check for the pattern FIRST ***
+        const patternMatch = trimmedLine.match(teamScoresOneHalfRegex);
+        if (patternMatch) {
+            isHeader = true;
+            potentialHeader = trimmedLine; // Store the original line ("Verona...")
+            canonicalHeader = "Pattern: Team Scores Only One Half"; // Assign canonical name
+            mainCategory = categoryMap[canonicalHeader]; // Get filter category from map
+            isSpecial = false; // Not special in the sense of principal/alternative classification
+            isPatternMatch = true; // Set our flag
+        }
+        // --- End pattern check ---
+        else if (trimmedLine.startsWith(playersPrefix)) { // Check Players next
+            isHeader = true;
+            potentialHeader = trimmedLine;
+            canonicalHeader = potentialHeader; // For players, original = canonical for now
+            mainCategory = playersCategory;
+            isSpecial = false;
+        } else if (specialCategories.has(trimmedLine)) { // Check Special categories
+            isHeader = true;
+            potentialHeader = trimmedLine;
+            canonicalHeader = potentialHeader;
+            mainCategory = categoryMap[potentialHeader] || "Outras Categorias Especiais";
+            isSpecial = true;
+        } else if (categories.includes(trimmedLine)) { // Check Standard categories
+            isHeader = true;
+            potentialHeader = trimmedLine;
+            canonicalHeader = potentialHeader;
+            mainCategory = categoryMap[potentialHeader] || "Outras Categorias";
+            isSpecial = false;
+        }
+
+        // Process block change or add content
+        if (isHeader) {
+            // Finalize the previous block
+            if (currentBlockData && currentBlockData.pairs.length > 0) {
+                 if (currentBlockData.isSpecial && !currentBlockData.isPatternMatch) { // Only classify non-pattern specials
+                      currentBlockData.classification = classifySpecialBlock(currentBlockData.header, currentBlockData.pairs);
+                 }
+                 allParsedBlocks.push(currentBlockData);
+            }
+            // Start a new block
+            currentBlockData = {
+                header: potentialHeader,         // Original matched text
+                canonicalHeader: canonicalHeader, // Consistent internal name
+                pairs: [],
+                mainCategory: mainCategory,
+                isSpecial: isSpecial,           // For principal/alternative logic
+                isPatternMatch: isPatternMatch, // Our specific pattern flag
+                classification: 'standard',
+                pendingOption: null
+            };
+        } else if (currentBlockData) { // Add option/odd pair
+            if (currentBlockData.pendingOption === null) {
+                currentBlockData.pendingOption = trimmedLine;
+            } else {
+                if (isOddNumber(trimmedLine)) {
+                    currentBlockData.pairs.push([currentBlockData.pendingOption, trimmedLine]);
+                    currentBlockData.pendingOption = null;
+                } else {
+                    // Discard previous pending option, assume this is the new option
+                    // console.log("Discarding pending:", currentBlockData.pendingOption, "- next line not an odd:", trimmedLine);
+                    currentBlockData.pendingOption = trimmedLine;
+                }
+            }
+        }
+    } // End loop through lines
+
+    // Finalize the last block
+    if (currentBlockData && currentBlockData.pairs.length > 0) {
+         if (currentBlockData.isSpecial && !currentBlockData.isPatternMatch) {
+              currentBlockData.classification = classifySpecialBlock(currentBlockData.header, currentBlockData.pairs);
+         }
+        allParsedBlocks.push(currentBlockData);
+    }
+
+    // --- Pass 2: Filter and Render based on rules ---
+    let renderedNormal = new Set();
+    let renderedSpecialPrincipal = new Set();
+    let renderedSpecialAlternative = new Set();
+    // *** NEW: Set to track rendered *original headers* for our specific pattern ***
+    let renderedTeamScoreOneHalfHeaders = new Set();
+
+    for (const block of allParsedBlocks) {
+        // Destructure block data, including the new flags/fields
+        const { header, canonicalHeader, pairs, mainCategory, isSpecial, isPatternMatch, classification } = block;
+
+         if (!mainCategory) {
+             console.warn("Skipping block with missing mainCategory:", header);
+             continue;
+         }
+
+        let displayHeader = header; // Default display header is the original matched text
+         if (header.startsWith(playersPrefix)) {
+            displayHeader = header.substring(playersPrefix.length).trim();
+            if (!displayHeader) displayHeader = "Jogador - Geral";
+         }
+
+        let table = null;
+
+        // *** MODIFIED: Handle our pattern rendering ***
+        if (isPatternMatch) {
+            // Check if this *specific original header* (e.g., "Verona...") has been rendered *for this pattern*
+            if (!renderedTeamScoreOneHalfHeaders.has(header)) {
+                renderedTeamScoreOneHalfHeaders.add(header); // Mark this specific team/line as rendered
+                table = createCategoryTable(displayHeader); // Use original header for display
+                table.setAttribute('data-original-category', header);
+                table.setAttribute('data-canonical-category', canonicalHeader); // Store canonical name too if needed
+                table.setAttribute('data-category', mainCategory); // Use mapped category for filtering
+                pairs.forEach(pair => addTableRow(table, pair[0], pair[1]));
+                outputDiv.appendChild(table);
+            }
+        // --- End pattern rendering ---
+        } else if (!isSpecial) { // Standard or Player category (not our pattern)
+            if (!renderedNormal.has(header)) { // Check original header for uniqueness
+                renderedNormal.add(header);
+                table = createCategoryTable(displayHeader); // Use potentially modified player header
+                table.setAttribute('data-original-category', header);
+                table.setAttribute('data-category', mainCategory);
+                pairs.forEach(pair => addTableRow(table, pair[0], pair[1]));
+                outputDiv.appendChild(table);
+            }
+        } else { // Special Category (Total, Handicap, etc. - not our pattern)
+            if (classification === 'principal') {
+                if (!renderedSpecialPrincipal.has(header)) {
+                    renderedSpecialPrincipal.add(header);
+                    table = createCategoryTable(displayHeader);
+                    table.setAttribute('data-original-category', header);
+                    table.setAttribute('data-category', mainCategory);
+                    pairs.forEach(pair => addTableRow(table, pair[0], pair[1]));
+                    outputDiv.appendChild(table);
+                }
+            } else if (classification === 'alternative') {
+                if (!renderedSpecialAlternative.has(header)) {
+                    renderedSpecialAlternative.add(header);
+                    table = createCategoryTable(displayHeader + ""); // Suffix was empty, keep it that way unless needed
+                    table.setAttribute('data-original-category', header);
+                    table.setAttribute('data-category', mainCategory);
+                    pairs.forEach(pair => addTableRow(table, pair[0], pair[1]));
+                    outputDiv.appendChild(table);
+                }
+            } else { // Fallback 'standard' for special
+                 if (!renderedSpecialPrincipal.has(header)) { // Treat fallback as principal
+                     renderedSpecialPrincipal.add(header);
+                     table = createCategoryTable(displayHeader);
+                     table.setAttribute('data-original-category', header);
+                     table.setAttribute('data-category', mainCategory);
+                     pairs.forEach(pair => addTableRow(table, pair[0], pair[1]));
+                     outputDiv.appendChild(table);
+                 }
+            }
+        }
+    } // End loop through parsed blocks
+
+    // Apply initial filtering (category + potentially empty search term) after creating tables
+    window.filterTables();
+
+    // *** Add Event Listener for Search Input AFTER tables are created ***
+    const searchInputForTitles = document.getElementById("searchSubcategoryInput");
+    if (searchInputForTitles) {
+         // Remove previous listener if any to avoid duplicates (optional but safer)
+         // searchInputForTitles.removeEventListener('input', window.filterTables);
+         searchInputForTitles.addEventListener('input', window.filterTables); // Trigger combined filter on input
+    } else {
+        console.warn("Search input ('searchSubcategoryInput') not found after table creation.");
+    }
+
+} // End of convertToTable function
+
+})(); // End of converter's self-executing anonymous function
+</script>
+
+</body>
+</html>

@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Migração de Dados - Jogadores (Segura)</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f8; color: #333; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .container { background-color: white; padding: 40px; border-radius: 12px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1); text-align: center; max-width: 600px; width: 90%; }
+        h1 { color: #1a73e8; margin-bottom: 15px; }
+        p { margin-bottom: 25px; line-height: 1.6; color: #555; }
+        .status { font-weight: bold; padding: 10px; border-radius: 8px; margin-bottom: 20px; }
+        .status.success { color: #1e8e3e; background-color: #e6f4ea; }
+        .status.error { color: #d93025; background-color: #fce8e6; }
+        .status.loading { color: #5f6368; background-color: #f1f3f4; }
+        #migrateButton { background-color: #1a73e8; color: white; border: none; padding: 15px 30px; font-size: 16px; font-weight: bold; border-radius: 8px; cursor: pointer; transition: background-color 0.3s ease, transform 0.2s ease; }
+        #migrateButton:hover { background-color: #155ab6; transform: translateY(-2px); }
+        #migrateButton:disabled { background-color: #cccccc; cursor: not-allowed; transform: none; }
+        #logOutput { margin-top: 30px; background-color: #2d2d2d; color: #f0f0f0; padding: 20px; border-radius: 8px; text-align: left; font-family: "SF Mono", "Fira Code", "Fira Mono", "Roboto Mono", monospace; font-size: 14px; max-height: 300px; overflow-y: auto; white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Ferramenta de Migração de Dados</h1>
+        <div id="authStatus" class="status loading">A verificar autenticação...</div>
+        <p>
+            O script irá copiar os valores de <code>id_pais</code> para <code>paisId</code> e de <code>id_clube</code> para <code>clubeId</code> na coleção <strong>"jogadores"</strong>.
+        </p>
+        <button id="migrateButton" disabled>Aguardando Autenticação</button>
+        <div id="logOutput">Aguardando início da operação...</div>
+    </div>
+
+    <script type="module">
+        // Importa as funções necessárias, incluindo as de AUTENTICAÇÃO
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, collection, getDocs, writeBatch, doc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+
+        // A sua configuração do Firebase
+        const firebaseConfig = {
+            apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0",
+            authDomain: "g-games-8a8fc.firebaseapp.com",
+            projectId: "g-games-8a8fc",
+            storageBucket: "g-games-8a8fc.firebasestorage.app",
+            messagingSenderId: "689897349449",
+            appId: "1:689897349449:web:536599794579901beb7a98",
+            measurementId: "G-GTTPJ6G5MD"
+        };
+
+        // Inicializa o Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app); // Inicializa o serviço de Autenticação
+
+        // Referências aos elementos do HTML
+        const migrateButton = document.getElementById('migrateButton');
+        const logOutput = document.getElementById('logOutput');
+        const authStatus = document.getElementById('authStatus');
+
+        // ====================================================================
+        // GATEKEEPER DE AUTENTICAÇÃO
+        // Este código é executado assim que a página carrega
+        // ====================================================================
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                // Usuário está logado!
+                console.log("Usuário autenticado:", user.uid);
+                authStatus.textContent = `Autenticado como: ${user.email || 'Admin'}. Pronto para iniciar.`;
+                authStatus.className = 'status success';
+                migrateButton.textContent = 'Iniciar Migração';
+                migrateButton.disabled = false; // Habilita o botão!
+
+                // Adiciona o evento de clique APENAS se o usuário estiver logado
+                migrateButton.addEventListener('click', migrateData);
+            } else {
+                // Usuário não está logado.
+                console.log("Nenhum usuário autenticado.");
+                authStatus.textContent = 'ERRO: Acesso negado. Por favor, faça login na aplicação principal e volte a esta página.';
+                authStatus.className = 'status error';
+                migrateButton.textContent = 'Login Necessário';
+                migrateButton.disabled = true;
+            }
+        });
+
+        function log(message) {
+            console.log(message);
+            logOutput.textContent += `> ${message}\n`;
+            logOutput.scrollTop = logOutput.scrollHeight;
+        }
+
+        async function migrateData() {
+            migrateButton.disabled = true;
+            logOutput.textContent = '';
+            log('Iniciando migração (como usuário autenticado)...');
+
+            try {
+                const jogadoresRef = collection(db, 'jogadores');
+                const querySnapshot = await getDocs(jogadoresRef);
+
+                if (querySnapshot.empty) {
+                    log('Nenhum jogador encontrado. Operação concluída.');
+                    migrateButton.disabled = false;
+                    return;
+                }
+
+                log(`Encontrados ${querySnapshot.size} documentos de jogadores.`);
+                
+                let docsChecked = 0;
+                let docsToUpdate = 0;
+                
+                const MAX_WRITES_PER_BATCH = 500;
+                let batch = writeBatch(db);
+                let writeCount = 0;
+
+                for (const docSnapshot of querySnapshot.docs) {
+                    docsChecked++;
+                    const jogadorData = docSnapshot.data();
+                    const updates = {};
+
+                    if (jogadorData.id_pais && jogadorData.paisId !== jogadorData.id_pais) {
+                        updates.paisId = jogadorData.id_pais;
+                    }
+                    if (jogadorData.id_clube && jogadorData.clubeId !== jogadorData.id_clube) {
+                        updates.clubeId = jogadorData.id_clube;
+                    }
+
+                    if (Object.keys(updates).length > 0) {
+                        docsToUpdate++;
+                        const jogadorDocRef = doc(db, 'jogadores', docSnapshot.id);
+                        batch.update(jogadorDocRef, updates);
+                        writeCount++;
+                        
+                        if (writeCount === MAX_WRITES_PER_BATCH) {
+                            log(`Enviando lote de ${writeCount} atualizações...`);
+                            await batch.commit();
+                            batch = writeBatch(db);
+                            writeCount = 0;
+                        }
+                    }
+                }
+                
+                if (writeCount > 0) {
+                    log(`Enviando lote final de ${writeCount} atualizações...`);
+                    await batch.commit();
+                }
+
+                log('-------------------------------------------');
+                log('MIGRAÇÃO CONCLUÍDA!');
+                log(`Total de documentos verificados: ${docsChecked}`);
+                log(`Total de documentos atualizados: ${docsToUpdate}`);
+
+            } catch (error) {
+                log('!!! ERRO DURANTE A MIGRAÇÃO !!!');
+                log(error.message);
+                console.error("Erro detalhado:", error);
+            } finally {
+                migrateButton.disabled = false;
+            }
+        }
+    </script>
+
+</body>
+</html>

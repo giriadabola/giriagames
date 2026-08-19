@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0b3d1c">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="gGames">
+    <title>gGames</title>
+    <link rel="manifest" href="./1x.webmanifest">
+    <link rel="icon" href="./assets/logos/favicon.ico" sizes="any">
+    <link rel="icon" type="image/png" sizes="32x32" href="./assets/logos/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="./assets/logos/favicon-16x16.png">
+    <link rel="apple-touch-icon" href="./assets/logos/apple-touch-icon-glass.png">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <script src="./core/pwa/register-pwa.js?v=3" defer></script>
+    <style>
+        /* Estilos existentes ... */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        /* --- TELA DE CARREGAMENTO (COM Z-INDEX CORRIGIDO) --- */
+        #loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #090c10;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 2002; /* <<< CORREÇÃO: Aumentado para garantir que fica por cima de tudo */
+        }
+        .loading-spinner { border: 6px solid #111622; border-top: 6px solid #2ecc71; border-radius: 50%; width: 80px; height: 80px; animation: spin 1.2s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+
+        /* Mod Popup Styles */
+        .mod-popup-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.85);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .mod-popup-overlay.active {
+            display: flex;
+            opacity: 1;
+        }
+
+        .mod-popup-content {
+            background: linear-gradient(135deg, #111622 0%, #0b0e14 100%);
+            color: #ffffff;
+            width: 85%;
+            max-width: 500px;
+            max-height: 90vh;
+            overflow-y: hidden;
+            border-radius: 15px;
+            padding: 25px;
+            position: relative;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5), 0 15px 12px rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            transform: scale(0.9);
+            transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .mod-popup-overlay.active .mod-popup-content {
+            transform: scale(1);
+        }
+
+        .mod-popup-close {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            font-size: 16px;
+            color: #ccc;
+            background: none;
+            border: none;
+            cursor: pointer;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            background-color: rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+            z-index: 2100;
+        }
+
+        .mod-popup-close:hover {
+            color: #fff;
+            background-color: rgba(255, 255, 255, 0.2);
+            transform: rotate(90deg);
+        }
+
+        .mod-popup-header {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-bottom: 20px;
+            position: relative;
+        }
+
+        .new-mod-badge {
+            position: absolute;
+            top: -15px;
+            left: -15px;
+            background: #FFD700;
+            color: #333;
+            font-weight: bold;
+            font-size: 0.8em;
+            padding: 8px 12px;
+            border-radius: 50%;
+            box-shadow: 0 0 10px rgba(255, 215, 0, 0.7);
+            z-index: 2200;
+            transform: rotate(-15deg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            width: 70px;
+            height: 70px;
+        }
+
+        .new-mod-badge::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: #FFD700;
+            z-index: -1;
+            border-radius: 50%;
+            transform: scale(1);
+            animation: pulse-star 1.5s infinite alternate;
+        }
+
+        @keyframes pulse-star {
+            0% { transform: scale(1); opacity: 0.7; }
+            100% { transform: scale(1.2); opacity: 0.3; }
+        }
+        .mod-popup-image-container { display: none; width: 100%; height: 150px; overflow: hidden; border-radius: 10px; margin-bottom: 10px; box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3); position: relative; }
+        .mod-popup-image { width: 100%; height: 100%; object-fit: cover; }
+        .mod-popup-title { font-size: 1.8em; font-weight: bold; color: #2176ff; text-align: center; margin-bottom: 10px; text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.3); }
+        .mod-popup-info { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; width: 100%; }
+        .mod-popup-overall { background: linear-gradient(135deg, #182232 0%, #111622 100%); border-radius: 8px; padding: 8px 12px; display: flex; justify-content: center; align-items: center; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); border: 1px solid rgba(33, 118, 255, 0.4); width: auto; color: #ffffff; }
+        .mod-popup-points { display: flex; justify-content: flex-end; padding: 8px 12px; background-color: rgba(255, 255, 255, 0.05); border-radius: 8px; box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1); border: 1px solid rgba(255, 255, 255, 0.05); }
+        .mod-popup-points-gain { color: #2ecc71; font-weight: bold; display: flex; align-items: center; margin-right: 10px; }
+        .mod-popup-points-loss { color: #e74c3c; font-weight: bold; display: flex; align-items: center; }
+        .mod-popup-points-gain::before { content: '+'; margin-right: 2px; }
+        .mod-popup-points-loss::before { content: '-'; margin-right: 2px; }
+        .mod-popup-video { width: 100%; margin: 15px 0; border-radius: 8px; overflow: hidden; box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3); position: relative; height: 350px; padding: 0; }
+        .mod-popup-video iframe { width: 100% !important; height: 100% !important; border: none; overflow: hidden; max-width: 100% !important; max-height: 100% !important; scrolling: no; padding: 0 !important; margin: 0 !important; display: block; box-sizing: border-box; object-fit: cover; object-position: center; }
+        .mod-popup-analyze { display: block; width: 100%; padding: 12px 0; background: linear-gradient(135deg, #2176ff, #1a5cc4); color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; margin-top: 20px; transition: all 0.3s ease; text-transform: uppercase; letter-spacing: 1px; box-shadow: 0 4px 6px rgba(33, 118, 255, 0.3); }
+        .mod-popup-analyze:hover { background: linear-gradient(135deg, #1a5cc4, #0d4cb3); transform: translateY(-2px); box-shadow: 0 6px 8px rgba(33, 118, 255, 0.4); }
+        .mod-icon-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.8); display: flex; justify-content: center; align-items: center; z-index: 2001; opacity: 0; transition: opacity 0.3s ease; pointer-events: none; }
+        .mod-icon-container.active { opacity: 1; pointer-events: auto; }
+        .mod-icon-animation { width: 150px; height: 150px; animation: pulse 1.5s infinite alternate, rotate 3.5s forwards; transform-origin: center; }
+        @keyframes pulse { 0% { transform: scale(1) rotate(0deg); filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.5)); } 100% { transform: scale(1.2) rotate(0deg); filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.8)); } }
+        @keyframes rotate { 0% { transform: scale(1) rotate(0deg); } 80% { transform: scale(1.5) rotate(360deg); filter: drop-shadow(0 0 30px rgba(255, 215, 0, 0.9)); } 100% { transform: scale(3) rotate(720deg); opacity: 0; filter: drop-shadow(0 0 50px rgba(255, 255, 255, 1)); } }
+        
+        /* ESTILOS DOS BOTÕES MODS E CALENDÁRIO */
+        .top-right-buttons { position: fixed; top: 10px; right: 20px; z-index: 1001; display: flex; gap: 10px; }
+        .action-button { padding: 10px 20px; color: white; border: none; border-radius: 25px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 8px; text-decoration: none; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3); transition: transform 0.3s, box-shadow 0.3s; position: relative; overflow: hidden; }
+        .action-button:hover { transform: translateY(-3px); }
+        .action-button::before { content: ''; position: absolute; top: 0; left: -100%; width: 50%; height: 100%; background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.3), transparent); transform: skewX(-25deg); animation: lightEffect 3s infinite; }
+        @keyframes lightEffect { 0% { left: -100%; } 100% { left: 200%; } }
+        .mods-button { background: linear-gradient(135deg, #9b59b6, #8e44ad); box-shadow: 0 4px 15px rgba(155, 89, 182, 0.5); }
+        .mods-button:hover { box-shadow: 0 6px 20px rgba(155, 89, 182, 0.7); }
+        .calendar-button { background: linear-gradient(135deg, #2176ff, #1a5cc4); box-shadow: 0 4px 15px rgba(33, 118, 255, 0.5); }
+        .calendar-button:hover { box-shadow: 0 6px 20px rgba(33, 118, 255, 0.7); }
+        
+        /* Resto dos estilos */
+        body { min-height: 100vh; background-color: #090c10; color: #ffffff; font-family: Arial, sans-serif; /* A linha display: none; foi removida */ }
+        .content { padding: 20px; margin-bottom: 80px; /* A linha display: none; foi removida */ margin-top: 50px; }
+        h1 { color: #ffffff; margin-bottom: 20px; }
+        #games-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; padding: 10px; }
+        .game-card { background: linear-gradient(to bottom right, #111622, #182232); border-radius: 20px; padding: 25px; box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2), 0 6px 6px rgba(0, 0, 0, 0.15); transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); position: relative; border: 1px solid rgba(255, 255, 255, 0.05); color: #ffffff; }
+        .game-card.voted { background: linear-gradient(to bottom right, #102a1d, #143d24); border: 1px solid rgba(46, 204, 113, 0.2); }
+        .vote-status-icon { position: absolute; top: 10px; left: 10px; font-size: 18px; z-index: 2; }
+        .vote-status-icon.voted { color: #2ecc71; }
+        .vote-status-icon.pending { color: #f1c40f; }
+        .round-badge { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, #2176ff, #1a5cc4); color: white; padding: 8px 20px; border-radius: 20px; font-size: 0.9em; font-weight: bold; box-shadow: 0 4px 8px rgba(33, 118, 255, 0.3); letter-spacing: 0.5px; }
+        .game-card:hover { transform: translateY(-8px); box-shadow: 0 15px 30px rgba(0, 0, 0, 0.3), 0 8px 8px rgba(0, 0, 0, 0.2); }
+        .teams-container { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .team { display: flex; flex-direction: column; align-items: center; flex: 1; }
+        .team-image { width: 70px; height: 70px; border-radius: 50%; overflow: hidden; margin-bottom: 12px; border: 3px solid #111622; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3); transition: transform 0.3s ease; }
+        .team-image img { width: 100%; height: 100%; object-fit: cover; }
+        .team-name { font-weight: bold; text-align: center; font-size: 0.9em; color: #ffffff; }
+        .vs { margin: 0 15px; font-weight: bold; color: #888888; }
+        .competition-info { display: flex; align-items: center; margin-bottom: 15px; padding: 10px; background: #111622; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.05); }
+        .competition-image { width: 30px; height: 30px; margin-right: 10px; }
+        .competition-image img { width: 100%; height: 100%; object-fit: contain; }
+        .competition-details { flex: 1; }
+        .competition-name { font-weight: bold; font-size: 0.9em; text-align: center; color: #ffffff; }
+        .round { color: #888888; font-size: 0.8em; }
+        .predict-button { width: 100%; padding: 14px; background: linear-gradient(135deg, #2176ff, #1a5cc4); color: white; border: none; border-radius: 12px; font-weight: bold; cursor: pointer; transition: all 0.3s ease; text-transform: uppercase; letter-spacing: 0.5px; box-shadow: 0 4px 6px rgba(33, 118, 255, 0.2); }
+        .predict-button:hover { background: linear-gradient(135deg, #1a5cc4, #0d4cb3); box-shadow: 0 6px 8px rgba(33, 118, 255, 0.3); transform: translateY(-2px); }
+        .game-datetime { text-align: center; color: #888888; font-size: 0.9em; margin-bottom: 15px; padding: 8px; background: #111622; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.05); }
+        .no-games, .error { text-align: center; color: #ffffff; padding: 20px; background: #111622; border-radius: 8px; margin: 20px 0; border: 1px solid rgba(255, 255, 255, 0.05); }
+        .error { color: #e74c3c; background: #2d1f21; border-color: rgba(231, 76, 60, 0.2); }
+
+        /* NOVO: Estilos para o Card Exclusivo do ModsPlay */
+       #modsplay-card-container {
+            margin-bottom: 30px;
+            /* Adicionado para centralizar o card na página */
+            display: flex;
+            justify-content: center;
+        }
+
+        .modsplay-card {
+            background: linear-gradient(135deg, #111622, #182232);
+            color: white;
+            border-radius: 20px;
+            padding: 0; /* Removido padding para a imagem poder preencher o topo */
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+            border: 2px solid #FFD700;
+            animation: fadeIn 0.8s ease-out;
+            
+            /* --- MODIFICAÇÃO DE TAMANHO --- */
+            /* Define uma largura que se assemelha a um card de jogo */
+            width: 100%;
+            max-width: 380px; 
+            min-height: 480px; /* Aprox. 1/3 mais alto que um card de jogo padrão */
+            
+            /* Adicionado para controlar layout interno da imagem e conteúdo */
+            display: flex;
+            flex-direction: column;
+            overflow: hidden; /* Garante que a imagem com borda arredondada não "vaze" */
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* NOVO: Estilo para o container da imagem que respeita a imagePosition */
+        .modsplay-image {
+            width: 100%;
+            height: 300px; /* Altura fixa para a área da imagem */
+            background-repeat: no-repeat;
+            /* As propriedades de imagem (URL, posição, zoom) serão aplicadas via JS */
+        }
+        
+        /* NOVO: Container para o conteúdo abaixo da imagem */
+        .modsplay-card-content {
+            padding: 0 20px 25px 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            flex-grow: 1; /* Faz este container ocupar o espaço vertical restante */
+        }
+
+        .modsplay-card-title {
+            font-size: 1.5em;
+            font-weight: bold;
+            margin-top: 15px;
+            margin-bottom: 20px;
+            text-shadow: 1px 1px 5px rgba(255, 215, 0, 0.5);
+        }
+
+        .modsplay-play-button {
+            display: inline-block;
+            padding: 14px;
+            background: linear-gradient(135deg, #FFD700, #FFA500);
+            color: #333;
+            border: none;
+            border-radius: 12px;
+            font-weight: bold;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(255, 215, 0, 0.4);
+            align-self: center; /* Centraliza o botão */
+        }
+
+        .modsplay-play-button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(255, 215, 0, 0.6);
+        }
+
+        /* Header styling similar to market.html */
+        .header-container {
+            display: flex;          
+            align-items: center;    
+            flex-wrap: wrap;        
+            gap: 16px 24px;         
+            margin-bottom: 25px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            padding-bottom: 20px;
+        }
+
+        .title-section {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .market-title {
+            font-size: 28px;
+            color: #ffffff;
+            font-weight: 700;
+            position: relative;
+            padding-left: 12px;
+            text-align: left;
+        }
+
+        .market-title::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 4px;
+            bottom: 4px;
+            width: 4px;
+            background-color: #2ecc71;
+            border-radius: 2px;
+        }
+
+        @media (max-width: 768px) {
+            .header-container {
+                justify-content: center; 
+                text-align: center;
+            }
+            .market-title {
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+
+
+<body>
+
+    <!-- A tela de carregamento está fora do wrapper, por isso aparece imediatamente -->
+    <div id="loading-screen">
+        <div class="loading-spinner"></div>
+    </div>
+    
+    <!-- Popups e outros elementos que podem aparecer por cima de tudo -->
+    <div id="mod-icon-container" class="mod-icon-container">
+        <img id="mod-icon-animation" class="mod-icon-animation" src="" alt="Mod Icon">
+    </div>
+
+    <div id="mod-popup-overlay" class="mod-popup-overlay">
+        <div class="mod-popup-content">
+            <button class="mod-popup-close"><i class="fas fa-times"></i></button>
+            <div class="mod-popup-header">
+                <div class="mod-popup-image-container"><img src="" alt="" class="mod-popup-image" id="popup-mod-image"></div>
+                <h2 class="mod-popup-title" id="popup-mod-title"></h2>
+                <span class="new-mod-badge">NEW MOD</span>
+            </div>
+            <div class="mod-popup-info">
+                <div class="mod-popup-overall">
+                    <span class="overall-label">Overall:</span>
+                    <span class="overall-value" id="popup-mod-overall"></span>
+                </div>
+                <div class="mod-popup-points">
+                    <span class="mod-popup-points-gain" id="popup-mod-points-gain"></span>
+                    <span class="mod-popup-points-loss" id="popup-mod-points-loss"></span>
+                </div>
+            </div>
+            <div id="popup-mod-video" class="mod-popup-video"></div>
+            <button id="popup-mod-analyze" class="mod-popup-analyze">Analisar</button>
+        </div>
+    </div>
+
+    <!-- Wrapper para todo o conteúdo principal, começa escondido -->
+    <div id="main-content-wrapper" style="display: none;">
+       <div class="top-right-buttons">
+    <a href="mods.html" class="action-button mods-button" id="mods-btn">
+        <i class="fas fa-star"></i>
+        Mods
+    </a>
+</div>
+
+        <div class="content">
+            <div class="header-container">
+                <div class="title-section">
+                    <h1 class="market-title">1x WhatIf...</h1>
+                </div>
+            </div>
+            
+            <!-- NOVO: Contentor para o Card Exclusivo do ModsPlay -->
+            <div id="modsplay-card-container"></div>
+
+            <div id="games-container">
+                <!-- Jogos serão carregados aqui dinamicamente -->
+            </div>
+        </div>
+
+
+
+<script src="config.js"></script>
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getFirestore, collection, getDocs, doc, getDoc, query, where, updateDoc, addDoc, serverTimestamp, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
+
+
+    function logUserAction(actionDescription) {
+    // Só executa se houver um utilizador autenticado
+    if (!auth.currentUser) {
+        console.log("Nenhum utilizador logado para registar a ação.");
+        return;
+    }
+    
+    try {
+        const eyeCollection = collection(db, 'eye');
+        void addDoc(eyeCollection, {
+            dataacao: serverTimestamp(), // Timestamp do servidor, mais fiável
+            acao: actionDescription,
+            userId: auth.currentUser.uid
+        }).catch((error) => console.error("Erro ao registar a ação na coleção 'eye':", error));
+    } catch (error) {
+        console.error("Erro ao registar ação na coleção 'eye':", error);
+    }
+}
+
+
+    const loadingScreen = document.getElementById('loading-screen');
+    const mainContentWrapper = document.getElementById('main-content-wrapper');
+    let currentUserStatus = null;
+
+    // Funções de Acesso e Menu
+    async function loadMenuSettings() { return getDoc(doc(db, 'paineis', 'paineis menu')).then(d => d.exists() ? d.data() : {}); }
+    async function checkPageAccess(userStatus, menuSettings) { if (!menuSettings || menuSettings['1x'] !== 'on') { if (!userStatus || userStatus !== 'ruler') { window.location.href = '404.html'; return false; } } return true; }
+    function updateTopRightButtonsVisibility(menuSettings) {
+    if (!menuSettings) return; // Se não houver configurações, não faz nada
+
+    const calendarBtn = document.getElementById('calendar-btn');
+    const modsBtn = document.getElementById('mods-btn');
+
+    if (calendarBtn && menuSettings.calendario === 'off') {
+        calendarBtn.style.display = 'none';
+    }
+
+    if (modsBtn && menuSettings.mods === 'off') {
+        modsBtn.style.display = 'none';
+    }
+}
+    async function getUserStatus(userId) { const userDoc = doc(db, 'users', userId); const docSnap = await getDoc(userDoc); if (docSnap.exists()) { const userData = docSnap.data(); return { estatuto: userData.estatuto, aceite: userData.aceite }; } else { return null; } }
+async function setupPageAccess() {
+    try {
+        const menuSettings = await loadMenuSettings();
+        const hasPageAccess = await checkPageAccess(currentUserStatus, menuSettings);
+        if (!hasPageAccess) {
+            return false;
+        }
+        updateMenuVisibility(menuSettings);
+        // ADICIONE ESTA LINHA AQUI
+        updateTopRightButtonsVisibility(menuSettings); 
+        return true;
+    
+    } catch (error) {
+        window.location.href = '404.html';
+        return false;
+    }
+}
+
+    let unsubscribeGames = null;
+    let gamesRenderToken = 0;
+    const documentCache = new Map();
+
+    function getCachedDocument(cacheKey, reference) {
+        if (!documentCache.has(cacheKey)) {
+            documentCache.set(cacheKey, getDoc(reference));
+        }
+        return documentCache.get(cacheKey);
+    }
+
+    function loadActiveGames() {
+        const gamesContainer = document.getElementById('games-container');
+        try {
+            const gamesRef = collection(db, 'jogos');
+            if (unsubscribeGames) unsubscribeGames();
+            
+            unsubscribeGames = onSnapshot(gamesRef, async (querySnapshot) => {
+                const renderToken = ++gamesRenderToken;
+                const now = new Date();
+                const activeGames = (await Promise.all(querySnapshot.docs.map(async (gameDoc) => {
+                    const game = { ...gameDoc.data() };
+                    if (!game.inicioIntervalo || !game.fimIntervalo) return null;
+                    const inicioPalpites = game.inicioIntervalo.toDate();
+                    const fimPalpites = game.fimIntervalo.toDate();
+                    if (now < inicioPalpites || now > fimPalpites) return null;
+                    if (typeof game.equipaCasaId !== 'string' || !game.equipaCasaId || typeof game.equipaForaId !== 'string' || !game.equipaForaId || typeof game.competicaoId !== 'string' || !game.competicaoId) return null;
+
+                    const palpitePromise = auth.currentUser
+                        ? getDocs(query(collection(db, 'users', auth.currentUser.uid, 'palpites'), where('jogoId', '==', gameDoc.id)))
+                        : Promise.resolve(null);
+                    const [palpiteSnapshot, equipaCasaDoc, equipaForaDoc, competicaoDoc] = await Promise.all([
+                        palpitePromise,
+                        getCachedDocument(`clubes/${game.equipaCasaId}`, doc(db, 'clubes', game.equipaCasaId)),
+                        getCachedDocument(`clubes/${game.equipaForaId}`, doc(db, 'clubes', game.equipaForaId)),
+                        getCachedDocument(`competicoes/${game.competicaoId}`, doc(db, 'competicoes', game.competicaoId))
+                    ]);
+                    game.hasVoted = Boolean(palpiteSnapshot && !palpiteSnapshot.empty);
+                    game.equipaCasaImagem = equipaCasaDoc.data()?.imagem || 'https://via.placeholder.com/50';
+                    game.equipaForaImagem = equipaForaDoc.data()?.imagem || 'https://via.placeholder.com/50';
+                    game.competicaoImagem = competicaoDoc.data()?.imagem || 'https://via.placeholder.com/30';
+                    game.competicaoImagemBackground = competicaoDoc.data()?.imagemBackground || '';
+                    return { ...game, id: gameDoc.id };
+                })).catch((error) => {
+                    console.error("Erro ao preparar os jogos activos: ", error);
+                    return [];
+                })).filter(Boolean);
+
+                if (renderToken !== gamesRenderToken) return;
+
+                gamesContainer.innerHTML = activeGames.length === 0 ? '<p class="no-games">Não há jogos disponíveis para palpites no momento.</p>' : '';
+                activeGames.forEach(game => {
+                    const card = document.createElement('div');
+                    card.className = `game-card ${game.hasVoted ? 'voted' : ''}`;
+                    if (game.competicaoImagemBackground) {
+                        if (game.hasVoted) {
+                            card.style.background = `linear-gradient(rgba(16, 42, 29, 0.85), rgba(20, 61, 36, 0.95)), url('${game.competicaoImagemBackground}') no-repeat center center`;
+                        } else {
+                            card.style.background = `linear-gradient(rgba(17, 22, 34, 0.85), rgba(24, 34, 50, 0.95)), url('${game.competicaoImagemBackground}') no-repeat center center`;
+                        }
+                        card.style.backgroundSize = 'cover';
+                    }
+                    card.innerHTML = `
+                        <i class="vote-status-icon fas ${game.hasVoted ? 'fa-check voted' : 'fa-hourglass-half pending'}"></i>
+                        <div class="round-badge">Ronda ${game.ronda}</div>
+                        <div class="teams-container">
+                            <div class="team"><div class="team-image"><img src="${game.equipaCasaImagem}" alt="${game.equipaCasa}"></div><div class="team-name">${game.equipaCasa}</div></div>
+                            <div class="vs">VS</div>
+                            <div class="team"><div class="team-image"><img src="${game.equipaForaImagem}" alt="${game.equipaFora}"></div><div class="team-name">${game.equipaFora}</div></div>
+                        </div>
+                        <div class="game-datetime">${game.dataJogo?.toDate()?.toLocaleDateString('pt-PT')} - ${game.dataJogo?.toDate()?.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}</div>
+                        <div class="competition-info">
+                            <div class="competition-image"><img src="${game.competicaoImagem}" alt="${game.competicao}"></div>
+                            <div class="competition-details"><div class="competition-name">${game.competicao}</div></div>
+                        </div>
+                        <button class="predict-button" onclick="window.location.href='palpite.html?id=${game.id}'">${game.hasVoted ? 'Ver Palpite' : 'Palpitar'}</button>
+                    `;
+                    gamesContainer.appendChild(card);
+                });
+                loadingScreen.style.display = 'none';
+            }, (error) => {
+                console.error("Erro ao escutar jogos em tempo real: ", error);
+                gamesContainer.innerHTML = '<p class="error">Erro ao carregar os jogos. Por favor, tente novamente mais tarde.</p>';
+                loadingScreen.style.display = 'none';
+            });
+        } catch (error) {
+            console.error("Erro ao carregar jogos: ", error);
+            gamesContainer.innerHTML = '<p class="error">Erro ao carregar os jogos. Por favor, tente novamente mais tarde.</p>';
+            loadingScreen.style.display = 'none';
+        }
+    }
+
+    /* NOVO: Função para verificar e exibir o card do ModsPlay */
+   async function checkAndDisplayModsPlayCard() {
+        const container = document.getElementById('modsplay-card-container');
+        if (!container) return;
+
+        try {
+            // 1. Obter o documento de configuração do modsplay
+            const modsPlayQuery = await getDocs(collection(db, 'modsplay'));
+            if (modsPlayQuery.empty) {
+                // Não há evento modsplay configurado, então não faz nada.
+                return;
+            }
+            
+            const modsPlayDoc = modsPlayQuery.docs[0];
+            const modsPlayData = modsPlayDoc.data();
+
+            // 2. Verificar as datas
+            const now = new Date();
+            const inicio = modsPlayData.dataInicio.toDate();
+            const fim = modsPlayData.dataFim.toDate();
+
+            if (now >= inicio && now <= fim) {
+                // O evento está ativo!
+                const modId = modsPlayData.modId;
+                if (!modId) {
+                    console.error("ModsPlay ativo, mas sem modId definido.");
+                    return;
+                }
+
+                // 3. Buscar os detalhes do mod correspondente
+                const modDocSnap = await getDoc(doc(db, 'mods', modId));
+                if (!modDocSnap.exists()) {
+                    console.error(`Mod com ID ${modId} não encontrado.`);
+                    return;
+                }
+                const modData = modDocSnap.data();
+
+                // 4. Extrair posições e zoom da imagem (com valores padrão para segurança)
+                const position = modData.imagePosition || { x: 'center', y: 'center' };
+                const zoom = modData.imagePosition?.zoom || 100; // Usa 100 como padrão se não existir
+
+                // 5. Construir e exibir o card com a nova estrutura e estilos inline para a imagem
+                container.innerHTML = `
+                    <div class="modsplay-card">
+                        <div class="modsplay-image" style="
+                            background-image: url('${modData.imagem}');
+                            background-position: ${position.x} ${position.y};
+                            background-size: ${zoom}%;
+                        "></div>
+                        <div class="modsplay-card-content">
+                            <h3 class="modsplay-card-title">${modData.nomeMod}</h3>
+                            <a href="modsplay.html" class="modsplay-play-button">Jogar</a>
+                        </div>
+                    </div>
+                `;
+            } else {
+                // O evento não está ativo, garantir que o contentor está vazio.
+                container.innerHTML = '';
+            }
+
+        } catch (error) {
+            console.error("Erro ao verificar o evento ModsPlay:", error);
+            container.innerHTML = ''; // Limpa em caso de erro
+        }
+    }
+
+    async function openModPopup(modId) { /* ... (código do popup) ... */ }
+    async function checkAndDisplayMods() { /* ... (código dos mods) ... */ }
+
+    onAuthStateChanged(auth, async (user) => {
+    if (user) {
+        const userInfo = await getUserStatus(user.uid);
+        if (userInfo && userInfo.aceite === "Yes") {
+            currentUserStatus = userInfo.estatuto;
+            const hasAccess = await setupPageAccess();
+            if (!hasAccess) return;
+
+            // A página fica utilizável assim que o acesso está validado. As
+            // tarefas de auditoria e dados secundários continuam em segundo plano.
+            mainContentWrapper.style.display = 'block';
+            loadingScreen.style.display = 'none';
+            void Promise.allSettled([
+                logUserAction(`Entrou em ${document.title}`),
+                updateDoc(doc(db, 'users', user.uid), { ultimoacesso: serverTimestamp() }),
+                checkAndDisplayModsPlayCard(),
+                checkAndDisplayMods()
+            ]);
+            loadActiveGames();
+        } else {
+            window.location.href = 'index.html';
+        }
+    } else {
+        window.location.href = 'index.html';
+    }
+});
+
+/* ---- NOVO: Listener Global para Cliques em Botões ---- */
+document.addEventListener('click', async (event) => {
+    // Tenta encontrar o elemento clicável mais próximo
+    const clickableElement = event.target.closest('button, a.action-button, a.modsplay-play-button');
+
+    if (!clickableElement) {
+        return; // Se não for um elemento de interesse, não faz nada
+    }
+
+    const actionName = clickableElement.id || clickableElement.textContent.trim();
+    if (!actionName) {
+        return; // Se não conseguirmos um nome para a ação, não faz nada
+    }
+
+    // Verifica se é um link que irá navegar para a mesma janela
+    const isNavLink = clickableElement.tagName === 'A' && clickableElement.href && clickableElement.target !== '_blank';
+
+    if (isNavLink) {
+        // 1. Impede a navegação imediata
+        event.preventDefault();
+        
+        // 2. Regista a ação e espera que termine
+        await logUserAction(`Clicou em: ${actionName}`);
+        
+        // 3. Agora, navega para o destino
+        window.location.href = clickableElement.href;
+
+    } else {
+        // Para botões normais ou links que abrem noutra aba,
+        // apenas regista a ação. O comportamento padrão do navegador continuará.
+        logUserAction(`Clicou em: ${actionName}`).catch(console.error);
+    }
+});
+
+    // Event listeners para o popup de mod (sem alterações)
+    // ...
+</script>
+<script src="menu-component.js"></script> 
+<script src="core/top-bar-component.js" type="module"></script>
+</body>
+</html>

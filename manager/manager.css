@@ -1,0 +1,589 @@
+/* manager/manager.css */
+/* --- Global Resets & Body --- */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    user-select: none; /* Prevent text selection */
+}
+
+body {
+    min-height: 100vh;
+    background: #090c10;
+    background-attachment: fixed; /* Prevent gradient scrolling */
+    font-family: 'Cinzel', serif;
+    color: #e0d2b4; /* Primary text color */
+    overflow-x: hidden; /* Prevent horizontal scroll */
+}
+
+/* --- Loading Screen Styles --- */
+#loading-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: #090c10;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 1005; /* Highest z-index */
+    opacity: 1;
+    transition: opacity 0.5s ease-out;
+}
+.loading-spinner {
+    border: 16px solid #111622; /* Darker background color */
+    border-top: 16px solid #c9a959; /* Gold accent */
+    border-radius: 50%;
+    width: 120px;
+    height: 120px;
+    animation: spin 2s linear infinite;
+}
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+.loading-percentage {
+    margin-top: 15px;
+    font-size: 18px;
+    font-weight: bold;
+    color: #c9a959; /* Gold accent */
+}
+.progress-bar-container {
+    width: 200px;
+    height: 10px;
+    background-color: #111622; /* Darker background */
+    border-radius: 5px;
+    margin-top: 10px;
+    overflow: hidden;
+}
+.progress-bar {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(135deg, #c9a959 0%, #e6c675 100%); /* Gold gradient */
+    border-radius: 5px;
+    transition: width 0.3s ease-in-out;
+}
+
+/* --- Popup General Styles --- */
+.popup-overlay {
+    display: none; /* Hidden by default */
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.85); /* Dark overlay */
+    z-index: 1001; /* Base popup layer (Ex: Mentalidade Details) */
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    overflow-y: auto; /* Allow vertical scroll if content overflows */
+    padding: 20px 0; /* Top/bottom padding for scroll space */
+}
+.popup-content {
+    position: relative; /* Position relative to the overlay flow */
+    margin: 5vh auto; /* Center vertically with margin, horizontally auto */
+    transform: scale(0.8); /* Start scaled down for animation */
+    background: rgba(17, 22, 34, 0.98); /* Premium dark background */
+    padding: 30px;
+    border-radius: 10px;
+    border: 2px solid #c9a959; /* Gold border */
+    max-width: 95%; /* Max width relative to viewport */
+    width: 800px; /* Default width */
+    opacity: 0;
+    transition: all 0.3s ease; /* Smooth transition for scale and opacity */
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8); /* Strong shadow */
+}
+.popup-overlay.active { /* Styles when popup is shown */
+    display: block; /* Make visible */
+    opacity: 1; /* Fade in */
+}
+.popup-overlay.active .popup-content {
+    transform: scale(1); /* Scale up to full size */
+    opacity: 1; /* Fade in content */
+}
+.popup-title {
+    text-align: center;
+    color: #c9a959; /* Gold title */
+    font-size: 24px;
+    margin-bottom: 20px;
+}
+.items-grid {
+    display: grid;
+    /* Auto-fill columns, minimum 150px width, max 1 fraction of space */
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 15px; /* Gap between grid items */
+    margin-bottom: 20px;
+    max-height: 60vh; /* Limit height to prevent overly tall popups */
+    overflow-y: auto; /* Allow scrolling within the grid */
+    padding-right: 10px; /* Space for scrollbar */
+    position: relative; /* Needed for z-index on headers */
+    z-index: 1;
+}
+.item-card {
+    background: rgba(26, 34, 50, 0.7); /* Custom dark theme card background */
+    border: 1px solid #c9a959; /* Gold border */
+    border-radius: 8px;
+    padding: 10px;
+    text-align: center;
+    opacity: 0; /* Start hidden for animation */
+    transform: translateY(20px); /* Start lower for animation */
+    transition: all 0.3s ease;
+    cursor: pointer; /* Indicate clickable */
+    position: relative; /* For stacking context if needed */
+    z-index: 1; /* Ensure cards are above potential grid background */
+}
+.item-card:hover {
+    border-color: #e6c675; /* Brighter gold border on hover */
+    background: rgba(26, 34, 50, 0.95); /* Brighter background on hover */
+}
+.item-card.visible { /* State for animation completion */
+    opacity: 1;
+    transform: translateY(0);
+}
+.item-image {
+    width: 100px; /* Fixed image width */
+    height: 100px; /* Fixed image height */
+    object-fit: contain; /* Scale image while preserving aspect ratio */
+    margin-bottom: 10px;
+    pointer-events: none; /* Prevent image dragging ghost */
+}
+.item-name {
+    color: #e0d2b4; /* Main text color */
+    font-size: 14px;
+    margin-bottom: 5px;
+    min-height: 2.5em; /* Ensure consistent height even with short names */
+}
+.item-nota { /* For description or other notes */
+    color: #a99a7c; /* Muted gold/brown */
+    font-size: 12px;
+}
+.type-header { /* Style for category headers within the grid */
+    width: 100%;
+    padding: 10px;
+    margin: 15px 0 10px;
+    color: #c9a959; /* Gold color */
+    font-size: 18px;
+    font-weight: bold;
+    border-bottom: 1px solid #c9a959; /* Gold underline */
+    grid-column: 1 / -1; /* Span across all grid columns */
+    text-transform: uppercase; /* Make titles stand out */
+    letter-spacing: 1px;
+    position: relative; /* Needed for z-index */
+    z-index: 1; /* Ensure headers are above cards if overlapping occurs */
+}
+.popup-buttons { /* Container for action buttons at bottom */
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    margin-top: 20px;
+}
+.popup-button { /* Style for buttons within popups */
+    padding: 10px 20px;
+    border: 2px solid #c9a959; /* Gold border */
+    background: transparent; /* Transparent background */
+    color: #e0d2b4; /* Text color */
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-family: 'Cinzel', serif; /* Use main font */
+}
+.popup-button:hover {
+    background: #c9a959; /* Gold background on hover */
+    color: #1a1a3a; /* Dark text on hover */
+}
+.confirmation-popup, .nested-popup-overlay {
+     /* Popups que devem ficar ACIMA do base (Loja, Detalhes Estádio, Confirmações) */
+    z-index: 1002;
+}
+#nested-popup.popup-overlay {
+    /* O popup genérico para itens anexados precisa ficar ACIMA dos outros popups (como a Loja) */
+    z-index: 1003;
+}
+
+#item-confirmation-popup.popup-overlay {
+    /* Garante que a confirmação de compra de item fique acima de TODOS os outros popups */
+    z-index: 1004;
+}
+
+.close-button { /* Style for the 'X' close button */
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    background: none;
+    border: none;
+    font-size: 28px;
+    color: #a99a7c; /* Muted gold */
+    cursor: pointer;
+    transition: color 0.3s ease;
+    padding: 5px;
+    line-height: 1; /* Ensure tight fit */
+}
+.close-button:hover {
+    color: #e0d2b4; /* Brighter color on hover */
+}
+
+/* --- Mentalidade Card Specific Styles --- */
+@keyframes floatGlow { /* Animation for the floating glow effect */
+    0%, 100% { filter: drop-shadow(0 0 8px rgba(201, 169, 89, 0.6)); } /* Base gold glow */
+    50% { filter: drop-shadow(0 0 12px rgba(201, 169, 89, 0.75)); } /* Stronger glow at midpoint */
+}
+.mentalidade-card { /* Container for the large mentalidade choice cards */
+    opacity: 0; /* Start hidden for JS animation */
+    transform: translateY(10px); /* Start lower for JS animation */
+    transition: opacity 0.8s ease-in-out, transform 0.8s ease-in-out; /* JS transitions */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    /* --- BASE MARGIN (Applied Desktop First) --- */
+    margin: 15px;
+    cursor: pointer; /* Indicate clickable */
+    position: relative; /* Needed for stacking context */
+    flex-shrink: 0; /* Prevent shrinking in flex container */
+}
+.mentalidade-card img { /* Image within the mentalidade card */
+    width: 300px; /* Large image */
+    height: 300px;
+    object-fit: contain;
+    pointer-events: none; /* Prevent interaction with image */
+    /* Apply the base floating glow animation */
+    animation: floatGlow 3.5s infinite ease-in-out;
+    /* Add transition for smooth hover effect change */
+    transition: filter 0.4s ease-in-out;
+}
+.mentalidade-card:hover img { /* Enhance glow on hover */
+    animation: none; /* Pause the floating animation on hover */
+    filter: drop-shadow(0 0 18px rgba(230, 198, 117, 0.9)); /* Stronger static glow */
+}
+
+/* --- Main Content Area Styling --- */
+#mentalidades-container {
+    position: relative; /* Needed for z-index stacking context */
+    z-index: 1; /* Ensure content is above the background image */
+    padding: 20px; /* Keep padding */
+    margin-bottom: 80px; /* Space above bottom menu */
+}
+#mentalidades-list {
+     position: relative; /* Ensure list items stack correctly */
+     z-index: 1;
+     display: flex; /* Use flexbox for layout */
+     flex-wrap: wrap; /* Allow items to wrap */
+     justify-content: center; /* Center items */
+     gap: 20px; /* BASE Gap between items (will be overridden for mobile mentalidades) */
+}
+
+/* Estilo para o botão Comprar quando desativado */
+.buy-item-btn:disabled {
+    background-color: rgba(85, 85, 85, 0.5); /* Cinza mais escuro e transparente */
+    border-color: #777;
+    color: #aaa;
+    cursor: not-allowed;
+    opacity: 0.7; /* Um pouco mais transparente */
+}
+.buy-item-btn:disabled:hover {
+     /* Evita mudança de cor no hover quando desativado */
+    background-color: rgba(85, 85, 85, 0.5);
+    color: #aaa;
+}
+.disabled-reason { /* Estilo para a nota abaixo do botão desativado */
+    font-size: 10px;
+    color: #ffcdd2; /* Cor de aviso suave (vermelho claro) */
+    margin-top: 5px;
+    display: block; /* Garante que fica numa linha própria */
+    min-height: 1.2em; /* Reserva espaço mesmo quando não há motivo */
+}
+
+/* --- Botão Flutuante para Outros Impérios --- */
+#other-managers-button {
+    position: fixed;
+    bottom: 90px; /* Acima do menu inferior */
+    right: 20px;
+    width: 55px;
+    height: 55px;
+    background-color: rgba(201, 169, 89, 0.85); /* Cor dourada semi-transparente */
+    color: #1a1a3a; /* Cor escura do tema */
+    border: 2px solid #1a1a3a;
+    border-radius: 50%;
+    font-size: 24px;
+    display: flex; /* Para centralizar o ícone */
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
+    z-index: 999; /* Abaixo dos popups, acima do conteúdo */
+    transition: all 0.3s ease;
+    opacity: 0; /* Começa escondido, mostrado via JS */
+    transform: scale(0.8); /* Animação de entrada */
+}
+#other-managers-button:hover {
+    background-color: #e6c675; /* Dourado mais claro */
+    transform: scale(1.1);
+}
+#other-managers-button.visible { /* Classe para mostrar o botão */
+    opacity: 1;
+    transform: scale(1);
+}
+
+/* --- Popup Outros Impérios --- */
+#other-managers-popup.popup-overlay {
+     /* Deve ficar acima de outros popups como loja ou detalhes */
+     z-index: 1003;
+}
+/* Estilo para cada cartão de utilizador na lista */
+.user-manager-card {
+    background: rgba(26, 34, 50, 0.7);
+    border: 1px solid #a99a7c; /* Borda mais suave */
+    border-radius: 8px;
+    padding: 15px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.3s ease;
+    opacity: 0; /* Para animação */
+    transform: translateY(15px); /* Para animação */
+    cursor: pointer; /* Indicar que é clicável */
+}
+ .user-manager-card.visible { /* Para animação */
+     opacity: 1;
+     transform: translateY(0);
+ }
+.user-manager-card:hover {
+     border-color: #c9a959;
+     background: rgba(26, 34, 50, 0.95);
+ }
+.user-manager-image {
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid #c9a959;
+    margin-bottom: 5px;
+    pointer-events: none; /* Evita interação com a imagem */
+}
+.user-manager-name {
+    color: #e0d2b4;
+    font-size: 14px;
+    font-weight: bold;
+    pointer-events: none; /* Evita interação com o nome */
+}
+
+/* --- Popup Itens de Outro Utilizador --- */
+#user-items-popup.popup-overlay {
+     /* Deve ficar acima do popup de Outros Impérios */
+     z-index: 1004;
+}
+/* Estilo para cada item na lista do popup de itens do utilizador */
+.user-owned-item-card {
+    background: rgba(17, 22, 34, 0.85); /* Premium dark background */
+    border: 1px solid #7a6a4c;
+    border-radius: 6px;
+    padding: 10px;
+    text-align: left; /* Alinhar texto à esquerda */
+    display: flex;
+    flex-direction: column; /* Empilhar nome e tipo */
+    gap: 4px;
+    opacity: 0; /* Para animação */
+    transform: translateY(15px); /* Para animação */
+    transition: all 0.3s ease;
+}
+.user-owned-item-card.visible { /* Para animação */
+     opacity: 1;
+     transform: translateY(0);
+ }
+.user-owned-item-name {
+    color: #e0d2b4;
+    font-size: 14px;
+    font-weight: bold;
+}
+.user-owned-item-type {
+    color: #a99a7c;
+    font-size: 12px;
+    font-style: italic;
+}
+
+.item-type-chip {
+    position: absolute; /* Posicionamento absoluto relativo ao cartão */
+    top: 5px;          /* Distância do topo */
+    right: 5px;         /* Distância da direita */
+    background-color: rgba(201, 169, 89, 0.8); /* Cor dourada semi-transparente (ajusta conforme gosto) */
+    color: #1a1a3a;     /* Cor escura do tema para o texto */
+    padding: 2px 6px;  /* Espaçamento interno (pequeno) */
+    border-radius: 10px; /* Bordas arredondadas */
+    font-size: 10px;     /* Tamanho da fonte pequeno */
+    font-weight: bold;
+    z-index: 2;        /* Garante que fica acima da imagem se houver sobreposição */
+    line-height: 1.2;  /* Ajuste de altura da linha */
+    box-shadow: 0 1px 3px rgba(0,0,0,0.5); /* Sombra suave */
+}
+
+/* =========================================================== */
+/* --- Responsive Adjustments for Mobile (Max-width 600px) --- */
+/* =========================================================== */
+@media (max-width: 600px) {
+
+    /* --- Adjustments for Mentalidade Section --- */
+    #mentalidades-list {
+         /* Make Mentalidade cards wrap */
+         flex-wrap: wrap;
+         /* Remove space BETWEEN mentalidade cards */
+         gap: 0;
+         /* Keep items centered */
+         justify-content: center;
+    }
+
+    .mentalidade-card {
+        /* Reduce size significantly */
+        width: 150px; /* Or adjust as needed */
+        height: auto; /* Allow height to adjust */
+
+        /* --- KEY FIX: Remove horizontal margin, keep vertical --- */
+        margin: 10px 0; /* 10px top/bottom, 0px left/right */
+    }
+
+    .mentalidade-card img {
+        /* Match card width, adjust height as needed */
+        width: 100%; /* Fill the card width */
+        height: 150px; /* Adjust height */
+    }
+
+    /* Adjustments for General Item Cards (in Grids and Main List) */
+    .items-grid {
+        /* Make grid columns slightly smaller minimum on mobile */
+        grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+        gap: 10px; /* Reduce gap between grid items */
+        padding-right: 5px; /* Less padding for scrollbar */
+        max-height: 65vh; /* Allow slightly more height if needed */
+    }
+
+    .item-card { /* Applies to Stadiums and Owned Items in main list too */
+        padding: 8px; /* Slightly reduce padding */
+         /* Ensure cards in grid don't have conflicting margins */
+         margin: 0; /* Remove potential margins IF they cause issues */
+    }
+
+    .item-image {
+        width: 80px; /* Reduce image size */
+        height: 80px;
+        margin-bottom: 8px;
+    }
+
+    .item-name {
+        font-size: 13px; /* Slightly smaller font */
+        min-height: 2.2em; /* Adjust min-height accordingly */
+         margin-bottom: 3px;
+    }
+
+    .item-nota {
+        font-size: 11px; /* Slightly smaller font */
+    }
+
+     .item-type-chip {
+         font-size: 9px;   /* Smaller chip text */
+         padding: 1px 5px; /* Adjust padding */
+     }
+
+    /* Adjustments for Popups */
+    .popup-content {
+        width: 92%; /* Remove fixed width, rely on percentage */
+        padding: 20px; /* Reduce padding */
+        margin: 3vh auto; /* Adjust vertical margin */
+    }
+
+    .popup-title {
+        font-size: 20px; /* Reduce title size */
+        margin-bottom: 15px;
+    }
+
+    .type-header {
+        font-size: 16px; /* Reduce header size */
+        padding: 8px;
+        margin: 10px 0 8px;
+    }
+
+    .popup-buttons {
+        gap: 10px; /* Reduce gap between buttons */
+        margin-top: 15px;
+    }
+
+    .popup-button {
+        padding: 8px 15px; /* Adjust button padding */
+        font-size: 14px;
+    }
+
+    /* Adjust confirmation popups if needed */
+    #confirmation-popup .popup-content,
+    #stadium-confirmation-popup .popup-content,
+    #item-confirmation-popup .popup-content,
+    #info-popup .popup-content {
+        width: 90%; /* Ensure smaller popups are also responsive */
+    }
+
+    /* Adjust Bottom Menu Spacing */
+    .bottom-menu {
+        gap: 20px; /* Reduce gap between menu items */
+        padding: 10px 0;
+    }
+    .menu-item i {
+        font-size: 22px; /* Slightly smaller icons */
+    }
+    .manager-icon {
+        font-size: 38px; /* Slightly smaller main icon */
+    }
+
+     /* Adjust Floating Button Position */
+     #other-managers-button {
+         bottom: 75px; /* Adjust position relative to smaller bottom menu */
+         right: 15px;
+         width: 50px;
+         height: 50px;
+         font-size: 22px;
+     }
+
+    /* Adjust Main Header */
+    #mentalidades-container h2 {
+         font-size: 24px; /* Smaller main title */
+         margin: 0 8px; /* Adjust margins */
+     }
+    #user-image-placeholder {
+         width: 40px; height: 40px; /* Smaller user image */
+     }
+    #user-image-placeholder img {
+         width: 38px; height: 38px; /* Adjust image size within placeholder */
+     }
+     #shop-button-placeholder .popup-button {
+         padding: 6px 10px; /* Smaller shop button */
+         font-size: 13px;
+     }
+     #shop-button-placeholder {
+         gap: 5px; /* Smaller gap if multiple buttons appear */
+     }
+
+    /* Adjustments for Other Managers/User Items Popups */
+    .user-manager-card {
+        padding: 10px;
+        gap: 5px;
+    }
+    .user-manager-image {
+        width: 55px;
+        height: 55px;
+    }
+    .user-manager-name {
+        font-size: 13px;
+    }
+    .user-owned-item-card {
+        padding: 8px;
+    }
+    .user-owned-item-name {
+        font-size: 13px;
+    }
+    .user-owned-item-type {
+        font-size: 11px;
+    }
+    #user-items-list {
+        /* Adjust columns for owned items popup if needed */
+        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    }
+}

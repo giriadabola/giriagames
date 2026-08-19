@@ -1,0 +1,1426 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>G Empire - Gerir Banca</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <script type="module" src="js/auth-guard.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { min-height: 100vh; background-color: #f0f0f0; font-family: Arial, sans-serif; display: none; flex-direction: column; }
+        .top-menu { position: fixed; top: 0; left: 0; width: 100%; background-color: #ffffff; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); padding: 12px 0; display: flex; justify-content: center; gap: 24px; align-items: center; z-index: 1000; }
+        .menu-item { text-decoration: none; color: #666; transition: color 0.3s ease; font-weight: 500; padding: 8px 16px; border-radius: 4px; display: flex; align-items: center; gap: 8px; }
+        .menu-item:hover, .menu-item.active { color: #2176ff; background-color: rgba(33, 118, 255, 0.1); }
+        .menu-item i { font-size: 16px; }
+        .content { padding: 80px 20px 20px; max-width: 600px; width: 100%; margin: 0 auto; }
+        h1 { color: #333; margin-bottom: 24px; font-size: 28px; text-align: center; }
+        #status-message { text-align: center; font-size: 18px; color: #666; padding: 40px; }
+        .form-container { display: none; background: white; padding: 24px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; margin-bottom: 8px; font-weight: bold; color: #555; }
+        .form-group input, #user-select, #query-user-select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 16px; }
+        .form-group input[readonly] { background-color: #e9ecef; cursor: not-allowed; }
+        .form-button { width: 100%; padding: 12px; border: none; background-color: #2176ff; color: white; font-size: 16px; font-weight: bold; border-radius: 4px; cursor: pointer; transition: background-color 0.3s ease; }
+        .form-button:hover { background-color: #1a5fcc; }
+        .feedback-message { text-align: center; margin-top: 16px; font-weight: bold; }
+        .feedback-message.success { color: green; }
+        .feedback-message.error { color: red; }
+        .popup-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.6); z-index: 2000; justify-content: center; align-items: center; }
+        .popup-content { background: white; padding: 24px; border-radius: 8px; width: 90%; max-width: 500px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); max-height: 90vh; overflow-y: auto; }
+        .popup-content h2 { text-align: center; margin-bottom: 20px; color: #333; }
+        .popup-buttons { display: flex; gap: 12px; margin-top: 20px; }
+        .popup-button { flex: 1; padding: 12px; border: none; border-radius: 4px; font-size: 16px; font-weight: bold; cursor: pointer; transition: all 0.3s ease; }
+        .popup-button.confirm { background-color: #28a745; color: white; }
+        .popup-button.confirm:hover { background-color: #218838; }
+        .popup-button.cancel { background-color: #dc3545; color: white; }
+        .popup-button.cancel:hover { background-color: #c82333; }
+        .results-table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 14px; }
+        .results-table th, .results-table td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        .results-table th { background-color: #f2f2f2; font-weight: bold; }
+        .results-table tr:nth-child(even) { background-color: #f9f9f9; }
+        .valor-positivo { color: #28a745; font-weight: bold; }
+        .valor-negativo { color: #dc3545; font-weight: bold; }
+        .fab-button { position: fixed; bottom: 20px; right: 20px; width: 60px; height: 60px; border-radius: 50%; background-color: #ffc107; color: white; border: none; box-shadow: 0 4px 8px rgba(0,0,0,0.2); font-size: 24px; cursor: pointer; display: flex; justify-content: center; align-items: center; z-index: 1500; }
+        .fab-button:hover { background-color: #e0a800; }
+        .simulation-box { background-color: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; padding: 15px; margin-bottom: 20px; margin-top: 10px; }
+        .simulation-box h3 { font-size: 16px; margin-bottom: 10px; color: #444; border-bottom: 2px solid #2176ff; display: inline-block; }
+        .sim-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; }
+        .sim-result { font-weight: bold; font-size: 18px; text-align: center; padding: 10px; border-radius: 4px; background: #fff; border: 1px solid #ddd; }
+        .sim-advice { font-size: 13px; color: #666; margin-top: 8px; font-style: italic; background: #fff3cd; padding: 8px; border-radius: 4px; border-left: 4px solid #ffc107; }
+    /* --- Estilos do Painel de Ajuda Flutuante --- */
+.helper-btn {
+    right: 55px !important; /* Fica ao lado do botão de fechar (que está a 15px) */
+    color: #3498db;
+}
+.helper-btn:hover { color: #2980b9; }
+
+.helper-panel {
+    display: none;
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 95%; max-width: 450px;
+    background: white;
+    border: 2px solid #3498db;
+    border-radius: 12px;
+    padding: 20px;
+    z-index: 2500; /* Fica por cima do popup normal */
+    box-shadow: 0 15px 40px rgba(0,0,0,0.4);
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.helper-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+    margin-top: 10px;
+}
+
+.helper-table th { background-color: #f1f8ff; color: #0a2e5c; padding: 8px; position: sticky; top: 0; }
+.helper-table td { border-bottom: 1px solid #eee; padding: 8px; text-align: center; }
+.helper-table tr:hover { background-color: #f9f9f9; }
+
+.tag-good { background: #d4edda; color: #155724; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; }
+.close-helper { background: #eee; border: none; padding: 8px 15px; border-radius: 6px; margin-top: 15px; cursor: pointer; width: 100%; font-weight: bold; }
+.close-helper:hover { background: #ddd; }
+    
+    /* --- Estilos do Painel de Ajuda Flutuante (Arrastável) --- */
+.helper-btn {
+    right: 55px !important;
+    color: #3498db;
+}
+.helper-btn:hover { color: #2980b9; }
+
+.helper-panel {
+    display: none;
+    position: fixed; /* Fixed para poder arrastar pelo ecrã todo */
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 450px;
+    background: white;
+    border: 1px solid #ccc;
+    border-radius: 12px;
+    box-shadow: 0 15px 50px rgba(0,0,0,0.5);
+    z-index: 3000; /* Muito acima de tudo */
+    overflow: hidden; /* Para o header não sair dos cantos arredondados */
+}
+
+/* Cabeçalho Arrastável */
+.helper-header {
+    background-color: #f1f8ff;
+    padding: 12px 15px;
+    border-bottom: 1px solid #ddd;
+    cursor: move; /* Mostra cursor de mover */
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    user-select: none; /* Impede selecionar texto ao arrastar */
+}
+
+.helper-header h3 {
+    margin: 0;
+    font-size: 1rem;
+    color: #0a2e5c;
+}
+
+/* Botão X no header */
+.close-helper-x {
+    background: none;
+    border: none;
+    color: #777;
+    font-size: 1.2rem;
+    cursor: pointer;
+    transition: color 0.2s;
+    padding: 0 5px;
+}
+.close-helper-x:hover { color: #c0392b; }
+
+.helper-content {
+    padding: 15px;
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+.helper-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+    margin-top: 5px;
+}
+
+.helper-table th { background-color: #fff; border-bottom: 2px solid #eee; color: #0a2e5c; padding: 8px; text-align: left; position: sticky; top: 0; }
+.helper-table td { border-bottom: 1px solid #eee; padding: 8px; text-align: left; }
+.helper-table tr:hover { background-color: #f0f7ff; cursor: pointer; }
+
+.tag-good { background: #d4edda; color: #155724; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; }
+
+/* --- Estilos da Calculadora Inversa --- */
+.reverse-calc-box {
+    background-color: #e3f2fd; /* Azul muito claro */
+    border: 1px solid #90caf9;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 15px;
+}
+
+.reverse-calc-box h4 {
+    margin: 0 0 10px 0;
+    color: #1565c0;
+    font-size: 0.95rem;
+    border-bottom: 1px solid #bbdefb;
+    padding-bottom: 5px;
+}
+
+.calc-inputs-row {
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+    margin-bottom: 10px;
+}
+
+.calc-group {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.calc-group label {
+    font-size: 0.75rem;
+    color: #555;
+    margin-bottom: 2px;
+    font-weight: bold;
+}
+
+.calc-group input {
+    width: 100%;
+    padding: 6px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 0.9rem;
+}
+
+.calc-btn {
+    background-color: #1976d2;
+    color: white;
+    border: none;
+    padding: 8px 15px;
+    border-radius: 4px;
+    cursor: pointer;
+    width: 100%;
+    font-weight: bold;
+    transition: background 0.2s;
+}
+.calc-btn:hover { background-color: #1565c0; }
+        .form-group label { display: block; margin-bottom: 8px; font-weight: bold; color: #555; }
+        .form-group input, #user-select, #query-user-select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 16px; }
+        .form-group input[readonly] { background-color: #e9ecef; cursor: not-allowed; }
+        .form-button { width: 100%; padding: 12px; border: none; background-color: #2176ff; color: white; font-size: 16px; font-weight: bold; border-radius: 4px; cursor: pointer; transition: background-color 0.3s ease; }
+        .form-button:hover { background-color: #1a5fcc; }
+        .feedback-message { text-align: center; margin-top: 16px; font-weight: bold; }
+        .feedback-message.success { color: green; }
+        .feedback-message.error { color: red; }
+        .popup-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.6); z-index: 2000; justify-content: center; align-items: center; }
+        .popup-content { background: white; padding: 24px; border-radius: 8px; width: 90%; max-width: 500px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); max-height: 90vh; overflow-y: auto; }
+        .popup-content h2 { text-align: center; margin-bottom: 20px; color: #333; }
+        .popup-buttons { display: flex; gap: 12px; margin-top: 20px; }
+        .popup-button { flex: 1; padding: 12px; border: none; border-radius: 4px; font-size: 16px; font-weight: bold; cursor: pointer; transition: all 0.3s ease; }
+        .popup-button.confirm { background-color: #28a745; color: white; }
+        .popup-button.confirm:hover { background-color: #218838; }
+        .popup-button.cancel { background-color: #dc3545; color: white; }
+        .popup-button.cancel:hover { background-color: #c82333; }
+        .results-table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 14px; }
+        .results-table th, .results-table td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        .results-table th { background-color: #f2f2f2; font-weight: bold; }
+        .results-table tr:nth-child(even) { background-color: #f9f9f9; }
+        .valor-positivo { color: #28a745; font-weight: bold; }
+        .valor-negativo { color: #dc3545; font-weight: bold; }
+        .fab-button { position: fixed; bottom: 20px; right: 20px; width: 60px; height: 60px; border-radius: 50%; background-color: #ffc107; color: white; border: none; box-shadow: 0 4px 8px rgba(0,0,0,0.2); font-size: 24px; cursor: pointer; display: flex; justify-content: center; align-items: center; z-index: 1500; }
+        .fab-button:hover { background-color: #e0a800; }
+        .simulation-box { background-color: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; padding: 15px; margin-bottom: 20px; margin-top: 10px; }
+        .simulation-box h3 { font-size: 16px; margin-bottom: 10px; color: #444; border-bottom: 2px solid #2176ff; display: inline-block; }
+        .sim-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; }
+        .sim-result { font-weight: bold; font-size: 18px; text-align: center; padding: 10px; border-radius: 4px; background: #fff; border: 1px solid #ddd; }
+        .sim-advice { font-size: 13px; color: #666; margin-top: 8px; font-style: italic; background: #fff3cd; padding: 8px; border-radius: 4px; border-left: 4px solid #ffc107; }
+        .helper-btn {
+    right: 55px !important; /* Fica ao lado do botão de fechar (que está a 15px) */
+    color: #3498db;
+}
+.helper-btn:hover { color: #2980b9; }
+
+.helper-panel {
+    display: none;
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 95%; max-width: 450px;
+    background: white;
+    border: 2px solid #3498db;
+    border-radius: 12px;
+    padding: 20px;
+    z-index: 2500; /* Fica por cima do popup normal */
+    box-shadow: 0 15px 40px rgba(0,0,0,0.4);
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.helper-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+    margin-top: 10px;
+}
+
+.helper-table th { background-color: #f1f8ff; color: #0a2e5c; padding: 8px; position: sticky; top: 0; }
+.helper-table td { border-bottom: 1px solid #eee; padding: 8px; text-align: center; }
+.helper-table tr:hover { background-color: #f9f9f9; }
+
+.tag-good { background: #d4edda; color: #155724; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; }
+.close-helper { background: #eee; border: none; padding: 8px 15px; border-radius: 6px; margin-top: 15px; cursor: pointer; width: 100%; font-weight: bold; }
+.close-helper:hover { background: #ddd; }
+    
+    /* --- Estilos do Painel de Ajuda Flutuante (Arrastável) --- */
+.helper-btn {
+    right: 55px !important;
+    color: #3498db;
+}
+.helper-btn:hover { color: #2980b9; }
+
+.helper-panel {
+    display: none;
+    position: fixed; /* Fixed para poder arrastar pelo ecrã todo */
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 450px;
+    background: white;
+    border: 1px solid #ccc;
+    border-radius: 12px;
+    box-shadow: 0 15px 50px rgba(0,0,0,0.5);
+    z-index: 3000; /* Muito acima de tudo */
+    overflow: hidden; /* Para o header não sair dos cantos arredondados */
+}
+
+/* Cabeçalho Arrastável */
+.helper-header {
+    background-color: #f1f8ff;
+    padding: 12px 15px;
+    border-bottom: 1px solid #ddd;
+    cursor: move; /* Mostra cursor de mover */
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    user-select: none; /* Impede selecionar texto ao arrastar */
+}
+
+.helper-header h3 {
+    margin: 0;
+    font-size: 1rem;
+    color: #0a2e5c;
+}
+
+/* Botão X no header */
+.close-helper-x {
+    background: none;
+    border: none;
+    color: #777;
+    font-size: 1.2rem;
+    cursor: pointer;
+    transition: color 0.2s;
+    padding: 0 5px;
+}
+.close-helper-x:hover { color: #c0392b; }
+
+.helper-content {
+    padding: 15px;
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+.helper-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+    margin-top: 5px;
+}
+
+.helper-table th { background-color: #fff; border-bottom: 2px solid #eee; color: #0a2e5c; padding: 8px; text-align: left; position: sticky; top: 0; }
+.helper-table td { border-bottom: 1px solid #eee; padding: 8px; text-align: left; }
+.helper-table tr:hover { background-color: #f0f7ff; cursor: pointer; }
+
+.tag-good { background: #d4edda; color: #155724; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; }
+
+/* --- Estilos da Calculadora Inversa --- */
+.reverse-calc-box {
+    background-color: #e3f2fd; /* Azul muito claro */
+    border: 1px solid #90caf9;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 15px;
+}
+
+.reverse-calc-box h4 {
+    margin: 0 0 10px 0;
+    color: #1565c0;
+    font-size: 0.95rem;
+    border-bottom: 1px solid #bbdefb;
+    padding-bottom: 5px;
+}
+
+.calc-inputs-row {
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+    margin-bottom: 10px;
+}
+
+.calc-group {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.calc-group label {
+    font-size: 0.75rem;
+    color: #555;
+    margin-bottom: 2px;
+    font-weight: bold;
+}
+
+.calc-group input {
+    width: 100%;
+    padding: 6px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 0.9rem;
+}
+
+.calc-btn {
+    background-color: #1976d2;
+    color: white;
+    border: none;
+    padding: 8px 15px;
+    border-radius: 4px;
+    cursor: pointer;
+    width: 100%;
+    font-weight: bold;
+    transition: background 0.2s;
+}
+.calc-btn:hover { background-color: #1565c0; }
+
+.calc-result-row {
+    background: white;
+    margin-top: 10px;
+    padding: 8px;
+    border-radius: 4px;
+    border: 1px solid #ddd;
+    display: none; /* Escondido por defeito */
+    text-align: center;
+}
+
+.apply-result-btn {
+    margin-top: 5px;
+    background-color: #28a745;
+    color: white;
+    border: none;
+    padding: 4px 10px;
+    border-radius: 3px;
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+
+        /* Styles for Discount & Commission button and tabs */
+        .second-fab {
+            bottom: 90px !important;
+            background-color: #17a2b8 !important;
+        }
+        .second-fab:hover {
+            background-color: #138496 !important;
+        }
+        .tab-container {
+            display: flex;
+            border-bottom: 2px solid #ddd;
+            margin-bottom: 20px;
+        }
+        .tab-link {
+            flex: 1;
+            padding: 10px;
+            text-align: center;
+            background: #f1f1f1;
+            border: none;
+            outline: none;
+            cursor: pointer;
+            transition: 0.3s;
+            font-size: 14px;
+            font-weight: bold;
+            color: #555;
+            border-radius: 4px 4px 0 0;
+        }
+        .tab-link:hover {
+            background: #e2e2e2;
+        }
+        .tab-link.active {
+            background: #fff;
+            border-bottom: 3px solid #17a2b8;
+            color: #17a2b8;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+    </style>
+
+    <link rel="stylesheet" href="css/admin-global.css">
+
+    <link rel="stylesheet" href="css/menu-admin.css">
+</head>
+<body>
+    <nav class="top-menu">
+        <a href="engrenagem.html" class="menu-item"><i class="fas fa-home"></i>Home</a>
+        <a href="fusiveis.html" class="menu-item"><i class="fas fa-bolt"></i>Fusíveis</a>
+        <a href="arbitro.html" class="menu-item"><i class="fas fa-gavel"></i>Árbitro</a>
+        <a href="criar-manual.html" class="menu-item"><i class="fas fa-book"></i>Manual</a>
+        <a href="criar-banca.html" class="menu-item active"><i class="fas fa-university"></i>Banca</a>
+        <a href="email.html" class="menu-item"><i class="fas fa-envelope"></i>Email</a>
+        <a href="gerir-notificacoes.html" class="menu-item"><i class="fas fa-bell"></i>Notificações</a>
+        <a href="#" id="mini-ggames-menu-btn" class="menu-item"><i class="fas fa-gamepad"></i>Mini-gGames</a>
+    </nav>
+    <main class="content">
+        <h1><i class="fas fa-university"></i> Gerir Valor da Banca</h1>
+        <p id="status-message">A carregar dados...</p>
+        <div class="form-container" id="banca-form-container">
+            <form id="banca-form">
+                <div class="form-group">
+                    <label for="base-value-input">Valor Base (Ajuste Manual)</label>
+                    <input type="number" step="any" id="base-value-input" value="0">
+                </div>
+                <div class="form-group">
+                    <label for="total-input">Total Calculado</label>
+                    <input type="text" id="total-input" readonly>
+                </div>
+                <button type="submit" class="form-button">Guardar Alterações</button>
+            </form>
+            <p id="feedback-message" class="feedback-message"></p>
+            <button id="open-loan-popup-btn" class="form-button" style="margin-top: 20px; background-color: #28a745;"><i class="fas fa-hand-holding-usd"></i> Conceder Empréstimo</button>
+            <button id="open-query-popup-btn" class="form-button" style="margin-top: 10px; background-color: #007bff;"><i class="fas fa-search"></i> Consultar Movimentos</button>
+        </div>
+    </main>
+    
+    <button id="open-discount-popup-btn" class="fab-button second-fab" title="Gerir Desconto e Comissão"><i class="fas fa-percent"></i></button>
+    <button id="open-taxa-popup-btn" class="fab-button" title="Gerir Taxa WhoWins"><i class="fas fa-cog"></i></button>
+
+    <!-- POPUP 4: DESCONTO / COMISSÃO -->
+    <div class="popup-overlay" id="discount-popup">
+        <div class="popup-content" style="position: relative;">
+            <button class="popup-btn popup-btn-icon" id="cancel-discount-icon-btn" style="right: 15px; background: none; border: none; font-size: 20px; cursor: pointer; color: #555;"><i class="fas fa-times"></i></button>
+            <h2 style="margin-bottom: 15px;">Desconto & Comissão</h2>
+            
+            <div class="tab-container">
+                <button class="tab-link active" id="tab-btn-desconto" type="button">Desconto</button>
+                <button class="tab-link" id="tab-btn-comissao" type="button">Comissão</button>
+            </div>
+
+            <form id="discount-form">
+                <!-- Tab Desconto -->
+                <div id="tab-content-desconto" class="tab-content active">
+                    <div class="form-group">
+                        <label for="desconto-banca-input">Desconto de Venda à Banca (gCoins)</label>
+                        <input type="number" id="desconto-banca-input" placeholder="Ex: 15" min="0" step="1">
+                        <small style="color: #666; display: block; margin-top: 5px;">Valor subtraído ao preço original do jogador.</small>
+                    </div>
+                    <div class="form-group" style="margin-top: 15px;">
+                        <label for="data-venda-banca-input">Permitir Venda à Banca Apenas Após:</label>
+                        <input type="datetime-local" id="data-venda-banca-input">
+                        <small style="color: #666; display: block; margin-top: 5px;">Data/Hora a partir da qual os utilizadores podem vender jogadores para a banca.</small>
+                    </div>
+                </div>
+
+                <!-- Tab Comissão -->
+                <div id="tab-content-comissao" class="tab-content">
+                    <div class="form-group">
+                        <label for="taxa-banca-input-discount">Comissão Banca (Fator 0 a 1)</label>
+                        <input type="number" step="0.01" min="0" max="1" id="taxa-banca-input-discount" placeholder="Ex: 0.5">
+                        <small style="color: #666; display: block; margin-top: 5px;">Fator da Comissão da Banca (0 a 1). Sincronizado com a configuração geral.</small>
+                    </div>
+                    <div class="form-group" style="margin-top: 15px;">
+                        <label for="comissao-banca-venda-input">Comissão de Venda entre Jogadores (gCoins Fixo)</label>
+                        <input type="number" id="comissao-banca-venda-input" placeholder="Ex: 5" min="0" step="1">
+                        <small style="color: #666; display: block; margin-top: 5px;">Valor cobrado pela Banca na venda de um jogador para outro utilizador.</small>
+                    </div>
+                </div>
+
+                <div class="popup-buttons" style="margin-top: 20px;">
+                    <button type="submit" class="popup-button confirm">Guardar Configurações</button>
+                    <button type="button" class="popup-button cancel" id="cancel-discount-btn">Cancelar</button>
+                </div>
+            </form>
+            <p id="discount-feedback" class="feedback-message"></p>
+        </div>
+    </div>
+
+    <!-- POPUP 1: CONSULTA -->
+    <div class="popup-overlay" id="query-popup">
+        <div class="popup-content">
+            <h2>Consultar Movimentos</h2>
+            <div class="form-group">
+                <label for="query-user-select">Selecione o Utilizador</label>
+                <select id="query-user-select"><option value="">A carregar utilizadores...</option></select>
+            </div>
+            <div id="query-result-container" style="min-height: 50px; max-height: 300px; overflow-y: auto;"></div>
+            <div class="popup-buttons">
+                <button type="button" class="popup-button cancel" id="close-query-btn">Fechar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- POPUP 2: EMPRÉSTIMO -->
+    <div class="popup-overlay" id="loan-popup">
+        <div class="popup-content">
+            <h2>Conceder Empréstimo</h2>
+            <form id="loan-form">
+                <div class="form-group">
+                    <label for="user-select">Selecionar Utilizador</label>
+                    <select id="user-select" required></select>
+                </div>
+                <div class="form-group">
+                    <label for="loan-amount">Valor do Empréstimo</label>
+                    <input type="number" id="loan-amount" placeholder="Ex: 500" required min="1">
+                </div>
+                <div class="form-group">
+                    <label for="loan-description">Descrição (Opcional)</label>
+                    <input type="text" id="loan-description" placeholder="Ex: Adiantamento prémio">
+                </div>
+                <div class="form-group">
+                    <label for="loan-interest">Juros (Valor Fixo em GCoins)</label>
+                    <input type="number" id="loan-interest" placeholder="Ex: 50" value="0" required min="0" step="1">
+                </div>
+                <div class="popup-buttons">
+                    <button type="submit" class="popup-button confirm">Confirmar</button>
+                    <button type="button" class="popup-button cancel" id="cancel-loan-btn">Cancelar</button>
+                </div>
+            </form>
+            <p id="loan-feedback" class="feedback-message"></p>
+        </div>
+    </div>
+    
+    <!-- POPUP 3: TAXAS (Lógica Bruta) -->
+  <div class="popup-overlay" id="taxa-popup">
+        <div class="popup-content" style="position: relative;">
+            <!-- Botão de Fechar Normal -->
+            <button class="popup-btn popup-btn-icon" id="cancel-taxa-icon-btn" style="right: 15px;"><i class="fas fa-times"></i></button>
+            
+            <!-- NOVO: Botão da Tabela de Ajuda -->
+            <button id="toggle-helper-btn" class="popup-btn popup-btn-icon helper-btn" title="Ver Combinações Válidas">
+                <i class="fas fa-table"></i>
+            </button>
+
+            <h2>Gerir Taxa e Comissões</h2>
+            
+            <div class="simulation-box">
+                <h3><i class="fas fa-calculator"></i> Configurador</h3>
+                <form id="taxa-form">
+                    <div class="form-group">
+                        <label for="taxa-whowins-input">Custo (Mini-gCoins necessários para 1 GCoin)</label>
+                        <input type="number" step="any" id="taxa-whowins-input" placeholder="Ex: 2" required>
+                    </div>
+                    <div class="form-group" style="margin-top: 15px;">
+                        <label for="taxa-banca-input">Comissão Banca (Fator 0 a 1)</label>
+                        <input type="number" step="0.01" min="0" max="1" id="taxa-banca-input" placeholder="Ex: 0.5" value="0" required>
+                        <small style="color: #666;">Ex: 0.5 = Banca fica com metade (50%).</small>
+                    </div>
+                    <hr style="margin: 20px 0; border: 0; border-top: 1px solid #ddd;">
+                    <h3>Simulação de Resultado</h3>
+                    <div class="sim-row">
+                        <div style="flex: 1;"><label style="font-size: 12px;">Input User (Mini):</label><input type="number" id="sim-amount-input" value="100"></div>
+                        <div style="display: flex; align-items: center; padding-top: 20px;"><i class="fas fa-arrow-right" style="color: #666;"></i></div>
+                        <div style="flex: 1;"><label style="font-size: 12px;">Total Gerado:</label><div id="sim-total-generated" class="sim-result" style="font-size: 14px;">0</div></div>
+                    </div>
+                    <div style="display: flex; gap: 10px; margin-top: 10px;">
+                        <div style="flex: 1; background: #e8f5e9; padding: 10px; border-radius: 5px; border: 1px solid #c3e6cb;">
+                            <label style="font-size: 12px; color: #155724; font-weight: bold;">User Recebe:</label><div id="sim-user-gets" style="font-size: 18px; font-weight: bold; color: #155724;">0</div>
+                        </div>
+                        <div style="flex: 1; background: #f8d7da; padding: 10px; border-radius: 5px; border: 1px solid #f5c6cb;">
+                            <label style="font-size: 12px; color: #721c24; font-weight: bold;">Banca Retém:</label><div id="sim-bank-gets" style="font-size: 18px; font-weight: bold; color: #721c24;">0</div>
+                        </div>
+                    </div>
+                    <div id="sim-advice-text" class="sim-advice" style="display: none; margin-top: 15px;"></div>
+                    <div class="popup-buttons" style="margin-top: 20px;">
+                        <button type="submit" class="popup-button confirm">Guardar Configurações</button>
+                        <button type="button" class="popup-button cancel" id="cancel-taxa-btn">Cancelar</button>
+                    </div>
+                </form>
+            </div>
+            <p id="taxa-feedback" class="feedback-message"></p>
+
+            <!-- PAINEL FLUTUANTE (ESCONDIDO POR DEFEITO) -->
+             <div id="helper-panel" class="helper-panel">
+                <!-- Cabeçalho para Arrastar -->
+                <div id="helper-drag-handle" class="helper-header">
+                    <h3><i class="fas fa-check-circle"></i> Combinações Seguras</h3>
+                    <button id="close-helper-x" class="close-helper-x" title="Fechar"><i class="fas fa-times"></i></button>
+                </div>
+                
+                <!-- Conteúdo -->
+               <div class="helper-content">
+                    
+                    <!-- NOVA: Calculadora Inversa -->
+                  <div class="reverse-calc-box">
+                        <h4><i class="fas fa-magic"></i> Calculadora Inversa</h4>
+                        
+                        <!-- Linha da Base de Entrada -->
+                        <div style="margin-bottom: 10px; padding-bottom:10px; border-bottom:1px dashed #ccc;">
+                            <label style="font-size:0.8rem; color:#333;">Por cada:</label>
+                            <div style="display:flex; align-items:center; gap:5px;">
+                                <input type="number" id="rev-base-input" value="1" style="width:70px; padding:5px; text-align:center; font-weight:bold;">
+                                <span style="font-size:0.85rem;">Mini-gCoins inseridos...</span>
+                            </div>
+                        </div>
+
+                        <div class="calc-inputs-row">
+                            <div class="calc-group">
+                                <label>User Recebe:</label>
+                                <input type="number" id="rev-target-user" placeholder="Ex: 2">
+                            </div>
+                            <div class="calc-group">
+                                <label>Banca Retém:</label>
+                                <input type="number" id="rev-target-bank" value="0" placeholder="Ex: 0">
+                            </div>
+                        </div>
+                        <button id="btn-calc-reverse" class="calc-btn">Calcular Configuração</button>
+                        
+                        <div id="rev-result-area" class="calc-result-row">
+                            <div style="font-size: 0.9rem; margin-bottom: 5px;">
+                                Taxa (Custo): <strong id="res-rate" style="color:#d35400">?</strong><br>
+                                Fator Banca: <strong id="res-fee" style="color:#c0392b">?</strong>
+                            </div>
+                            <button id="btn-apply-reverse" class="apply-result-btn">Aplicar Valores</button>
+                        </div>
+                    </div>
+
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+        import { getFirestore, doc, getDoc, setDoc, collection, query, where, getDocs, addDoc, Timestamp, writeBatch, orderBy } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+        const firebaseConfig = { apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0", authDomain: "g-games-8a8fc.firebaseapp.com", projectId: "g-games-8a8fc", storageBucket: "g-games-8a8fc.appspot.com", messagingSenderId: "689897349449", appId: "1:689897349449:web:536599794579901beb7a98", measurementId: "G-GTTPJ6G5MD" };
+        const app = initializeApp(firebaseConfig); const auth = getAuth(app); const db = getFirestore(app);
+
+        // Elements
+        const statusMessage = document.getElementById('status-message');
+        const formContainer = document.getElementById('banca-form-container');
+        const bancaForm = document.getElementById('banca-form');
+        const baseValueInput = document.getElementById('base-value-input');
+        const totalInput = document.getElementById('total-input');
+        const feedbackMessage = document.getElementById('feedback-message');
+        const openLoanPopupBtn = document.getElementById('open-loan-popup-btn');
+        const loanPopup = document.getElementById('loan-popup');
+        const loanForm = document.getElementById('loan-form');
+        const userSelect = document.getElementById('user-select');
+        const loanAmountInput = document.getElementById('loan-amount');
+        const loanDescriptionInput = document.getElementById('loan-description');
+        const cancelLoanBtn = document.getElementById('cancel-loan-btn');
+        const loanFeedback = document.getElementById('loan-feedback');
+        const loanInterestInput = document.getElementById('loan-interest');
+        const openQueryPopupBtn = document.getElementById('open-query-popup-btn');
+        const queryPopup = document.getElementById('query-popup');
+        const queryUserSelect = document.getElementById('query-user-select');
+        const queryResultContainer = document.getElementById('query-result-container');
+        const closeQueryBtn = document.getElementById('close-query-btn');
+        const openTaxaPopupBtn = document.getElementById('open-taxa-popup-btn');
+        const taxaPopup = document.getElementById('taxa-popup');
+        const taxaForm = document.getElementById('taxa-form');
+        const taxaInput = document.getElementById('taxa-whowins-input');
+        const cancelTaxaBtn = document.getElementById('cancel-taxa-btn');
+        const taxaFeedback = document.getElementById('taxa-feedback');
+        const taxaBancaInput = document.getElementById('taxa-banca-input');
+        const simUserGets = document.getElementById('sim-user-gets');
+        const simBankGets = document.getElementById('sim-bank-gets');
+        const simTotalGenerated = document.getElementById('sim-total-generated');
+        const simAmountInput = document.getElementById('sim-amount-input');
+        const simAdviceText = document.getElementById('sim-advice-text');
+
+        let movimentosSum = 0; let currentSeason = null;
+
+        function updateSimulation() {
+            const rate = parseFloat(taxaInput.value);
+            const fee = parseFloat(taxaBancaInput.value) || 0; // VALOR BRUTO (Ex: 0.5)
+            const amount = parseFloat(simAmountInput.value);
+
+            if (isNaN(rate) || isNaN(amount) || rate <= 0) {
+                simTotalGenerated.textContent = "-"; simUserGets.textContent = "0"; simBankGets.textContent = "0"; simAdviceText.style.display = 'none'; return;
+            }
+
+            const rawGCoins = amount / rate;
+            // LÓGICA NOVA: VALOR BRUTO
+            const bankCut = rawGCoins * fee; // Não divide por 100
+            const userCut = rawGCoins - bankCut;
+
+            simTotalGenerated.textContent = Number(rawGCoins.toFixed(4));
+            simUserGets.textContent = Number(userCut.toFixed(4));
+            simBankGets.textContent = Number(bankCut.toFixed(4));
+
+            const isUserInt = Number.isInteger(Number(userCut.toFixed(6)));
+            const isBankInt = Number.isInteger(Number(bankCut.toFixed(6)));
+
+            simAdviceText.style.display = 'block';
+            if (isUserInt && isBankInt) {
+                simAdviceText.innerHTML = `<i class="fas fa-check-circle"></i> <strong>Válido!</strong><br>User recebe ${userCut} e Banca recebe ${bankCut} (inteiros).`;
+                simAdviceText.className = 'sim-advice'; simAdviceText.style.backgroundColor = "#d4edda"; simAdviceText.style.color = "#155724"; simAdviceText.style.borderLeft = "4px solid #28a745";
+            } else {
+                simAdviceText.innerHTML = `<i class="fas fa-exclamation-triangle"></i> <strong>Gera Decimais!</strong><br>Esta combinação gera números quebrados. Ajuste os valores.`;
+                simAdviceText.className = 'sim-advice'; simAdviceText.style.backgroundColor = "#f8d7da"; simAdviceText.style.color = "#721c24"; simAdviceText.style.borderLeft = "4px solid #dc3545";
+            }
+        }
+
+        async function fetchCurrentSeason() {
+            const docSnap = await getDoc(doc(db, "paineis", "configuracoes_gerais"));
+            if (docSnap.exists() && docSnap.data().temporadaAtual) return docSnap.data().temporadaAtual.replace(/\//g, '');
+            throw new Error("Sem temporada.");
+        }
+
+        async function calculateMovimentosSum(season) {
+            const q = query(collection(db, "movimentos"), where("tipo", "==", "Banca"), where("temporada", "==", season));
+            const querySnapshot = await getDocs(q);
+            let sum = 0; querySnapshot.forEach((doc) => { const p = parseFloat(doc.data().preco); if (!isNaN(p)) sum += p; });
+            return sum;
+        }
+
+        function updateCalculatedTotal() { totalInput.value = ((parseFloat(baseValueInput.value) || 0) + movimentosSum).toFixed(2); }
+
+        async function handleFormSubmit(e) {
+            e.preventDefault(); feedbackMessage.textContent = 'A guardar...';
+            try {
+                await addDoc(collection(db, 'movimentos'), { preco: parseFloat(baseValueInput.value) || 0, movimentoData: Timestamp.now(), tipo: "Banca", temporada: currentSeason, descricao: "Ajuste manual" });
+                movimentosSum = await calculateMovimentosSum(currentSeason);
+                await setDoc(doc(db, "paineis", "Banca"), { valor: movimentosSum }, { merge: true });
+                baseValueInput.value = 0; updateCalculatedTotal(); feedbackMessage.textContent = 'Sucesso!'; feedbackMessage.className = 'feedback-message success';
+            } catch (error) { console.error(error); feedbackMessage.textContent = 'Erro.'; feedbackMessage.className = 'feedback-message error'; }
+        }
+
+        async function populateUsersDropdowns() {
+            try {
+                const q = query(collection(db, 'users'), where("aceite", "==", "Yes"));
+                const querySnapshot = await getDocs(q);
+                const users = [];
+                querySnapshot.forEach((doc) => users.push({ id: doc.id, ...doc.data() }));
+                users.sort((a, b) => (a.nometabela || a.id).localeCompare(b.nometabela || b.id));
+                const opt = '<option value="">-- Selecione --</option>';
+                if (userSelect) { userSelect.innerHTML = opt; users.forEach(u => { const o = document.createElement('option'); o.value = u.id; o.textContent = u.nometabela || u.id; userSelect.appendChild(o); }); }
+                if (queryUserSelect) { queryUserSelect.innerHTML = opt; users.forEach(u => { const o = document.createElement('option'); o.value = u.id; o.textContent = u.nometabela || u.id; queryUserSelect.appendChild(o); }); }
+            } catch (error) { console.error(error); }
+        }
+
+        async function handleLoanSubmit(e) {
+            e.preventDefault(); const uid = userSelect.value; const amt = parseFloat(loanAmountInput.value);
+            if (!uid || isNaN(amt) || amt <= 0) return;
+            loanFeedback.textContent = 'Processando...';
+            try {
+                const batch = writeBatch(db);
+                batch.set(doc(collection(db, 'movimentos')), { tipo: "Banca", preco: -amt, movimentoData: Timestamp.now(), temporada: currentSeason, descricao: `Empréstimo`, para_userId: uid });
+                batch.set(doc(collection(db, 'movimentos')), { userId: uid, valorreal: amt, tipo: "Empréstimo", movimentoData: Timestamp.now(), temporada: currentSeason, de: "Banca", descricao: loanDescriptionInput.value || "Empréstimo", valorJuros: parseFloat(loanInterestInput.value) || 0, valorTotalAPagar: amt + (parseFloat(loanInterestInput.value) || 0), estado: "Por Pagar" });
+                const uRef = doc(db, 'users', uid); const uSnap = await getDoc(uRef);
+                const newBal = (uSnap.data()[`${currentSeason}GCoins`] || 0) + amt;
+                batch.update(uRef, { [`${currentSeason}GCoins`]: newBal });
+                batch.set(doc(db, "paineis", "Banca"), { valor: movimentosSum - amt }, { merge: true });
+                await batch.commit();
+                movimentosSum -= amt; updateCalculatedTotal(); loanPopup.style.display = 'none';
+            } catch (e) { console.error(e); loanFeedback.textContent = 'Erro.'; }
+        }
+
+        async function handleTaxaSubmit(e) {
+            e.preventDefault(); const r = parseFloat(taxaInput.value); const f = parseFloat(taxaBancaInput.value);
+            if (isNaN(r) || r <= 0 || isNaN(f) || f < 0) return;
+            taxaFeedback.textContent = 'A guardar...';
+            try {
+                await setDoc(doc(db, "paineis", "Banca"), { taxaWhoWins: r, taxaBanca: f }, { merge: true });
+                taxaFeedback.textContent = 'Guardado!'; setTimeout(() => taxaPopup.style.display = 'none', 1000);
+            } catch (e) { taxaFeedback.textContent = 'Erro.'; }
+        }
+
+       async function initializePage() {
+            try {
+                currentSeason = await fetchCurrentSeason();
+                movimentosSum = await calculateMovimentosSum(currentSeason);
+                updateCalculatedTotal(); 
+                await populateUsersDropdowns();
+                statusMessage.style.display = 'none';
+                formContainer.style.display = 'block';
+                
+                // --- Lógica de Consulta ---
+                async function handleUserQuery(userId) {
+                    if (!userId) {
+                        queryResultContainer.innerHTML = '<p style="text-align: center;">Selecione um utilizador para consultar.</p>';
+                        return;
+                    }
+                    try {
+                        queryResultContainer.innerHTML = '<p style="text-align: center;"><em>A pesquisar movimentos...</em></p>';
+                        const q = query(collection(db, "movimentos"),
+                            where("userId", "==", userId), where("temporada", "==", currentSeason),
+                            where("valorreal", "!=", null), orderBy("movimentoData", "desc")
+                        );
+                        const querySnapshot = await getDocs(q);
+                        if (querySnapshot.empty) {
+                            queryResultContainer.innerHTML = '<p style="text-align: center;">Nenhum movimento com "valorreal" encontrado.</p>';
+                            return;
+                        }
+                        let tableHTML = `<table class="results-table"><thead><tr><th>Data</th><th>Tipo</th><th>Descrição</th><th>Valor</th></tr></thead><tbody>`;
+                        querySnapshot.forEach((doc) => {
+                            const data = doc.data();
+                            const valor = parseFloat(data.valorreal);
+                            const dataMovimento = data.movimentoData.toDate().toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                            const valorClass = valor >= 0 ? 'valor-positivo' : 'valor-negativo';
+                            tableHTML += `<tr><td>${dataMovimento}</td><td>${data.tipo || '-'}</td><td>${data.descricao || '-'}</td><td class="${valorClass}">${valor.toFixed(2)}</td></tr>`;
+                        });
+                        tableHTML += `</tbody></table>`;
+                        queryResultContainer.innerHTML = tableHTML;
+                    } catch (error) {
+                        console.error("Erro ao consultar movimentos:", error);
+                        queryResultContainer.innerHTML = '<p style="text-align: center; color: red;">Erro ao realizar a consulta.</p>';
+                    }
+                }
+
+                // Event Listeners de Consulta
+                openQueryPopupBtn.addEventListener('click', () => {
+                    queryResultContainer.innerHTML = '<p style="text-align: center;">Selecione um utilizador para consultar.</p>';
+                    queryUserSelect.value = '';
+                    queryPopup.style.display = 'flex';
+                });
+                closeQueryBtn.addEventListener('click', () => queryPopup.style.display = 'none');
+                queryPopup.addEventListener('click', (e) => { if (e.target === queryPopup) queryPopup.style.display = 'none'; });
+                queryUserSelect.addEventListener('change', (event) => handleUserQuery(event.target.value));
+
+                // Event Listeners de Banca e Empréstimos
+                baseValueInput.addEventListener('input', updateCalculatedTotal);
+                bancaForm.addEventListener('submit', handleFormSubmit);
+                openLoanPopupBtn.addEventListener('click', () => {
+                    loanFeedback.textContent = '';
+                    loanForm.reset();
+                    loanPopup.style.display = 'flex';
+                });
+                cancelLoanBtn.addEventListener('click', () => loanPopup.style.display = 'none');
+                loanPopup.addEventListener('click', (e) => { if (e.target === loanPopup) loanPopup.style.display = 'none'; });
+                loanForm.addEventListener('submit', handleLoanSubmit);
+
+                // --- LÓGICA DO POPUP DE DESCONTO E COMISSÃO ---
+                const openDiscountPopupBtn = document.getElementById('open-discount-popup-btn');
+                const discountPopup = document.getElementById('discount-popup');
+                const discountForm = document.getElementById('discount-form');
+                const discountFeedback = document.getElementById('discount-feedback');
+                
+                const descontoInput = document.getElementById('desconto-banca-input');
+                const dataVendaInput = document.getElementById('data-venda-banca-input');
+                const taxaBancaDiscountInput = document.getElementById('taxa-banca-input-discount');
+                const comissaoVendaInput = document.getElementById('comissao-banca-venda-input');
+                
+                const tabBtnDesconto = document.getElementById('tab-btn-desconto');
+                const tabBtnComissao = document.getElementById('tab-btn-comissao');
+                const tabContentDesconto = document.getElementById('tab-content-desconto');
+                const tabContentComissao = document.getElementById('tab-content-comissao');
+                
+                // Tab switches
+                tabBtnDesconto.addEventListener('click', () => {
+                    tabBtnDesconto.classList.add('active');
+                    tabBtnComissao.classList.remove('active');
+                    tabContentDesconto.classList.add('active');
+                    tabContentComissao.classList.remove('active');
+                });
+                tabBtnComissao.addEventListener('click', () => {
+                    tabBtnComissao.classList.add('active');
+                    tabBtnDesconto.classList.remove('active');
+                    tabContentComissao.classList.add('active');
+                    tabContentDesconto.classList.remove('active');
+                });
+                
+                // Open Discount Popup
+                openDiscountPopupBtn.addEventListener('click', async () => {
+                    discountFeedback.textContent = '';
+                    discountPopup.style.display = 'flex';
+                    // Reset to first tab
+                    tabBtnDesconto.click();
+                    
+                    try {
+                        const docSnap = await getDoc(doc(db, "paineis", "Banca"));
+                        if (docSnap.exists()) {
+                            const data = docSnap.data();
+                            descontoInput.value = data.descontoBanca !== undefined ? data.descontoBanca : '';
+                            dataVendaInput.value = data.dataVendaBanca || '';
+                            taxaBancaDiscountInput.value = data.taxaBanca !== undefined ? data.taxaBanca : '';
+                            comissaoVendaInput.value = data.comissaoBancaVenda !== undefined ? data.comissaoBancaVenda : '';
+                        }
+                    } catch (error) {
+                        console.error("Erro ao carregar desconto/comissão:", error);
+                    }
+                });
+                
+                // Close actions
+                const closeDiscount = () => { discountPopup.style.display = 'none'; };
+                document.getElementById('cancel-discount-icon-btn').addEventListener('click', closeDiscount);
+                document.getElementById('cancel-discount-btn').addEventListener('click', closeDiscount);
+                discountPopup.addEventListener('click', (e) => { if (e.target === discountPopup) closeDiscount(); });
+                
+                // Submit Form
+                discountForm.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    discountFeedback.textContent = 'A guardar...';
+                    discountFeedback.className = 'feedback-message';
+                    
+                    const desconto = parseInt(descontoInput.value, 10);
+                    const dataVenda = dataVendaInput.value;
+                    const taxaBanca = parseFloat(taxaBancaDiscountInput.value);
+                    const comissaoVenda = parseInt(comissaoVendaInput.value, 10);
+                    
+                    try {
+                        const updateObj = {};
+                        if (!isNaN(desconto)) updateObj.descontoBanca = desconto;
+                        updateObj.dataVendaBanca = dataVenda || "";
+                        if (!isNaN(taxaBanca)) updateObj.taxaBanca = taxaBanca;
+                        if (!isNaN(comissaoVenda)) updateObj.comissaoBancaVenda = comissaoVenda;
+                        
+                        await setDoc(doc(db, "paineis", "Banca"), updateObj, { merge: true });
+                        discountFeedback.textContent = 'Configurações guardadas com sucesso!';
+                        discountFeedback.className = 'feedback-message success';
+                        setTimeout(closeDiscount, 1500);
+                    } catch (error) {
+                        console.error("Erro ao guardar desconto/comissão:", error);
+                        discountFeedback.textContent = 'Erro ao guardar configurações.';
+                        discountFeedback.className = 'feedback-message error';
+                    }
+                });
+                
+                // Event Listeners da Taxa WhoWins
+                openTaxaPopupBtn.addEventListener('click', async () => {
+                    taxaFeedback.textContent = '';
+                    simAdviceText.style.display = 'none';
+                    taxaPopup.style.display = 'flex';
+                    
+                    try {
+                        const bancaRef = doc(db, "paineis", "Banca");
+                        const docSnap = await getDoc(bancaRef);
+                        
+                        if (docSnap.exists()) {
+                            taxaInput.value = docSnap.data().taxaWhoWins || 0;
+                            taxaBancaInput.value = docSnap.data().taxaBanca || 0;
+                        }
+                        updateSimulation();
+                    } catch (error) {
+                        console.error("Erro ao carregar taxa WhoWins:", error);
+                    }
+                });
+
+                // Ouvintes para atualização em tempo real do simulador
+                taxaInput.addEventListener('input', updateSimulation);
+                simAmountInput.addEventListener('input', updateSimulation);
+                taxaBancaInput.addEventListener('input', updateSimulation);
+
+                cancelTaxaBtn.addEventListener('click', () => taxaPopup.style.display = 'none');
+                taxaPopup.addEventListener('click', (e) => { if (e.target === taxaPopup) taxaPopup.style.display = 'none'; });
+                taxaForm.addEventListener('submit', handleTaxaSubmit);
+
+                // =========================================================
+                //  LÓGICA DO PAINEL FLUTUANTE (AJUDA + CALCULADORA)
+                // =========================================================
+                
+                const toggleHelperBtn = document.getElementById('toggle-helper-btn');
+                const helperPanel = document.getElementById('helper-panel');
+                const closeHelperX = document.getElementById('close-helper-x');
+                const helperBody = document.getElementById('helper-table-body');
+                const dragHandle = document.getElementById('helper-drag-handle');
+                
+                // Botão de fechar (X) do popup principal
+                document.getElementById('cancel-taxa-icon-btn').addEventListener('click', () => taxaPopup.style.display = 'none');
+
+                // Abrir o Painel de Ajuda
+                toggleHelperBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    // Resetar posição para o centro
+                    helperPanel.style.top = '50%';
+                    helperPanel.style.left = '50%';
+                    helperPanel.style.transform = 'translate(-50%, -50%)';
+                    helperPanel.style.display = 'block';
+                    generateHelperTable();
+                });
+
+                // Fechar o Painel de Ajuda
+                closeHelperX.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    helperPanel.style.display = 'none';
+                });
+
+                // --- Drag and Drop Logic ---
+                let isDragging = false;
+                let currentX;
+                let currentY;
+                let initialX;
+                let initialY;
+
+                dragHandle.addEventListener("mousedown", dragStart);
+                document.addEventListener("mouseup", dragEnd);
+                document.addEventListener("mousemove", drag);
+
+                function dragStart(e) {
+                    const rect = helperPanel.getBoundingClientRect();
+                    if (helperPanel.style.transform !== 'none') {
+                        helperPanel.style.left = rect.left + 'px';
+                        helperPanel.style.top = rect.top + 'px';
+                        helperPanel.style.transform = 'none';
+                    }
+                    initialX = e.clientX - helperPanel.offsetLeft;
+                    initialY = e.clientY - helperPanel.offsetTop;
+
+                    if (e.target === dragHandle || e.target.parentNode === dragHandle) {
+                        isDragging = true;
+                    }
+                }
+
+                function dragEnd(e) {
+                    initialX = currentX;
+                    initialY = currentY;
+                    isDragging = false;
+                }
+
+                function drag(e) {
+                    if (isDragging) {
+                        e.preventDefault();
+                        currentX = e.clientX - initialX;
+                        currentY = e.clientY - initialY;
+                        helperPanel.style.left = currentX + "px";
+                        helperPanel.style.top = currentY + "px";
+                    }
+                }
+
+                // --- Lógica da Calculadora Inversa ---
+              const btnCalcReverse = document.getElementById('btn-calc-reverse');
+                const btnApplyReverse = document.getElementById('btn-apply-reverse');
+                const inpRevBase = document.getElementById('rev-base-input'); // NOVO CAMPO
+                const inpRevUser = document.getElementById('rev-target-user');
+                const inpRevBank = document.getElementById('rev-target-bank');
+                const resArea = document.getElementById('rev-result-area');
+                const resRate = document.getElementById('res-rate');
+                const resFee = document.getElementById('res-fee');
+                
+                let calculatedRate = 0;
+                let calculatedFee = 0;
+                let calculatedMinInput = 0;
+
+                // Função Auxiliar: Máximo Divisor Comum
+                function gcd(a, b) { return !b ? a : gcd(b, a % b); }
+
+                btnCalcReverse.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const baseVal = parseFloat(inpRevBase.value); // LÊ A BASE (Ex: 1)
+                    const userTarget = parseFloat(inpRevUser.value);
+                    const bankTarget = parseFloat(inpRevBank.value);
+
+                    if (isNaN(baseVal) || baseVal <= 0 || isNaN(userTarget) || isNaN(bankTarget) || userTarget < 0 || bankTarget < 0) {
+                        alert("Insira valores válidos."); return;
+                    }
+
+                    const totalGenerated = userTarget + bankTarget;
+                    if (totalGenerated === 0) { alert("O total gerado não pode ser zero."); return; }
+
+                    // 1. Calcular Taxa (Custo = Base / Total que sai)
+                    // Ex: Entra 1, Sai 2. Taxa = 1 / 2 = 0.5
+                    calculatedRate = baseVal / totalGenerated;
+
+                    // 2. Calcular Fator Banca (Parte da Banca / Total que sai)
+                    calculatedFee = bankTarget / totalGenerated;
+
+                    // 3. Calcular Mínimo Obrigatório (Baseado em 100 para precisão standard)
+                    // Se a taxa for < 1 (multiplicador), o mínimo costuma ser 1.
+                    // Se a taxa for > 1 (divisor), temos de calcular.
+                    
+                    if (calculatedRate < 1) {
+                        calculatedMinInput = 1; // Se multiplica, qualquer valor serve
+                    } else {
+                        // Lógica simplificada para divisores
+                        calculatedMinInput = Math.ceil(calculatedRate);
+                    }
+                    
+                    // Refinar mínimo se houver banca
+                    if (bankTarget > 0) {
+                         // Se a banca recebe X%, precisamos garantir que X% do total é inteiro
+                         // Simplificação: Usar a base como referência segura
+                         calculatedMinInput = Math.max(calculatedMinInput, baseVal);
+                    }
+
+                    resRate.textContent = Number(calculatedRate.toFixed(6));
+                    resFee.textContent = Number(calculatedFee.toFixed(6));
+                    
+                    // Limpar avisos antigos e mostrar novo
+                    const oldMsg = document.getElementById('rev-warning-msg');
+                    if(oldMsg) oldMsg.remove();
+
+                    let msg = '';
+                    if (calculatedRate < 1) {
+                         msg = `<strong style="color:green">Modo Multiplicador!</strong><br>Por cada 1 Mini-gCoin, gera ${(1/calculatedRate).toFixed(2)} gCoins.`;
+                    } else {
+                         msg = `O utilizador terá de converter múltiplos de <strong>${baseVal}</strong>.`;
+                    }
+
+                    const msgDiv = document.createElement('div');
+                    msgDiv.id = 'rev-warning-msg';
+                    msgDiv.style = "margin-top:10px; padding:8px; background:#f0f7ff; border-left:4px solid #3498db; font-size:0.8rem; text-align:left;";
+                    msgDiv.innerHTML = msg;
+                    resArea.appendChild(msgDiv);
+
+                    resArea.style.display = 'block';
+                });
+
+                btnApplyReverse.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    taxaInput.value = Number(calculatedRate.toFixed(6));
+                    taxaBancaInput.value = Number(calculatedFee.toFixed(6));
+                    
+                    // Preenche o simulador com a BASE escolhida para testar logo
+                    document.getElementById('sim-amount-input').value = inpRevBase.value;
+                    updateSimulation();
+                });
+
+                // --- Gerar Tabela de Sugestões ---
+                function generateHelperTable() {
+                    helperBody.innerHTML = '';
+                    const baseInput = 100;
+                    const commonRates = [1, 1.25, 1.5, 2, 2.5, 4, 5, 10];
+                    const commonFees = [0.1, 0.2, 0.25, 0.4, 0.5];
+
+                    commonRates.forEach(rate => {
+                        commonFees.forEach(fee => {
+                            const gross = baseInput / rate;
+                            const bank = gross * fee;
+                            const user = gross - bank;
+                            const isClean = Math.abs(bank - Math.round(bank)) < 1e-9 && 
+                                          Math.abs(user - Math.round(user)) < 1e-9;
+
+                            if (isClean) {
+                                const row = document.createElement('tr');
+                                row.innerHTML = `
+                                    <td><strong>${rate}</strong></td>
+                                    <td>${fee}</td>
+                                    <td>
+                                        <div style="display:flex; flex-direction:column; gap:2px;">
+                        console.error("Erro ao carregar taxa WhoWins:", error);
+                    }
+                });
+
+                // Ouvintes para atualização em tempo real do simulador
+                taxaInput.addEventListener('input', updateSimulation);
+                simAmountInput.addEventListener('input', updateSimulation);
+                taxaBancaInput.addEventListener('input', updateSimulation);
+
+                cancelTaxaBtn.addEventListener('click', () => taxaPopup.style.display = 'none');
+                taxaPopup.addEventListener('click', (e) => { if (e.target === taxaPopup) taxaPopup.style.display = 'none'; });
+                taxaForm.addEventListener('submit', handleTaxaSubmit);
+
+                // =========================================================
+                //  LÓGICA DO PAINEL FLUTUANTE (AJUDA + CALCULADORA)
+                // =========================================================
+                
+                const toggleHelperBtn = document.getElementById('toggle-helper-btn');
+                const helperPanel = document.getElementById('helper-panel');
+                const closeHelperX = document.getElementById('close-helper-x');
+                const helperBody = document.getElementById('helper-table-body');
+                const dragHandle = document.getElementById('helper-drag-handle');
+                
+                // Botão de fechar (X) do popup principal
+                document.getElementById('cancel-taxa-icon-btn').addEventListener('click', () => taxaPopup.style.display = 'none');
+
+                // Abrir o Painel de Ajuda
+                toggleHelperBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    // Resetar posição para o centro
+                    helperPanel.style.top = '50%';
+                    helperPanel.style.left = '50%';
+                    helperPanel.style.transform = 'translate(-50%, -50%)';
+                    helperPanel.style.display = 'block';
+                    generateHelperTable();
+                });
+
+                // Fechar o Painel de Ajuda
+                closeHelperX.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    helperPanel.style.display = 'none';
+                });
+
+                // --- Drag and Drop Logic ---
+                let isDragging = false;
+                let currentX;
+                let currentY;
+                let initialX;
+                let initialY;
+
+                dragHandle.addEventListener("mousedown", dragStart);
+                document.addEventListener("mouseup", dragEnd);
+                document.addEventListener("mousemove", drag);
+
+                function dragStart(e) {
+                    const rect = helperPanel.getBoundingClientRect();
+                    if (helperPanel.style.transform !== 'none') {
+                        helperPanel.style.left = rect.left + 'px';
+                        helperPanel.style.top = rect.top + 'px';
+                        helperPanel.style.transform = 'none';
+                    }
+                    initialX = e.clientX - helperPanel.offsetLeft;
+                    initialY = e.clientY - helperPanel.offsetTop;
+
+                    if (e.target === dragHandle || e.target.parentNode === dragHandle) {
+                        isDragging = true;
+                    }
+                }
+
+                function dragEnd(e) {
+                    initialX = currentX;
+                    initialY = currentY;
+                    isDragging = false;
+                }
+
+                function drag(e) {
+                    if (isDragging) {
+                        e.preventDefault();
+                        currentX = e.clientX - initialX;
+                        currentY = e.clientY - initialY;
+                        helperPanel.style.left = currentX + "px";
+                        helperPanel.style.top = currentY + "px";
+                    }
+                }
+
+                // --- Lógica da Calculadora Inversa ---
+              const btnCalcReverse = document.getElementById('btn-calc-reverse');
+                const btnApplyReverse = document.getElementById('btn-apply-reverse');
+                const inpRevBase = document.getElementById('rev-base-input'); // NOVO CAMPO
+                const inpRevUser = document.getElementById('rev-target-user');
+                const inpRevBank = document.getElementById('rev-target-bank');
+                const resArea = document.getElementById('rev-result-area');
+                const resRate = document.getElementById('res-rate');
+                const resFee = document.getElementById('res-fee');
+                
+                let calculatedRate = 0;
+                let calculatedFee = 0;
+                let calculatedMinInput = 0;
+
+                // Função Auxiliar: Máximo Divisor Comum
+                function gcd(a, b) { return !b ? a : gcd(b, a % b); }
+
+                btnCalcReverse.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const baseVal = parseFloat(inpRevBase.value); // LÊ A BASE (Ex: 1)
+                    const userTarget = parseFloat(inpRevUser.value);
+                    const bankTarget = parseFloat(inpRevBank.value);
+
+                    if (isNaN(baseVal) || baseVal <= 0 || isNaN(userTarget) || isNaN(bankTarget) || userTarget < 0 || bankTarget < 0) {
+                        alert("Insira valores válidos."); return;
+                    }
+
+                    const totalGenerated = userTarget + bankTarget;
+                    if (totalGenerated === 0) { alert("O total gerado não pode ser zero."); return; }
+
+                    // 1. Calcular Taxa (Custo = Base / Total que sai)
+                    // Ex: Entra 1, Sai 2. Taxa = 1 / 2 = 0.5
+                    calculatedRate = baseVal / totalGenerated;
+
+                    // 2. Calcular Fator Banca (Parte da Banca / Total que sai)
+                    calculatedFee = bankTarget / totalGenerated;
+
+                    // 3. Calcular Mínimo Obrigatório (Baseado em 100 para precisão standard)
+                    // Se a taxa for < 1 (multiplicador), o mínimo costuma ser 1.
+                    // Se a taxa for > 1 (divisor), temos de calcular.
+                    
+                    if (calculatedRate < 1) {
+                        calculatedMinInput = 1; // Se multiplica, qualquer valor serve
+                    } else {
+                        // Lógica simplificada para divisores
+                        calculatedMinInput = Math.ceil(calculatedRate);
+                    }
+                    
+                    // Refinar mínimo se houver banca
+                    if (bankTarget > 0) {
+                         // Se a banca recebe X%, precisamos garantir que X% do total é inteiro
+                         // Simplificação: Usar a base como referência segura
+                         calculatedMinInput = Math.max(calculatedMinInput, baseVal);
+                    }
+
+                    resRate.textContent = Number(calculatedRate.toFixed(6));
+                    resFee.textContent = Number(calculatedFee.toFixed(6));
+                    
+                    // Limpar avisos antigos e mostrar novo
+                    const oldMsg = document.getElementById('rev-warning-msg');
+                    if(oldMsg) oldMsg.remove();
+
+                    let msg = '';
+                    if (calculatedRate < 1) {
+                         msg = `<strong style="color:green">Modo Multiplicador!</strong><br>Por cada 1 Mini-gCoin, gera ${(1/calculatedRate).toFixed(2)} gCoins.`;
+                    } else {
+                         msg = `O utilizador terá de converter múltiplos de <strong>${baseVal}</strong>.`;
+                    }
+
+                    const msgDiv = document.createElement('div');
+                    msgDiv.id = 'rev-warning-msg';
+                    msgDiv.style = "margin-top:10px; padding:8px; background:#f0f7ff; border-left:4px solid #3498db; font-size:0.8rem; text-align:left;";
+                    msgDiv.innerHTML = msg;
+                    resArea.appendChild(msgDiv);
+
+                    resArea.style.display = 'block';
+                });
+
+                btnApplyReverse.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    taxaInput.value = Number(calculatedRate.toFixed(6));
+                    taxaBancaInput.value = Number(calculatedFee.toFixed(6));
+                    
+                    // Preenche o simulador com a BASE escolhida para testar logo
+                    document.getElementById('sim-amount-input').value = inpRevBase.value;
+                    updateSimulation();
+                });
+
+                // --- Gerar Tabela de Sugestões ---
+                function generateHelperTable() {
+                    helperBody.innerHTML = '';
+                    const baseInput = 100;
+                    const commonRates = [1, 1.25, 1.5, 2, 2.5, 4, 5, 10];
+                    const commonFees = [0.1, 0.2, 0.25, 0.4, 0.5];
+
+                    commonRates.forEach(rate => {
+                        commonFees.forEach(fee => {
+                            const gross = baseInput / rate;
+                            const bank = gross * fee;
+                            const user = gross - bank;
+                            const isClean = Math.abs(bank - Math.round(bank)) < 1e-9 && 
+                                          Math.abs(user - Math.round(user)) < 1e-9;
+
+                            if (isClean) {
+                                const row = document.createElement('tr');
+                                row.innerHTML = `
+                                    <td><strong>${rate}</strong></td>
+                                    <td>${fee}</td>
+                                    <td>
+                                        <div style="display:flex; flex-direction:column; gap:2px;">
+                                            <span class="tag-good">User: ${user}</span>
+                                            <span style="font-size:0.75em; color:#dc3545;">Banca: ${bank}</span>
+                                        </div>
+                                    </td>
+                                `;
+                                row.addEventListener('click', () => {
+                                    taxaInput.value = rate;
+                                    taxaBancaInput.value = fee;
+                                    updateSimulation();
+                                });
+                                helperBody.appendChild(row);
+                            }
+                        });
+                    });
+                    if(helperBody.innerHTML === '') {
+                        helperBody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#777;">Nenhuma combinação padrão encontrada. Use a calculadora acima.</td></tr>';
+                    }
+                }
+
+            } catch (error) {
+                console.error("Erro na inicialização:", error);
+                statusMessage.textContent = `Erro: ${error.message}`;
+            }
+        }
+
+        onAuthStateChanged(auth, async (u) => { if(u && (await getDoc(doc(db,"users",u.uid))).data().estatuto==='ruler') { document.body.style.display='flex'; initializePage(); } else window.location.href='/'; });
+    </script>
+</body>
+</html>

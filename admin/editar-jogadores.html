@@ -1,0 +1,1053 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Editar Jogadores - G EMPIRE</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+
+    <!-- ALTERAÇÃO 1.1: Adicionada a ligação para os estilos do menu -->
+    <link rel="stylesheet" href="css/menu-admin.css">
+
+    <!-- 1. Adiciona o nosso guardião de segurança central. -->
+   <script type="module" src="js/auth-guard.js"></script>
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { min-height: 100vh; background-color: #090c10; font-family: 'Poppins', Arial, sans-serif; color: #f0f2f5; }
+        
+        .content { padding: 110px 20px 40px; max-width: 1200px; margin: 0 auto; }
+        .cards-container { display: flex; flex-wrap: wrap; gap: 20px; justify-content: flex-start; margin-top: 30px; }
+        .card { background: #111622; border-radius: 12px; padding: 24px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45); border: 1px solid rgba(255, 255, 255, 0.06); width: calc(33.33% - 14px); min-width: 300px; margin-bottom: 0; }
+        h1 { color: #ffffff; margin-bottom: 30px; text-align: center; font-weight: 700; font-size: 28px; }
+        
+        .search-container { position: relative; margin-bottom: 30px; }
+        .search-input { width: 100%; padding: 12px; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; font-size: 16px; outline: none; background-color: #111622; color: #ffffff; transition: all 0.3s ease; }
+        .search-input:focus { border-color: rgba(33, 118, 255, 0.5); box-shadow: 0 0 10px rgba(33, 118, 255, 0.15); }
+        .search-results { position: absolute; top: 100%; left: 0; right: 0; background: #161c28; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; max-height: 300px; overflow-y: auto; z-index: 1000; display: none; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5); }
+        
+        .country-search-container { position: relative; margin-bottom: 20px; }
+        .country-search-input { width: 100%; padding: 12px; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; font-size: 16px; outline: none; background-color: #111622; color: #ffffff; }
+        .country-search-results { position: absolute; top: 100%; left: 0; right: 0; background: #161c28; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; max-height: 200px; overflow-y: auto; z-index: 1000; display: none; }
+        .country-result { padding: 10px; cursor: pointer; transition: background-color 0.2s; color: #ffffff; }
+        .country-result:hover { background-color: rgba(33, 118, 255, 0.15); }
+        
+        .player-result { display: flex; align-items: center; padding: 10px; cursor: pointer; border-bottom: 1px solid rgba(255, 255, 255, 0.05); color: #ffffff; }
+        .player-result:hover { background-color: rgba(33, 118, 255, 0.15); }
+        .player-result img { width: 40px; height: 40px; border-radius: 50%; margin-right: 10px; object-fit: cover; border: 1px solid rgba(255, 255, 255, 0.1); }
+        
+        .card-title { font-size: 18px; font-weight: 600; color: #2176ff; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 2px solid rgba(255, 255, 255, 0.05); }
+        .form-group { margin-bottom: 16px; }
+        .form-group:last-child { margin-bottom: 0; }
+        .form-group label { display: block; margin-bottom: 8px; color: #8892b0; font-weight: 500; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; }
+        
+        .form-control { width: 100%; padding: 10px; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; font-size: 16px; transition: border-color 0.2s ease; background-color: #161c28; color: #ffffff; outline: none; }
+        .form-control:focus { border-color: rgba(33, 118, 255, 0.5); }
+        .checkbox-group { display: flex; flex-direction: column; gap: 10px; }
+        .mini-game-option { display: flex; align-items: center; gap: 10px; }
+        .mini-game-price { display: none; }
+        .mini-game-price-input { padding: 5px; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 4px; width: 80px; background-color: #161c28; color: #ffffff; }
+        
+        .image-preview { width: 100px; height: 100px; border-radius: 8px; object-fit: cover; margin-top: 10px; border: 1px solid rgba(255, 255, 255, 0.08); }
+        .dropdown { position: relative; }
+        .dropdown-results { position: absolute; top: 100%; left: 0; right: 0; background: #161c28; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; max-height: 200px; overflow-y: auto; z-index: 1000; display: none; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5); }
+        .dropdown-item { padding: 10px 12px; cursor: pointer; color: #ffffff; }
+        .dropdown-item:hover { background-color: rgba(33, 118, 255, 0.15); }
+        
+        .btn-edit { background: linear-gradient(135deg, #2ecc71, #27ae60); color: white; border: none; padding: 12px 24px; border-radius: 8px; font-size: 16px; font-weight: 700; cursor: pointer; width: 100%; transition: all 0.3s ease; text-transform: uppercase; letter-spacing: 0.5px; box-shadow: 0 4px 15px rgba(46, 204, 113, 0.2); }
+        .btn-edit:hover { background: linear-gradient(135deg, #27ae60, #219653); transform: translateY(-1px); box-shadow: 0 6px 20px rgba(46, 204, 113, 0.35); }
+        
+        .coeficientes-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; background-color: #161c28; border-radius: 8px; overflow: hidden; border: 1px solid rgba(255, 255, 255, 0.05); }
+        .coeficientes-table th, .coeficientes-table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid rgba(255, 255, 255, 0.04); color: #ffffff; }
+        .coeficientes-table th { background-color: #1d2639; font-weight: bold; color: #8892b0; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .coeficientes-table tr:nth-child(even) { background-color: rgba(255, 255, 255, 0.02); }
+        .coeficientes-table tr:hover { background-color: rgba(33, 118, 255, 0.08); }
+        .coeficientes-table tr:last-child td { border-bottom: none; }
+
+        /* Controls / Search Bar */
+        .controls-row { display: flex; gap: 16px; margin-bottom: 24px; align-items: center; flex-wrap: wrap; }
+        .search-wrapper { position: relative; width: 320px; }
+        .search-wrapper i { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); color: #8892b0; }
+        .search-input { width: 100%; padding: 12px 42px 12px 16px; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; font-size: 15px; outline: none; background-color: #111622; color: #ffffff; transition: all 0.3s ease; }
+        .search-input:focus { border-color: rgba(33, 118, 255, 0.5); box-shadow: 0 0 10px rgba(33, 118, 255, 0.15); }
+        .filter-select { padding: 12px 36px 12px 16px; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; font-size: 15px; outline: none; background-color: #111622; color: #ffffff; transition: all 0.3s ease; cursor: pointer; min-width: 180px; appearance: none; -webkit-appearance: none; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%238892b0' viewBox='0 0 16 16'><path fill-rule='evenodd' d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/></svg>"); background-repeat: no-repeat; background-position: calc(100% - 14px) center; }
+        .filter-select:focus { border-color: rgba(33, 118, 255, 0.5); box-shadow: 0 0 10px rgba(33, 118, 255, 0.15); }
+
+        /* Excel-like Table Container */
+        .table-container { background-color: #111622; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.06); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45); overflow-x: auto; margin-bottom: 30px; }
+        .excel-table { width: 100%; border-collapse: collapse; text-align: left; min-width: 800px; }
+        .excel-table th, .excel-table td { padding: 12px 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.04); font-size: 14px; }
+        .excel-table th { background-color: #161c28; color: #8892b0; font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px; border-bottom: 2px solid rgba(255, 255, 255, 0.08); user-select: none; }
+        .excel-table th i { margin-left: 6px; font-size: 10px; transition: color 0.2s; }
+        .excel-table tr { cursor: pointer; transition: background-color 0.2s ease; }
+        .excel-table tr:hover { background-color: rgba(33, 118, 255, 0.08); }
+        .excel-table tr:last-child td { border-bottom: none; }
+        
+        .player-row-img { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 1px solid rgba(255, 255, 255, 0.1); margin-right: 8px; vertical-align: middle; }
+        .player-row-name { font-weight: 600; color: #ffffff; display: inline-block; vertical-align: middle; }
+        .pos-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; }
+        .pos-badge.guarda-redes { background-color: rgba(46, 204, 113, 0.15); color: #2ecc71; border: 1px solid rgba(46, 204, 113, 0.2); }
+        .pos-badge.defesa { background-color: rgba(52, 152, 219, 0.15); color: #3498db; border: 1px solid rgba(52, 152, 219, 0.2); }
+        .pos-badge.medio { background-color: rgba(241, 196, 15, 0.15); color: #f1c40f; border: 1px solid rgba(241, 196, 15, 0.2); }
+        .pos-badge.avancado { background-color: rgba(231, 76, 60, 0.15); color: #e74c3c; border: 1px solid rgba(231, 76, 60, 0.2); }
+
+        /* Main Modal Overlay */
+        .overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.75); z-index: 1000; backdrop-filter: blur(4px); justify-content: center; align-items: center; }
+        .overlay.active { display: flex; }
+        .modal-content { background: #111622; width: 95%; max-width: 1100px; border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 15px 45px rgba(0,0,0,0.6); display: flex; flex-direction: column; max-height: 90vh; animation: zoomIn 0.3s ease; }
+        @keyframes zoomIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        
+        .modal-header { padding: 20px; border-bottom: 1px solid rgba(255,255,255,0.06); display: flex; justify-content: space-between; align-items: center; }
+        .modal-header h3 { font-size: 18px; color: #ffffff; font-weight: bold; }
+        .modal-body { padding: 20px; overflow-y: auto; flex-grow: 1; }
+        .modal-footer { padding: 16px 20px; border-top: 1px solid rgba(255,255,255,0.06); display: flex; justify-content: flex-end; gap: 12px; }
+        
+        .btn.secondary { background-color: #161c28; color: #8892b0; border: 1px solid rgba(255, 255, 255, 0.08); }
+        .btn.secondary:hover { background-color: #1d2639; color: #ffffff; }
+
+        /* Small Switch for Table */
+        .table-switch {
+            position: relative;
+            display: inline-block;
+            width: 46px;
+            height: 24px;
+            vertical-align: middle;
+        }
+        .table-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .table-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #e74c3c;
+            transition: .4s;
+            border-radius: 24px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        .table-slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 2px;
+            bottom: 2px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        .table-switch input:checked + .table-slider {
+            background-color: #2ecc71;
+        }
+        .table-switch input:checked + .table-slider:before {
+            transform: translateX(22px);
+        }
+    </style>
+
+    <link rel="stylesheet" href="css/admin-global.css">
+</head>
+<body style="display: none;">
+    
+    <!-- ALTERAÇÃO 2: O menu estático foi substituído pelo placeholder dinâmico. -->
+    <nav id="menu-placeholder" class="top-menu"></nav>
+
+    <div class="content">
+        <a href="gerenciar-jogadores.html" class="menu-item"><i class="fas fa-users"></i> JOGADORES LIVE</a>
+        <h1>Editar Jogadores</h1>
+        
+        <div class="controls-row">
+            <div class="search-wrapper">
+                <input type="text" class="search-input" placeholder="Pesquisar jogador pelo nome, clube ou posição..." id="tableSearch">
+                <i class="fas fa-search"></i>
+            </div>
+            <select id="filter-pais" class="filter-select">
+                <option value="">Todos os Países</option>
+            </select>
+            <select id="filter-posicao" class="filter-select">
+                <option value="">Todas as Posições</option>
+            </select>
+            <div style="margin-left: auto; display: flex; align-items: center; gap: 8px;">
+                <select id="topSeasonSelect" class="filter-select" style="min-width: 130px; font-weight: 700; color: #2176ff; border-color: rgba(33, 118, 255, 0.4);">
+                    <option value="">A carregar...</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <table class="excel-table">
+                <thead>
+                    <tr>
+                        <th data-sort="nome" style="cursor: pointer;">Nome <i class="fas fa-sort"></i></th>
+                        <th data-sort="paisNome" style="cursor: pointer;">País <i class="fas fa-sort"></i></th>
+                        <th data-sort="clube" style="cursor: pointer;">Clube <i class="fas fa-sort"></i></th>
+                        <th data-sort="posicao" style="cursor: pointer;">Posição <i class="fas fa-sort"></i></th>
+                        <th data-sort="overall" style="cursor: pointer; text-align: center;">Overall <i class="fas fa-sort"></i></th>
+                        <th style="text-align: center;">Ativo</th>
+                    </tr>
+                </thead>
+                <tbody id="players-table-body">
+                    <!-- Loaded dynamically -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- MAIN OVERLAY EDIT POPUP -->
+    <div class="overlay" id="edit-player-popup">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <h3>Editar Jogador</h3>
+                    <select id="modalSeasonSelect" class="filter-select" style="padding: 6px 12px; font-size: 13px; font-weight: 600; color: #2176ff; background-color: #161c28; border-color: rgba(33, 118, 255, 0.3);">
+                        <option value="">Temporada...</option>
+                    </select>
+                </div>
+                <button type="submit" form="editPlayerForm" class="btn-edit" style="width: auto; padding: 8px 24px; font-size: 14px; margin: 0 auto; display: inline-block;">Editar Jogador</button>
+                <button class="btn secondary" id="closeModalBtn" style="padding: 5px 10px; min-width: auto;"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <form id="editPlayerForm" class="cards-container" style="margin-top: 0;">
+                    <div class="card" style="width: calc(33.33% - 14px); margin-bottom: 0;">
+                        <div class="card-title">Informações Básicas</div>
+                        <div class="form-group"><label for="playerName">Nome do Jogador</label><input type="text" class="form-control" id="playerName" readonly></div>
+                        <div class="form-group"><label for="playerImageCode">Código para Imagem</label><input type="text" class="form-control" id="playerImageCode"><img src="" alt="Preview" class="image-preview" id="imagePreview"></div>
+                        <div class="form-group"><label for="playerCountry">País do Jogador</label><div class="dropdown"><input type="text" class="form-control" id="playerCountry"><div class="dropdown-results" id="countryResults"></div></div></div>
+                        <div class="form-group"><label for="playerClub">Clube do Jogador</label><div class="dropdown"><input type="text" class="form-control" id="playerClub"><div class="dropdown-results" id="clubResults"></div></div></div>
+                        <div class="form-group"><label for="playerPosition">Posição do Jogador</label><select class="form-control" id="playerPosition"><option value="">Selecione a posição</option><option value="Guarda-Redes">Guarda-Redes</option><option value="Defesa">Defesa</option><option value="Médio">Médio</option><option value="Avançado">Avançado</option></select></div>
+                        <div class="form-group"><label for="playerBirthDate">Data Nascimento</label><input type="date" class="form-control" id="playerBirthDate"></div>
+                        <div class="form-group"><label for="playerHeight">Altura (m)</label><input type="number" class="form-control" id="playerHeight" step="0.01" placeholder="Ex: 1.85"></div>
+                    </div>
+                    <div class="card" style="width: calc(33.33% - 14px); margin-bottom: 0;">
+                        <div class="card-title">Status do Jogador</div>
+                        <div class="form-group"><label for="playerOverall">Overall do Jogador</label><input type="number" class="form-control" id="playerOverall" step="0.1" min="0" max="1000"></div>
+                        <div class="form-group"><label for="playerTier">Casta do Jogador</label><select class="form-control" id="playerTier"><option value="Jogador Ouro">Jogador Ouro</option><option value="Jogador Prata">Jogador Prata</option><option value="Jogador Bronze">Jogador Bronze</option><option value="Jogador Platina">Jogador Platina</option></select></div>
+                        <div class="form-group"><label for="playerMarket">No Mercado?</label><select class="form-control" id="playerMarket"><option value="Sim">Sim</option><option value="Não">Não</option></select></div>
+                        <div class="form-group"><label for="playerActive">Ativo?</label><select class="form-control" id="playerActive"><option value="Sim">Sim</option><option value="Não">Não</option></select></div>
+                        <div class="form-group"><label for="playerPrice">Preço</label><input type="number" class="form-control" id="playerPrice" min="0" max="1000"></div>
+                        <div class="form-group"><label for="playerBuyer">Comprado por (Opcional)</label><select class="form-control" id="playerBuyer"><option value="">Ninguém</option></select></div>
+                        <div class="form-group"><label>Mini Games? (Opcional)</label><div class="checkbox-group" id="minigames-container"><!-- Carregando mini-games... --></div></div>
+                    </div>
+                    <div class="card" style="width: calc(33.33% - 14px); margin-bottom: 0;">
+                        <div class="card-title">Overall</div>
+                        <div class="form-group"><label for="playerStats">Estatísticas (Opcional)</label><textarea class="form-control" id="playerStats" rows="5"></textarea></div>
+                        <div id="coeficientes-section" style="display: none; margin-bottom: 20px;"><h3>Coeficientes</h3><div id="firebase-data-display"><div id="loading-indicator" style="display: none; text-align: center; margin-top: 10px;"><i class="fas fa-spinner fa-spin"></i> Carregando coeficientes...</div></div></div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn secondary" id="cancelModalBtn">Cancelar</button>
+               <script type="module">
+        import { db } from './js/auth-guard.js';
+        import { collection, getDocs, query, where, doc, getDoc, updateDoc, deleteDoc, setDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        import { fetchUniqueSeasons, getPlayerSeasonData, buildPlayerSeasonUpdatePayload, hasPlayerDataForSeason } from './js/player-season-helper.js';
+
+        let allRawPlayers = [];
+        let allPlayers = [];
+        let seasons = [];
+        let currentSeason = '2025/2026';
+        let countriesMap = new Map();
+        let selectedPlayerId = null;
+        let originalClubName = null;
+        let currentSortColumn = 'nome';
+        let currentSortDirection = 'asc';
+        let activeMiniGames = [];
+
+        window.resolvePlayerImage = function(img, code) {
+            if (!img.dataset.tryIndex) {
+                img.dataset.tryIndex = "0";
+            }
+            const extensions = ['webp', 'png', 'jpg', 'jpeg', 'svg'];
+            const currentIndex = parseInt(img.dataset.tryIndex);
+            
+            if (currentIndex < extensions.length) {
+                img.dataset.tryIndex = (currentIndex + 1).toString();
+                img.src = `../assets/faces/face_${code}.${extensions[currentIndex]}`;
+            } else {
+                img.onerror = null;
+                img.src = 'placeholder.jpg';
+            }
+        };
+
+        async function initPage() {
+            try {
+                // Fetch seasons, players, countries and mini-games in parallel
+                const [uniqueSeasons, playersSnap, countriesSnap, minigamesSnap] = await Promise.all([
+                    fetchUniqueSeasons(db),
+                    getDocs(collection(db, 'jogadores')),
+                    getDocs(collection(db, 'paises')),
+                    getDoc(doc(db, 'settings', 'mini-ggames'))
+                ]);
+
+                // Set seasons
+                seasons = uniqueSeasons;
+                currentSeason = seasons[0] || '2025/2026';
+
+                const topSeasonSelect = document.getElementById('topSeasonSelect');
+                const modalSeasonSelect = document.getElementById('modalSeasonSelect');
+
+                if (topSeasonSelect) {
+                    topSeasonSelect.innerHTML = seasons.map(s => `<option value="${s}">${s}</option>`).join('');
+                    topSeasonSelect.value = currentSeason;
+                }
+
+                if (modalSeasonSelect) {
+                    modalSeasonSelect.innerHTML = seasons.map(s => `<option value="${s}">${s}</option>`).join('');
+                    modalSeasonSelect.value = currentSeason;
+                }
+
+                // Map countries
+                countriesSnap.forEach(d => countriesMap.set(d.id, d.data().nome));
+
+                // Store raw docs
+                allRawPlayers = playersSnap.docs.map(d => ({
+                    id: d.id,
+                    rawData: d.data()
+                }));
+
+                // Render dynamic mini-games
+                const minigamesContainer = document.getElementById('minigames-container');
+                if (minigamesContainer) {
+                    minigamesContainer.innerHTML = '';
+                    if (minigamesSnap.exists()) {
+                        const mgData = minigamesSnap.data();
+                        const games = Object.entries(mgData).map(([key, value]) => ({ key, ...value }));
+                        games.sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
+
+                        games.forEach(game => {
+                            if (game.status === true) {
+                                activeMiniGames.push(game);
+                                const optDiv = document.createElement('div');
+                                optDiv.className = 'mini-game-option';
+                                optDiv.style.display = 'flex';
+                                optDiv.style.alignItems = 'center';
+                                optDiv.style.gap = '10px';
+                                optDiv.style.marginBottom = '8px';
+                                
+                                let extraMarkup = '';
+                                if (game.key === 'caderneta') {
+                                    extraMarkup = `
+                                        <select name="caderneta-casta" style="padding: 5px 8px; font-size: 13px; background-color: #161c28; color: #ffffff; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 4px; width: 110px; margin-left: 8px; outline: none; cursor: pointer; height: 30px; vertical-align: middle;">
+                                            <option value="comum">Comum</option>
+                                            <option value="raro">Raro</option>
+                                            <option value="epico">Épico</option>
+                                            <option value="lendario">Lendário</option>
+                                        </select>
+                                    `;
+                                }
+                                optDiv.innerHTML = `
+                                    <label style="cursor: pointer; user-select: none; display: flex; align-items: center; gap: 8px; margin: 0;"><input type="checkbox" name="mini-games" value="${game.key}" class="mini-game-checkbox"> ${game.nome}</label>
+                                    <div class="mini-game-price" style="display: none; margin-left: 10px; vertical-align: middle;">
+                                        <input type="text" name="${game.key}-preco" maxlength="5" placeholder="Preço" class="mini-game-price-input" style="padding: 5px; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 4px; width: 70px; background-color: #161c28; color: #ffffff; height: 30px; vertical-align: middle; text-align: center; outline: none;">
+                                        ${extraMarkup}
+                                    </div>
+                                `;
+                                minigamesContainer.appendChild(optDiv);
+                            }
+                        });
+                    } else {
+                        minigamesContainer.innerHTML = '<p style="color: #777;">Nenhum mini-game ativo configurado.</p>';
+                    }
+                }
+
+                processPlayersAndRender();
+
+            } catch (error) {
+                console.error("Erro ao carregar os dados:", error);
+                alert("Erro ao carregar os dados dos jogadores.");
+            }
+        }
+
+        function processPlayersAndRender() {
+            const season = currentSeason;
+            const defaultBaseSeason = seasons[seasons.length - 1] || '2025/2026';
+
+            // Filtra apenas os jogadores que possuem dados gravados para a época selecionada
+            const filteredRaw = allRawPlayers.filter(item => hasPlayerDataForSeason(item.rawData, season, defaultBaseSeason));
+
+            allPlayers = filteredRaw.map(item => {
+                const sData = getPlayerSeasonData(item.rawData, season);
+                return {
+                    id: item.id,
+                    nome: sData.nome || 'Sem Nome',
+                    paisId: sData.paisId || '',
+                    paisNome: countriesMap.get(sData.paisId) || sData.pais || 'N/A',
+                    clube: sData.clube || 'N/A',
+                    posicao: sData.posicao || 'N/A',
+                    overall: sData.overall || 0,
+                    casta: sData.casta || '',
+                    imagem: sData.imagem || '',
+                    codigoUrl: sData.codigoUrl || '',
+                    estatisticas: sData.estatisticas || '',
+                    preco: sData.preco || null,
+                    compradopor: sData.compradopor || '',
+                    noMercado: sData.noMercado || false,
+                    ativo: sData.ativo !== false,
+                    dataNascimento: sData.dataNascimento || '',
+                    altura: sData.altura || null,
+                    miniGames: sData.miniGames || [],
+                    rawData: item.rawData,
+                    ...sData
+                };
+            });
+
+            populateFilters();
+            renderPlayersTable();
+        }
+
+        function populateFilters() {
+            const paises = [...new Set(allPlayers.map(p => p.paisNome).filter(pn => pn && pn !== 'N/A'))].sort();
+            const posicoes = [...new Set(allPlayers.map(p => p.posicao).filter(pos => pos && pos !== 'N/A'))].sort();
+
+            const filterPais = document.getElementById('filter-pais');
+            const filterPosicao = document.getElementById('filter-posicao');
+
+            const selectedPais = filterPais.value;
+            const selectedPosicao = filterPosicao.value;
+
+            filterPais.innerHTML = '<option value="">Todos os Países</option>';
+            filterPosicao.innerHTML = '<option value="">Todas as Posições</option>';
+
+            paises.forEach(pais => {
+                const opt = document.createElement('option');
+                opt.value = pais;
+                opt.textContent = pais;
+                if (pais === selectedPais) opt.selected = true;
+                filterPais.appendChild(opt);
+            });
+
+            posicoes.forEach(pos => {
+                const opt = document.createElement('option');
+                opt.value = pos;
+                opt.textContent = pos;
+                if (pos === selectedPosicao) opt.selected = true;
+                filterPosicao.appendChild(opt);
+            });
+        }
+
+        function renderPlayersTable() {
+            const queryText = document.getElementById('tableSearch').value.toLowerCase();
+            const filterPais = document.getElementById('filter-pais').value;
+            const filterPosicao = document.getElementById('filter-posicao').value;
+            const tableBody = document.getElementById('players-table-body');
+            tableBody.innerHTML = '';
+
+            const filtered = allPlayers.filter(p => {
+                const matchesSearch = p.nome.toLowerCase().includes(queryText) || 
+                                     p.clube.toLowerCase().includes(queryText) || 
+                                     p.posicao.toLowerCase().includes(queryText) ||
+                                     p.paisNome.toLowerCase().includes(queryText);
+                const matchesPais = !filterPais || p.paisNome === filterPais;
+                const matchesPosicao = !filterPosicao || p.posicao === filterPosicao;
+                return matchesSearch && matchesPais && matchesPosicao;
+            });
+
+            if (filtered.length === 0) {
+                tableBody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #8892b0; padding: 20px;">Nenhum jogador encontrado para a temporada selecionada.</td></tr>`;
+                return;
+            }
+
+            filtered.sort((a, b) => {
+                let valA = a[currentSortColumn] || '';
+                let valB = b[currentSortColumn] || '';
+
+                let comparison = 0;
+                if (typeof valA === 'number' && typeof valB === 'number') {
+                    comparison = valA - valB;
+                } else {
+                    comparison = valA.toString().localeCompare(valB.toString(), 'pt', { sensitivity: 'base' });
+                }
+
+                return currentSortDirection === 'asc' ? comparison : -comparison;
+            }).forEach(p => {
+                const tr = document.createElement('tr');
+                
+                const posClassMap = {
+                    'Guarda-Redes': 'guarda-redes',
+                    'Defesa': 'defesa',
+                    'Médio': 'medio',
+                    'Avançado': 'avancado'
+                };
+                const badgeClass = posClassMap[p.posicao] || '';
+
+                const displayImg = p.imagem ? (p.imagem.startsWith('http') || p.imagem.startsWith('data:') ? p.imagem : '../' + p.imagem) : 'placeholder.jpg';
+                const isChecked = p.ativo !== false ? 'checked' : '';
+                
+                const codeMatch = p.imagem ? p.imagem.match(/face_(.+)\.(webp|png|jpe?g|svg)/i) : null;
+                const playerCode = codeMatch ? codeMatch[1] : p.codigoUrl;
+
+                tr.innerHTML = `
+                    <td>
+                        <img src="${displayImg}" class="player-row-img" onerror="resolvePlayerImage(this, '${playerCode}')">
+                        <span class="player-row-name">${p.nome}</span>
+                    </td>
+                    <td>${p.paisNome}</td>
+                    <td>${p.clube}</td>
+                    <td><span class="pos-badge ${badgeClass}">${p.posicao}</span></td>
+                    <td style="text-align: center; font-weight: bold; color: #2ecc71;">${p.overall || 0}</td>
+                    <td style="text-align: center;">
+                        <label class="table-switch">
+                            <input type="checkbox" class="ativo-toggle" ${isChecked}>
+                            <span class="table-slider"></span>
+                        </label>
+                    </td>
+                `;
+                
+                const toggleSwitch = tr.querySelector('.table-switch');
+                toggleSwitch.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                });
+                const toggleInput = tr.querySelector('.ativo-toggle');
+                toggleInput.addEventListener('change', async (e) => {
+                    const activeState = e.target.checked;
+                    try {
+                        const playerRef = doc(db, 'jogadores', p.id);
+                        const updatePayload = buildPlayerSeasonUpdatePayload(currentSeason, { ...p, ativo: activeState });
+                        await setDoc(playerRef, updatePayload, { merge: true });
+                        p.ativo = activeState; // Update local cache
+                    } catch (err) {
+                        console.error("Erro ao atualizar o estado ativo do jogador:", err);
+                        e.target.checked = !activeState; // Revert
+                    }
+                });
+                
+                tr.addEventListener('click', () => openEditModal(p));
+                tableBody.appendChild(tr);
+            });
+        }
+
+        function updateSortHeaders() {
+            const headers = document.querySelectorAll('.excel-table th[data-sort]');
+            headers.forEach(th => {
+                const col = th.getAttribute('data-sort');
+                const icon = th.querySelector('i');
+                if (icon) {
+                    if (col === currentSortColumn) {
+                        icon.className = currentSortDirection === 'asc' ? 'fas fa-sort-up' : 'fas fa-sort-down';
+                        icon.style.color = '#2176ff';
+                    } else {
+                        icon.className = 'fas fa-sort';
+                        icon.style.color = '#8892b0';
+                    }
+                }
+            });
+        }
+
+        function openEditModal(player) {
+            const modalSeasonSelect = document.getElementById('modalSeasonSelect');
+            if (modalSeasonSelect) {
+                modalSeasonSelect.value = currentSeason;
+            }
+            selectPlayerForSeason(player.id, player.rawData, currentSeason);
+            document.getElementById('edit-player-popup').classList.add('active');
+        }
+
+        function closeEditModal() {
+            document.getElementById('edit-player-popup').classList.remove('active');
+            document.getElementById('editPlayerForm').reset();
+            document.getElementById('imagePreview').src = "";
+            selectedPlayerId = null;
+            document.getElementById('coeficientes-section').style.display = 'none';
+        }
+
+        async function fetchOverallLimits() {
+            const docRef = doc(db, 'paineis', 'paineis overall');
+            const docSnap = await getDoc(docRef);
+            return docSnap.exists() ? docSnap.data() : null;
+        }
+
+        function determineCastaFromOverall(overall, limits) {
+            if (!limits) return "";
+            const [platinaLimit] = limits.Platina || [null];
+            const [ouroLower, ouroUpper] = limits.Ouro || [null, null];
+            const [prataLower, prataUpper] = limits.Prata || [null, null];
+            const [bronzeLimit] = limits.Bronze || [null];
+            if (platinaLimit !== null && overall >= platinaLimit) return "Jogador Platina";
+            if (ouroLower !== null && ouroUpper !== null && overall >= ouroLower && overall <= ouroUpper) return "Jogador Ouro";
+            if (prataLower !== null && prataUpper !== null && overall >= prataLower && overall <= prataUpper) return "Jogador Prata";
+            if (bronzeLimit !== null && overall <= bronzeLimit) return "Jogador Bronze";
+            return "";
+        }
+
+        async function selectPlayerForSeason(playerId, rawData, season) {
+            selectedPlayerId = playerId;
+            const player = getPlayerSeasonData(rawData, season);
+
+            document.getElementById('playerName').value = player.nome || 'Sem Nome';
+            document.getElementById('playerImageCode').value = player.codigoUrl || '';
+            let ext = 'webp';
+            if (player.imagem) {
+                const match = player.imagem.match(/face_(.+)\.(webp|png|jpe?g|svg)/i);
+                if (match) ext = match[2];
+            }
+            const imagePreview = document.getElementById('imagePreview');
+            imagePreview.removeAttribute('data-try-index');
+            if (player.codigoUrl) {
+                imagePreview.onerror = () => window.resolvePlayerImage(imagePreview, player.codigoUrl);
+                imagePreview.src = player.imagem ? (player.imagem.startsWith('http') || player.imagem.startsWith('data:') ? player.imagem : '../' + player.imagem) : `../assets/faces/face_${player.codigoUrl}.${ext}`;
+            } else {
+                imagePreview.onerror = null;
+                imagePreview.src = 'placeholder.jpg';
+            }
+            document.getElementById('playerPrice').value = player.preco || '';
+            document.getElementById('playerBuyer').value = player.compradopor || '';
+            originalClubName = player.clube;
+
+            if (player.paisId) {
+                const paisDoc = doc(collection(db, 'paises'), player.paisId);
+                getDoc(paisDoc).then(docSnap => { document.getElementById('playerCountry').value = docSnap.exists() ? docSnap.data().nome : ''; });
+            } else {
+                document.getElementById('playerCountry').value = player.pais || '';
+            }
+
+            document.getElementById('playerClub').value = player.clube || '';
+            document.getElementById('playerOverall').value = player.overall || 0;
+            document.getElementById('playerTier').value = player.casta || 'Jogador Bronze';
+            document.getElementById('playerMarket').value = player.noMercado ? 'Sim' : 'Não';
+            document.getElementById('playerActive').value = player.ativo !== false ? 'Sim' : 'Não';
+            document.getElementById('playerStats').value = player.estatisticas || '';
+            document.getElementById('playerPosition').value = player.posicao || '';
+            document.getElementById('playerBirthDate').value = player.dataNascimento || '';
+            document.getElementById('playerHeight').value = player.altura || '';
+
+            const coeficientesSection = document.getElementById('coeficientes-section');
+            if (player.posicao) {
+                coeficientesSection.style.display = 'block';
+                displayFirebaseData(player.posicao, player.casta, player.estatisticas || '');
+            } else {
+                coeficientesSection.style.display = 'none';
+            }
+
+            document.querySelectorAll('.mini-game-checkbox').forEach(checkbox => {
+                let isChecked = false;
+                if (Array.isArray(player.miniGames)) {
+                    isChecked = player.miniGames.includes(checkbox.value);
+                } else if (player.miniGames && typeof player.miniGames === 'object') {
+                    if (checkbox.value === 'caderneta') {
+                        isChecked = player.miniGames.caderneta?.estado === true;
+                    } else {
+                        isChecked = player.miniGames[checkbox.value] === true;
+                    }
+                }
+                checkbox.checked = isChecked;
+                const priceDiv = checkbox.closest('.mini-game-option').querySelector('.mini-game-price');
+                if (priceDiv) {
+                    priceDiv.style.display = isChecked ? 'inline-block' : 'none';
+                    priceDiv.querySelector('.mini-game-price-input').value = isChecked ? (player[`${checkbox.value}preco`] || '') : '';
+                    if (checkbox.value === 'caderneta') {
+                        let cadCasta = 'comum';
+                        if (player.miniGames && typeof player.miniGames === 'object' && !Array.isArray(player.miniGames)) {
+                            if (player.miniGames.caderneta && typeof player.miniGames.caderneta === 'object') {
+                                cadCasta = player.miniGames.caderneta.casta || 'comum';
+                            }
+                        }
+                        const castaSelect = priceDiv.querySelector('select[name="caderneta-casta"]');
+                        if (castaSelect) castaSelect.value = cadCasta;
+                    }
+                }
+            });
+
+            const buyerSelect = document.getElementById('playerBuyer');
+            buyerSelect.innerHTML = '<option value="">Ninguém</option>';
+            const usersSnapshot = await getDocs(collection(db, 'users'));
+            usersSnapshot.forEach(userDoc => {
+                const userData = userDoc.data();
+                const option = document.createElement('option');
+                option.value = userDoc.id;
+                option.textContent = userData.nomeDeUsuario || userData.nometabela || 'Utilizador sem nome';
+                buyerSelect.appendChild(option);
+            });
+            
+            if (player.compradopor) {
+                buyerSelect.value = player.compradopor;
+            }
+        }
+
+        function displayCountryResults(countries) {
+            const countryResults = document.getElementById('countryResults');
+            countryResults.innerHTML = '';
+            if (countries.length > 0) {
+                countries.forEach(country => {
+                    const div = document.createElement('div');
+                    div.className = 'dropdown-item';
+                    div.textContent = country.nome;
+                    div.addEventListener('click', () => {
+                        document.getElementById('playerCountry').value = country.nome;
+                        countryResults.style.display = 'none';
+                    });
+                    countryResults.appendChild(div);
+                });
+                countryResults.style.display = 'block';
+            } else {
+                countryResults.style.display = 'none';
+            }
+        }
+
+        function displayClubResults(clubs) {
+            const clubResults = document.getElementById('clubResults');
+            clubResults.innerHTML = '';
+            if (clubs.length > 0) {
+                clubs.forEach(club => {
+                    const div = document.createElement('div');
+                    div.className = 'dropdown-item';
+                    div.textContent = `${club.nome} (${club.pais?.nome || ''})`;
+                    div.addEventListener('click', () => {
+                        document.getElementById('playerClub').value = club.nome;
+                        clubResults.style.display = 'none';
+                    });
+                    clubResults.appendChild(div);
+                });
+                clubResults.style.display = 'block';
+            } else {
+                clubResults.style.display = 'none';
+            }
+        }
+
+        async function fetchPaineisCoefficients() {
+            const paineisDoc = await getDoc(doc(db, 'paineis', 'paineis coeficiente'));
+            return paineisDoc.exists() ? paineisDoc.data().paineis_coeficiente : null;
+        }
+
+        async function displayFirebaseData(selectedPosition, selectedCasta, estatisticasText) {
+            const firebaseDataDisplay = document.getElementById('firebase-data-display');
+            firebaseDataDisplay.innerHTML = '';
+            if (!selectedPosition) return;
+
+            const [paineisCoeficienteData, overallLimitsData] = await Promise.all([fetchPaineisCoefficients(), fetchOverallLimits()]);
+
+            if (paineisCoeficienteData) {
+                const table = document.createElement('table');
+                table.className = 'coeficientes-table';
+                table.innerHTML = '<thead><tr><th>Nome da Subcategoria</th><th>Coeficientes</th><th>Estatística</th></tr></thead>';
+                const tbody = document.createElement('tbody');
+                const rows = [];
+                let totalSum = 0;
+
+                for (const categoria in paineisCoeficienteData) {
+                    for (const subcategoriaNome in paineisCoeficienteData[categoria]) {
+                        const subcategoria = paineisCoeficienteData[categoria][subcategoriaNome];
+                        if (subcategoria.tipo) {
+                            for (const tipoItem of subcategoria.tipo) {
+                                if (tipoItem.name === selectedPosition) {
+                                    let firebaseValue = tipoItem.text || '-';
+                                    let estatisticaValue = '-';
+                                    let statisticNumber = 0;
+                                    if (estatisticasText) {
+                                        const lines = estatisticasText.split('\n');
+                                        for (let i = 0; i < lines.length; i++) {
+                                            if (lines[i].trim().toLowerCase().startsWith(subcategoriaNome.toLowerCase())) {
+                                                const valueLine = lines[i + 1]?.trim() || '';
+                                                const numberMatch = valueLine.match(/^(\d+(\.\d+)?)/);
+                                                if (numberMatch) {
+                                                    estatisticaValue = numberMatch[1];
+                                                    statisticNumber = parseFloat(estatisticaValue.replace(',', '.'));
+                                                }
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    totalSum += (parseFloat(firebaseValue.replace(',', '.')) * statisticNumber);
+                                    const row = document.createElement('tr');
+                                    row.innerHTML = `<td>${subcategoriaNome}</td><td>${firebaseValue}</td><td>${estatisticaValue}</td>`;
+                                    rows.push(row);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                rows.sort((a, b) => a.cells[0].textContent.localeCompare(b.cells[0].textContent)).forEach(row => tbody.appendChild(row));
+                
+                let castaFinal = selectedCasta;
+                if (overallLimitsData && overallLimitsData[selectedPosition]) {
+                    const castaDeterminada = determineCastaFromOverall(totalSum, overallLimitsData[selectedPosition]);
+                    if (castaDeterminada) {
+                        document.getElementById('playerTier').value = castaDeterminada;
+                        castaFinal = castaDeterminada;
+                    }
+                }
+                
+                let coeficienteCastaValue = '-';
+                if (paineisCoeficienteData?.['Coeficiente']?.['Coeficiente']?.casta) {
+                    for (const castaItem of paineisCoeficienteData['Coeficiente']['Coeficiente'].casta) {
+                        if (castaItem.name === castaFinal) {
+                            coeficienteCastaValue = castaItem.text || '-';
+                            break;
+                        }
+                    }
+                }
+                
+                let coeficienteStatisticValue = '-';
+                const totalStatistic = parseFloat(totalSum.toFixed(2));
+                const coefficientValueForCalculation = parseFloat(coeficienteCastaValue.replace(',', '.'));
+                if (!isNaN(coefficientValueForCalculation) && !isNaN(totalStatistic)) {
+                    coeficienteStatisticValue = Math.round(coefficientValueForCalculation * totalStatistic);
+                    document.getElementById('playerOverall').value = coeficienteStatisticValue;
+                }
+                tbody.innerHTML += `<tr style="font-weight: bold;"><td>Total</td><td>-</td><td>${totalSum.toFixed(2)}</td></tr><tr style="font-weight: bold;"><td>Coeficiente</td><td>${coeficienteCastaValue}</td><td>${coeficienteStatisticValue}</td></tr>`;
+                table.appendChild(tbody);
+                firebaseDataDisplay.appendChild(table);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initPage();
+
+            const topSeasonSelect = document.getElementById('topSeasonSelect');
+            if (topSeasonSelect) {
+                topSeasonSelect.addEventListener('change', (e) => {
+                    currentSeason = e.target.value;
+                    const modalSeasonSelect = document.getElementById('modalSeasonSelect');
+                    if (modalSeasonSelect) modalSeasonSelect.value = currentSeason;
+                    processPlayersAndRender();
+                });
+            }
+
+            const modalSeasonSelect = document.getElementById('modalSeasonSelect');
+            if (modalSeasonSelect) {
+                modalSeasonSelect.addEventListener('change', (e) => {
+                    const chosenModalSeason = e.target.value;
+                    if (selectedPlayerId) {
+                        const rawDoc = allRawPlayers.find(p => p.id === selectedPlayerId);
+                        if (rawDoc) {
+                            selectPlayerForSeason(rawDoc.id, rawDoc.rawData, chosenModalSeason);
+                        }
+                    }
+                });
+            }
+
+            const tableSearch = document.getElementById('tableSearch');
+            const playerCountry = document.getElementById('playerCountry');
+            const playerClub = document.getElementById('playerClub');
+
+            tableSearch.addEventListener('input', () => {
+                renderPlayersTable();
+            });
+
+            const filterPaisSelect = document.getElementById('filter-pais');
+            filterPaisSelect.addEventListener('change', () => {
+                renderPlayersTable();
+            });
+
+            const filterPosicaoSelect = document.getElementById('filter-posicao');
+            filterPosicaoSelect.addEventListener('change', () => {
+                renderPlayersTable();
+            });
+
+            document.querySelectorAll('.excel-table th[data-sort]').forEach(th => {
+                th.addEventListener('click', () => {
+                    const col = th.getAttribute('data-sort');
+                    if (currentSortColumn === col) {
+                        currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        currentSortColumn = col;
+                        currentSortDirection = 'asc';
+                    }
+                    updateSortHeaders();
+                    renderPlayersTable();
+                });
+            });
+            updateSortHeaders();
+
+            document.getElementById('closeModalBtn').addEventListener('click', closeEditModal);
+            document.getElementById('cancelModalBtn').addEventListener('click', closeEditModal);
+
+            document.getElementById('playerImageCode').addEventListener('input', (e) => { 
+                const code = e.target.value.trim();
+                const imagePreview = document.getElementById('imagePreview');
+                imagePreview.removeAttribute('data-try-index');
+                if (code) {
+                    imagePreview.onerror = () => window.resolvePlayerImage(imagePreview, code);
+                    imagePreview.src = `../assets/faces/face_${code}.webp`;
+                } else {
+                    imagePreview.onerror = null;
+                    imagePreview.src = 'placeholder.jpg';
+                }
+            });
+
+            document.getElementById('playerStats').addEventListener('input', async function() {
+                let playerPosition = document.getElementById('playerPosition').value;
+                if (playerPosition) displayFirebaseData(playerPosition, document.getElementById('playerTier').value, this.value);
+            });
+
+            const minigamesContainerEl = document.getElementById('minigames-container');
+            if (minigamesContainerEl) {
+                minigamesContainerEl.addEventListener('change', (e) => {
+                    if (e.target.classList.contains('mini-game-checkbox')) {
+                        const priceDiv = e.target.closest('.mini-game-option').querySelector('.mini-game-price');
+                        if (priceDiv) {
+                            priceDiv.style.display = e.target.checked ? 'inline-block' : 'none';
+                        }
+                    }
+                });
+            }
+
+            playerCountry.addEventListener('input', async (e) => {
+                const searchTerm = e.target.value.toLowerCase();
+                if (searchTerm.length < 1) { document.getElementById('countryResults').style.display = 'none'; return; }
+                const snapshot = await getDocs(collection(db, 'paises'));
+                const countries = [];
+                snapshot.forEach(doc => { if (doc.data().nome.toLowerCase().includes(searchTerm)) countries.push(doc.data()); });
+                displayCountryResults(countries);
+            });
+
+            playerClub.addEventListener('input', async (e) => {
+                const searchTerm = e.target.value.toLowerCase();
+                if (searchTerm.length < 1) { document.getElementById('clubResults').style.display = 'none'; return; }
+                const snapshot = await getDocs(collection(db, 'clubes'));
+                const clubs = [];
+                snapshot.forEach(doc => { if (doc.data().nome.toLowerCase().includes(searchTerm)) clubs.push(doc.data()); });
+                displayClubResults(clubs);
+            });
+
+            const playerPositionSelect = document.getElementById('playerPosition');
+            playerPositionSelect.addEventListener('change', async function() {
+                if (selectedPlayerId) {
+                    const novaPosicao = this.value;
+                    const castaAtual = document.getElementById('playerTier').value;
+                    const estatisticasAtuais = document.getElementById('playerStats').value;
+                    displayFirebaseData(novaPosicao, castaAtual, estatisticasAtuais);
+                }
+            });
+
+            document.getElementById('editPlayerForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                if (!selectedPlayerId) return;
+                try {
+                    const targetModalSeason = document.getElementById('modalSeasonSelect')?.value || currentSeason;
+                    const countryName = document.getElementById('playerCountry').value;
+                    const newClubName = document.getElementById('playerClub').value;
+                    const playerRef = doc(db, 'jogadores', selectedPlayerId);
+
+                    let paisId = null;
+                    const paisSnapshot = await getDocs(query(collection(db, 'paises'), where('nome', '==', countryName)));
+                    if (!paisSnapshot.empty) paisId = paisSnapshot.docs[0].id;
+
+                    let clubeId = null; 
+                    if (newClubName) {
+                        const clubeSnapshot = await getDocs(query(collection(db, 'clubes'), where('nome', '==', newClubName)));
+                        if (!clubeSnapshot.empty) {
+                            clubeId = clubeSnapshot.docs[0].id;
+                        }
+                    }
+
+                    const miniGamesPrices = {};
+                    document.querySelectorAll('.mini-game-checkbox').forEach(cb => {
+                        const game = cb.value;
+                        if (cb.checked) {
+                            const priceInput = document.querySelector(`input[name="${game}-preco"]`);
+                            miniGamesPrices[`${game}preco`] = priceInput ? priceInput.value.trim() : "";
+                        } else {
+                            miniGamesPrices[`${game}preco`] = "";
+                        }
+                    });
+
+                    const rawItem = allRawPlayers.find(p => p.id === selectedPlayerId);
+                    const oldSeasonData = getPlayerSeasonData(rawItem ? rawItem.rawData : null, targetModalSeason);
+                    const oldMiniGames = oldSeasonData?.miniGames || {};
+                    let newMiniGamesObj = {};
+
+                    if (typeof oldMiniGames === 'object' && !Array.isArray(oldMiniGames)) {
+                        newMiniGamesObj = { ...oldMiniGames };
+                    } else if (Array.isArray(oldMiniGames)) {
+                        oldMiniGames.forEach(game => {
+                            if (game !== 'caderneta') newMiniGamesObj[game] = true;
+                        });
+                    }
+
+                    document.querySelectorAll('.mini-game-checkbox').forEach(cb => {
+                        const gameName = cb.value;
+                        if (gameName === 'caderneta') {
+                            newMiniGamesObj.caderneta = {
+                                estado: cb.checked,
+                                casta: document.querySelector('select[name="caderneta-casta"]')?.value || 'comum'
+                            };
+                        } else {
+                            if (cb.checked) {
+                                newMiniGamesObj[gameName] = true;
+                            } else {
+                                delete newMiniGamesObj[gameName];
+                            }
+                        }
+                    });
+
+                    const imageCode = document.getElementById('playerImageCode').value.trim();
+                    const previewSrc = document.getElementById('imagePreview').src;
+                    let ext = 'webp';
+                    if (previewSrc && !previewSrc.includes('data:image') && !previewSrc.includes('placeholder.jpg')) {
+                        const extMatch = previewSrc.match(/\.(webp|png|jpe?g|svg)/i);
+                        if (extMatch) {
+                            ext = extMatch[1].toLowerCase();
+                        }
+                    }
+                    const playerData = {
+                        nome: document.getElementById('playerName').value,
+                        codigoUrl: imageCode,
+                        imagem: imageCode ? `assets/faces/face_${imageCode}.${ext}` : '',
+                        pais: countryName, 
+                        paisId: paisId, 
+                        clube: newClubName,
+                        clubeId: clubeId, 
+                        posicao: document.getElementById('playerPosition').value,
+                        dataNascimento: document.getElementById('playerBirthDate').value,
+                        altura: parseFloat(document.getElementById('playerHeight').value) || null,
+                        overall: parseFloat(document.getElementById('playerOverall').value) || 0,
+                        casta: document.getElementById('playerTier').value,
+                        noMercado: document.getElementById('playerMarket').value === 'Sim',
+                        ativo: document.getElementById('playerActive').value === 'Sim',
+                        preco: parseInt(document.getElementById('playerPrice').value) || null,
+                        compradopor: document.getElementById('playerBuyer').value || null,
+                        estatisticas: document.getElementById('playerStats').value,
+                        miniGames: newMiniGamesObj, 
+                        ...miniGamesPrices,
+                        ultimaAtualizacao: new Date().toISOString()
+                    };
+
+                    const updatePayload = buildPlayerSeasonUpdatePayload(targetModalSeason, playerData);
+                    await setDoc(playerRef, updatePayload, { merge: true });
+
+                    if (originalClubName !== newClubName) {
+                        if (originalClubName) {
+                            const oldClubSnapshot = await getDocs(query(collection(db, 'clubes'), where('nome', '==', originalClubName)));
+                            if (!oldClubSnapshot.empty) await deleteDoc(doc(db, 'clubes', oldClubSnapshot.docs[0].id, 'jogadores', selectedPlayerId));
+                        }
+                        if (newClubName && clubeId) {
+                            await setDoc(doc(db, 'clubes', clubeId, 'jogadores', selectedPlayerId), playerData);
+                        }
+                    } else if (newClubName && clubeId) {
+                        await setDoc(doc(db, 'clubes', clubeId, 'jogadores', selectedPlayerId), playerData, { merge: true });
+                    }
+                    
+                    // Update cache local
+                    if (rawItem) {
+                        rawItem.rawData = {
+                            ...rawItem.rawData,
+                            ...updatePayload
+                        };
+                    }
+
+                    closeEditModal();
+                    processPlayersAndRender();
+                    
+                } catch (error) {
+                    console.error('Erro ao atualizar jogador:', error);
+                    alert('Erro ao atualizar jogador');
+                }
+            });
+
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('.dropdown')) {
+                    document.getElementById('countryResults').style.display = 'none';
+                    document.getElementById('clubResults').style.display = 'none';
+                }
+            });
+        });
+    </script>
+    
+    <!-- ALTERAÇÃO 3: Adicionado o script para carregar o menu de navegação. -->
+    <script src="js/menuadmin-loader.js"></script>
+
+</body>
+</html>

@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visualizador de 'oddcategorias'</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f4f4f9;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: auto;
+            background: white;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #0056b3;
+            border-bottom: 2px solid #e0e0e0;
+            padding-bottom: 10px;
+        }
+        #loading-message {
+            font-size: 1.2em;
+            color: #555;
+            text-align: center;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            font-size: 0.9em;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: left;
+            vertical-align: top;
+        }
+        th {
+            background-color: #007bff;
+            color: white;
+            position: sticky;
+            top: 0;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        tr:hover {
+            background-color: #f1f1f1;
+        }
+        td {
+            word-break: break-word;
+        }
+        .na-value {
+            color: #999;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Visualizador da Coleção 'oddcategorias'</h1>
+        <div id="output-container">
+            <p id="loading-message">A carregar dados do Firebase...</p>
+        </div>
+    </div>
+
+    <script src="config.js"></script>
+    <!-- Importar o SDK do Firebase -->
+    <script type="module">
+          import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getFirestore, collection, getDocs, query, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+    import { getAuth } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js"; // <-- ADD THIS LINE
+
+             const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+  
+
+        // Função para buscar e exibir os dados
+        async function displayOddCategorias() {
+            const outputContainer = document.getElementById('output-container');
+            const loadingMessage = document.getElementById('loading-message');
+
+            try {
+                // Criar uma consulta para a coleção, ordenando para melhor visualização
+                const categoriasRef = collection(db, 'oddcategorias');
+                const q = query(categoriasRef, orderBy('categoria_subcategoria_3cat'), orderBy('ordem'));
+                
+                const querySnapshot = await getDocs(q);
+
+                if (querySnapshot.empty) {
+                    outputContainer.innerHTML = '<p>Nenhum documento encontrado na coleção "oddcategorias".</p>';
+                    return;
+                }
+
+                const docsData = [];
+                const allHeaders = new Set(['Documento ID']); // Usar um Set para ter chaves únicas
+
+                // Primeiro, percorrer para obter todos os dados e descobrir todos os cabeçalhos possíveis
+                querySnapshot.forEach(doc => {
+                    const data = doc.data();
+                    docsData.push({ id: doc.id, ...data });
+                    Object.keys(data).forEach(key => allHeaders.add(key));
+                });
+                
+                const sortedHeaders = Array.from(allHeaders).sort(); // Ordenar cabeçalhos alfabeticamente para consistência
+
+                // Construir a tabela HTML
+                let tableHtml = '<table><thead><tr>';
+                sortedHeaders.forEach(header => {
+                    tableHtml += `<th>${header}</th>`;
+                });
+                tableHtml += '</tr></thead><tbody>';
+
+                // Preencher as linhas da tabela
+                docsData.forEach(doc => {
+                    tableHtml += '<tr>';
+                    sortedHeaders.forEach(header => {
+                        let value = doc[header];
+                        if (header === 'Documento ID') {
+                            value = doc.id;
+                        }
+
+                        if (value === undefined || value === null || value === "") {
+                            tableHtml += `<td><span class="na-value">N/A</span></td>`;
+                        } else if (typeof value === 'object') {
+                            // Converte objetos (como Timestamps) para uma string legível
+                            tableHtml += `<td>${JSON.stringify(value)}</td>`;
+                        } else {
+                            tableHtml += `<td>${value}</td>`;
+                        }
+                    });
+                    tableHtml += '</tr>';
+                });
+
+                tableHtml += '</tbody></table>';
+
+                // Exibir a tabela e esconder a mensagem de carregamento
+                outputContainer.innerHTML = tableHtml;
+                loadingMessage.style.display = 'none';
+
+            } catch (error) {
+                console.error("Erro ao buscar dados do Firebase:", error);
+                outputContainer.innerHTML = `<p style="color: red;"><strong>Erro ao carregar dados:</strong> ${error.message}</p>`;
+                loadingMessage.style.display = 'none';
+            }
+        }
+
+        // Chamar a função para iniciar o processo
+        displayOddCategorias();
+    </script>
+
+</body>
+</html>

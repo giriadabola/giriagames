@@ -1,0 +1,1173 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Confirmação de Disponibilidade</title>
+  <style>
+  /* --- CSS Completo (Ajustes Mobile - 100% Largura Ecrã) --- */
+  /* --- CSS Completo (Desktop + Ajustes Mobile) --- */
+  * { box-sizing: border-box; }
+
+  body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    margin: 0;
+    padding: 0;
+    background: linear-gradient(to right, #e0eafc, #cfdef3);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-bottom: 40px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  header {
+    background: #2d89ef;
+    color: white;
+    width: 100%;
+    padding: 20px 0;
+    text-align: center;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  }
+  h1 { margin: 0; font-size: 2em; font-weight: 600; }
+
+  #selecao-container, #cards-container {
+    margin-top: 40px;
+    width: 100%;
+    max-width: 900px; /* Adjusted for consistency */
+    padding: 0 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center; /* Center items in selecao-container */
+  }
+  #cards-container { align-items: stretch; } /* Keep cards stretching */
+
+  #selecao-container h2 {
+    color: #333;
+    margin-bottom: 15px;
+    text-align: center; /* Center heading */
+    width: 100%;
+  }
+
+  /* --- Input + Suggestions Styles --- */
+  .nome-input-wrapper {
+    position: relative; /* Needed for positioning suggestions */
+    width: 100%;
+    max-width: 350px; /* Match old select width */
+    margin-bottom: 20px;
+  }
+
+  input#nomeInput {
+    padding: 12px 15px;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+    font-size: 1em;
+    width: 100%;
+    background-color: white;
+    cursor: pointer; /* Indicate it's clickable */
+    /* Remove default appearance */
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+  }
+
+  input#nomeInput:disabled {
+    background-color: #e9ecef;
+    cursor: not-allowed;
+    opacity: 0.7;
+  }
+
+  input#nomeInput::placeholder {
+      color: #999;
+  }
+
+  .suggestions-list {
+    position: absolute;
+    top: 100%; /* Position below input */
+    left: 0;
+    right: 0;
+    background-color: white;
+    border: 1px solid #ccc;
+    border-top: none; /* Avoid double border */
+    border-radius: 0 0 8px 8px;
+    max-height: 200px; /* Limit height */
+    overflow-y: auto; /* Add scroll if needed */
+    z-index: 10; /* Ensure it's above other content */
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  }
+
+  .suggestion-item {
+    padding: 10px 15px;
+    font-size: 1em;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+  }
+
+  .suggestion-item:hover,
+  .suggestion-item.active { /* For potential keyboard nav */
+    background-color: #f0f0f0;
+  }
+  /* --- End Input Styles --- */
+
+  .grupo-semana {
+    margin-bottom: 40px;
+    width: 100%;
+  }
+  .semana-titulo {
+    font-size: 1.2em;
+    font-weight: 600;
+    margin-bottom: 20px;
+    color: #1a4a7a;
+    border-bottom: 2px solid #a0c4f0;
+    padding-bottom: 8px;
+    text-align: left;
+  }
+
+  .cards-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 25px;
+  }
+
+  .dia-agrupado {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 15px;
+    width: 100%;
+  }
+
+  .dia-agrupado > .card {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: auto;
+    margin: 0;
+    padding: 15px;
+    box-shadow: 0 4px 10px rgba(45, 137, 239, 0.1);
+    background: white;
+    border-radius: 16px;
+    border: 2px solid transparent;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    transition: transform 0.25s ease, box-shadow 0.25s ease, background-color 0.3s ease, border-color 0.3s ease, opacity 0.3s ease; /* Added transitions */
+  }
+  .dia-agrupado > .card .dia-semana {
+    font-size: 1.25em;
+    margin-bottom: 12px;
+    line-height: 1.25;
+    transition: color 0.3s ease;
+  }
+  .dia-agrupado > .card .dia-semana .hora-texto {
+    font-size: 0.85em;
+    font-weight: normal;
+    color: #555;
+    transition: color 0.3s ease;
+  }
+  .dia-agrupado > .card .data-pequena {
+    font-size: 0.8em;
+    margin-bottom: 5px;
+    transition: color 0.3s ease;
+  }
+  .dia-agrupado > .card .btn-confirmar {
+    padding: 10px 15px;
+    font-size: 0.9em;
+  }
+
+  .cards-grid > .card {
+    background: white;
+    border-radius: 16px;
+    padding: 25px;
+    box-shadow: 0 8px 20px rgba(45, 137, 239, 0.15);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    transition: transform 0.25s ease, box-shadow 0.25s ease, background-color 0.3s ease, border-color 0.3s ease, opacity 0.3s ease; /* Added transitions */
+    border: 2px solid transparent;
+    position: relative;
+  }
+  .cards-grid > .card .dia-semana {
+    font-size: 1.45em;
+    transition: color 0.3s ease;
+  }
+
+  .card:hover:not(.canceled) { /* Don't apply hover effect to canceled cards */
+    transform: translateY(-5px);
+    box-shadow: 0 12px 25px rgba(45, 137, 239, 0.2);
+  }
+  .card.confirmado {
+    background-color: #e0f8e7;
+    border: 2px solid #28a745;
+  }
+  .card.confirmado .dia-semana {
+    color: #1c7430;
+  }
+  .card.confirmado .dia-semana .hora-texto {
+    color: #208139;
+  }
+  .card.confirmado .btn-confirmar {
+    background-color: #6c757d;
+    cursor: pointer;
+    opacity: 0.9;
+  }
+  .card.confirmado .btn-confirmar:hover {
+    background-color: #5a6268;
+  }
+
+  /* --- START: Styles for Canceled Cards --- */
+  .card.canceled {
+    background-color: #ffebee !important; /* Light red background */
+    border-color: #e57373 !important; /* Darker red border */
+    box-shadow: 0 4px 10px rgba(200, 0, 0, 0.1); /* Reddish shadow */
+    opacity: 0.8; /* Slightly faded */
+  }
+
+  .card.canceled .dia-semana,
+  .card.canceled .data-pequena,
+  .card.canceled .hora-texto {
+    color: #c62828 !important; /* Dark red text */
+    /* Optional: text-decoration: line-through; */
+  }
+
+  .card.canceled .btn-confirmar {
+    background-color: #bdbdbd !important; /* Gray background */
+    color: #757575 !important; /* Darker gray text */
+    cursor: not-allowed !important;
+    opacity: 0.7 !important;
+    transform: none !important; /* Disable hover/active effects */
+    pointer-events: none; /* Further ensure no interaction */
+  }
+  /* --- END: Canceled Card Styles --- */
+
+  .data-pequena {
+    font-size: 0.9em;
+    color: #555;
+    margin-bottom: 8px;
+    transition: color 0.3s ease;
+  }
+  .dia-semana {
+    font-weight: bold;
+    color: #2d89ef;
+    text-transform: capitalize;
+    margin-bottom: 20px;
+    line-height: 1.3;
+    transition: color 0.3s ease;
+  }
+  .dia-semana .hora-texto {
+    font-size: 0.8em;
+    font-weight: normal;
+    color: #555;
+    display: block;
+    margin-top: 4px;
+    transition: color 0.3s ease;
+  }
+
+  .btn-confirmar, .btn-continuar, .btn-voltar {
+    padding: 12px 25px;
+    background: #2d89ef;
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-size: 1em;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s ease, transform 0.1s ease, opacity 0.2s ease;
+    margin-top: auto; /* Pushes button down in card */
+  }
+  .btn-continuar {
+      margin-top: 0; /* Overwrite auto margin for this button */
+  }
+  .btn-confirmar:hover:not(:disabled), /* Apply hover only if not disabled */
+  .btn-continuar:hover:not(:disabled),
+  .btn-voltar:hover {
+    background-color: #1b5dbf;
+  }
+  .btn-confirmar:active:not(:disabled), /* Apply active only if not disabled */
+  .btn-continuar:active:not(:disabled),
+  .btn-voltar:active {
+    transform: scale(0.98);
+  }
+  .btn-confirmar:disabled, .btn-continuar:disabled { /* Apply disabled style to Continuar too */
+    cursor: not-allowed;
+    opacity: 0.6;
+    background-color: #8abbee; /* Lighter blue when disabled */
+    /* Ensure specific canceled button style overrides this if needed */
+  }
+  .btn-voltar {
+    background-color: #6c757d;
+    margin-bottom: 30px;
+    align-self: flex-start;
+  }
+  .btn-voltar:hover {
+    background-color: #5a6268;
+  }
+
+  #boasVindas {
+    width: 100%;
+    text-align: left;
+    font-size: 1.5em;
+    color: #333;
+    margin-bottom: 30px;
+  }
+  .hidden { display: none !important; }
+
+  .emoji-burst {
+    position: absolute;
+    font-size: 24px;
+    pointer-events: none;
+    z-index: 1000;
+  }
+  .loading-spinner {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 20px;
+    height: 20px;
+    border: 3px solid rgba(45, 137, 239, 0.3);
+    border-radius: 50%;
+    border-top-color: #2d89ef;
+    animation: spin 1s ease-in-out infinite;
+    z-index: 5;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* --- AJUSTES ESPECÍFICOS PARA MOBILE --- */
+  @media (max-width: 700px) {
+    body {
+      font-size: 18px; /* Adjusted base font size */
+    }
+
+    .cards-grid {
+      grid-template-columns: 1fr; /* Stack cards */
+      gap: 25px; /* Keep gap between stacked items */
+    }
+    .dia-agrupado {
+      flex-wrap: wrap; /* Allow grouped cards to wrap if needed */
+    }
+
+    /* Make containers take full width minus some padding */
+    #selecao-container, #cards-container {
+      padding: 0 15px !important; /* Add side padding */
+      margin: 20px 0 0 0 !important; /* Adjust top margin */
+      width: 100% !important;
+      max-width: 100% !important; /* Ensure full width */
+    }
+
+    #selecao-container h2 {
+      font-size: 1.5em; /* Slightly smaller */
+      padding-left: 0;
+      padding-right: 0;
+    }
+
+    /* Adjust Input and Suggestions for Mobile */
+    .nome-input-wrapper {
+       max-width: none; /* Allow full width */
+       width: 100%;
+       margin-bottom: 20px; /* Keep spacing */
+    }
+
+    input#nomeInput {
+      padding: 18px 20px; /* Larger padding for easier tapping */
+      font-size: 1.2em; /* Larger font */
+      width: 100%;
+      border-radius: 8px; /* Keep some radius */
+    }
+
+    .suggestions-list {
+       font-size: 1.1em;
+       max-height: 250px; /* Slightly more height */
+       border-radius: 0 0 8px 8px;
+    }
+    .suggestion-item {
+        padding: 12px 20px;
+    }
+
+    .btn-continuar {
+      width: 100%; /* Full width */
+      max-width: none;
+      padding: 18px 0; /* Taller button */
+      font-size: 1.3em;
+      border-radius: 8px; /* Match input radius */
+      margin-top: 0; /* Align with wrapper */
+    }
+
+    /* Adjust Card Styles for Mobile */
+    .cards-grid > .card,
+    .dia-agrupado > .card {
+      padding: 30px 20px; /* Adjust padding */
+      width: 100%; /* Take full width */
+      max-width: none;
+      margin-bottom: 20px; /* Space between cards */
+      border-radius: 12px; /* Consistent radius */
+    }
+    .cards-grid > .card:last-child,
+    .dia-agrupado > .card:last-child {
+       margin-bottom: 0;
+    }
+
+    .card .data-pequena {
+      font-size: 1.0em; /* Adjust size */
+      margin-bottom: 10px;
+    }
+    .card .dia-semana {
+      font-size: 1.6em; /* Adjust size */
+      line-height: 1.3;
+      margin-bottom: 25px;
+    }
+    .card .dia-semana .hora-texto {
+      font-size: 0.9em; /* Adjust size */
+      margin-top: 5px;
+    }
+    .card .btn-confirmar {
+      padding: 15px 25px;
+      font-size: 1.1em;
+      width: auto; /* Don't force width */
+      max-width: 250px; /* Limit max width */
+      min-width: 120px; /* Ensure minimum tap area */
+    }
+
+    /* Grouped card adjustments (might be redundant now) */
+    .dia-agrupado > .card { padding: 25px 15px; }
+    .dia-agrupado > .card .dia-semana { font-size: 1.5em; }
+    .dia-agrupado > .card .dia-semana .hora-texto { font-size: 0.85em; }
+    .dia-agrupado > .card .data-pequena { font-size: 1.0em; }
+    .dia-agrupado > .card .btn-confirmar { padding: 12px 20px; font-size: 1.0em; }
+
+    #boasVindas {
+      font-size: 1.2em; /* Adjust size */
+      margin-bottom: 30px;
+      padding-left: 0;
+      padding-right: 0;
+    }
+    .semana-titulo {
+      font-size: 1.3em;
+      margin-bottom: 20px;
+      padding-bottom: 8px;
+      padding-left: 0;
+      padding-right: 0;
+    }
+    .btn-voltar {
+      padding: 12px 25px;
+      font-size: 1.1em;
+      margin-bottom: 30px;
+      margin-left: 0; /* Align left */
+      margin-right: 0;
+      border-radius: 8px;
+    }
+  }
+  /* --- Fim do CSS --- */
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Confirme sua disponibilidade</h1>
+</header>
+
+<!-- Seleção de nome -->
+<div id="selecao-container">
+  <h2>Escolha seu nome:</h2>
+  <div class="nome-input-wrapper">
+    <input type="text" id="nomeInput" placeholder="Clique ou digite para filtrar..." autocomplete="off" disabled>
+    <div id="nomeSuggestions" class="suggestions-list hidden"></div>
+  </div>
+  <button class="btn-continuar" onclick="continuar()" disabled>Continuar</button>
+</div>
+
+<!-- Cards de disponibilidade -->
+<div id="cards-container" class="hidden">
+  <button class="btn-voltar" onclick="voltar()">⬅️ Trocar nome</button>
+  <h2 id="boasVindas"></h2>
+  <div id="cards-grupos">
+    <!-- Conteúdo carregado via JS -->
+  </div>
+</div>
+
+<!-- Add Firebase SDKs using Modules -->
+<script type="module">
+  // Firebase Imports...
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getFirestore, collection, addDoc, serverTimestamp, query, where, getDocs, limit, deleteDoc, doc, orderBy } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+  // ** REPLACE WITH YOUR ACTUAL FIREBASE CONFIG (ou use métodos mais seguros em produção) **
+  const firebaseConfig = {
+    apiKey: "AIzaSyCxUQTIg1cebw6FSzIH2w05ETgi9sj6dcU",
+    authDomain: "daytime-a0fa5.firebaseapp.com",
+    projectId: "daytime-a0fa5",
+    storageBucket: "daytime-a0fa5.firebasestorage.app",
+    messagingSenderId: "217848316066",
+    appId: "1:217848316066:web:fad68b3fd59ece761997fb"
+  };
+
+  // Initialize Firebase
+  let app;
+  let db;
+  const nomeInput = document.getElementById("nomeInput");
+  const suggestionsDiv = document.getElementById("nomeSuggestions");
+  const continuarBtn = document.querySelector(".btn-continuar");
+
+  try {
+      // Basic check if config seems like placeholders
+      if (!firebaseConfig.apiKey || firebaseConfig.apiKey === "YOUR_API_KEY" || firebaseConfig.apiKey.length < 10 ||
+          !firebaseConfig.projectId || firebaseConfig.projectId === "YOUR_PROJECT_ID") {
+           throw new Error("Firebase config not provided or seems like placeholder values.");
+      }
+      app = initializeApp(firebaseConfig);
+      db = getFirestore(app);
+      console.log(">>> Firebase initialized successfully.");
+      nomeInput.placeholder = "Carregando nomes...";
+  } catch (error) {
+      console.error(">>> Firebase initialization failed:", error);
+      alert(`Erro ao conectar com a base de dados: ${error.message}`);
+      if(nomeInput) { nomeInput.placeholder = '-- Erro de Conexão --'; nomeInput.disabled = true; }
+      if(continuarBtn) continuarBtn.disabled = true;
+  }
+
+  // --- Global Variables ---
+  let usuarioAtual = null;
+  // REMOVED: let userConfirmations = new Set(); // No longer needed
+  let availableEventos = []; // Stores fetched & processed future events {..., data: Date, estado: string}
+  let allNames = []; // Array to store all fetched names
+  let selectedNameValid = false; // Track if input holds a valid selected name
+
+  // --- Date Formatting/Grouping Helpers ---
+  function parseStartHour(horarioString) {
+        if (!horarioString || typeof horarioString !== 'string') { return 99; }
+        const match = horarioString.match(/^(\d+)/);
+        if (match && match[1]) {
+            const hour = parseInt(match[1], 10);
+            return isNaN(hour) ? 99 : hour;
+        }
+        return 99;
+    }
+    function processEventDateData(eventoDataFromFirestore) {
+         if (!eventoDataFromFirestore?.dataOriginal) return null;
+         const dataStr = eventoDataFromFirestore.dataOriginal;
+         const parts = dataStr.split('-');
+         if (parts.length !== 3) return null;
+
+          try {
+             const dateObjectUTC = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+             const optionsDataExtenso = { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' };
+             const dataExtenso = dateObjectUTC.toLocaleDateString('pt-PT', optionsDataExtenso);
+             const startHour = parseStartHour(eventoDataFromFirestore.horario);
+
+             return {
+                ...eventoDataFromFirestore,
+                data: dateObjectUTC,
+                dataExtenso: dataExtenso,
+                startHour: startHour
+             };
+          } catch (e) {
+             console.error(`>>> Error processing date ${dataStr}:`, e);
+             return null;
+          }
+      }
+     function getSemanaRange(data) {
+       if (!(data instanceof Date) || isNaN(data)) return { display: "Semana inválida", key: "invalid-" + Date.now() };
+
+       const diaDaSemana = data.getUTCDay();
+       const diff = diaDaSemana === 0 ? -6 : 1 - diaDaSemana;
+       const inicioSemana = new Date(data);
+       inicioSemana.setUTCDate(data.getUTCDate() + diff);
+
+       const fimSemana = new Date(inicioSemana);
+       fimSemana.setUTCDate(inicioSemana.getUTCDate() + 6);
+
+       const iDia = inicioSemana.getUTCDate();
+       const fDia = fimSemana.getUTCDate();
+       const opts = { month: 'long', timeZone: 'UTC' };
+       const mInicio = inicioSemana.toLocaleDateString('pt-PT', opts);
+       const mFim = fimSemana.toLocaleDateString('pt-PT', opts);
+       const aInicio = inicioSemana.getUTCFullYear();
+       const aFim = fimSemana.getUTCFullYear();
+
+       let range = `Semana de ${iDia}`;
+       if (mInicio !== mFim || aInicio !== aFim) range += ` de ${mInicio}`;
+       if (aInicio !== aFim) range += ` de ${aInicio}`;
+       range += ` a ${fDia} de ${mFim}`;
+       if (aInicio !== aFim || mInicio !== mFim) range += ` de ${aFim}`;
+
+       const sortK = `${aInicio}-${String(inicioSemana.getUTCMonth() + 1).padStart(2, '0')}-${String(iDia).padStart(2, '0')}`;
+
+       return { display: range, key: sortK };
+     }
+
+  // --- Fetch Event Dates ---
+  async function fetchAndFilterEventosData() {
+        if (!db) { console.error(">>> DB not initialized for fetchAndFilterEventosData."); return []; }
+        console.log(">>> [fetchAndFilterEventosData] Starting fetch...");
+        availableEventos = [];
+
+        const today = new Date();
+        const todayUTC = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+        console.log(`>>> [fetchAndFilterEventosData] Comparing against future/today date: ${todayUTC.toISOString().split('T')[0]}`);
+
+        try {
+            const qSnapshot = await getDocs(collection(db, "eventosData"));
+            console.log(`>>> [fetchAndFilterEventosData] Fetched ${qSnapshot.size} total events from Firestore.`);
+
+            const fetchedAndProcessed = [];
+            qSnapshot.forEach((doc) => {
+                const pData = processEventDateData(doc.data());
+                if (pData && pData.data >= todayUTC) {
+                    fetchedAndProcessed.push(pData);
+                }
+            });
+
+            fetchedAndProcessed.sort((a, b) => {
+                const dateDiff = a.data - b.data;
+                if (dateDiff !== 0) return dateDiff;
+                return (a.startHour ?? 99) - (b.startHour ?? 99);
+            });
+
+            availableEventos = fetchedAndProcessed;
+            console.log(`>>> [fetchAndFilterEventosData] Found ${availableEventos.length} valid future/today events.`);
+
+        } catch (error) {
+            console.error(">>> ERROR fetching or processing events:", error);
+            alert("Erro ao carregar as datas dos eventos.");
+            availableEventos = [];
+        }
+        return availableEventos;
+    }
+
+  // --- CORE APPLICATION LOGIC ---
+
+  // Fetch Names from Firestore
+  async function preencherNomes() {
+      nomeInput.placeholder = '-- Carregando... --';
+      nomeInput.disabled = true;
+      continuarBtn.disabled = true;
+      allNames = [];
+      console.log(">>> [preencherNomes] Starting.");
+      if (!db) { console.error(">>> DB not initialized for preencherNomes."); return; }
+      try {
+          const qSnapshot = await getDocs(query(collection(db, "pessoas"), orderBy("nome")));
+          const nomesTemp = [];
+          qSnapshot.forEach((doc) => {
+              if (doc.data()?.nome) nomesTemp.push(doc.data().nome.trim());
+          });
+          allNames = nomesTemp;
+
+          if (allNames.length > 0) {
+              nomeInput.placeholder = 'Clique ou digite para escolher...';
+              nomeInput.disabled = false;
+              console.log(">>> [preencherNomes] Names loaded:", allNames.length);
+          } else {
+              nomeInput.placeholder = '-- Nenhum nome encontrado --';
+              console.warn(">>> [preencherNomes] No names found in 'pessoas' collection.");
+          }
+      } catch (error) {
+          console.error(">>> Error fetching names:", error);
+          nomeInput.placeholder = '-- Erro ao carregar nomes --';
+          alert("Não foi possível carregar a lista de nomes.");
+      }
+      finally {
+          console.log(">>> [preencherNomes] Finished.");
+          continuarBtn.disabled = !selectedNameValid;
+      }
+  }
+
+  // --- Suggestion Display Logic ---
+
+  function displaySuggestions(namesToShow) {
+      suggestionsDiv.innerHTML = '';
+      if (!namesToShow || namesToShow.length === 0) {
+          suggestionsDiv.classList.add('hidden');
+          return;
+      }
+      namesToShow.forEach(name => {
+          const item = document.createElement('div');
+          item.classList.add('suggestion-item');
+          item.textContent = name;
+          item.addEventListener('click', () => selectName(name));
+          suggestionsDiv.appendChild(item);
+      });
+      suggestionsDiv.classList.remove('hidden');
+  }
+
+  function selectName(name) {
+      if (allNames.includes(name)) {
+        nomeInput.value = name;
+        suggestionsDiv.classList.add('hidden');
+        usuarioAtual = name;
+        selectedNameValid = true;
+        continuarBtn.disabled = false;
+        console.log(">>> [selectName] Name selected and valid:", usuarioAtual);
+      } else {
+        console.warn(">>> [selectName] Attempted to select an invalid name:", name);
+        usuarioAtual = null;
+        selectedNameValid = false;
+        continuarBtn.disabled = true;
+      }
+  }
+
+  function handleNameInput() {
+      const inputText = nomeInput.value.trim();
+      const inputTextLower = inputText.toLowerCase();
+
+      selectedNameValid = false;
+      continuarBtn.disabled = true;
+      usuarioAtual = null;
+
+      let filteredNames = [];
+      if (inputText.length > 0) {
+          filteredNames = allNames.filter(name =>
+              name.toLowerCase().includes(inputTextLower)
+          );
+           displaySuggestions(filteredNames);
+      } else {
+          displaySuggestions(allNames);
+          return;
+      }
+
+      if (allNames.includes(inputText)) {
+          selectedNameValid = true;
+          continuarBtn.disabled = false;
+          usuarioAtual = inputText;
+          console.log(">>> [handleNameInput] Input matches valid name:", usuarioAtual);
+      }
+  }
+
+  // --- Event Listeners for Input ---
+  nomeInput.addEventListener('input', handleNameInput);
+  nomeInput.addEventListener('focus', handleNameInput);
+  nomeInput.addEventListener('click', handleNameInput);
+  document.addEventListener('click', (event) => {
+      if (!nomeInput.contains(event.target) && !suggestionsDiv.contains(event.target)) {
+          suggestionsDiv.classList.add('hidden');
+      }
+  });
+   // Add Enter key listener in window.onload
+
+  // --- Button Actions ---
+  async function continuar() {
+    console.log(">>> [continuar] Button clicked. Valid name?", selectedNameValid, "User:", usuarioAtual);
+    if (!selectedNameValid || !usuarioAtual) {
+        const currentInputText = nomeInput.value.trim();
+        if (allNames.includes(currentInputText)) {
+            selectName(currentInputText);
+        } else {
+            alert("Por favor, selecione um nome válido da lista ou digite um nome completo existente.");
+            console.warn(">>> [continuar] Validation failed.");
+            nomeInput.focus();
+            displaySuggestions(allNames);
+            return;
+        }
+    }
+    if (!db) { alert("Erro DB."); return; }
+
+    // REMOVED: userConfirmations.clear();
+    console.log(">>> [continuar] Proceeding to show cards.");
+    document.getElementById("selecao-container").classList.add("hidden");
+    document.getElementById("cards-container").classList.remove("hidden");
+    document.getElementById("boasVindas").textContent = `Olá, ${usuarioAtual}! Carregando datas...`;
+    document.getElementById("cards-grupos").innerHTML = '<div style="text-align:center; padding: 20px;">A carregar disponibilidades...</div>';
+
+    console.log(">>> [continuar] Calling fetchAndFilterEventosData...");
+    const eventosParaMostrar = await fetchAndFilterEventosData();
+    console.log(`>>> [continuar] fetchAndFilterEventosData returned ${eventosParaMostrar.length} events.`);
+
+    document.getElementById("boasVindas").textContent = `Olá, ${usuarioAtual}! Selecione os dias em que pode:`;
+    if (eventosParaMostrar.length > 0) {
+        console.log(">>> [continuar] Calling renderCardsAgrupados...");
+        renderCardsAgrupados(eventosParaMostrar); // Renders cards always as "Eu posso"
+        console.log(">>> [continuar] renderCardsAgrupados finished.");
+
+        // REMOVED CALL: await preloadUserConfirmations(eventosParaMostrar);
+        // console.log(">>> [continuar] preloadUserConfirmations would have run here.");
+
+    } else {
+        console.log(">>> [continuar] No future events found.");
+        document.getElementById("cards-grupos").innerHTML = '<div style="text-align:center; padding: 20px;">Nenhuma data futura disponível para confirmação.</div>';
+    }
+  }
+
+  function voltar() {
+    console.log(">>> [voltar] Back button clicked.");
+    usuarioAtual = null;
+    selectedNameValid = false;
+    // REMOVED: userConfirmations.clear();
+    availableEventos = [];
+    document.getElementById("cards-container").classList.add("hidden");
+    document.getElementById("selecao-container").classList.remove("hidden");
+    nomeInput.value = "";
+    suggestionsDiv.classList.add('hidden');
+    continuarBtn.disabled = true;
+    document.getElementById("cards-grupos").innerHTML = "";
+  }
+
+  // REMOVED FUNCTION: preloadUserConfirmations()
+
+     // Helper to find a card based on data and horario (still useful for UI updates)
+     function findCardElement(dataOriginal, horario) {
+        const cards = document.querySelectorAll('#cards-grupos .card');
+        for (const card of cards) {
+            if (card.dataset.originalDate === dataOriginal && card.dataset.horario === (horario === null ? 'null' : horario)) {
+                return card;
+            }
+        }
+        return null;
+     }
+
+
+  // --- Card Creation / Rendering ---
+   function createCardElement(ev) {
+       const isCanceled = ev.estado === 'cancelado';
+       const dataOriginal = ev.dataOriginal;
+       // Ensure horario is consistently 'null' string or the time string
+       const horario = ev.horario === null ? 'null' : (ev.horario || 'null');
+       const logPrefix = `>>> [createCardElement | ${dataOriginal}|${horario}]`;
+
+       // console.log(`${logPrefix} Creating card element for event:`, ev); // Keep this if needed
+
+       const card = document.createElement("div");
+       card.className = "card";
+       card.dataset.originalDate = dataOriginal;
+       card.dataset.horario = horario; // Store 'null' or time string
+
+       if (isCanceled) {
+           // console.log(`${logPrefix} Applying 'canceled' class.`);
+           card.classList.add('canceled');
+       }
+       // Intentionally NO 'confirmado' class added here
+
+       const dataPequenaDiv = document.createElement("div");
+       dataPequenaDiv.className = "data-pequena";
+       dataPequenaDiv.textContent = ev.dataExtenso;
+
+       const diaSemanaDiv = document.createElement("div");
+       diaSemanaDiv.className = "dia-semana";
+       const diaTexto = ev.diasemana;
+       const horarioTexto = (ev.horario?.trim() && horario !== 'null') ? ` ${ev.horario.trim()}` : ''; // Display only if not null/empty
+       diaSemanaDiv.innerHTML = `${diaTexto}${horarioTexto ? '<br><span class="hora-texto">' + horarioTexto + '</span>' : ''}`;
+
+       const btnConfirmar = document.createElement("button");
+       btnConfirmar.className = "btn-confirmar";
+
+       if (isCanceled) {
+           // console.log(`${logPrefix} Setting button text to 'Cancelado' and disabling.`);
+           btnConfirmar.textContent = "Cancelado";
+           btnConfirmar.disabled = true;
+       } else {
+           // ALWAYS initialize as "Eu posso"
+           // console.log(`${logPrefix} Setting button text to 'Eu posso'.`);
+           btnConfirmar.textContent = "Eu posso";
+           btnConfirmar.onclick = () => confirmar(ev, btnConfirmar);
+       }
+
+       card.appendChild(dataPequenaDiv);
+       card.appendChild(diaSemanaDiv);
+       card.appendChild(btnConfirmar);
+
+       // console.log(`${logPrefix} Final card classes: '${card.className}'. Final button text: '${btnConfirmar.textContent}'. Returning card element.`);
+       return card;
+   }
+
+   function renderCardsAgrupados(eventos) {
+        const container = document.getElementById("cards-grupos");
+        container.innerHTML = "";
+        console.log(`>>> [renderCardsAgrupados] Rendering ${eventos.length} events.`);
+
+        if (eventos.length === 0) {
+            container.innerHTML = '<div style="text-align:center; padding: 20px;">Nenhuma data futura disponível para confirmação.</div>';
+            return;
+        }
+
+        const gruposPorSemana = {};
+        eventos.forEach(ev => {
+            if (!ev?.data) return;
+            try {
+                const si = getSemanaRange(ev.data);
+                if (!gruposPorSemana[si.key]) {
+                    gruposPorSemana[si.key] = { display: si.display, eventos: [] };
+                }
+                gruposPorSemana[si.key].eventos.push(ev);
+            } catch (e) {
+                console.error(">>> Error grouping event by week", ev, e);
+            }
+        });
+
+        const semanasOrdenadas = Object.keys(gruposPorSemana).sort();
+
+        semanasOrdenadas.forEach(semanaKey => {
+            const semanaGrupo = gruposPorSemana[semanaKey];
+            const grupoDiv = document.createElement("div");
+            grupoDiv.className = "grupo-semana";
+
+            const titulo = document.createElement("div");
+            titulo.className = "semana-titulo";
+            titulo.textContent = semanaGrupo.display;
+            grupoDiv.appendChild(titulo);
+
+            const gridSemana = document.createElement("div");
+            gridSemana.className = "cards-grid";
+
+            const eventosPorDiaNaSemana = {};
+            semanaGrupo.eventos.forEach(ev => {
+                const dk = ev.dataOriginal;
+                if (!eventosPorDiaNaSemana[dk]) {
+                    eventosPorDiaNaSemana[dk] = [];
+                }
+                eventosPorDiaNaSemana[dk].push(ev);
+            });
+
+            const diasOrdenadosNaSemana = Object.keys(eventosPorDiaNaSemana).sort();
+
+            diasOrdenadosNaSemana.forEach(dataDia => {
+                const eventosDoDia = eventosPorDiaNaSemana[dataDia];
+                eventosDoDia.sort((a, b) => (a.startHour ?? 99) - (b.startHour ?? 99));
+
+                // console.log(`>>> [renderCardsAgrupados] Processing day ${dataDia}, ${eventosDoDia.length} event(s).`);
+
+                if (eventosDoDia.length === 1) {
+                    // console.log(`>>> [renderCardsAgrupados] Calling createCardElement for single event on ${dataDia}`);
+                    gridSemana.appendChild(createCardElement(eventosDoDia[0]));
+                } else if (eventosDoDia.length > 1) {
+                    // console.log(`>>> [renderCardsAgrupados] Creating dia-agrupado for ${eventosDoDia.length} events on ${dataDia}`);
+                    const diaAgrupadoWrapper = document.createElement("div");
+                    diaAgrupadoWrapper.className = "dia-agrupado";
+                    eventosDoDia.forEach((ev, index) => {
+                        // console.log(`>>> [renderCardsAgrupados] Calling createCardElement for event ${index+1} in group on ${dataDia}`);
+                        diaAgrupadoWrapper.appendChild(createCardElement(ev));
+                    });
+                    gridSemana.appendChild(diaAgrupadoWrapper);
+                }
+            });
+
+            grupoDiv.appendChild(gridSemana);
+            container.appendChild(grupoDiv);
+        });
+        console.log(">>> [renderCardsAgrupados] Finished rendering all weeks.");
+    }
+
+  // --- Confirmation/Deletion Logic (NEW VERSION) ---
+  
+  
+  
+  
+  async function confirmar(eventoData, button) {
+     // Prevent action on canceled event
+     if (eventoData.estado === 'cancelado') {
+         console.warn(">>> [confirmar] Action on canceled event blocked:", eventoData.dataOriginal, eventoData.horario);
+         return;
+     }
+
+     if (!db) { console.error(">>> DB not available for confirmar."); alert("Erro conexão."); return; }
+     if (!usuarioAtual) { console.error(">>> No user selected for confirmar."); alert("Erro: Utilizador não definido."); return; }
+
+     const card = button.closest('.card');
+     const dataOriginal = eventoData.dataOriginal;
+     const horarioEvento = eventoData.horario || null;
+     if (!dataOriginal) { console.error(">>> Missing dataOriginal in confirmar"); alert("Erro interno."); return; }
+
+     // Capture the button text BEFORE disabling it, as this indicates user intent
+     const currentButtonText = button.textContent;
+     console.log(`>>> [confirmar] Clicked button with text: "${currentButtonText}"`);
+
+     if (button.disabled) { console.log(">>> [confirmar] Action already in progress."); return; }
+
+     const horarioLog = horarioEvento === null ? 'null' : horarioEvento;
+     const logPrefix = `>>> [confirmar | User: ${usuarioAtual} | ${dataOriginal}|${horarioLog}]`;
+     console.log(`${logPrefix} --- Button Click START (UI Intent Logic) ---`);
+
+     button.disabled = true; // Disable button early
+     button.textContent = 'Aguarde...'; // Generic processing text
+     const spinner = document.createElement('div'); spinner.className = 'loading-spinner'; card.appendChild(spinner);
+
+     let confirmationExists = false; // Track the state found in Firestore
+
+     try {
+         // --- STEP 1: Always check current state in Firestore ---
+         console.log(`${logPrefix} Checking Firestore for existing confirmation...`);
+         const qCheck = query(
+             collection(db, "disponibilidade"),
+             where("nome", "==", usuarioAtual),
+             where("dataOriginal", "==", dataOriginal),
+             where("horario", "==", horarioEvento),
+             limit(1)
+         );
+         const checkSnapshot = await getDocs(qCheck);
+         confirmationExists = !checkSnapshot.empty;
+         const existingDocId = confirmationExists ? checkSnapshot.docs[0].id : null; // Get ID if exists
+         console.log(`${logPrefix} Firestore check complete. Exists? ${confirmationExists}${existingDocId ? ` (ID: ${existingDocId})` : ''}`);
+
+         // --- STEP 2: Act based on USER INTENT (button text) and Firestore state ---
+
+         if (currentButtonText === "Eu posso") {
+             // --- USER INTENDS TO CONFIRM ---
+             console.log(`${logPrefix} User intent: CONFIRM.`);
+             if (!confirmationExists) {
+                 // --- Needs to be added ---
+                 console.log(`${logPrefix} Firestore state: DOES NOT EXIST. Adding...`);
+                 // Prepare data
+                 const semanaInfo = getSemanaRange(eventoData.data);
+                 const dados = { /* ... dados ... */
+                     nome: usuarioAtual, ano: String(eventoData.data.getUTCFullYear()), mes: String(eventoData.data.getUTCMonth() + 1).padStart(2,'0'), semana: semanaInfo.display, dia: String(eventoData.data.getUTCDate()).padStart(2,'0'), diasemana: eventoData.diasemana, dataOriginal: dataOriginal, horario: horarioEvento, timestamp: serverTimestamp()
+                 };
+                 if (!dados.nome || !dados.dataOriginal) throw new Error("Dados essenciais em falta.");
+
+                 const docRef = await addDoc(collection(db, "disponibilidade"), dados);
+                 console.log(`${logPrefix} ADD successful. Doc ID: ${docRef.id}.`);
+
+                 // Update UI to CONFIRMED state
+                 card.classList.add('confirmado');
+                 button.textContent = "Confirmado!";
+                 triggerEmojiBurst(button);
+
+             } else {
+                 // --- Already exists, user clicked "Eu posso" ---
+                 console.log(`${logPrefix} Firestore state: ALREADY EXISTS. Updating UI only.`);
+                 // DO NOTHING in Firebase
+                 // Update UI to CONFIRMED state (syncing UI with actual state)
+                 card.classList.add('confirmado');
+                 button.textContent = "Confirmado!";
+                 triggerEmojiBurst(button); // Still show success effect
+             }
+
+         } else if (currentButtonText === "Confirmado!") {
+             // --- USER INTENDS TO REMOVE ---
+             console.log(`${logPrefix} User intent: REMOVE.`);
+             if (confirmationExists && existingDocId) {
+                 // --- Exists and we have ID: Remove it ---
+                  console.log(`${logPrefix} Firestore state: EXISTS. Removing doc ID: ${existingDocId}...`);
+                 await deleteDoc(doc(db, "disponibilidade", existingDocId));
+                 console.log(`${logPrefix} REMOVE successful.`);
+
+                 // Update UI to NON-confirmed state
+                 card.classList.remove('confirmado');
+                 button.textContent = "Eu posso";
+
+             } else {
+                 // --- Does not exist OR failed to get ID, but user clicked "Confirmado!" ---
+                 console.warn(`${logPrefix} Firestore state: DOES NOT EXIST (or no ID found), but UI said 'Confirmado!'. Correcting UI only.`);
+                 // DO NOTHING in Firebase
+                 // Correct UI to NON-confirmed state
+                 card.classList.remove('confirmado');
+                 button.textContent = "Eu posso";
+             }
+         } else {
+             // Should not happen if button text is managed correctly
+             console.warn(`${logPrefix} Unexpected button text found: "${currentButtonText}"`);
+             // Revert button text conservatively
+             button.textContent = confirmationExists ? 'Confirmado!' : 'Eu posso';
+         }
+
+     } catch (e) {
+         console.error(`${logPrefix} ERROR during Firestore check or update: `, e);
+         alert(`Ocorreu um erro ao atualizar a disponibilidade para ${dataOriginal}. Tente novamente. (${e.message})`);
+         // Revert button text based on the state BEFORE the action was attempted
+         button.textContent = confirmationExists ? 'Confirmado!' : 'Eu posso';
+         // Avoid changing card class here to prevent potential visual inconsistencies after error
+
+     } finally {
+         if(spinner) spinner.remove();
+         // Re-enable button ONLY if it wasn't for a canceled event
+         if (eventoData.estado !== 'cancelado') {
+             button.disabled = false;
+             // Ensure the final button text reflects the logical state after operation/error
+             // Read the classList AGAIN as the primary source of truth for UI state after try/catch
+             if (card.classList.contains('confirmado')) {
+                 button.textContent = 'Confirmado!';
+             } else {
+                 button.textContent = 'Eu posso';
+             }
+         } else {
+             button.textContent = 'Cancelado'; // Ensure canceled stays canceled
+         }
+         console.log(`${logPrefix} --- Button Click END (UI Intent Logic) --- Final Button Text: "${button.textContent}"`);
+     }
+ }
+
+
+
+
+
+
+
+
+
+
+  // --- Visual Effects ---
+  function triggerEmojiBurst(button) {
+        if (!button || !document.body) return;
+        const buttonRect = button.getBoundingClientRect();
+        const startX = buttonRect.left + buttonRect.width / 2 + window.scrollX;
+        const startY = buttonRect.top + buttonRect.height / 2 + window.scrollY;
+        const emojiChar = '👍';
+
+        for (let i = 0; i < 15; i++) {
+            const emoji = document.createElement('span');
+            emoji.textContent = emojiChar;
+            emoji.className = 'emoji-burst';
+            emoji.style.position = 'absolute';
+            emoji.style.left = `${startX}px`;
+            emoji.style.top = `${startY}px`;
+            emoji.style.fontSize = `${18 + Math.random() * 12}px`;
+            document.body.appendChild(emoji);
+
+            const angle = Math.random() * Math.PI * 2;
+            const distance = 60 + Math.random() * 50;
+            const duration = 700 + Math.random() * 300;
+            const x = Math.cos(angle) * distance;
+            const y = Math.sin(angle) * distance - distance * 0.5;
+
+            const animation = emoji.animate([
+                { transform: `translate(0, 0) scale(1)`, opacity: 1 },
+                { transform: `translate(${x}px, ${y}px) scale(0.5)`, opacity: 0 }
+            ], {
+                duration: duration,
+                easing: 'cubic-bezier(0.1, 0.8, 0.7, 1.0)'
+            });
+            animation.finished.then(() => emoji.remove());
+        }
+    }
+
+  // --- Expose functions needed by HTML ---
+  window.continuar = continuar;
+  window.voltar = voltar;
+  // confirmar is called internally
+
+  // --- INITIALIZATION ---
+  window.onload = async () => {
+      console.log(">>> [window.onload] Page loading...");
+      if (db) {
+        console.log(">>> [window.onload] Calling preencherNomes()...");
+        await preencherNomes();
+        console.log(">>> [window.onload] preencherNomes() finished.");
+
+        if (!nomeInput.disabled) {
+            console.log(">>> [window.onload] Adding Enter listener to nomeInput.");
+            nomeInput.addEventListener('keypress', function(event) {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    // console.log(">>> [Event Listener] Enter key pressed.");
+                    if (!continuarBtn.disabled || allNames.includes(nomeInput.value.trim())) {
+                        // console.log(">>> [Event Listener] Enter key: Calling continuar()");
+                        continuar();
+                    } else {
+                         // console.log(">>> [Event Listener] Enter key: Name invalid or button disabled.");
+                         nomeInput.focus();
+                    }
+                }
+            });
+             console.log(">>> [window.onload] Enter listener added.");
+        } else {
+             console.log(">>> [window.onload] Skipping Enter listener (input disabled).");
+        }
+      } else {
+          console.error(">>> [window.onload] Skipping setup (DB not initialized).");
+      }
+      console.log(">>> [window.onload] Page load script finished.");
+  };
+
+</script>
+
+</body>
+</html>

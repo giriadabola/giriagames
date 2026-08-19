@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visualizador de Firestore v3 (com Logs)</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f7f9; margin: 0; padding: 20px; color: #333; }
+        .container { max-width: 900px; margin: auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        h1, h2 { color: #1a73e8; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+        h2 { font-size: 1.2em; border-bottom-style: dashed; margin-top: 25px; }
+        .auth-container { background-color: #f9f9f9; padding: 20px; border-radius: 5px; margin-bottom: 20px; }
+        .auth-container input { width: calc(100% - 22px); padding: 10px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px; }
+        .auth-container button { padding: 10px 15px; background-color: #1a73e8; color: white; border: none; border-radius: 4px; cursor: pointer; transition: background-color 0.2s; }
+        .auth-container button:hover { background-color: #1558b8; }
+        .auth-container button:disabled { background-color: #aaa; cursor: not-allowed; }
+        #auth-status { text-align: right; margin-bottom: 15px; }
+        #logout-btn { background-color: #d93025; color: white; border: none; padding: 5px 10px; cursor: pointer; border-radius: 4px; }
+        #logout-btn:hover { background-color: #a52714; }
+        #breadcrumb { margin-bottom: 20px; font-size: 1.1em; color: #5f6368; word-break: break-all; }
+        #breadcrumb a { color: #1a73e8; text-decoration: none; }
+        #breadcrumb a:hover { text-decoration: underline; }
+        #data-container { min-height: 200px; padding: 10px; }
+        .item { padding: 12px; border: 1px solid #eee; border-radius: 4px; margin-top: 8px; cursor: pointer; transition: background-color 0.2s, box-shadow 0.2s; display: flex; align-items: center; }
+        .item:hover { background-color: #f1f3f4; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .item-icon { margin-right: 10px; }
+        .item-id { font-family: "Courier New", Courier, monospace; }
+        .doc-data { background-color: #2d2d2d; color: #f1f1f1; padding: 15px; border-radius: 5px; margin-bottom: 20px; white-space: pre-wrap; word-wrap: break-word; font-family: "Fira Code", "Courier New", monospace; }
+        #loading { text-align: center; padding: 40px; font-size: 1.2em; color: #999; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Visualizador de Firestore</h1>
+    <div id="auth-status"></div>
+    <div id="auth-container" class="auth-container">
+        <h2>Login</h2>
+        <input type="email" id="email" placeholder="Email">
+        <input type="password" id="password" placeholder="Senha">
+        <button id="login-btn">Entrar</button>
+        <p id="auth-error" style="color: red; font-weight: bold; margin-top: 10px;"></p>
+    </div>
+    <div id="main-content" class="hidden">
+        <div id="breadcrumb"></div>
+        <div id="data-container">
+            <div id="loading">Aguardando login...</div>
+        </div>
+    </div>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+    import { getFirestore, collection, getDocs, doc, getDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+    import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0",
+      authDomain: "g-games-8a8fc.firebaseapp.com",
+      projectId: "g-games-8a8fc",
+      storageBucket: "g-games-8a8fc.appspot.com",
+      messagingSenderId: "689897349449",
+      appId: "1:689897349449:web:536599794579901beb7a98",
+      measurementId: "G-GTTPJ6G5MD"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
+
+    const authContainer = document.getElementById('auth-container'), mainContent = document.getElementById('main-content'),
+          authStatus = document.getElementById('auth-status'), dataContainer = document.getElementById('data-container'),
+          breadcrumbContainer = document.getElementById('breadcrumb'), loadingDiv = document.getElementById('loading'),
+          loginBtn = document.getElementById('login-btn'), emailInput = document.getElementById('email'),
+          passwordInput = document.getElementById('password'), authError = document.getElementById('auth-error');
+
+    const ROOT_COLLECTIONS = [ 'users', 'jogadores', 'movimentos', 'stadiumLocks', 'planteis', 'palpites', 'palpitesmods','trofeus', 'manual', 'mitosgameRegras', 'mitosgameItens', 'jogos', 'jogadorespalpites', 'paineis', 'clubes', 'paises', 'competicoes', 'oddcategorias', 'empireitens', 'mods','modsplay', 'menuSettings' ];
+    const SUBCOLLECTION_NAMES = ['palpites', 'jogadores', 'temporadas']; 
+
+    // =================================================================
+    //  NOVA LÓGICA DE LOGIN COM LOGS E FEEDBACK DETALHADO
+    // =================================================================
+    loginBtn.addEventListener('click', async () => {
+        authError.textContent = '';
+        loginBtn.disabled = true;
+        loginBtn.textContent = 'A entrar...';
+
+        try {
+            await signInWithEmailAndPassword(auth, emailInput.value, passwordInput.value);
+            // Se o login for bem-sucedido, o `onAuthStateChanged` tratará do resto.
+        } catch (error) {
+            // AQUI ESTÁ A MAGIA! Imprimimos o erro completo na consola.
+            console.error("### ERRO DE LOGIN DETALHADO ###");
+            console.error(error);
+
+            // E damos uma mensagem mais específica ao utilizador.
+            switch (error.code) {
+                case 'auth/user-not-found':
+                    authError.textContent = 'Utilizador não encontrado. Verifique o email.';
+                    break;
+                case 'auth/wrong-password':
+                    authError.textContent = 'Senha incorreta. Tente novamente.';
+                    break;
+                case 'auth/invalid-email':
+                    authError.textContent = 'O formato do email é inválido.';
+                    break;
+                case 'auth/too-many-requests':
+                    authError.textContent = 'Muitas tentativas de login. Tente novamente mais tarde.';
+                    break;
+                default:
+                    authError.textContent = 'Ocorreu um erro inesperado. Verifique a consola.';
+                    break;
+            }
+        } finally {
+            // Isto garante que o botão volta ao normal, quer o login funcione ou não.
+            loginBtn.disabled = false;
+            loginBtn.textContent = 'Entrar';
+        }
+    });
+
+    onAuthStateChanged(auth, user => {
+        if (user) {
+            authContainer.classList.add('hidden'); mainContent.classList.remove('hidden');
+            authStatus.innerHTML = `Logado como: ${user.email} <button id="logout-btn">Sair</button>`;
+            document.getElementById('logout-btn').addEventListener('click', () => signOut(auth));
+            renderPath([]);
+        } else {
+            authContainer.classList.remove('hidden'); mainContent.classList.add('hidden');
+            authStatus.innerHTML = '';
+            dataContainer.innerHTML = '<div id="loading">Aguardando login...</div>';
+            breadcrumbContainer.innerHTML = '';
+        }
+    });
+
+    async function renderPath(pathSegments = []) {
+        showLoading();
+        dataContainer.innerHTML = '';
+        updateBreadcrumb(pathSegments);
+        try {
+            if (pathSegments.length === 0) {
+                displayItems(ROOT_COLLECTIONS, 'collection', pathSegments);
+            } else if (pathSegments.length % 2 !== 0) {
+                const collectionPath = pathSegments.join('/');
+                const q = collection(db, collectionPath);
+                const querySnapshot = await getDocs(q);
+                const docs = querySnapshot.docs.map(d => d.id);
+                displayItems(docs, 'document', pathSegments);
+            } else {
+                const docPath = pathSegments.join('/');
+                const docRef = doc(db, docPath);
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    dataContainer.innerHTML += `<h2>Dados do Documento</h2><pre class="doc-data"><code>${JSON.stringify(docSnap.data(), null, 2)}</code></pre>`;
+                    dataContainer.innerHTML += `<h2>Subcoleções</h2>`;
+                    displayItems(SUBCOLLECTION_NAMES, 'collection', pathSegments, true);
+                } else {
+                    dataContainer.innerHTML = `<div style="padding: 20px; color: #777;">Documento não encontrado.</div>`;
+                }
+            }
+        } catch (error) {
+            console.error("Erro ao buscar dados: ", error);
+            dataContainer.innerHTML = `<div style="color: red; padding: 20px;">Permissão negada ou erro. Verifique o console e suas Regras de Segurança.</div>`;
+        } finally {
+            hideLoading();
+        }
+    }
+    function displayItems(items, type, currentPath, isAppending = false) {
+        if (!isAppending) dataContainer.innerHTML = '';
+        if (items.length === 0) {
+            const noItemsMessage = `<div style="padding: 20px; color: #777;">Nenhum item encontrado.</div>`;
+            if (isAppending) { dataContainer.innerHTML += noItemsMessage; } else { dataContainer.innerHTML = noItemsMessage; }
+            return;
+        }
+        items.forEach(itemId => {
+            const itemDiv = document.createElement('div');
+            itemDiv.className = 'item';
+            const icon = type === 'collection' ? '📁' : '📄';
+            itemDiv.innerHTML = `<span class="item-icon">${icon}</span> <span class="item-id">${itemId}</span>`;
+            itemDiv.onclick = () => renderPath([...currentPath, itemId]);
+            dataContainer.appendChild(itemDiv);
+        });
+    }
+    function updateBreadcrumb(pathSegments) {
+        breadcrumbContainer.innerHTML = `<a href="#" onclick="navigateToPath([])">Início</a>`;
+        let currentPath = [];
+        pathSegments.forEach(segment => {
+            currentPath.push(segment);
+            breadcrumbContainer.innerHTML += ` / <a href="#" onclick='navigateToPath(${JSON.stringify(currentPath)})'>${segment}</a>`;
+        });
+    }
+    window.navigateToPath = (path) => renderPath(path);
+    function showLoading() { dataContainer.innerHTML = '<div id="loading">Carregando...</div>'; }
+    function hideLoading() { document.getElementById('loading')?.remove(); }
+</script>
+
+</body>
+</html>

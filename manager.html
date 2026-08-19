@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manager - Ggames</title>
+    <link rel="icon" type="image/png" href="https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhTl6Ljabwgx-VXdZz8FcAoygQprujSsCoXc32Y_iU0FjYVPu1B6MffWwp8gcCVuV8TWn39FRk9OIe1nc-esubVJYmdLsTptAoR9GyqNuw4R5MBaeaoWXTc3JaqH2YVNtEmfReQqohvQKvHiI0XwE5na2ty2B9Bt4oELxYv2BaZ7R3UmeylpiVEIbiLnCB/s320/soccer-ball-png.webp">
+
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <!-- Google Font Cinzel -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&display=swap">
+    
+    <!-- External Modular Stylesheet -->
+    <link rel="stylesheet" href="manager/manager.css">
+</head>
+
+<body class="manager-theme">
+    <!-- Loading Screen -->
+    <div id="loading-screen">
+        <div class="loading-spinner"></div>
+        <div class="loading-percentage">0%</div>
+        <div class="progress-bar-container">
+            <div class="progress-bar"></div>
+        </div>
+    </div>
+
+    <!-- Container for Main Content (State-Dependent) -->
+    <div id="mentalidades-container" style="display: none;"> <!-- Controlled by JS -->
+         <!-- Header Row: User Image (Left), Title (Center), Shop Button (Right) -->
+         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <!-- Placeholder para Imagem do Utilizador (Esquerda) -->
+            <div id="user-image-placeholder" style="flex-shrink: 0; width: 50px; height: 50px;"> <!-- Reserva espaço -->
+                 <!-- Imagem injetada aqui pelo JS -->
+            </div>
+
+            <!-- Título Centralizado -->
+            <h2 style="text-align: center; font-size: 32px; color: #c9a959; flex-grow: 1; margin: 0 15px;">Carregando...</h2>
+
+            <!-- Placeholder para Botão da Loja (Direita) -->
+            <div id="shop-button-placeholder" style="flex-shrink: 0; display: flex; align-items: center; gap: 10px;">
+                <!-- Botão injetado aqui pelo JS -->
+            </div>
+        </div>
+        <!-- List Area: Displays Mentalidades, Estadios, or Owned Items -->
+        <div id="mentalidades-list">
+            <!-- Content dynamically loaded here -->
+        </div>
+    </div>
+
+    <!-- POPUPS -->
+
+    <!-- Main Popup (Mentalidade Details/Selection) -->
+    <div id="popup-overlay" class="popup-overlay">
+        <div class="popup-content">
+            <button class="close-button" onclick="closePopup()">×</button>
+            <h3 class="popup-title"></h3> <!-- JS sets title -->
+            <div class="items-grid"> <!-- Attached items loaded here --> </div>
+            <div class="popup-buttons">
+                <button id="escolher-mentalidade-btn" class="popup-button" onclick="showConfirmation()">Escolher Mentalidade</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mentalidade Choice Confirmation Popup -->
+    <div id="confirmation-popup" class="popup-overlay confirmation-popup">
+        <div class="popup-content" style="width: 400px;"> <!-- Smaller width -->
+            <h3 class="popup-title">Confirmar Escolha</h3>
+            <p style="text-align: center; color: #e0d2b4; margin-bottom: 20px;">Tem certeza que deseja escolher esta mentalidade?</p>
+            <div class="popup-buttons">
+                <button class="popup-button" onclick="confirmChoice(false)">Não</button>
+                <button class="popup-button" onclick="confirmChoice(true)">Sim</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Nested Popup (Generic for viewing items attached to other items) -->
+    <div id="nested-popup" class="popup-overlay nested-popup-overlay">
+        <div class="popup-content">
+            <button class="close-button" onclick="closeNestedPopup()">×</button>
+            <h3 class="popup-title"></h3> <!-- JS sets title -->
+            <div class="items-grid"> <!-- Nested items loaded here --> </div>
+        </div>
+    </div>
+
+    <!-- Stadium Details Popup (Shows only items attached to a specific stadium) -->
+    <div id="stadium-details-popup" class="popup-overlay nested-popup-overlay">
+        <div class="popup-content">
+            <button class="close-button" onclick="closeStadiumDetailsPopup()">×</button>
+            <h3 class="popup-title">Itens Anexados</h3> <!-- Title can be updated by JS -->
+            <div class="items-grid" id="stadium-attached-items-grid"> <!-- Stadium's attached items --> </div>
+        </div>
+    </div>
+
+    <!-- Stadium Purchase Confirmation Popup -->
+    <div id="stadium-confirmation-popup" class="popup-overlay confirmation-popup">
+        <div class="popup-content" style="width: 450px;">
+            <h3 class="popup-title">Confirmar Compra</h3>
+            <p id="stadium-confirmation-text" style="text-align: center; color: #e0d2b4; margin-bottom: 20px;">
+                Tem certeza que deseja adquirir o estádio <strong id="confirm-stadium-name"></strong> por <strong id="confirm-stadium-price"></strong> GCoins?
+            </p>
+            <div class="popup-buttons">
+                <button class="popup-button" onclick="confirmStadiumPurchase(false)">Não</button>
+                <button class="popup-button" onclick="confirmStadiumPurchase(true)">Sim</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Manager Shop Popup (Shows purchasable items for owned stadium) -->
+    <div id="manager-shop-popup" class="popup-overlay nested-popup-overlay">
+        <div class="popup-content">
+            <button class="close-button" onclick="closeManagerShopPopup()">×</button>
+            <h3 class="popup-title">Loja do Império</h3>
+            <div class="items-grid" id="manager-shop-items-grid"> <!-- Purchasable items loaded here --> </div>
+        </div>
+    </div>
+
+    <!-- Item Purchase Confirmation Popup (For items from the Manager Shop) -->
+    <div id="item-confirmation-popup" class="popup-overlay confirmation-popup">
+        <div class="popup-content" style="width: 450px;">
+            <h3 class="popup-title">Confirmar Compra</h3>
+            <p id="item-confirmation-text" style="text-align: center; color: #e0d2b4; margin-bottom: 20px;">
+                Tem certeza que deseja adquirir o item <strong id="confirm-item-name"></strong> por <strong id="confirm-item-price"></strong> GCoins?
+            </p>
+            <div class="popup-buttons">
+                <button id="confirm-item-btn-no" class="popup-button" onclick="confirmItemPurchase(false)">Não</button>
+                <button id="confirm-item-btn-yes" class="popup-button" onclick="handleConfirmPurchase()">Sim</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Simple Info/Error Popup -->
+    <div id="info-popup" class="popup-overlay confirmation-popup">
+        <div class="popup-content" style="width: 400px;">
+            <h3 id="info-popup-title" class="popup-title">Informação</h3>
+            <p id="info-popup-message" style="text-align: center; color: #e0d2b4; margin-bottom: 20px;"></p>
+            <div class="popup-buttons">
+                <button class="popup-button" onclick="closeInfoPopup()">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Popup para Mostrar Outros Impérios -->
+    <div id="other-managers-popup" class="popup-overlay">
+        <div class="popup-content">
+            <button class="close-button" onclick="closeOtherManagersPopup()">×</button>
+            <h3 class="popup-title">Outros Impérios</h3>
+            <div id="other-managers-list" class="items-grid" style="max-height: 70vh;">
+                <!-- Lista de utilizadores será carregada aqui -->
+                <p style="color: #a99a7c; text-align: center; grid-column: 1 / -1;">A carregar impérios...</p>
+            </div>
+        </div>
+    </div>
+
+     <!-- Popup para Mostrar Itens de Outro Utilizador -->
+    <div id="user-items-popup" class="popup-overlay">
+        <div class="popup-content">
+            <button class="close-button" onclick="closeUserItemsPopup()">×</button>
+            <h3 id="user-items-popup-title" class="popup-title">Itens do Império</h3> <!-- Título dinâmico -->
+            <div id="user-items-list" class="items-grid" style="max-height: 70vh; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));"> <!-- Grid para itens -->
+                <!-- Lista de itens será carregada aqui -->
+                <p style="color: #a99a7c; text-align: center; grid-column: 1 / -1;">A carregar itens...</p>
+            </div>
+        </div>
+    </div>
+  
+    <!-- Botão para Abrir Popup de Outros Impérios -->
+    <button id="other-managers-button" style="display: none;">
+        <i class="fas fa-globe-americas"></i>
+    </button>
+
+    <!-- Configuration -->
+    <script src="config.js"></script>
+    
+    <!-- External Modular JavaScript -->
+    <script type="module" src="manager/manager.js"></script>
+
+    <!-- Global Shared Menu Component -->
+    <script src="core/menu-component.js"></script> 
+</body>
+</html>

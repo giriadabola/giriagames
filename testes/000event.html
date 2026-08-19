@@ -1,0 +1,2822 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Painel Administrativo</title>
+
+  <!-- jsPDF Library -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
+  <!-- jsPDF AutoTable Plugin -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" defer></script>
+
+  <style>
+    /* Estilos CSS Completos */
+    body {
+      position: relative; /* Needed for absolute positioning context of the link */
+      font-family: Arial, sans-serif;
+      padding: 30px;
+      padding-top: 80px; /* Increased padding to avoid overlap with icon */
+      background: #f4f4f4;
+      max-width: 1200px;
+      margin: auto;
+      font-size: 16px;
+      line-height: 1.6; /* Improve overall readability */
+    }
+
+    h1, h2, h3, h4 { /* Added H4 */
+      color: #2d89ef;
+      margin-top: 1.2em; /* Consistent top margin */
+      margin-bottom: 0.6em;
+      line-height: 1.3; /* Adjust heading line height */
+    }
+    h1 { font-size: 2em;}
+    h2 { font-size: 1.6em;}
+    h3 { font-size: 1.3em;}
+    h4 { font-size: 1.15em; color: #1a70c7; } /* Style for month headers */
+
+
+    section {
+      position: relative; /* Ensure sections are positioning context */
+      background: white;
+      border-radius: 10px;
+      padding: 25px; /* Increase padding */
+      margin-bottom: 35px; /* Increase spacing */
+      box-shadow: 0 2px 15px rgba(0,0,0,0.08); /* Refined shadow */
+    }
+
+    /* --- Estilos Adicionais para o Ícone da Lâmpada --- */
+    .section-top-right-icon {
+        position: absolute;
+        top: 20px; /* Ajuste conforme necessário */
+        right: 25px; /* Ajuste conforme necessário */
+        z-index: 5; /* Abaixo do link do poll */
+    }
+     @media (max-width: 768px) {
+        .section-top-right-icon { top: 15px; right: 18px; }
+     }
+     @media (max-width: 600px) {
+         .section-top-right-icon { top: 12px; right: 15px; }
+         /* Ajuste posicionamento do ícone da lâmpada */
+         .section-top-right-icon { right: 60px; } /* Afasta do ícone do poll */
+     }
+    /* --- Fim dos Estilos Adicionais --- */
+
+    /* --- CSS for the general stats icon --- */
+    .section-top-right-icon-stats {
+        position: absolute;
+        top: 20px;
+        right: 25px;
+        z-index: 5;
+    }
+     @media (max-width: 768px) {
+        .section-top-right-icon-stats { top: 15px; right: 18px; }
+     }
+     @media (max-width: 600px) {
+         .section-top-right-icon-stats { top: 12px; right: 15px; }
+     }
+    /* --- END CSS for stats icon --- */
+
+
+    label {
+        display: block;
+        margin: 10px 0 5px;
+        font-weight: bold;
+        color: #555;
+    }
+    input[type="text"], input[type="date"], select {
+      padding: 10px 12px; /* Adjust padding */
+      margin: 0 8px 12px 0;
+      width: auto;
+      min-width: 180px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 1em;
+      box-sizing: border-box;
+      vertical-align: middle;
+      transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+    }
+    input[type="text"]:focus, input[type="date"]:focus, select:focus {
+      border-color: #2d89ef;
+      outline: none;
+      box-shadow: 0 0 0 2px rgba(45, 137, 239, 0.2); /* Focus indicator */
+    }
+
+    input[type="checkbox"] {
+        margin-right: 5px;
+        vertical-align: middle;
+        width: 16px; /* Explicit size */
+        height: 16px;
+    }
+    #diasSemanaCheckboxes label {
+        font-weight: normal;
+        cursor: pointer;
+        padding: 5px 8px; /* Adjust padding */
+        border-radius: 4px;
+        transition: background-color 0.2s;
+        display: inline-flex; /* Align checkbox and text */
+        align-items: center;
+    }
+     #diasSemanaCheckboxes label:hover {
+         background-color: #f0f0f0;
+     }
+
+
+    button {
+      padding: 10px 20px;
+      background: #2d89ef;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      margin-top: 8px;
+      margin-bottom: 12px;
+      font-size: 1em;
+      font-weight: 500; /* Slightly bolder */
+      vertical-align: middle;
+      transition: background-color 0.2s, opacity 0.2s, transform 0.1s ease-out;
+    }
+
+    button:hover:not(:disabled) { /* Added :not(:disabled) */
+      background: #1b5dbf;
+      transform: translateY(-1px); /* Subtle lift effect */
+    }
+    button:active:not(:disabled) {
+        transform: translateY(0px); /* Press effect */
+    }
+    button:disabled {
+        background: #a0c7e8;
+        cursor: not-allowed;
+        opacity: 0.7;
+    }
+
+    ul {
+      list-style: none;
+      padding-left: 0;
+      margin-top: 10px;
+    }
+
+    ul li {
+      margin-bottom: 10px;
+      padding: 8px 5px;
+      border-bottom: 1px solid #eee;
+      display: flex; /* Use flex for list items containing buttons */
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap; /* Allow wrap on small screens */
+      gap: 5px; /* Reduced gap slightly to help fit buttons */
+    }
+    ul li:last-child {
+        border-bottom: none;
+    }
+    ul li span { /* Allow text to grow */
+        flex-grow: 1;
+        margin-right: 5px; /* Space between name and buttons */
+        word-break: break-word; /* Prevent long names overflowing */
+    }
+    /* Button Container within LI */
+    ul li > div:last-child {
+        display: flex;
+        flex-shrink: 0; /* Prevent button container from shrinking */
+        align-items: center;
+        gap: 5px; /* Space between buttons in the container */
+    }
+
+
+    .remove-btn {
+      background: #e74c3c;
+      color: white;
+      font-size: 0.8em;
+      padding: 5px 10px;
+      margin-left: 5px; /* Keep some left margin if needed or set to 0 if gap handles it */
+      border-radius: 4px;
+      cursor: pointer;
+      border: none;
+      vertical-align: middle;
+      transition: background-color 0.2s, opacity 0.2s, transform 0.1s;
+      flex-shrink: 0; /* Prevent shrinking */
+    }
+     .remove-btn:hover:not(:disabled) {
+      background: #c0392b;
+      transform: translateY(-1px);
+     }
+     .remove-btn:active:not(:disabled) {
+         transform: translateY(0px);
+     }
+     .remove-btn:disabled {
+         background: #f5b7b1; /* Lighter red when disabled */
+         opacity: 0.7;
+         cursor: not-allowed;
+         transform: none !important; /* Disable transform effects too */
+     }
+
+    /* --- START: Added styles for Cancel/Reactivate --- */
+    .cancel-btn, .reactivate-btn {
+      background: #ff9800; /* Orange */
+      color: white;
+      font-size: 0.8em;
+      padding: 5px 10px;
+      margin-left: 5px;
+      border-radius: 4px;
+      cursor: pointer;
+      border: none;
+      vertical-align: middle;
+      transition: background-color 0.2s, opacity 0.2s, transform 0.1s;
+      flex-shrink: 0;
+      min-width: 70px;
+      text-align: center;
+    }
+    .reactivate-btn {
+        background: #4caf50; /* Green */
+    }
+
+    .cancel-btn:hover:not(:disabled) { background: #e68a00; transform: translateY(-1px); }
+    .reactivate-btn:hover:not(:disabled) { background: #43a047; transform: translateY(-1px); }
+
+    .cancel-btn:active:not(:disabled), .reactivate-btn:active:not(:disabled) { transform: translateY(0px); }
+
+    .cancel-btn:disabled, .reactivate-btn:disabled {
+        background: #ffcc80; opacity: 0.7; cursor: not-allowed; transform: none !important;
+    }
+     .reactivate-btn:disabled {
+        background: #a5d6a7;
+     }
+
+    /* Style for canceled list items */
+    .canceled-event span:first-of-type {
+        text-decoration: line-through;
+        opacity: 0.7;
+        color: #777;
+    }
+    /* --- END: Added styles for Cancel/Reactivate --- */
+
+    /* Style for individual stats button in the list */
+    .stats-btn-pessoa {
+      background: #5bc0de; /* Info blue */
+      color: white;
+      font-size: 0.8em;
+      padding: 5px 10px;
+      margin-left: 5px;
+      border-radius: 4px;
+      cursor: pointer;
+      border: none;
+      vertical-align: middle;
+      transition: background-color 0.2s, opacity 0.2s, transform 0.1s;
+      flex-shrink: 0;
+      min-width: 80px; /* Give it some width */
+      text-align: center;
+    }
+    .stats-btn-pessoa:hover:not(:disabled) {
+      background: #31b0d5;
+      transform: translateY(-1px);
+    }
+     .stats-btn-pessoa:active:not(:disabled) {
+         transform: translateY(0px);
+     }
+     .stats-btn-pessoa:disabled {
+         background: #b0e0e6; /* Lighter blue */
+         opacity: 0.7;
+         cursor: not-allowed;
+         transform: none !important;
+     }
+
+     /* Style for captain toggle button */
+     .toggle-capitao-btn {
+        font-size: 0.75em !important; /* Ensure smaller size */
+        padding: 3px 6px !important;
+        margin-left: 10px; /* Space before captain button */
+        border-width: 1px; /* Add border */
+        border-style: solid;
+        flex-shrink: 0;
+        color: white; /* Ensure text is visible */
+        min-width: 85px; /* Give button some width */
+        text-align: center;
+        transition: background-color 0.2s, border-color 0.2s, opacity 0.2s, transform 0.1s;
+     }
+     .toggle-capitao-btn:hover:not(:disabled) { transform: translateY(-1px); }
+     .toggle-capitao-btn:active:not(:disabled) { transform: translateY(0px); }
+     .toggle-capitao-btn:disabled { opacity: 0.7; cursor: not-allowed; transform: none !important; }
+
+
+    /* Estilos do Calendário */
+    .calendar {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 10px;
+      margin-top: 16px;
+      overflow-x: auto;
+    }
+
+     .calendar-header {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 10px;
+        margin-bottom: 10px;
+        text-align: center;
+        font-weight: bold;
+        color: #444;
+        padding: 8px 0;
+        border-bottom: 2px solid #eee;
+    }
+
+    .day {
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 10px 12px;
+      min-width: 120px; /* Maintain min-width */
+      box-shadow: 0 3px 6px rgba(0,0,0,0.06);
+      font-size: 1em;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      transition: box-shadow 0.2s, border-color 0.2s, background-color 0.3s;
+      min-height: 100px;
+    }
+     .day:hover {
+         box-shadow: 0 5px 10px rgba(0,0,0,0.08);
+     }
+
+    .day-number-header {
+        font-weight: bold;
+        font-size: 1.3em;
+        text-align: center;
+        color: #444;
+        margin-bottom: 10px;
+        padding-top: 5px;
+        transition: color 0.3s, text-decoration 0.3s, opacity 0.3s;
+    }
+
+    .day-placeholder {
+        background-color: #f9f9f9;
+        border-color: #f0f0f0;
+        box-shadow: none;
+    }
+    .day-empty {
+        background-color: #ffffff;
+        border-color: #e0e0e0;
+    }
+    .day.has-event {
+         border-color: #2d89ef;
+         background-color: #f3f9ff;
+    }
+    .day.has-event .day-number-header {
+        color: #2d89ef;
+    }
+
+    .horario-group-header {
+        font-size: 0.8em;
+        font-weight: bold;
+        color: #555;
+        margin-top: 8px;
+        margin-bottom: 2px;
+        padding-left: 2px;
+        border-bottom: 1px dotted #ccc;
+        transition: opacity 0.3s, color 0.3s;
+    }
+
+
+    .nomes { /* Class used in calendar days */
+      margin-top: 4px;
+      padding-left: 0;
+      flex-grow: 1;
+      font-size: 0.9em;
+    }
+     .horario-nomes-list {
+        margin-top: 2px !important;
+        padding-left: 5px !important;
+        margin-bottom: 8px;
+     }
+
+    .nomes li { /* Style for names within calendar day */
+      color: #333;
+      list-style: none;
+      margin-bottom: 4px;
+      padding: 3px 0;
+      border: none; /* Remove border inherited from parent ul li */
+      line-height: 1.3;
+      display: block; /* Ensure names stack vertically */
+    }
+     .nomes li span {
+         transition: opacity 0.3s, color 0.3s;
+     }
+     .nomes li span[style*="bold"] {
+         /* font-weight: bold; applied inline */
+     }
+
+    /* --- Style for canceled calendar days --- */
+    .day.is-canceled {
+        background-color: #ffebee !important; border-color: #e57373 !important; box-shadow: inset 0 0 8px rgba(200, 0, 0, 0.1);
+    }
+    .day.is-canceled .day-number-header { color: #c62828 !important; text-decoration: line-through; opacity: 0.8; }
+    .day.is-canceled .horario-group-header,
+    .day.is-canceled .nomes li span { opacity: 0.6; color: #d32f2f; }
+
+
+    /* --- Styles for Suggestion Filter Buttons --- */
+    #sugestoesHeaderContainer { margin-bottom: 10px; }
+    .suggestion-filter-btn { padding: 6px 12px; font-size: 0.85em; background-color: #f0f0f0; border: 1px solid #ccc; border-radius: 5px; cursor: pointer; transition: background-color 0.2s, border-color 0.2s, box-shadow 0.2s; font-weight: 500; color: #555; }
+    .suggestion-filter-btn:hover:not(.active) { background-color: #e9e9e9; border-color: #bbb; }
+    .suggestion-filter-btn.active { background-color: #2d89ef; border-color: #1b5dbf; color: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1); cursor: default; }
+
+    /* Estilos das Sugestões (Flexbox) */
+    #sugestoesContainer { display: flex; flex-wrap: wrap; gap: 10px; min-height: 40px; }
+     #sugestoesContainer p { width: 100%; text-align: center; color: #777; margin: 10px 0; font-style: italic; }
+     #sugestoesContainer p[style*="color: red"] { font-weight: bold; font-style: normal; }
+    .sugestao-card { display: inline-block; }
+    .sugestao-card button { padding: 8px 14px; margin: 0; background: #eaf4ff; border: 1px solid #a0c7e8; border-radius: 6px; width: auto; display: inline-block; text-align: left; cursor: pointer; font-size: 0.95em; font-weight: 500; color: #1c5a9b; transition: background 0.2s, border-color 0.2s, opacity 0.3s, transform 0.1s ease-out; white-space: nowrap; vertical-align: middle; }
+    .sugestao-card button:hover:not(:disabled) { background: #d8e9fd; border-color: #7ab1e8; transform: translateY(-1px); }
+    .sugestao-card button:active:not(:disabled) { transform: scale(0.98); }
+    .sugestao-card button:disabled { background-color: #f0f0f0; border-color: #dcdcdc; color: #a0a0a0; cursor: not-allowed; opacity: 0.7; transform: none; }
+
+     /* Estilos das Regras Ativas List (Popup) */
+     #activeRulesList li { background-color: #f9f9f9; padding: 10px 15px; border-radius: 5px; border-bottom: none; margin-bottom: 8px; }
+     .toggle-list #activeRulesList li { background-color: #f9f9f9; }
+     #activeRulesList li .remove-btn { margin-left: 15px; flex-shrink: 0; }
+     #activeRulesList li span { flex-grow: 1; margin-right: 10px; }
+
+    #calendarioContainer { width: 100%; min-height: 200px; }
+
+    /* --- Toggle Styles --- */
+    .toggle-container { margin-top: 25px; border: 1px solid #e0e0e0; border-radius: 8px; background-color: #fff; overflow: hidden; /* Adicionado para conter elementos filhos */ }
+    .toggle-header { cursor: pointer; padding: 12px 15px; margin: 0; background-color: #f8f9fa; border-bottom: 1px solid #e0e0e0; transition: all 0.3s ease; display: flex; justify-content: space-between; align-items: center; color: #495057; font-weight: 600; position: relative; z-index: 1; }
+    .toggle-header.open { border-bottom-color: transparent; background-color: #f0f5fa; }
+    .toggle-header h3, h3.toggle-header, .toggle-header h4, h4.toggle-header { color: inherit; margin: 0; font-size: 1.2em; font-weight: inherit; }
+    h4.toggle-header { font-size: 1.1em; background-color: #f0f5fa; border-top: 1px solid #e9ecef; border-bottom: 1px solid #e9ecef; margin-top: 0 !important; margin-bottom: 0 !important; }
+    #datasCriadasListContainer > h4.toggle-header:first-of-type { border-top: none; }
+    h4.toggle-header.open { border-bottom-color: transparent; }
+    .toggle-header:hover { background-color: #f1f3f5; }
+    .toggle-icon { font-size: 1.2em; font-weight: bold; transition: transform 0.3s ease; color: #6c757d; }
+    .toggle-header.open .toggle-icon { transform: rotate(135deg); } /* Changed to 'x' (minus) */
+
+    .toggle-list {
+      padding: 0 15px; margin: 0;
+      /* Define specific transitions IN THE BASE STATE */
+      transition: max-height 0.4s ease-out,
+                  opacity 0.3s ease-in, /* Adjust timing if needed */
+                  padding 0.4s ease-out,
+                  border-top-width 0.1s linear,
+                  transform 0.3s ease-out;
+      max-height: 0;
+      overflow: hidden; /* Keep hidden when closed */
+      opacity: 0;
+      border-top: 0px solid #e0e0e0;
+      background-color: #fff;
+      transform: translateY(-10px);
+      pointer-events: none; /* Keep none when closed */
+      will-change: max-height, opacity, transform;
+    }
+
+    .toggle-list.visible {
+        opacity: 1;
+        overflow: auto; /* Allow interaction/scrolling when open */
+        border-top-width: 1px;
+        transform: translateY(0);
+        pointer-events: auto; /* <<< ADD THIS LINE */
+        /* No need to redeclare transition here if base is correct */
+        /* max-height is set inline by JS */
+        /* Padding is set inline by JS */
+    }
+
+     /* Also ensure the sub-list has pointer-events auto when visible */
+     #datasCriadasListContainer > ul.toggle-list.visible {
+          /* ... other styles ... */
+          pointer-events: auto; /* Can be redundant but safe */
+          overflow: auto; /* Can be redundant but safe */
+     }
+
+    /* Specific padding for names list container when visible */
+    #listaNomesContainer.toggle-list.visible { padding: 15px; }
+    /* Specific padding for main dates list container when visible */
+    #datasCriadasListContainer.toggle-list.visible { padding: 0; }
+
+    /* Style for SUB-lists (monthly events) within 'Datas Criadas' */
+    #datasCriadasListContainer > ul.toggle-list {
+        padding: 0 15px 0 35px; /* Top/Bottom 0, Left Indented */
+        margin: 0;
+        background-color: #fdfdff;
+        border-top: 1px solid #e9ecef;
+        /* REMOVED max-height and overflow-y */
+    }
+     /* Apply specific padding when the monthly list becomes visible */
+     #datasCriadasListContainer > ul.toggle-list.visible {
+          padding-top: 10px;
+          padding-bottom: 10px;
+          border-top-width: 1px; /* Ensure border shows */
+     }
+     /* Style list items within the monthly list */
+     #datasCriadasListContainer > ul.toggle-list > li {
+         border-bottom: 1px dashed #eee !important;
+         padding: 6px 0 !important;
+         margin-bottom: 0 !important;
+     }
+     #datasCriadasListContainer > ul.toggle-list > li:last-child {
+         border-bottom: none !important;
+     }
+
+    /* General rules for lists within toggles */
+    .toggle-header + .toggle-list.visible { border-top: none; }
+    #datasCriadasListContainer > h4.toggle-header {
+    background-color: #ffffff; /* Fundo branco para diferenciar */
+    padding: 10px 15px 10px 25px; /* Menos padding vertical, MAIS padding esquerdo para indentar */
+    font-size: 1.05em; /* Ligeiramente menor que o H3 */
+    font-weight: 500; /* Um pouco menos "bold" */
+    color: #282b2f;   /* Tom de azul/cinza mais suave */
+    border-top: 1px solid #eef2f7; /* Borda superior MUITO suave para separar meses */
+    border-bottom: 1px solid #eef2f7; /* Borda inferior MUITO suave quando fechado */
+    margin: 0 !important; /* Remover margens que H4 podem ter por padrão */
+}
+
+    #datasCriadasListContainer > h4.toggle-header:first-of-type { border-top: none; }
+    .toggle-list ul { margin-top: 0; }
+    /* Default LI styling inside a toggle list (applies to rules list AND names list) */
+    .toggle-list > ul > li {
+        border-bottom: 1px solid #f0f0f0;
+        padding: 8px 5px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+    }
+    .toggle-list > ul > li:last-child { border-bottom: none; }
+
+    /* Style for the name span within the names list */
+    #listaNomes li span { flex-grow: 1; word-break: break-word; margin-right: 5px; }
+    #listaNomes .remove-btn, #listaNomes .stats-btn-pessoa { flex-shrink: 0; }
+
+     /* --- Inline Form Styles --- */
+    .inline-form-container { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 25px; }
+    .inline-form-container label.inline-label { display: inline-block; margin: 0; flex-shrink: 0; }
+    .inline-form-container input.inline-input { flex-grow: 1; min-width: 150px; margin: 0; width: auto; }
+    .inline-form-container button.inline-button { margin: 0; flex-shrink: 0; }
+    #novoNomeInput.inline-input, #addNomeBtn.inline-button { margin-bottom: 0 !important; }
+    input[type="text"].inline-input, button.inline-button { width: auto; max-width: none; }
+
+    /* --- Styles for Inline Event Creation Form --- */
+    .event-creation-form { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 15px; margin-bottom: 25px; }
+    .event-creation-form > div { margin-bottom: 0; }
+    .event-creation-form input[type="date"],
+    .event-creation-form input[type="text"],
+    .event-creation-form button { margin-top: 0; margin-bottom: 0; }
+    .event-creation-form label { margin-bottom: 4px; }
+
+    /* --- Top Right Link Styles --- */
+    .top-right-link { position: absolute; top: 20px; right: 30px; z-index: 10; }
+    .top-right-link a { display: inline-flex; justify-content: center; align-items: center; width: 44px; height: 44px; padding: 0; background-color: rgba(45, 137, 239, 0.85); border-radius: 50%; box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15); text-decoration: none; font-size: 1.8em; color: #ffffff; transition: background-color 0.2s, transform 0.2s; line-height: 1; }
+    .top-right-link a:hover { background-color: #1b5dbf; transform: scale(1.1); color: #ffffff; }
+
+    /* --- Icon Button Style --- */
+    .icon-button { background: none; border: none; padding: 5px 8px; font-size: 1.6em; color: #6c757d; cursor: pointer; transition: color 0.2s, transform 0.2s; line-height: 1; margin-left: 15px; }
+    .icon-button:hover { color: #2d89ef; transform: scale(1.1); }
+
+    /* --- Modal Styles --- */
+    .modal-overlay { position: fixed; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.6); display: flex; justify-content: center; align-items: center; z-index: 1000; opacity: 0; visibility: hidden; transition: opacity 0.3s ease, visibility 0s linear 0.3s; }
+    .modal-overlay.visible { opacity: 1; visibility: visible; transition: opacity 0.3s ease, visibility 0s linear 0s; }
+    .modal-content { background-color: #fff; padding: 30px; border-radius: 10px; box-shadow: 0 5px 20px rgba(0, 0, 0, 0.2); width: 90%; max-width: 650px; max-height: 85vh; overflow-y: auto; position: relative; transform: scale(0.9); transition: transform 0.3s ease; }
+    .modal-overlay.visible .modal-content { transform: scale(1); }
+    .modal-close-btn { position: absolute; top: 10px; right: 15px; background: none; border: none; font-size: 2.2em; color: #aaa; cursor: pointer; line-height: 1; padding: 0 5px; transition: color 0.2s; }
+    .modal-close-btn:hover { color: #666; }
+
+    /* Content inside Resumo popup */
+    #popupResumoContent h2 { margin-top: 0; }
+    #popupResumoContent > div { padding: 10px 15px; margin-bottom: 10px; border-radius: 5px; }
+     #popupResumoContent > div > h4 { margin-top: 0 !important; margin-bottom: 8px !important; border-bottom: 1px solid #ddd !important; padding-bottom: 5px !important; color: #555 !important; font-size: 1.1em !important; }
+    #popupResumoContent > div > div[style*="bold"] { font-weight: bold; margin-top: 8px; margin-left: 0px; font-size: 0.95em; color:#333; margin-bottom: 5px; }
+    #popupResumoContent ul { list-style: none; padding-left: 10px; margin-bottom: 0; margin-top: 5px; }
+    #popupResumoContent li { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px dashed #ddd; margin-bottom: 0; gap: 10px; flex-wrap: wrap; }
+    #popupResumoContent li:last-child { border-bottom: none; }
+    #popupResumoContent li span { flex-grow: 1; min-width: 100px; word-break: break-word;}
+    #popupResumoContent .remove-btn { margin-left: 5px; padding: 4px 8px; font-size: 0.75em; }
+    #popupResumoContent .toggle-capitao-btn { margin-left: 10px; }
+    #popupResumoContent li > div:last-child { flex-shrink: 0; display: flex; align-items: center; }
+     #popupResumoContent li span[style*="bold"] { /* font-weight: bold; applied inline */ }
+     #popupResumoContent p { margin-left: 10px; font-size: 0.9em; color: #777; margin-bottom: 5px; }
+
+     /* Export Button Container */
+    #popupResumoContainer .modal-content > div:last-of-type { text-align: right; margin-top: 25px; padding-top: 15px; border-top: 1px solid #eee; }
+    #exportPdfBtn { background-color: #28a745; }
+    #exportPdfBtn:hover:not(:disabled) { background-color: #218838; transform: translateY(-1px);}
+    #exportPdfBtn:active:not(:disabled) { transform: translateY(0px); }
+    #exportPdfBtn:disabled { background: #a3d9a5; cursor: not-allowed; opacity: 0.7; transform: none; }
+
+     /* --- ESTILOS PARA CONTEÚDO DENTRO DO POPUP DE SUGESTÕES --- */
+     #popupSugestoesContent h2 { margin-top: 0; margin-bottom: 1em; }
+     #popupSugestoesContent > section { box-shadow: none; padding: 0; margin-bottom: 0; border-radius: 0; background: transparent; }
+     #popupSugestoesContent label { margin-top: 15px; }
+     #popupSugestoesContent .toggle-container { margin-top: 20px; }
+     #popupSugestoesContent p:last-of-type { margin-top: 20px; font-size: 0.9em; color: #666; }
+
+     /* --- Search and Scrollable List Styles --- */
+     #listaNomesContainer #searchNomeInput { padding: 8px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.95em; margin-bottom: 15px; width: auto; min-width: 200px; max-width: 300px; display: inline-block; vertical-align: middle; }
+      #listaNomesContainer label[for="searchNomeInput"] { display: inline-block; margin-right: 5px; vertical-align: middle; font-weight: normal; color: #555; }
+     #listaNomes { max-height: 300px; overflow-y: auto; margin-top: 0; border: 1px solid #eee; border-radius: 4px; padding: 5px 0; }
+
+    /* Optional: Style for the individual person stats popup content */
+    #personStatsContentArea ul { list-style: disc; padding-left: 25px; margin-bottom: 1em; }
+     #personStatsContentArea h4 { margin-top: 1.5em; margin-bottom: 0.5em; border-bottom: 1px solid #eee; padding-bottom: 4px; }
+     #personStatsContentArea li { margin-bottom: 5px; padding: 2px 0; border: none; display: list-item; justify-content: flex-start; }
+
+
+    /* --- Estilos Responsivos --- */
+    @media (max-width: 992px) {
+        .day { min-width: 100px; padding: 10px 8px; min-height: 90px; }
+        .calendar, .calendar-header { gap: 6px; }
+    }
+    @media (max-width: 768px) {
+        body { padding: 20px; padding-top: 70px; font-size: 15px;}
+        h1 { font-size: 1.9em;} h2 { font-size: 1.5em;} h3 { font-size: 1.25em;} h4 { font-size: 1.1em; }
+        input[type="text"], input[type="date"], select,
+        button:not(.inline-button):not(.remove-btn):not(.icon-button):not(.modal-close-btn):not(.toggle-capitao-btn):not(.sugestao-card button):not(.suggestion-filter-btn):not(.cancel-btn):not(.reactivate-btn):not(.stats-btn-pessoa) { /* Exclude small/specific buttons */
+             width: 100%; max-width: none; margin-right: 0; margin-bottom: 15px; box-sizing: border-box;
+        }
+        input.inline-input, button.inline-button, button.remove-btn, button.icon-button,
+        button.modal-close-btn, button.toggle-capitao-btn, .sugestao-card button,
+        .event-creation-form input[type="date"], .event-creation-form input[type="text"], .event-creation-form button,
+        .suggestion-filter-btn, button.cancel-btn, button.reactivate-btn, button.stats-btn-pessoa, /* Include stats button */
+        #listaNomesContainer #searchNomeInput { /* Keep search input inline initially */
+            width: auto; max-width: none; margin-bottom: 0; margin-right: 8px;
+        }
+         #listaNomesContainer label[for="searchNomeInput"] { display: block; margin-bottom: 5px; }
+         #listaNomesContainer #searchNomeInput { width: 100%; max-width: none; margin-right: 0; margin-bottom: 15px; box-sizing: border-box; }
+
+         .suggestion-filter-btn { margin-bottom: 8px; }
+         button.cancel-btn, button.reactivate-btn, button.stats-btn-pessoa { margin-left: 0; }
+
+        .inline-form-container { margin-bottom: 20px; }
+        .inline-form-container > * { margin-bottom: 10px; margin-right: 0; }
+        .inline-form-container > label.inline-label { width: 100%; margin-bottom: 5px; }
+        .inline-form-container > input.inline-input { width: 100%; margin-right: 0; }
+        .inline-form-container > button.inline-button { width: 100%; }
+
+        .event-creation-form > div, .event-creation-form > button { margin-bottom: 15px; margin-right: 0; }
+        .event-creation-form > button { margin-top: 0; }
+
+        #diasSemanaCheckboxes label { display: block; margin-right: 0; margin-bottom: 8px; }
+        .day { min-width: 80px; min-height: 80px; font-size: 0.9em; }
+        .day-number-header { font-size: 1.2em; }
+        .nomes li { font-size: 0.85em; }
+        .sugestao-card button { width: auto; margin-right: 8px; margin-bottom: 8px; white-space: nowrap; padding: 8px 12px; }
+        #activeRulesList li { flex-direction: column; align-items: flex-start; gap: 8px; }
+        #activeRulesList li .remove-btn { margin-left: 0; margin-top: 5px; }
+        #listaNomes li > div:last-child { gap: 8px; } /* Adjust gap for name list buttons */
+        #listaNomes { max-height: 250px; }
+
+        .top-right-link { top: 15px; right: 20px; }
+        .top-right-link a { width: 40px; height: 40px; font-size: 1.6em; }
+        .icon-button { font-size: 1.5em; margin-left: 10px; padding: 3px 5px; }
+        .modal-content { width: 95%; padding: 20px; }
+        .modal-close-btn { font-size: 2em; top: 8px; right: 10px; }
+         #popupResumoContent li { flex-wrap: nowrap; }
+         #popupResumoContent li span { min-width: 50px; }
+    }
+    @media (max-width: 600px) {
+      body { padding: 15px; padding-top: 65px; font-size: 14px; }
+      h1 { font-size: 1.8em;} h2 { font-size: 1.4em;} h3 { font-size: 1.2em;} h4 { font-size: 1.05em; }
+      .toggle-header h3, h3.toggle-header, .toggle-header h4, h4.toggle-header { font-size: 1.1em; }
+      .day { min-width: auto; padding: 8px 10px; min-height: 70px; }
+      .calendar, .calendar-header { gap: 4px; }
+      .day-number-header { font-size: 1.1em; margin-bottom: 6px; }
+       .horario-group-header { font-size: 0.75em; margin-top: 5px;}
+       .horario-nomes-list { padding-left: 2px !important; }
+      .top-right-link { top: 12px; right: 15px; }
+      .top-right-link a { width: 38px; height: 38px; font-size: 1.5em; }
+      .icon-button { font-size: 1.4em; }
+       #popupResumoContent li { flex-direction: column; align-items: flex-start; gap: 5px;}
+       #popupResumoContent li > div:last-child { margin-top: 5px; margin-left: 0; }
+       #popupResumoContent .toggle-capitao-btn { margin-left: 0; }
+       #popupResumoContent .remove-btn { margin-left: 5px; }
+       .event-creation-form { gap: 10px; }
+       .event-creation-form input[type="date"],
+       .event-creation-form input[type="text"] { min-width: 120px; flex-grow: 1; margin-right: 0; }
+       .suggestion-filter-btn { margin-right: 5px; margin-bottom: 5px; padding: 5px 10px;}
+       #listaNomesContainer.toggle-list.visible { padding: 10px; }
+       #listaNomes { max-height: 200px; } /* Further reduce height */
+        /* Ensure buttons in name list wrap if needed */
+        #listaNomes li { flex-wrap: wrap; }
+        #listaNomes li span { width: 100%; margin-bottom: 5px; } /* Name takes full width */
+        #listaNomes li > div:last-child { /* Button container */
+            width: 100%; justify-content: flex-start;
+        }
+         #listaNomes li > div:last-child button { margin-left: 0; margin-right: 8px; } /* Adjust button spacing */
+
+
+        #datasCriadasListContainer > ul.toggle-list { /* Monthly event list */
+            padding-left: 25px; padding-right: 10px; /* Adjust padding */
+        }
+        #datasCriadasListContainer > ul.toggle-list > li { flex-wrap: wrap; }
+        #datasCriadasListContainer > ul.toggle-list > li > span { width: 100%; margin-bottom: 5px; }
+        #datasCriadasListContainer > ul.toggle-list > li > div:last-child { margin-left: 0; width: 100%; justify-content: flex-start; }
+         #datasCriadasListContainer > ul.toggle-list > li > div:last-child > button { margin-left: 0; margin-right: 5px; }
+
+    }
+
+  </style>
+</head>
+<body>
+
+  <!-- Poll Icon Link -->
+  <div class="top-right-link">
+    <a href="000pool.html" title="Ir para Votação">
+      📊 <!-- Bar Chart Emoji Icon -->
+    </a>
+  </div>
+
+  <h1>Painel Administrativo</h1>
+
+  <!-- Seção: Criar Nova Data de Evento -->
+  <section>
+    <!-- Ícone da Lâmpada para abrir o popup de Sugestões -->
+    <div class="section-top-right-icon">
+        <button class="icon-button" onclick="openSugestoesPopup()" title="Gerenciar Sugestões de Datas">
+            💡
+        </button>
+    </div>
+    
+    <!-- Fim do Ícone da Lâmpada -->
+
+    <h2>➕ Criar Nova Data de Evento</h2>
+
+    <!-- Wrapper DIV for inline layout -->
+    <div class="event-creation-form">
+        <div> <!-- DIV for Data -->
+            <label for="novaData">Data:</label>
+            <input type="date" id="novaData">
+        </div>
+        <div> <!-- DIV for Horário -->
+            <label for="novoHorario">Horário:</label>
+            <input type="text" id="novoHorario" placeholder="Ex: 10h - 13h">
+        </div>
+        <button onclick="criarData()">Adicionar Data e Horário</button>
+    </div>
+    <!-- END Wrapper DIV -->
+
+     <!-- START: Sugestões Rápidas with Filters -->
+    <div id="sugestoesHeaderContainer" style="display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 25px; padding-top: 15px; border-top: 1px solid #eee;">
+        <h3 style="margin: 0; flex-shrink: 0;">💡 Sugestões Rápidas</h3>
+        <div id="sugestoesFilterButtons" style="margin-left: 15px; display: flex; gap: 8px; flex-wrap: wrap;">
+            <button class="suggestion-filter-btn active" data-offset="0" onclick="filterSugestoes(this)">Este Mês</button>
+            <button class="suggestion-filter-btn" data-offset="1" onclick="filterSugestoes(this)">Próximo Mês</button>
+            <button class="suggestion-filter-btn" data-offset="2" onclick="filterSugestoes(this)">Daqui a 2 Meses</button>
+            <button class="suggestion-filter-btn" data-offset="3" onclick="filterSugestoes(this)">Daqui a 3 Meses</button>
+        </div>
+    </div>
+    <div id="sugestoesContainer" style="margin-top: 10px;">
+        <p>Selecione um período acima para ver as sugestões.</p>
+        <!-- Suggestion cards populated by JS -->
+    </div>
+    <!-- END: Sugestões Rápidas with Filters -->
+
+     <!-- START: Modified Toggle Section for Datas Criadas -->
+    <div class="toggle-container" style="margin-top: 25px;"> <!-- Outer container -->
+      <h3 class="toggle-header" onclick="toggleListVisibility(this)"> <!-- Header is the trigger -->
+        Datas e Horários Adicionados <span class="toggle-icon">+</span> <!-- Icon -->
+      </h3>
+      
+      <div id="datasCriadasListContainer" class="toggle-list"> <!-- Inner container for content -->
+        <p style="padding:15px; text-align:center; color:#777;">Carregando datas...</p>
+        <!-- The Month Headers (H4) and Lists (UL) will be placed inside here by JS -->
+      </div>
+
+
+    </div>
+    <!-- END: Modified Toggle Section for Datas Criadas -->
+
+
+
+
+
+    
+  </section>
+  <!-- FIM Seção: Criar Nova Data de Evento -->
+
+
+  <!-- Seção: Calendário de Confirmações -->
+  <section>
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+        <h2>📅 Calendário de Confirmações</h2>
+        <button id="resumoBtn" class="icon-button" onclick="openPopupResumo()" title="Ver Resumo/Editar Disponibilidades">
+          🧪 <!-- Using Lab Flask as requested -->
+        </button>
+    </div>
+    <label for="mesSelect">Selecionar mês:</label>
+    <select id="mesSelect" onchange="renderCalendario()"><option value="">Carregando...</option></select>
+    <div id="calendarioContainer" style="margin-top: 15px;">
+        <p style="text-align:center; padding: 20px; color:#777;">Carregando calendário...</p>
+        <!-- Calendar grid will be populated by JS -->
+    </div>
+  </section>
+  <!-- FIM da Seção: Calendário de Confirmações -->
+
+
+  <!-- INÍCIO Seção: Gerenciamento de Pessoas -->
+  <section>
+    <h2>👤 Gerenciamento de Pessoas</h2>
+    <div class="section-top-right-icon-stats">
+        <button id="statsPessoasBtn" class="icon-button" onclick="openStatsPessoasPopup()" title="Ver Estatísticas de Pessoas">
+            📊 <!-- Bar Chart Emoji Icon -->
+        </button>
+    </div>
+    <!-- Formulário para adicionar nova pessoa (usando classes inline) -->
+    <div class="inline-form-container">
+        <label for="novoNomeInput" class="inline-label">Adicionar Pessoa:</label>
+        <input type="text" id="novoNomeInput" class="inline-input" placeholder="Nome da pessoa">
+        <button id="addNomeBtn" onclick="adicionarNome()" class="inline-button">Adicionar</button>
+    </div>
+
+    <!-- Painel Toggle para listar e pesquisar pessoas -->
+    <div class="toggle-container">
+      <h3 class="toggle-header" onclick="toggleListVisibility(this)">
+        Lista de Pessoas <span class="toggle-icon">+</span>
+      </h3>
+      <div id="listaNomesContainer" class="toggle-list"> <!-- Padding applied by CSS when visible -->
+        <!-- Barra de Pesquisa -->
+        <div style="margin-bottom: 15px;"> <!-- Wrapper for search -->
+          <label for="searchNomeInput">Pesquisar:</label>
+          <input type="text" id="searchNomeInput" placeholder="Filtrar nomes..." oninput="filterNomes()">
+        </div>
+        <!-- Lista de Nomes -->
+        <ul id="listaNomes">
+          <li id="nomesLoadingMsg" style="text-align: center; padding: 10px; color: #777; border: none;">Carregando nomes...</li>
+          <!-- Nomes serão populados pelo JavaScript -->
+        </ul>
+      </div>
+    </div>
+  </section>
+  <!-- FIM da Seção: Gerenciamento de Pessoas -->
+
+
+  <!-- Popup Modal for Calendar Summary -->
+  <div id="popupResumoContainer" class="modal-overlay">
+    <div class="modal-content">
+      <button class="modal-close-btn" onclick="closePopupResumo()">×</button>
+      <h2>Resumo de Disponibilidade (Eventos Ativos)</h2>
+      <div id="popupResumoContent">
+        <p>Carregando resumo...</p>
+        <!-- Summary content will be populated by JS -->
+      </div>
+      <div style="text-align: right; margin-top: 25px; padding-top: 15px; border-top: 1px solid #eee;">
+        <button id="exportPdfBtn" onclick="exportarResumoPdf()">Extrair PDF</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================== -->
+  <!-- ================= NOVO POPUP PARA SUGESTÕES ================= -->
+  <!-- ============================================================== -->
+  <div id="popupSugestoesContainer" class="modal-overlay">
+    <div class="modal-content" id="popupSugestoesContent">
+      <button class="modal-close-btn" onclick="closeSugestoesPopup()">×</button>
+      <!-- O CONTEÚDO DA ANTIGA SECÇÃO DE SUGESTÕES VEM AQUI -->
+      <section> <!-- Usamos <section> aqui para manter a estrutura, mas estilizamos para remover bordas/fundo -->
+        <h2>💡 Gerar e Gerenciar Sugestões de Datas</h2>
+
+        <label>Selecionar Dias da Semana:</label>
+        <div id="diasSemanaCheckboxes" style="margin-bottom: 15px;">
+          <label><input type="checkbox" name="diaSugestao" value="1"> Seg</label>
+          <label><input type="checkbox" name="diaSugestao" value="2"> Ter</label>
+          <label><input type="checkbox" name="diaSugestao" value="3"> Qua</label>
+          <label><input type="checkbox" name="diaSugestao" value="4"> Qui</label>
+          <label><input type="checkbox" name="diaSugestao" value="5"> Sex</label>
+          <label><input type="checkbox" name="diaSugestao" value="6"> Sáb</label>
+          <label><input type="checkbox" name="diaSugestao" value="0"> Dom</label>
+        </div>
+
+        <div>
+          <label for="horarioSugestaoMulti">Horário Comum:</label>
+          <input type="text" id="horarioSugestaoMulti" placeholder="Ex: 10h - 13h">
+        </div>
+
+        <button onclick="adicionarRegrasESalvarSugestoes()">Adicionar Regra(s) e Gerar Sugestões</button>
+
+        <div class="toggle-container" style="margin-top: 20px;">
+          <h3 class="toggle-header" onclick="toggleListVisibility(this)">
+            Regras Ativas de Sugestão <span class="toggle-icon">+</span>
+          </h3>
+          <ul id="activeRulesList" class="toggle-list">
+            <li>Nenhuma regra ativa. Adicione acima.</li>
+            <!-- Regras populadas pelo JS -->
+          </ul>
+        </div>
+
+        <p style="margin-top: 20px; font-size: 0.9em; color: #666;">Gerar sugestões limpará e recriará todas as sugestões baseadas nas regras ativas acima para os próximos meses.</p>
+      </section>
+      <!-- FIM DO CONTEÚDO MOVIDO -->
+    </div>
+  </div>
+
+
+
+  <div id="popupStatsPessoasContainer" class="modal-overlay">
+    <div class="modal-content">
+      <button class="modal-close-btn" onclick="closeStatsPessoasPopup()">×</button>
+      <h2>Estatísticas de Pessoas</h2>
+      <div id="statsPessoasContentArea" style="margin-top: 20px;">
+        <p>Carregando estatísticas...</p>
+        <!-- Statistics content will be populated by JS -->
+      </div>
+       <!-- Optional: Add buttons here later if needed, e.g., for different stats views -->
+    </div>
+  </div>
+
+
+  <div id="popupPersonStatsContainer" class="modal-overlay">
+    <div class="modal-content">
+      <button class="modal-close-btn" onclick="closePersonStatsPopup()">×</button>
+      <h2 id="personStatsPopupTitle">Estatísticas Individuais</h2>
+      <div id="personStatsContentArea" style="margin-top: 20px;">
+        <p>Carregando estatísticas da pessoa...</p>
+        <!-- Individual statistics content will be populated by JS -->
+      </div>
+    </div>
+  </div>
+
+
+
+
+  <!-- ============================================================== -->
+  <!-- ==================== FIM DO NOVO POPUP ======================= -->
+  <!-- ============================================================== -->
+
+
+  <!-- ========================== -->
+  <!--       JAVASCRIPT           -->
+  <!-- ========================== -->
+  <script type="module">
+
+    // --- Firebase Initialization ---
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import {
+        getFirestore, collection, addDoc, getDocs, query, where,
+        deleteDoc, doc, orderBy, writeBatch, updateDoc
+    } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+    // --- COLE A SUA CONFIGURAÇÃO DO FIREBASE AQUI ---
+    // Substitua as reticências pelos seus valores reais do Firebase Console
+    const firebaseConfig = {
+        apiKey: "AIzaSyCxUQTIg1cebw6FSzIH2w05ETgi9sj6dcU",
+        authDomain: "daytime-a0fa5.firebaseapp.com",
+        projectId: "daytime-a0fa5",
+        storageBucket: "daytime-a0fa5.firebasestorage.app",
+        messagingSenderId: "217848316066",
+        appId: "1:217848316066:web:fad68b3fd59ece761997fb"
+        // measurementId: "G-XXXXXXXXXX" // Adicione se existir na sua configuração
+    };
+    // --------------------------------------------
+    // !!! NÃO CONTINUE SEM SUBSTITUIR OS VALORES ACIMA !!!
+    // --------------------------------------------
+
+    let db;
+    let jsPDFInstance; // Hold the jsPDF object
+
+    try {
+        // Basic check if config seems like placeholders
+        if (!firebaseConfig.apiKey || firebaseConfig.apiKey === "YOUR_API_KEY" || firebaseConfig.apiKey.length < 10 ||
+            !firebaseConfig.projectId || firebaseConfig.projectId === "YOUR_PROJECT_ID") {
+             throw new Error("Firebase config not provided or seems like placeholder values.");
+        }
+        const app = initializeApp(firebaseConfig);
+        db = getFirestore(app);
+
+        // Check and assign jsPDF safely
+        if (typeof window.jspdf === 'undefined' || typeof window.jspdf.jsPDF === 'undefined') {
+            console.error("FATAL: jsPDF library object not found.");
+            alert("Erro crítico: A biblioteca jsPDF não foi carregada corretamente.");
+        } else {
+            jsPDFInstance = window.jspdf.jsPDF; // Assign constructor
+             // Check for AutoTable plugin AFTER jsPDF is confirmed loaded
+             if (jsPDFInstance.API && typeof jsPDFInstance.API.autoTable === 'function') {
+                   // AutoTable plugin loaded successfully
+             } else {
+                   console.warn("Warning: jsPDF autoTable plugin FAILED to load or attach correctly. PDF export will likely fail.");
+                   const exportBtn = document.getElementById('exportPdfBtn');
+                   if(exportBtn) {
+                        exportBtn.disabled = true;
+                        exportBtn.title = "Exportação PDF indisponível (erro no plugin AutoTable)";
+                   }
+             }
+        }
+
+    } catch (e) {
+        console.error("Initialization failed (Firebase or jsPDF):", e);
+        alert(`Falha CRÍTICA na inicialização:\n\n${e.message}\n\nVerifique a configuração do Firebase e se as bibliotecas jsPDF carregaram (ver console F12).`);
+        document.body.innerHTML = `<div style="padding:40px; text-align:center; background-color: #ffdddd; border: 2px solid red; margin: 30px auto; max-width: 600px; border-radius: 8px;">
+            <h1>Erro Crítico na Inicialização</h1>
+            <p>Falha ao carregar dependências ou conectar ao Firebase.</p>
+            <p>Verifique a configuração no código HTML e o console do navegador (F12) para detalhes.</p>
+            <p><i>${e.message}</i></p>
+        </div>`;
+        throw new Error("Initialization failed - halting execution");
+    }
+
+
+    // --- Firestore Collection References ---
+    const pessoasCollectionRef = collection(db, "pessoas");
+    const eventosDataCollectionRef = collection(db, "eventosData");
+    const sugestoesCollectionRef = collection(db, "sugestoes");
+    const disponibilidadeCollectionRef = collection(db, "disponibilidade");
+    const regrasSugestaoCollectionRef = collection(db, "regrasSugestao");
+
+    // --- State Variables ---
+    let activeSuggestionRules = [];
+    let currentMonthAvailability = new Map();
+    let currentSuggestionFilterOffset = 0;
+    let allEventosData = [];
+    let eventosDataMap = new Map();
+    let allPessoas = [];
+
+    // --- CONSTANTS ---
+    const DIAS_SEMANA_NOMES_COMPLETOS = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+    const DIAS_SEMANA_NOMES_CURTOS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+
+    // --- Helper Functions ---
+    function capitalize(str) { if (!str) return str; return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase(); }
+    function formatarDataParaExibicao(dataStr) { if (!dataStr || !/^\d{4}-\d{2}-\d{2}$/.test(dataStr)) return "Data Inválida"; try { const [year, month, day] = dataStr.split('-').map(Number); if (isNaN(year) || isNaN(month) || isNaN(day) || month < 1 || month > 12 || day < 1 || day > 31) return "Data Inválida"; const date = new Date(Date.UTC(year, month - 1, day)); if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return "Data Inválida"; return date.toLocaleDateString('pt-PT', { timeZone: 'UTC', weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }); } catch (e) { return "Erro Data"; } }
+    async function groupEventosPorMes() { try { const eventos = await loadDatas(); const datasPorMes = {}; eventos.forEach(evento => { if (evento?.dataOriginal?.length >= 7) { try { const mesKey = evento.dataOriginal.substring(0, 7); if (!datasPorMes[mesKey]) datasPorMes[mesKey] = []; datasPorMes[mesKey].push(evento.dataOriginal); } catch (e) { console.warn("Could not process event date for grouping:", evento, e); } } }); return datasPorMes; } catch (e) { console.error("Error grouping events by month:", e); return {}; } }
+    function hslToRgb(h, s, l){ let r, g, b; if(s == 0){ r = g = b = l; }else{ const hue2rgb = (p, q, t) => { if(t < 0) t += 1; if(t > 1) t -= 1; if(t < 1/6) return p + (q - p) * 6 * t; if(t < 1/2) return q; if(t < 2/3) return p + (q - p) * (2/3 - t) * 6; return p; }; const q = l < 0.5 ? l * (1 + s) : l + s - l * s; const p = 2 * l - q; r = hue2rgb(p, q, h + 1/3); g = hue2rgb(p, q, h); b = hue2rgb(p, q, h - 1/3); } return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)]; }
+    function rgbToHex(r, g, b) { const componentToHex = (c) => { const hex = c.toString(16); return hex.length == 1 ? "0" + hex : hex; }; return "#" + componentToHex(r) + componentToHex(g) + componentToHex(b); }
+    function generateSoftColors(count, saturation = 0.65, lightness = 0.92, startHue = 0.55, hueStep = 0.15) { const colors = []; let currentHue = startHue; for (let i = 0; i < count; i++) { colors.push([currentHue, saturation, lightness]); currentHue = (currentHue + hueStep) % 1.0; } return colors; }
+    function parseHorarioDuration(horarioStr) {
+        if (!horarioStr || typeof horarioStr !== 'string') return null;
+        horarioStr = horarioStr.toLowerCase().replace(/\s+/g, ''); // Normalize
+
+        const timeParts = horarioStr.split('-');
+        let startTime = null, endTime = null;
+
+        const parseTime = (timeStr) => {
+            const match = timeStr.match(/(\d{1,2})(?:h(\d{1,2})?)?/);
+            if (!match) return null;
+            const hour = parseInt(match[1], 10);
+            const minute = match[2] ? parseInt(match[2], 10) : 0;
+            if (isNaN(hour) || isNaN(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+            return hour + minute / 60.0; // Time in hours (float)
+        };
+
+        startTime = parseTime(timeParts[0]);
+        if (timeParts.length > 1) {
+            endTime = parseTime(timeParts[1]);
+        } else {
+             if (startTime !== null) endTime = startTime + 1; // Assume 1 hour duration if only start time
+        }
+
+        if (startTime !== null && endTime !== null) {
+            if (endTime <= startTime) {
+                 const diff = endTime - startTime;
+                 return diff > 0 ? diff : 1.0; // Default 1h if same time or ends earlier
+            }
+            return endTime - startTime;
+        }
+        return null; // Parsing failed
+    }
+
+
+   // --- Toggle Function (Revised for Stability & CSS Overflow) ---
+   function toggleListVisibility(headerElement) {
+        if (!headerElement) return;
+        const listElement = headerElement.nextElementSibling;
+        if (!listElement || !listElement.classList.contains('toggle-list')) {
+             console.error("TOGGLE DEBUG: Toggle target not found or invalid for:", headerElement);
+             return;
+        }
+        const listId = listElement.id || `(no id, header: ${headerElement.textContent.trim().substring(0, 20)}...)`; // Get an identifier
+        const iconElement = headerElement.querySelector('.toggle-icon');
+        const isVisible = listElement.classList.contains('visible');
+
+        console.log(`TOGGLE DEBUG: Toggling '${listId}'. Currently visible: ${isVisible}`);
+
+        // --- Check computed style BEFORE changing anything ---
+        try {
+            const initialComputedStyle = getComputedStyle(listElement);
+            console.log(`TOGGLE DEBUG [${listId}] BEFORE Action - Computed Overflow: ${initialComputedStyle.overflow}, PointerEvents: ${initialComputedStyle.pointerEvents}, Opacity: ${initialComputedStyle.opacity}, MaxHeight: ${initialComputedStyle.maxHeight}`);
+        } catch(e) { console.warn("TOGGLE DEBUG: Error getting initial computed style", e); }
+
+
+        if (isVisible) {
+            // --- Start Closing ---
+             console.log(`TOGGLE DEBUG [${listId}]: Closing...`);
+            const currentHeight = listElement.scrollHeight + 'px';
+            // Set max-height explicitly *before* animating to 0
+            listElement.style.maxHeight = currentHeight;
+            console.log(`TOGGLE DEBUG [${listId}]: Set max-height to ${currentHeight} before closing transition.`);
+
+            requestAnimationFrame(() => {
+                listElement.style.maxHeight = '0';
+                listElement.style.paddingTop = '0';
+                listElement.style.paddingBottom = '0';
+                listElement.style.borderTopWidth = '0px';
+                listElement.classList.remove('visible'); // Remove class
+                headerElement.classList.remove('open');
+                if (iconElement) iconElement.textContent = '+';
+
+                // --- Check computed style IMMEDIATELY AFTER starting close ---
+                 try {
+                    const closingComputedStyle = getComputedStyle(listElement);
+                    console.log(`TOGGLE DEBUG [${listId}] Closing Frame - Computed Overflow: ${closingComputedStyle.overflow}, PointerEvents: ${closingComputedStyle.pointerEvents}, Opacity: ${closingComputedStyle.opacity}, MaxHeight: ${closingComputedStyle.maxHeight}, List Classes: ${listElement.className}`);
+                 } catch(e) { console.warn("TOGGLE DEBUG: Error getting closing computed style", e); }
+            });
+
+        } else {
+            // --- Start Opening ---
+            console.log(`TOGGLE DEBUG [${listId}]: Opening...`);
+            headerElement.classList.add('open');
+            if (iconElement) iconElement.textContent = '−';
+
+            // Determine padding/border based on element type
+            const isOuterContainer = listElement.id === 'datasCriadasListContainer';
+            const isSubDateList = headerElement.tagName === 'H4' && listElement.closest('#datasCriadasListContainer');
+            let paddingTop = '0px', paddingBottom = '0px', paddingLeft = '0px', paddingRight = '0px';
+            let requiresFixedMaxHeight = false;
+            let borderTopWidth = '0px';
+
+             if (isOuterContainer) {
+                requiresFixedMaxHeight = true; borderTopWidth = '1px';
+                console.log(`TOGGLE DEBUG [${listId}]: Applying rules for Outer Container`);
+             } else if (isSubDateList) {
+                 paddingTop = '10px'; paddingBottom = '10px'; paddingLeft = '35px'; paddingRight = '15px'; borderTopWidth = '1px';
+                 console.log(`TOGGLE DEBUG [${listId}]: Applying rules for Inner Monthly List`);
+            } else if (listElement.id === 'listaNomesContainer' || listElement.id === 'activeRulesList') {
+                 paddingTop = '15px'; paddingBottom = '15px'; paddingLeft = '15px'; paddingRight = '15px'; borderTopWidth = '1px';
+                 console.log(`TOGGLE DEBUG [${listId}]: Applying rules for Standard List`);
+            }
+
+             // Apply styles BEFORE adding class or getting scrollHeight
+             if (paddingTop !== '0px') listElement.style.paddingTop = paddingTop;
+             if (paddingBottom !== '0px') listElement.style.paddingBottom = paddingBottom;
+             if (paddingLeft !== '0px') listElement.style.paddingLeft = paddingLeft;
+             if (paddingRight !== '0px') listElement.style.paddingRight = paddingRight;
+             if (borderTopWidth !== '0px') listElement.style.borderTopWidth = borderTopWidth;
+             console.log(`TOGGLE DEBUG [${listId}]: Applied padding/border styles.`);
+
+            // Add visible class - this should trigger CSS for opacity, overflow: auto, etc.
+            listElement.classList.add('visible');
+             console.log(`TOGGLE DEBUG [${listId}]: Added .visible class.`);
+
+             // --- Check computed style IMMEDIATELY AFTER adding class ---
+             try {
+                 const openingComputedStyle = getComputedStyle(listElement);
+                 console.log(`TOGGLE DEBUG [${listId}] After Class Add - Computed Overflow: ${openingComputedStyle.overflow}, PointerEvents: ${openingComputedStyle.pointerEvents}, Opacity: ${openingComputedStyle.opacity}, List Classes: ${listElement.className}`);
+             } catch(e) { console.warn("TOGGLE DEBUG: Error getting opening computed style", e); }
+
+
+            // Use rAF to ensure styles and class are processed before calculating height
+            requestAnimationFrame(() => {
+                 console.log(`TOGGLE DEBUG [${listId}]: Inside requestAnimationFrame for height calculation.`);
+                 let targetMaxHeightValue;
+
+                 if (requiresFixedMaxHeight) {
+                    targetMaxHeightValue = 5000;
+                    console.log(`TOGGLE DEBUG [${listId}]: Using fixed max-height: ${targetMaxHeightValue}px`);
+                 } else {
+                     targetMaxHeightValue = listElement.scrollHeight;
+                     console.log(`TOGGLE DEBUG [${listId}]: Calculated scrollHeight: ${targetMaxHeightValue}px`);
+                     if (targetMaxHeightValue <= 0) {
+                          const minHeightFromPadding = parseInt(paddingTop) + parseInt(paddingBottom);
+                          targetMaxHeightValue = Math.max(10, minHeightFromPadding);
+                          console.log(`TOGGLE DEBUG [${listId}]: ScrollHeight was <= 0, using minimum: ${targetMaxHeightValue}px`);
+                     }
+                 }
+
+                 listElement.style.maxHeight = targetMaxHeightValue + 'px';
+                 console.log(`TOGGLE DEBUG [${listId}]: Applied max-height: ${listElement.style.maxHeight}`);
+
+                 // --- Check computed style AFTER applying max-height ---
+                  try {
+                      const finalComputedStyle = getComputedStyle(listElement);
+                      console.log(`TOGGLE DEBUG [${listId}] After MaxHeight Set - Computed Overflow: ${finalComputedStyle.overflow}, PointerEvents: ${finalComputedStyle.pointerEvents}, Opacity: ${finalComputedStyle.opacity}, MaxHeight: ${finalComputedStyle.maxHeight}`);
+                  } catch(e) { console.warn("TOGGLE DEBUG: Error getting final computed style", e); }
+            });
+        }
+    }
+
+
+    // --- Gestão de Nomes ---
+    async function loadNomes() {
+        const loadingMsgLi = document.querySelector('#listaNomes #nomesLoadingMsg');
+        try {
+            const q = query(pessoasCollectionRef, orderBy("nome"));
+            const snapshot = await getDocs(q);
+            allPessoas = snapshot.docs.map(d => ({ id: d.id, nome: d.data().nome }));
+        } catch (e) {
+            console.error("Erro ao carregar nomes:", e);
+            if (loadingMsgLi) loadingMsgLi.textContent = "Erro ao carregar nomes.";
+            else { const listElement = document.getElementById('listaNomes'); if(listElement) listElement.innerHTML = '<li>Erro ao carregar nomes.</li>'; }
+            alert(`Erro ao carregar lista de pessoas: ${e.message}`);
+            allPessoas = []; // Reset on error
+        }
+    }
+
+
+
+// --- TEMPORARY DIAGNOSTIC CLICK LISTENER ---
+document.addEventListener('click', function(event) {
+    const target = event.target;
+    const isInToggleList = target.closest('.toggle-list'); // Check if click is inside ANY toggle list
+    const isVisibleToggleList = target.closest('.toggle-list.visible'); // Check if inside a VISIBLE one
+
+    console.log("-------------------- CLICK DETECTED --------------------");
+    console.log("Clicked Element:", target);
+    console.log("Tag:", target.tagName, "ID:", target.id || 'none', "Classes:", target.className);
+
+    if (isInToggleList) {
+        console.log("Click occurred INSIDE a .toggle-list element.");
+        if (isVisibleToggleList) {
+            console.log("The parent .toggle-list HAS the .visible class.");
+            try {
+                const listStyle = getComputedStyle(isVisibleToggleList);
+                console.log(`Parent List Computed Overflow: ${listStyle.overflow}, PointerEvents: ${listStyle.pointerEvents}`);
+                 const targetStyle = getComputedStyle(target);
+                 console.log(`Clicked Element Computed PointerEvents: ${targetStyle.pointerEvents}`);
+            } catch(e) { console.warn("Error getting computed styles on click", e); }
+        } else {
+            console.warn("The parent .toggle-list does NOT have the .visible class (should be closed).");
+        }
+    } else {
+        console.log("Click occurred OUTSIDE any .toggle-list element.");
+    }
+    console.log("-------------------------------------------------------");
+
+}, true); // Use capturing phase to catch clicks early (optional but sometimes useful)
+
+// --- End Temporary Listener ---
+
+
+
+
+    function renderNomes(searchTerm = '') {
+        const listElement = document.getElementById('listaNomes');
+        if (!listElement) { console.error("Elemento #listaNomes não encontrado."); return; }
+        const loadingMsg = document.getElementById('nomesLoadingMsg');
+        if (loadingMsg) loadingMsg.remove();
+
+        const searchTermLower = searchTerm.toLowerCase().trim();
+        const filteredPessoas = searchTermLower === ''
+            ? [...allPessoas]
+            : allPessoas.filter(p => p.nome && p.nome.toLowerCase().includes(searchTermLower));
+
+        listElement.innerHTML = ''; // Clear current list
+
+        if (allPessoas.length === 0) {
+            listElement.innerHTML = '<li style="text-align: center; padding: 10px; color: #777; border: none;">Nenhuma pessoa adicionada ainda.</li>';
+        } else if (filteredPessoas.length === 0 && searchTermLower !== '') {
+            listElement.innerHTML = '<li style="text-align: center; padding: 10px; color: #777; border: none;">Nenhum nome encontrado para a pesquisa.</li>';
+        } else {
+            filteredPessoas.forEach(pessoa => {
+                const li = document.createElement('li');
+                li.setAttribute('data-id', pessoa.id);
+
+                const nomeSpan = document.createElement('span');
+                nomeSpan.textContent = pessoa.nome;
+                li.appendChild(nomeSpan);
+
+                // Create a container for buttons
+                const btnContainer = document.createElement('div');
+
+                // Stats Button
+                const statsBtn = document.createElement('button');
+                statsBtn.className = 'stats-btn-pessoa';
+                statsBtn.textContent = 'Estatísticas';
+                statsBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    openPersonStatsPopup(pessoa.id, pessoa.nome);
+                };
+                btnContainer.appendChild(statsBtn);
+
+                // Remove Button
+                const removeBtn = document.createElement('button');
+                removeBtn.className = 'remove-btn';
+                removeBtn.textContent = 'Remover';
+                removeBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    removerNome(pessoa.id, pessoa.nome);
+                };
+                btnContainer.appendChild(removeBtn);
+
+                li.appendChild(btnContainer);
+                listElement.appendChild(li);
+            });
+        }
+    }
+
+    async function adicionarNome() {
+        const input = document.getElementById('novoNomeInput');
+        const addButton = document.getElementById('addNomeBtn');
+        if (!input || !addButton) return;
+
+        const nome = input.value.trim();
+        if (!nome) {
+            alert("Por favor, insira um nome.");
+            input.focus();
+            return;
+        }
+
+        const nomeLower = nome.toLowerCase();
+        const existe = allPessoas.some(p => p.nome.toLowerCase() === nomeLower);
+        if (existe) {
+            alert(`"${nome}" já existe na lista.`);
+            input.select();
+            return;
+        }
+
+        addButton.disabled = true;
+        addButton.textContent = 'Adicionando...';
+
+        try {
+            const docRef = await addDoc(pessoasCollectionRef, { nome: nome });
+            allPessoas.push({ id: docRef.id, nome: nome });
+            allPessoas.sort((a, b) => a.nome.localeCompare(b.nome));
+            input.value = '';
+            filterNomes();
+        } catch (e) {
+            console.error("Erro ao adicionar nome:", e);
+            alert("Erro ao adicionar pessoa.");
+        } finally {
+            addButton.disabled = false;
+            addButton.textContent = 'Adicionar';
+            input.focus();
+        }
+    }
+
+    async function removerNome(id, nome) {
+        if (!confirm(`Tem certeza que deseja remover "${nome}"? \n(Isso NÃO removerá as confirmações de disponibilidade existentes dessa pessoa).`)) {
+            return;
+        }
+
+        const liElement = document.querySelector(`#listaNomes li[data-id="${id}"]`);
+        const removeBtn = liElement?.querySelector('.remove-btn');
+        const statsBtn = liElement?.querySelector('.stats-btn-pessoa');
+        if(liElement) liElement.style.opacity = '0.5';
+        if(removeBtn) { removeBtn.disabled = true; removeBtn.textContent = '...';}
+        if(statsBtn) { statsBtn.disabled = true; }
+
+        try {
+            await deleteDoc(doc(db, "pessoas", id));
+            allPessoas = allPessoas.filter(p => p.id !== id);
+            filterNomes();
+        } catch (e) {
+            console.error("Erro ao remover nome:", e);
+            alert("Erro ao remover pessoa.");
+            if(liElement) liElement.style.opacity = '1';
+            if(removeBtn) { removeBtn.disabled = false; removeBtn.textContent = 'Remover'; }
+            if(statsBtn) { statsBtn.disabled = false; }
+        }
+    }
+
+    function filterNomes() {
+        const searchInput = document.getElementById('searchNomeInput');
+        renderNomes(searchInput?.value || '');
+    }
+    // --- FIM Gestão de Nomes ---
+
+
+    // --- Gestão de Datas de Evento ---
+    async function loadDatas() {
+        try {
+            const q = query(eventosDataCollectionRef, orderBy("dataOriginal"), orderBy("horario"));
+            const snapshot = await getDocs(q);
+            allEventosData = snapshot.docs.map(d => ({ id: d.id, ...d.data() })).filter(item => {
+                const isValid = item.dataOriginal && item.horario;
+                if (isValid && typeof item.estado === 'undefined') { item.estado = 'ativo'; } // Default state if missing
+                return isValid;
+            });
+            // Rebuild the map ensuring only active events or the *last* event (if multiple exist, prioritize active) are primary
+            eventosDataMap.clear();
+            allEventosData.forEach(evento => {
+                 if (!eventosDataMap.has(evento.dataOriginal)) {
+                     eventosDataMap.set(evento.dataOriginal, evento);
+                 } else {
+                      // If an event for this date already exists in the map
+                      const existingEvent = eventosDataMap.get(evento.dataOriginal);
+                      // Prefer keeping an 'ativo' event over a 'cancelado' one if IDs differ
+                      // Or if same ID, update the state in the map
+                      if (existingEvent.estado === 'cancelado' && evento.estado === 'ativo') {
+                          eventosDataMap.set(evento.dataOriginal, evento); // Replace canceled with active
+                      } else if (existingEvent.id === evento.id) {
+                          eventosDataMap.set(evento.dataOriginal, evento); // Update state for the same event
+                      }
+                      // Otherwise, keep the first one encountered (or the active one already there)
+                 }
+            });
+            console.log("Loaded Events:", allEventosData);
+            console.log("Eventos Data Map:", eventosDataMap);
+            return allEventosData;
+        } catch (e) { console.error("Erro ao carregar datas dos eventos:", e); alert(`Erro ao carregar datas dos eventos: ${e.message}`); allEventosData = []; eventosDataMap.clear(); return []; }
+    }
+    async function renderDatasCriadas() {
+        const listContainer = document.getElementById('datasCriadasListContainer');
+        if (!listContainer) { console.error("renderDatasCriadas: Container #datasCriadasListContainer not found."); return; }
+        listContainer.innerHTML = '<p style="padding:15px; text-align:center; color:#777;">Carregando datas...</p>';
+        try {
+            const datasEventos = allEventosData; // Use cached data
+
+            if (datasEventos.length === 0) { listContainer.innerHTML = '<p style="padding:15px; text-align:center; color:#777;">Nenhuma data e horário adicionados ainda.</p>'; return; }
+
+            // Group events by month (YYYY-MM)
+            const eventosPorMes = {};
+            datasEventos.forEach(evento => {
+                if (evento?.dataOriginal?.length >= 7) {
+                    try {
+                        const mesKey = evento.dataOriginal.substring(0, 7); // YYYY-MM
+                        if (!eventosPorMes[mesKey]) eventosPorMes[mesKey] = [];
+                        eventosPorMes[mesKey].push(evento);
+                    } catch (e) { console.warn("Could not parse date for grouping:", evento.dataOriginal, e); }
+                }
+            });
+
+            const sortedMonthKeys = Object.keys(eventosPorMes).sort();
+            listContainer.innerHTML = ''; // Clear loading message
+
+            sortedMonthKeys.forEach(mesKey => {
+                const eventosDoMes = eventosPorMes[mesKey];
+                if (!eventosDoMes || eventosDoMes.length === 0) return; // Skip empty months
+
+                const [year, monthNum] = mesKey.split('-').map(Number);
+                const monthDisplayName = capitalize(new Date(Date.UTC(year, monthNum - 1, 1)).toLocaleDateString('pt-PT', { timeZone: 'UTC', month: 'long', year: 'numeric' }));
+
+                // Create Month Header (H4) - Toggle Trigger
+                const monthHeader = document.createElement('h4');
+                monthHeader.className = 'toggle-header';
+                monthHeader.onclick = () => toggleListVisibility(monthHeader); // Use the revised toggle function
+                monthHeader.innerHTML = `${monthDisplayName} <span class="toggle-icon">+</span>`; // Icon
+
+                // Create Month List (UL) - Toggle Content
+                const monthUl = document.createElement('ul');
+                monthUl.className = 'toggle-list'; // This list will now expand/collapse
+                monthUl.style.maxHeight = '0'; // Start closed
+                monthUl.style.overflow = 'hidden'; // Start hidden
+
+                // Sort events within the month
+                eventosDoMes.sort((a, b) => a.dataOriginal.localeCompare(b.dataOriginal) || a.horario.localeCompare(b.horario));
+
+                eventosDoMes.forEach(evento => {
+                    const dataFormatada = formatarDataParaExibicao(evento.dataOriginal);
+                    const horario = evento.horario;
+                    const texto = `${dataFormatada} | ${horario}`;
+                    const isCanceled = evento.estado === 'cancelado';
+
+                    const li = document.createElement('li');
+                    li.setAttribute('data-eventid', evento.id);
+                    if (isCanceled) { li.classList.add('canceled-event'); }
+
+                    const textoSpan = document.createElement('span');
+                    textoSpan.textContent = texto;
+                    li.appendChild(textoSpan);
+
+                    const btnDiv = document.createElement('div'); // Container for buttons
+
+                    // Add Cancel/Reactivate Button
+                    if (isCanceled) {
+                        const reactivateBtn = document.createElement('button');
+                        reactivateBtn.className = 'reactivate-btn';
+                        reactivateBtn.textContent = 'Reativar';
+                        reactivateBtn.onclick = (e) => {e.stopPropagation(); reativarData(evento.id, evento.dataOriginal, evento.horario);};
+                        btnDiv.appendChild(reactivateBtn);
+                    } else {
+                        const cancelBtn = document.createElement('button');
+                        cancelBtn.className = 'cancel-btn';
+                        cancelBtn.textContent = 'Cancelar';
+                        cancelBtn.onclick = (e) => {e.stopPropagation(); cancelarData(evento.id, evento.dataOriginal, evento.horario);};
+                        btnDiv.appendChild(cancelBtn);
+                    }
+
+                    // Add Remove Button
+                    const removeBtn = document.createElement('button');
+                    removeBtn.className = 'remove-btn';
+                    removeBtn.textContent = 'Remover';
+                    removeBtn.onclick = (e) => {e.stopPropagation(); removerData(evento.id, evento.dataOriginal, evento.horario);};
+                    btnDiv.appendChild(removeBtn);
+
+                    li.appendChild(btnDiv);
+                    monthUl.appendChild(li);
+                });
+
+                listContainer.appendChild(monthHeader);
+                listContainer.appendChild(monthUl);
+            });
+
+             // Check if the main container (#datasCriadasListContainer) itself should adjust height
+             // This might not be strictly necessary if its height is natural, but included for safety
+             if (listContainer.classList.contains('visible')) {
+                 requestAnimationFrame(() => {
+                     if(listContainer.classList.contains('visible') && listContainer.style.maxHeight !== null) { // Check if max-height was set
+                         listContainer.style.maxHeight = listContainer.scrollHeight + 'px';
+                     }
+                 });
+             }
+
+        } catch (e) { console.error("Error rendering created dates list:", e); listContainer.innerHTML = '<p style="color:red; padding:15px; text-align:center;">Erro ao carregar datas.</p>'; }
+    }
+     async function criarData(dataManual = null, horarioManual = null, clickedButton = null) {
+        const inputData = document.getElementById('novaData');
+        const inputHorario = document.getElementById('novoHorario');
+        if (!dataManual && (!inputData || !inputHorario)) { alert("Erro interno: Campos de data/horário não encontrados."); return; }
+
+        let dataString, horarioString, buttonToDisable = null, isManualAdd = false, mainAddButton = null;
+
+        if (dataManual && horarioManual) {
+            // Called from suggestion click
+            isManualAdd = false; // Indicates it wasn't from the main form inputs
+            dataString = dataManual;
+            horarioString = horarioManual;
+            buttonToDisable = clickedButton; // The suggestion button itself
+        } else {
+            // Called from the main "Adicionar Data e Horário" button
+            isManualAdd = true;
+            const dataValue = inputData.value;
+            const horarioValue = inputHorario.value.trim();
+            if (!dataValue || !horarioValue) { alert("Data e Horário são obrigatórios."); return; }
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(dataValue)) { alert("Formato de data inválido. Use AAAA-MM-DD."); inputData.focus(); return; }
+            // Basic date validity check (avoids things like 2023-02-30)
+            try { const [y, m, d] = dataValue.split('-').map(Number); const testDate = new Date(y, m - 1, d); if (testDate.getFullYear() !== y || testDate.getMonth() !== m - 1 || testDate.getDate() !== d) { throw new Error("Invalid date components"); } } catch { alert("Data inválida (ex: dia 31 num mês de 30)."); inputData.focus(); return; }
+            dataString = dataValue;
+            horarioString = horarioValue;
+            mainAddButton = inputHorario.closest('.event-creation-form')?.querySelector('button:not([onclick*="Sugestoes"])'); // Find the main add button
+            buttonToDisable = mainAddButton;
+        }
+
+        if (!dataString || !horarioString) { alert("Erro interno: Data ou Horário não definidos."); return; }
+
+        // --- Disable button ---
+        let originalButtonText = '';
+        if (buttonToDisable) {
+            originalButtonText = buttonToDisable.textContent;
+            buttonToDisable.disabled = true;
+            buttonToDisable.textContent = '...';
+        }
+        let eventAlreadyExisted = false;
+        try {
+            // Check if this specific date and time already exists
+            const q = query(eventosDataCollectionRef, where("dataOriginal", "==", dataString), where("horario", "==", horarioString));
+            const snapshot = await getDocs(q);
+
+            if (!snapshot.empty) {
+                // Event exists, check its state
+                let existingIsCanceled = false;
+                snapshot.forEach(doc => {
+                    if (doc.data().estado === 'cancelado') {
+                        existingIsCanceled = true;
+                        // Optionally, you could offer to reactivate it here
+                        // For now, just inform the user it exists (even if canceled)
+                    }
+                });
+                eventAlreadyExisted = true;
+                alert(`O evento para ${formatarDataParaExibicao(dataString)} às ${horarioString} já existe` + (existingIsCanceled ? " (e está cancelado)." : "."));
+                if (!isManualAdd && buttonToDisable) {
+                     // Keep suggestion button disabled but change text
+                     buttonToDisable.textContent = "Já Adicionado";
+                     // Note: We DON'T re-enable it here, as it's already added.
+                }
+            } else {
+                // Event does not exist, create it
+                const [yearNum, monthNum, dayNum] = dataString.split('-').map(Number);
+                const dateObject = new Date(Date.UTC(yearNum, monthNum - 1, dayNum)); // Use UTC for consistency
+                const mesNome = capitalize(dateObject.toLocaleDateString('pt-PT', { timeZone: 'UTC', month: 'long' }));
+                const diaSemanaNome = capitalize(dateObject.toLocaleDateString('pt-PT', { timeZone: 'UTC', weekday: 'long' }));
+
+                const eventoDataDoc = {
+                    ano: String(yearNum),
+                    dataOriginal: dataString,
+                    dia: dayNum,
+                    diasemana: diaSemanaNome,
+                    mes: mesNome,
+                    horario: horarioString,
+                    estado: "ativo" // New events are always active initially
+                };
+
+                const newDocRef = await addDoc(eventosDataCollectionRef, eventoDataDoc);
+
+                // Update local state immediately
+                const newEvent = {id: newDocRef.id, ...eventoDataDoc };
+                allEventosData.push(newEvent);
+                allEventosData.sort((a, b) => a.dataOriginal.localeCompare(b.dataOriginal) || a.horario.localeCompare(b.horario));
+
+                // Update the map (important for calendar/summary)
+                // Add or potentially replace a canceled version on the same date
+                 if (!eventosDataMap.has(newEvent.dataOriginal) || eventosDataMap.get(newEvent.dataOriginal)?.estado === 'cancelado') {
+                    eventosDataMap.set(newEvent.dataOriginal, newEvent);
+                 }
+
+                // Clear inputs only if added manually from the form
+                if (isManualAdd) {
+                    if(inputData) inputData.value = '';
+                    if(inputHorario) inputHorario.value = '';
+                }
+
+                // Re-render necessary parts of the UI
+                await renderDatasCriadas();
+                await renderCalendario(); // Update calendar view
+                await renderSugestoesVisiveis(); // Update suggestion buttons state
+            }
+        } catch (e) {
+            console.error("Error adding date:", e);
+            alert("Erro ao adicionar a data.");
+             // Re-enable button only on error, and only if it was the suggestion button that failed
+             if (!isManualAdd && buttonToDisable) {
+                 buttonToDisable.disabled = false;
+                 buttonToDisable.textContent = originalButtonText;
+             }
+        } finally {
+             // Re-enable the button ONLY IF:
+             // 1. It was the manual add button OR
+             // 2. It was a suggestion button AND the event did NOT already exist (meaning it was just added or failed)
+             if (buttonToDisable && (isManualAdd || (!isManualAdd && !eventAlreadyExisted))) {
+                 // Check if it's the suggestion button that was "Já Adicionado"
+                 if (!(buttonToDisable.textContent === "Já Adicionado")) {
+                    buttonToDisable.disabled = false;
+                    buttonToDisable.textContent = originalButtonText;
+                 }
+             }
+             // Focus input if added manually
+             if(isManualAdd && inputData) inputData.focus();
+         }
+    }
+    async function removerData(id, dataOriginal, horario) {
+        const dataFormatada = formatarDataParaExibicao(dataOriginal);
+        if (!confirm(`Tem certeza que deseja remover o evento:\n${dataFormatada} | ${horario}?\nATENÇÃO: Confirmações de disponibilidade NÃO serão removidas automaticamente.`)) return;
+
+        const liElement = document.querySelector(`#datasCriadasListContainer li[data-eventid="${id}"]`);
+        if (liElement) { liElement.style.opacity = '0.5'; liElement.querySelectorAll('button').forEach(btn => btn.disabled = true); }
+
+        try {
+            await deleteDoc(doc(db, "eventosData", id));
+            // Update local state
+            allEventosData = allEventosData.filter(ev => ev.id !== id);
+            // Update map if this specific ID was the one mapped for that date
+            if(eventosDataMap.has(dataOriginal) && eventosDataMap.get(dataOriginal).id === id) {
+                // Need to find if there's *another* event for the same date (e.g., a previously canceled one)
+                const otherEventsOnDate = allEventosData.filter(ev => ev.dataOriginal === dataOriginal);
+                if (otherEventsOnDate.length > 0) {
+                    // Prioritize active if available, otherwise take the first remaining
+                    const activeReplacement = otherEventsOnDate.find(ev => ev.estado === 'ativo');
+                    eventosDataMap.set(dataOriginal, activeReplacement || otherEventsOnDate[0]);
+                } else {
+                    eventosDataMap.delete(dataOriginal); // No more events for this date
+                }
+            }
+            // Re-render UI
+            await renderDatasCriadas();
+            await renderCalendario();
+            await renderSugestoesVisiveis(); // Update suggestion buttons state
+        } catch (e) { console.error("Error removing date:", e); alert("Erro ao remover a data."); await renderDatasCriadas(); /* Re-render list to potentially restore button state */ }
+    }
+    async function cancelarData(id, dataOriginal, horario) {
+        const dataFormatada = formatarDataParaExibicao(dataOriginal);
+        if (!confirm(`Tem certeza que deseja CANCELAR o evento:\n${dataFormatada} | ${horario}?`)) return;
+
+        const liElement = document.querySelector(`#datasCriadasListContainer li[data-eventid="${id}"]`);
+        if (liElement) { liElement.querySelectorAll('button').forEach(btn => { btn.disabled = true; btn.textContent='...'}); }
+
+        try {
+            await updateDoc(doc(db, "eventosData", id), { estado: "cancelado" });
+            // Update local state
+            const index = allEventosData.findIndex(ev => ev.id === id);
+            if (index > -1) { allEventosData[index].estado = "cancelado"; }
+            // Update map if this ID was the mapped one
+             if (eventosDataMap.has(dataOriginal) && eventosDataMap.get(dataOriginal).id === id) {
+                 const eventInMap = eventosDataMap.get(dataOriginal);
+                 if (eventInMap) eventInMap.estado = "cancelado"; // Update the state in the map directly
+             }
+            // Re-render UI
+            await renderDatasCriadas();
+            await renderCalendario(); // Calendar needs update to show canceled state
+            // Suggestions don't need update here, canceling doesn't affect them
+        } catch (e) { console.error("Error canceling date:", e); alert("Erro ao cancelar a data."); await renderDatasCriadas(); /* Restore buttons on error */ }
+    }
+    async function reativarData(id, dataOriginal, horario) {
+        const dataFormatada = formatarDataParaExibicao(dataOriginal);
+        if (!confirm(`Tem certeza que deseja REATIVAR o evento:\n${dataFormatada} | ${horario}?`)) return;
+
+        const liElement = document.querySelector(`#datasCriadasListContainer li[data-eventid="${id}"]`);
+        if (liElement) { liElement.querySelectorAll('button').forEach(btn => { btn.disabled = true; btn.textContent='...'}); }
+
+        try {
+            await updateDoc(doc(db, "eventosData", id), { estado: "ativo" });
+            // Update local state
+            const index = allEventosData.findIndex(ev => ev.id === id);
+            if (index > -1) { allEventosData[index].estado = "ativo"; }
+             // Update map - this reactivated event should now be the primary for the date
+             const reactivatedEvent = allEventosData[index];
+             eventosDataMap.set(dataOriginal, reactivatedEvent);
+
+            // Re-render UI
+            await renderDatasCriadas();
+            await renderCalendario(); // Calendar needs update
+            // Suggestions don't need update here
+        } catch (e) { console.error("Error reactivating date:", e); alert("Erro ao reativar a data."); await renderDatasCriadas(); /* Restore buttons on error */ }
+    }
+
+
+    // --- Gestão de Sugestões ---
+    async function loadSuggestionRulesFromFirestore() { try { const q = query(regrasSugestaoCollectionRef, orderBy("diaSemana"), orderBy("horario")); const snapshot = await getDocs(q); activeSuggestionRules = snapshot.docs.map(d => ({ id: d.id, ...d.data() })).filter(r => typeof r.diaSemana === 'number' && typeof r.horario === 'string'); } catch (e) { console.error("Error loading suggestion rules:", e); activeSuggestionRules = []; alert("Erro ao carregar regras."); } }
+    function renderActiveRules() { const listElement = document.getElementById('activeRulesList'); if (!listElement) return; listElement.innerHTML = ''; if (activeSuggestionRules.length === 0) { listElement.innerHTML = '<li style="border:none; text-align:center; color:#777;">Nenhuma regra ativa. Adicione acima.</li>'; } else { activeSuggestionRules.sort((a, b) => a.diaSemana - b.diaSemana || a.horario.localeCompare(b.horario)).forEach((rule) => { const diaNome = DIAS_SEMANA_NOMES_COMPLETOS[rule.diaSemana] || 'Inválido'; const li = document.createElement('li'); const ruleSpan = document.createElement('span'); ruleSpan.textContent = `${capitalize(diaNome)} | ${rule.horario}`; li.appendChild(ruleSpan); const removeBtn = document.createElement('button'); removeBtn.className = 'remove-btn'; removeBtn.textContent = 'Remover Regra'; removeBtn.onclick = (e) => { e.stopPropagation(); removerRegraSugestao(rule.id, rule.diaSemana, rule.horario); }; li.appendChild(removeBtn); listElement.appendChild(li); }); } /* Adjust height if visible - Handled by toggle function */ }
+    async function adicionarRegrasESalvarSugestoes() {
+        const horarioInput = document.getElementById("horarioSugestaoMulti"); const checkboxes = document.querySelectorAll('#diasSemanaCheckboxes input:checked'); const popupContent = document.getElementById('popupSugestoesContent'); if (!popupContent) return;
+        const addButton = popupContent.querySelector('button:not(.remove-btn):not(.modal-close-btn)'); if (!horarioInput || !addButton) return;
+        const horario = horarioInput.value.trim(); if (!horario || checkboxes.length === 0) { alert("Selecione pelo menos um dia da semana e insira um horário."); return; }
+        addButton.disabled = true; addButton.textContent = 'Adicionando...'; let rulesAdded = false; const promises = []; const addedIds = new Set(); const newRules = [];
+        checkboxes.forEach(cb => { const dia = parseInt(cb.value, 10); const exists = activeSuggestionRules.some(r => r.diaSemana === dia && r.horario === horario); const identifier = `${dia}-${horario}`; if (!exists && !addedIds.has(identifier)) { const ruleData = { diaSemana: dia, horario: horario }; promises.push(addDoc(regrasSugestaoCollectionRef, ruleData).then(docRef => { newRules.push({ id: docRef.id, ...ruleData }); })); addedIds.add(identifier); rulesAdded = true; } });
+        if (!rulesAdded && addedIds.size === 0) { alert("Nenhuma regra nova para adicionar (já existem ou nenhuma selecionada)."); addButton.disabled = false; addButton.textContent = 'Adicionar Regra(s) e Gerar Sugestões'; return; }
+        try { await Promise.all(promises);
+             activeSuggestionRules.push(...newRules);
+             activeSuggestionRules.sort((a, b) => a.diaSemana - b.diaSemana || a.horario.localeCompare(b.horario));
+             renderActiveRules(); // Update the list in the popup
+             await gerarEAtualizarSugestoesFirestore(); // Regenerate and save all suggestions
+             horarioInput.value = ''; checkboxes.forEach(cb => cb.checked = false);
+        } catch (e) { console.error("Error adding rules:", e); alert("Erro ao salvar regras."); await loadSuggestionRulesFromFirestore(); renderActiveRules(); // Reload rules on error
+        } finally { addButton.disabled = false; addButton.textContent = 'Adicionar Regra(s) e Gerar Sugestões'; }
+    }
+    async function removerRegraSugestao(ruleId, diaSemana, horario) {
+        const diaNome = DIAS_SEMANA_NOMES_COMPLETOS[diaSemana] || 'Inválido'; if (!confirm(`Remover regra "${capitalize(diaNome)} | ${horario}"?`)) return;
+        const button = document.querySelector(`#activeRulesList button[onclick*="${ruleId}"]`); if(button){button.disabled=true; button.textContent="..."; button.closest('li').style.opacity='0.5';}
+        try { await deleteDoc(doc(db, "regrasSugestao", ruleId)); activeSuggestionRules = activeSuggestionRules.filter(r => r.id !== ruleId);
+             renderActiveRules(); // Update list in popup
+             await gerarEAtualizarSugestoesFirestore(); // Regenerate suggestions based on remaining rules
+        } catch (e) { console.error("Error removing rule:", e); alert("Erro ao remover regra."); if(button){button.disabled=false; button.textContent="Remover Regra"; button.closest('li').style.opacity='1';} }
+    }
+    async function gerarEAtualizarSugestoesFirestore() {
+        console.log("Generating suggestions based on rules:", activeSuggestionRules);
+        const novasSugestoes = []; const hoje = new Date(); hoje.setHours(0,0,0,0); // Start of today
+        const maxFutureDate = new Date();
+        maxFutureDate.setMonth(maxFutureDate.getMonth() + 6); // Generate suggestions for next ~6 months max
+
+        if (activeSuggestionRules.length > 0) {
+            activeSuggestionRules.forEach(rule => {
+                const { diaSemana, horario } = rule;
+                // Start from today and check forward
+                for (let dayOffset = 0; ; dayOffset++) {
+                    const dateCand = new Date(hoje);
+                    dateCand.setDate(hoje.getDate() + dayOffset);
+
+                    if (dateCand > maxFutureDate) break; // Stop if we go too far into the future
+
+                    if (dateCand.getDay() === diaSemana) { // Check if the day of the week matches
+                        const y = dateCand.getFullYear(), m = String(dateCand.getMonth() + 1).padStart(2, '0'), d = String(dateCand.getDate()).padStart(2, '0');
+                        const iso = `${y}-${m}-${d}`;
+                        const diaCurto = DIAS_SEMANA_NOMES_CURTOS[dateCand.getDay()];
+                        const txt = `${capitalize(diaCurto)} ${d}/${m} | ${horario}`;
+
+                        // Add if not already present for this date/time combination
+                        if (!novasSugestoes.some(s => s.date === iso && s.horario === horario)) {
+                            novasSugestoes.push({ date: iso, text: txt, horario: horario });
+                        }
+                    }
+                     // Optimization: If today + offset already passed target day for this week, jump to next week's potential day? More complex. Simple iteration is fine for now.
+                }
+            });
+        }
+
+        novasSugestoes.sort((a, b) => a.date.localeCompare(b.date) || a.horario.localeCompare(b.horario));
+        console.log(`Generated ${novasSugestoes.length} new suggestions.`);
+
+        // --- Update Firestore: Delete old, Add new ---
+        const loadingPara = document.querySelector('#sugestoesContainer p');
+        if (loadingPara && loadingPara.textContent.includes('Carregando')) {
+            loadingPara.textContent = 'Atualizando base de dados de sugestões...';
+        }
+        try {
+            const existing = await getDocs(sugestoesCollectionRef);
+            const batch = writeBatch(db);
+            existing.forEach(d => batch.delete(d.ref)); // Delete all existing suggestions
+            novasSugestoes.forEach(s => batch.set(doc(collection(db, "sugestoes")), s)); // Add all new ones
+            await batch.commit();
+            console.log("Firestore suggestions updated.");
+             await renderSugestoesVisiveis(); // Refresh the displayed suggestions
+        } catch (e) {
+            console.error("Error updating Firestore suggestions:", e);
+            alert("Erro ao atualizar sugestões na base de dados.");
+            if (loadingPara) { loadingPara.style.color = 'red'; loadingPara.textContent = 'Erro ao atualizar sugestões.';}
+        }
+    }
+    async function filterSugestoes(clickedButton) { if (!clickedButton || clickedButton.classList.contains('active')) return; const offset = parseInt(clickedButton.getAttribute('data-offset'), 10); if (isNaN(offset)) return; currentSuggestionFilterOffset = offset;
+         document.querySelectorAll('#sugestoesFilterButtons .suggestion-filter-btn').forEach(btn => btn.classList.remove('active')); clickedButton.classList.add('active');
+         await renderSugestoesVisiveis();
+    }
+    async function renderSugestoesVisiveis() {
+        const container = document.getElementById("sugestoesContainer"); const filterBtns = document.getElementById('sugestoesFilterButtons'); if (!container) return;
+        if (filterBtns) filterBtns.querySelectorAll('button').forEach(b => b.disabled = true); // Disable filter buttons while loading
+        container.innerHTML = '<p>Carregando sugestões...</p>';
+        try {
+            const today = new Date(); const targetDt = new Date(today.getFullYear(), today.getMonth() + currentSuggestionFilterOffset, 1);
+            const targetY = targetDt.getFullYear(); const targetM = String(targetDt.getMonth() + 1).padStart(2, '0'); const targetYYYYMM = `${targetY}-${targetM}`;
+
+            // Ensure event data is loaded if needed (it likely is already, but double-check)
+             if (allEventosData.length === 0) await loadDatas();
+
+            // Fetch suggestions from Firestore for the target month
+            const q = query(sugestoesCollectionRef,
+                            where("date", ">=", targetYYYYMM + "-01"),
+                            where("date", "<=", targetYYYYMM + "-31"), // Firestore handles date comparisons correctly
+                            orderBy("date"), orderBy("horario")); // Order by date then time
+            const sugestoesSnap = await getDocs(q);
+
+            // Create a Set of existing ACTIVE event date/time combos for quick lookup
+            const eventosAtivosSet = new Set(
+                 allEventosData
+                    .filter(e => e.estado !== 'cancelado') // Only consider active events
+                    .map(e => `${e.dataOriginal}|${e.horario}`)
+            );
+
+            container.innerHTML = ''; // Clear loading message
+            let hasVisible = false;
+            sugestoesSnap.forEach(doc => {
+                const sug = doc.data();
+                if (!sug?.date || !sug.text || !sug.horario) return; // Skip invalid suggestions
+
+                 // Double-check the month, although Firestore query should handle it
+                 if (sug.date.startsWith(targetYYYYMM)) {
+                     const identifier = `${sug.date}|${sug.horario}`;
+                     const isAddedAndActive = eventosAtivosSet.has(identifier); // Check if added AND active
+
+                     const div = document.createElement('div'); div.className = 'sugestao-card';
+                     const btn = document.createElement('button');
+                     btn.textContent = sug.text;
+                     btn.disabled = isAddedAndActive; // Disable only if added and active
+
+                     if (!isAddedAndActive) {
+                         btn.onclick = (ev) => criarData(sug.date, sug.horario, ev.target); // Pass target button
+                     } else {
+                         btn.title = "Data já adicionada e ativa";
+                     }
+                     div.appendChild(btn); container.appendChild(div);
+                     hasVisible = true;
+                 }
+             });
+
+            if (!hasVisible) {
+                 // Check if there are *any* suggestions in Firestore at all
+                 const anySuggestionsSnap = await getDocs(query(sugestoesCollectionRef, limit(1)));
+                 if (anySuggestionsSnap.empty && activeSuggestionRules.length === 0) {
+                     container.innerHTML = `<p>Nenhuma regra ativa para gerar sugestões.</p>`;
+                 } else if (anySuggestionsSnap.empty && activeSuggestionRules.length > 0) {
+                     container.innerHTML = `<p>Nenhuma sugestão encontrada. Tente adicionar regras e gerar novamente.</p>`;
+                 }
+                 else {
+                     container.innerHTML = `<p>Nenhuma sugestão para este período (${targetYYYYMM}).</p>`;
+                 }
+            }
+        } catch (e) { console.error("Error loading/rendering suggestions:", e); container.innerHTML = '<p style="color: red;">Erro ao carregar sugestões.</p>';
+        } finally { if (filterBtns) filterBtns.querySelectorAll('button').forEach(b => b.disabled = false); // Re-enable filter buttons
+         }
+    }
+
+    // --- Popup & Resumo Functions ---
+    function openPopupResumo() { const select = document.getElementById('mesSelect'); if (!select?.value) { alert("Selecione um mês primeiro."); return; } const key = select.value; const title = document.querySelector('#popupResumoContainer h2'); if (title) title.textContent = `Escala TPERM Bairro Alto - ${select.options[select.selectedIndex]?.text}`; renderPopupResumo(key); const modal = document.getElementById('popupResumoContainer'); if (!modal) return; modal.style.display = 'flex'; setTimeout(() => modal.classList.add('visible'), 10); }
+    function closePopupResumo() { const modal = document.getElementById('popupResumoContainer'); if (!modal) return; modal.classList.remove('visible'); modal.addEventListener('transitionend', () => { if (!modal.classList.contains('visible')) { modal.style.display = 'none'; document.getElementById('popupResumoContent').innerHTML = '<p>...</p>'; } }, { once: true }); }
+    function renderPopupResumo(mesKey) {
+        const content = document.getElementById('popupResumoContent'); if (!content) return;
+        content.innerHTML = '<p>Carregando resumo...</p>';
+        const monthAvailFiltered = new Map(); // Map: date -> Map: horario -> [confirmations]
+        let hasAnyAvailForActiveEvents = false;
+
+        // Filter the global availability map (currentMonthAvailability) for the selected month AND active events
+        currentMonthAvailability.forEach((horarioMap, date) => {
+            if (date.startsWith(mesKey)) {
+                 const eventInfo = eventosDataMap.get(date); // Use the primary event map
+                 if (eventInfo && eventInfo.estado !== 'cancelado') { // Check if event exists and is active
+                     monthAvailFiltered.set(date, horarioMap);
+                     // Check if there are actual confirmations within the horarioMap
+                     if(horarioMap.size > 0) {
+                         horarioMap.forEach(confs => {
+                             if (confs.length > 0) hasAnyAvailForActiveEvents = true;
+                         });
+                     }
+                 }
+             }
+        });
+
+        const exportBtn = document.getElementById('exportPdfBtn');
+
+        if (monthAvailFiltered.size === 0) {
+            content.innerHTML = '<p>Nenhum evento ativo encontrado para este mês.</p>';
+            if(exportBtn) exportBtn.disabled = true;
+            return;
+        }
+        if (!hasAnyAvailForActiveEvents) {
+            content.innerHTML = '<p>Nenhuma confirmação registrada para os eventos ativos deste mês.</p>';
+             if(exportBtn) exportBtn.disabled = true; // Disable export if no data
+        } else {
+             if(exportBtn) exportBtn.disabled = false; // Enable export if data exists
+        }
+
+         content.innerHTML = ''; // Clear loading/no data message
+        const sortedDates = Array.from(monthAvailFiltered.keys()).sort();
+
+        // Generate colors for unique dates to group visually
+        const uniqueFormatted = [...new Set(sortedDates.map(formatarDataParaExibicao))].sort((a, b) => {
+            // Attempt to sort formatted dates correctly (might need localeCompare with options)
+            // Basic sort works for now if format is consistent
+             return a.localeCompare(b, 'pt-PT');
+        });
+        const colorMap = new Map();
+        const colors = generateSoftColors(uniqueFormatted.length);
+        uniqueFormatted.forEach((dStr, i) => {
+            const [h, s, l] = colors[i % colors.length];
+            colorMap.set(dStr, rgbToHex(...hslToRgb(h, s, l)));
+        });
+
+        sortedDates.forEach(dateOrig => {
+            const dateMap = monthAvailFiltered.get(dateOrig); // Map: horario -> [confs]
+            const dateFmt = formatarDataParaExibicao(dateOrig);
+            const bgColor = colorMap.get(dateFmt) || '#ffffff'; // Fallback to white
+
+            const blockDiv = document.createElement('div');
+            blockDiv.style.backgroundColor = bgColor;
+            const h4 = document.createElement('h4'); h4.textContent = dateFmt; blockDiv.appendChild(h4);
+
+            if (dateMap?.size > 0) {
+                // Sort horarios within the date
+                Array.from(dateMap.keys()).sort().forEach(horario => {
+                    const confs = dateMap.get(horario) || [];
+
+                    const horarioHdr = document.createElement('div');
+                    horarioHdr.textContent = `Horário: ${horario}`;
+                    horarioHdr.style.fontWeight = 'bold';
+                    blockDiv.appendChild(horarioHdr);
+
+                    if (confs.length > 0) {
+                        const ul = document.createElement('ul');
+                        // Sort confirmations: Captain first, then alphabetically
+                        confs.sort((a, b) => (a.isCapitao === b.isCapitao) ? a.nome.localeCompare(b.nome) : (a.isCapitao ? -1 : 1));
+
+                        confs.forEach((conf) => {
+                            const li = document.createElement('li');
+                            const span = document.createElement('span');
+                            span.textContent = conf.nome + (conf.isCapitao ? ' (C)' : '');
+                            if(conf.isCapitao) span.style.fontWeight = 'bold';
+                            li.appendChild(span);
+
+                            const btnsDiv = document.createElement('div'); // Container for buttons
+
+                            // Captain Toggle Button
+                            const capBtn = document.createElement('button');
+                            capBtn.className = 'toggle-capitao-btn';
+                            capBtn.textContent = conf.isCapitao ? 'Rem. Capitão' : 'Tornar Capitão';
+                            // Dynamic styling based on state
+                            capBtn.style.backgroundColor = conf.isCapitao ? '#ffc107' : '#6c757d'; // Yellow if captain, gray if not
+                            capBtn.style.borderColor = conf.isCapitao ? '#e0a800' : '#5a6268';
+                            capBtn.onclick = (e) => toggleCapitaoStatus(conf.id, dateOrig, horario, !conf.isCapitao, e.target); // Pass event target
+                            btnsDiv.appendChild(capBtn);
+
+                            // Remove Confirmation Button
+                            const remBtn = document.createElement('button');
+                            remBtn.className = 'remove-btn';
+                            remBtn.textContent = 'Remover';
+                            remBtn.onclick = (e) => removerConfirmacao(conf.id, dateOrig, horario, conf.nome, e.target); // Pass event target
+                            btnsDiv.appendChild(remBtn);
+
+                            li.appendChild(btnsDiv);
+                            ul.appendChild(li);
+                        });
+                        blockDiv.appendChild(ul);
+                    } else {
+                        // Should ideally not happen if dateMap has the horario key, but good fallback
+                        blockDiv.appendChild(document.createElement('p')).textContent = 'Sem confirmações para este horário.';
+                    }
+                });
+            } else {
+                 // This case means the event exists and is active, but has 0 horarios with confirmations
+                 blockDiv.appendChild(document.createElement('p')).textContent = 'Sem horários com confirmações registrados.';
+             }
+            content.appendChild(blockDiv);
+        });
+    }
+    async function removerConfirmacao(docId, dateOrig, horario, nome, btn) {
+        if (!confirm(`Remover confirmação de ${nome} em ${formatarDataParaExibicao(dateOrig)} (${horario})?`)) return;
+        if(btn){ // Disable buttons immediately
+            btn.disabled=true; btn.textContent='...';
+            const capBtn=btn.parentElement?.querySelector('.toggle-capitao-btn'); if(capBtn)capBtn.disabled=true;
+        }
+
+        try {
+            await deleteDoc(doc(db,"disponibilidade",docId));
+
+            // Update local availability state (currentMonthAvailability)
+            if (currentMonthAvailability.has(dateOrig)) {
+                const dMap = currentMonthAvailability.get(dateOrig);
+                if (dMap.has(horario)) {
+                    const hArr = dMap.get(horario);
+                    const idx = hArr.findIndex(c=>c.id===docId);
+                    if(idx > -1) {
+                        hArr.splice(idx,1); // Remove the item from the array
+                    }
+                    // Optional: if hArr is now empty, remove the horario key?
+                    // if (hArr.length === 0) dMap.delete(horario);
+                }
+                // Optional: if dMap is now empty, remove the date key?
+                // if (dMap.size === 0) currentMonthAvailability.delete(dateOrig);
+            }
+
+            // Re-render the popup if it's currently visible for the correct month
+            const selMonth = document.getElementById('mesSelect')?.value;
+            if(selMonth && dateOrig.startsWith(selMonth) && document.getElementById('popupResumoContainer')?.classList.contains('visible')) {
+                renderPopupResumo(selMonth);
+            }
+            // Re-render the main calendar after a short delay
+            setTimeout(renderCalendario, 50); // Delay allows popup to potentially update first
+
+        } catch(e){
+            console.error("Error removing confirmation:", e);
+            alert("Erro ao remover confirmação.");
+             // Re-enable buttons on error
+             if(btn){
+                 btn.disabled=false; btn.textContent='Remover';
+                 const capBtn=btn.parentElement?.querySelector('.toggle-capitao-btn'); if(capBtn)capBtn.disabled=false;
+             }
+        }
+    }
+    async function toggleCapitaoStatus(docId, dateOrig, horario, makeCap, btn) {
+        // Disable buttons immediately
+        if(btn){
+            btn.disabled=true; btn.textContent='...';
+            const remBtn=btn.parentElement?.querySelector('.remove-btn'); if(remBtn)remBtn.disabled=true;
+        }
+
+        // Check if someone else is already captain for this specific date/time slot
+        const q = query(disponibilidadeCollectionRef, where("dataOriginal","==",dateOrig), where("horario","==",horario), where("isCapitao", "==", true));
+        try {
+            let oldCapId = null;
+            // Only query for existing captain if we are *making* someone captain
+            if (makeCap) {
+                const snap = await getDocs(q);
+                snap.forEach(d => {
+                    if(d.id !== docId) oldCapId = d.id; // Find the ID of the *other* captain
+                });
+            }
+
+            // Use a batch write to update potentially two documents atomically
+            const batch = writeBatch(db);
+            // If making someone captain AND another captain exists, remove old captain status
+            if(makeCap && oldCapId) {
+                batch.update(doc(db,"disponibilidade",oldCapId), {isCapitao:false});
+            }
+            // Update the target person's captain status
+            batch.update(doc(db,"disponibilidade",docId), {isCapitao:makeCap});
+
+            await batch.commit();
+
+            // Update local availability state (currentMonthAvailability)
+            if (currentMonthAvailability.has(dateOrig)) {
+                const dMap=currentMonthAvailability.get(dateOrig);
+                if(dMap.has(horario)){
+                    const hArr=dMap.get(horario);
+                    // Update old captain in local state if applicable
+                    if(makeCap && oldCapId){
+                        const old=hArr.find(c=>c.id===oldCapId);
+                        if(old) old.isCapitao=false;
+                    }
+                    // Update target person in local state
+                    const target=hArr.find(c=>c.id===docId);
+                    if(target) target.isCapitao=makeCap;
+                }
+            }
+
+            // Re-render the popup if it's visible for the correct month
+            const selMonth = document.getElementById('mesSelect')?.value;
+            if(selMonth && dateOrig.startsWith(selMonth) && document.getElementById('popupResumoContainer')?.classList.contains('visible')) {
+                renderPopupResumo(selMonth);
+            }
+            // Re-render the main calendar
+            setTimeout(renderCalendario, 50);
+
+        } catch(e){
+            console.error("Error toggling captain status:", e);
+            alert("Erro ao alterar status de capitão.");
+             // Re-enable buttons on error
+             if(btn){
+                 btn.disabled = false;
+                 // Restore text based on the intended action that failed
+                 btn.textContent = makeCap ? 'Tornar Capitão' : 'Rem. Capitão';
+                 const remBtn=btn.parentElement?.querySelector('.remove-btn'); if(remBtn)remBtn.disabled = false;
+             }
+        }
+    }
+    async function exportarResumoPdf() {
+        if (!jsPDFInstance || typeof jsPDFInstance.API?.autoTable !== 'function') { alert("Erro: Biblioteca PDF ou plugin AutoTable não carregado."); return; }
+
+        const select = document.getElementById('mesSelect'); const mesKey = select?.value; const mesTxt = select?.options[select.selectedIndex]?.text || `Mês ${mesKey}`; if(!mesKey){alert("Selecione um mês primeiro."); return;}
+
+        // --- Re-filter data specifically for PDF generation, similar to renderPopupResumo ---
+        const monthAvailFiltered = new Map(); let hasConfirmations = false;
+        currentMonthAvailability.forEach((horarioMap, date) => {
+             if (date.startsWith(mesKey)) {
+                 const eventInfo = eventosDataMap.get(date); // Use map
+                 if (eventInfo && eventInfo.estado !== 'cancelado') {
+                     monthAvailFiltered.set(date, horarioMap);
+                     horarioMap.forEach(confs => { if(confs.length > 0) hasConfirmations = true; });
+                 }
+             } });
+        if(monthAvailFiltered.size === 0){alert("Nenhum evento ativo neste mês para exportar."); return;} if(!hasConfirmations){alert("Nenhuma confirmação registrada para eventos ativos neste mês para exportar."); return;}
+        // --- End Re-filter ---
+
+        const btn = document.getElementById('exportPdfBtn'); if(btn){btn.disabled=true; btn.textContent='Gerando...';}
+        try {
+            const pdf = new jsPDFInstance({ orientation: 'p', unit: 'mm', format: 'a4' }); // Use jsPDF constructor
+            const pageMargin = 14;
+            pdf.setFontSize(18); pdf.text(`Escala TPERM Bairro Alto - ${mesTxt}`, pageMargin, 22);
+
+            const cols = ["Data / Horário", "Nomes Confirmados"]; const rows = [];
+            const sortedDates = Array.from(monthAvailFiltered.keys()).sort();
+
+            // Generate colors for PDF grouping (similar to popup)
+            const uniqueFmt = [...new Set(sortedDates.map(formatarDataParaExibicao))].sort((a,b)=>a.localeCompare(b, 'pt-PT'));
+            const pdfColorMap = new Map(); const colors = generateSoftColors(uniqueFmt.length, 0.7, 0.95); // Slightly different colors maybe
+            uniqueFmt.forEach((dStr, i) => { const [h,s,l] = colors[i%colors.length]; pdfColorMap.set(dStr, hslToRgb(h,s,l)); });
+
+            // Prepare data rows for the table
+            sortedDates.forEach(dateOrig => {
+                const dMap = monthAvailFiltered.get(dateOrig);
+                if(dMap?.size > 0){
+                    const dateFmt = formatarDataParaExibicao(dateOrig);
+                    Array.from(dMap.keys()).sort().forEach(horario => {
+                        const confs = dMap.get(horario) || [];
+                        if(confs.length > 0){
+                            let capName=null;
+                            const others=[];
+                            // Separate captain and sort others
+                            confs.forEach(c => c.isCapitao ? capName=c.nome : others.push(c.nome));
+                            others.sort((a,b) => a.localeCompare(b));
+
+                            // Build names string: Captain first (bold), then others
+                            let namesStr = "";
+                            if(capName) namesStr += `${capName} (C)`; // AutoTable doesn't directly support bold *substrings* easily here. Bolding is applied per cell/column.
+                            if(others.length>0){
+                                if(capName) namesStr+=", "; // Add separator if captain exists
+                                namesStr+=others.join(", ");
+                            }
+                            // Add row data: [Col1_DataHora, Col2_Nomes, Grouping_DateFmt]
+                            rows.push([`${dateFmt} | ${horario}`, namesStr, dateFmt]);
+                        }
+                    });
+                }
+            });
+
+            if(rows.length===0){ alert("Nenhuma confirmação encontrada para eventos ativos neste mês (erro na preparação do PDF)."); if(btn){btn.disabled=false;btn.textContent='Extrair PDF';} return;}
+
+            // --- Use AutoTable ---
+            const groupSpacingPadding = 3; // Extra padding in mm to add below groups
+
+            pdf.autoTable({
+                head: [cols],
+                body: rows.map(r=>[r[0],r[1]]), // Only pass data for columns, not the grouping date
+                startY: 30,
+                theme: 'grid',
+                margin: { top: 30, left: pageMargin, right: pageMargin, bottom: pageMargin },
+                headStyles: {
+                    fillColor: [45, 137, 239],
+                    textColor: [255, 255, 255],
+                    fontStyle: 'bold',
+                    halign: 'center', // Pode querer centrar o cabeçalho também
+                    valign: 'middle'
+                 },
+                styles: { // Estilos aplicados às células do corpo (body)
+                    fontSize: 9,
+                    cellPadding: 2.5, // Padding geral dentro da célula
+                    lineWidth: 0.1,
+                    lineColor: [200, 200, 200],
+                    font: 'helvetica',
+                    halign: 'left',   // <<< ALTERAÇÃO: Alinhamento horizontal à esquerda
+                    valign: 'middle'  // <<< ALTERAÇÃO: Alinhamento vertical ao centro
+                },
+                columnStyles: {
+                    0:{ // Primeira Coluna (Data / Horário)
+                        cellWidth: 85,
+                        fontStyle: 'bold'
+                        // halign e valign herdados de 'styles'
+                    },
+                    1:{ // Segunda Coluna (Nomes)
+                        cellWidth: 'auto'
+                        // halign e valign herdados de 'styles'
+                    }
+                },
+                // Styling based on Date Group and adding spacing
+                didParseCell: (data) => {
+                   // ... (código do didParseCell para cores e espaçamento permanece igual)
+                   if (data.section === 'body') {
+                        const rowData = rows[data.row.index];
+                        const rowDateFmt = rowData?.[2];
+
+                        // Apply background color based on date group
+                        if (rowDateFmt && pdfColorMap.has(rowDateFmt)) {
+                            data.cell.styles.fillColor = pdfColorMap.get(rowDateFmt);
+                        } else {
+                            data.cell.styles.fillColor = [255, 255, 255];
+                        }
+                        data.cell.styles.textColor = [0, 0, 0];
+
+                        // Adicionar espaçamento inferior se for a última linha de um grupo
+                        const isLastRowOfGroup = (data.row.index === rows.length - 1)
+                                             || (rows[data.row.index + 1] && rowDateFmt !== rows[data.row.index + 1][2]);
+
+                        if (isLastRowOfGroup) {
+                             // Manter o padding extra no fundo para espaçamento entre grupos
+                            data.cell.styles.cellPadding = {
+                                top: data.cell.styles.cellPadding?.top || 2.5,
+                                right: data.cell.styles.cellPadding?.right || 2.5,
+                                bottom: (data.cell.styles.cellPadding?.bottom || 2.5) + groupSpacingPadding, // Padding extra aqui
+                                left: data.cell.styles.cellPadding?.left || 2.5,
+                            };
+                        } else {
+                             // Reset cellPadding for non-last rows of group if needed,
+                             // or ensure default padding is applied if not modifying bottom
+                             data.cell.styles.cellPadding = {
+                                top: data.cell.styles.cellPadding?.top || 2.5,
+                                right: data.cell.styles.cellPadding?.right || 2.5,
+                                bottom: data.cell.styles.cellPadding?.bottom || 2.5,
+                                left: data.cell.styles.cellPadding?.left || 2.5,
+                             };
+                        }
+                         // NOTA: As propriedades halign/valign definidas em 'styles' já se aplicam.
+                         // Não precisamos de as definir aqui no didParseCell, a menos que
+                         // quiséssemos um alinhamento diferente para células específicas.
+                    } else if (data.section === 'head') {
+                         // Opcional: Aplicar alinhamento ao cabeçalho explicitamente se necessário
+                         // (já foi feito em headStyles acima)
+                    }
+                }
+            });
+
+            // --- Save PDF ---
+            pdf.save(`Resumo_Disponibilidade_Ativos_${mesKey.replace('-','_')}.pdf`);
+
+        } catch(e) { console.error("PDF Generation Error:", e); alert(`Erro ao gerar o PDF: ${e.message}`);
+        } finally { if(btn){btn.disabled=false; btn.textContent='Extrair PDF';} } // Re-enable button
+    }
+
+
+
+
+
+
+
+
+
+
+    // --- Gestão do Calendário ---
+    async function renderCalendario() {
+        const container = document.getElementById('calendarioContainer'); const selectMes = document.getElementById('mesSelect'); const currentSelectedMonth = selectMes?.value; if (!container || !selectMes) { console.error("Calendar elements missing."); return; }
+        container.innerHTML = '<p style="text-align:center; padding: 20px; color:#777;">Carregando calendário...</p>'; const resumoBtn = document.getElementById('resumoBtn'); if(resumoBtn) resumoBtn.disabled = true; // Disable summary button while loading
+
+        try {
+             // Ensure necessary data is loaded (Events primarily)
+             if (eventosDataMap.size === 0) await loadDatas(); // Reload if map is empty
+
+             // Fetch all availability data for the calendar month display
+             // Note: This fetches ALL availability, then filters locally. Could optimize by querying only the relevant month if needed.
+             console.log("Fetching all availability for Calendar rendering...");
+             const disponibilidadeDocs = await getDocs(query(disponibilidadeCollectionRef, orderBy("dataOriginal"), orderBy("horario"), orderBy("nome")));
+             console.log(`Fetched ${disponibilidadeDocs.size} total availability records.`);
+
+            // Determine available months based *only* on created events (allEventosData)
+            const datasPorMes = {};
+            allEventosData.forEach(e => {
+                if (e?.dataOriginal?.length >= 7) {
+                    const key = e.dataOriginal.substring(0, 7); // YYYY-MM
+                    if (!datasPorMes[key]) datasPorMes[key] = true; // Just mark month as having an event
+                }
+            });
+            const availableMonths = Object.keys(datasPorMes).sort();
+
+            // Populate month selector
+            selectMes.innerHTML = '';
+            if (availableMonths.length === 0) {
+                selectMes.innerHTML = '<option value="">Sem eventos</option>';
+                container.innerHTML = '<p style="text-align:center; padding: 20px; color:#777;">Crie um evento para ver o calendário.</p>';
+                currentMonthAvailability.clear(); // Clear availability map
+                return; // Stop rendering calendar if no months have events
+            }
+            availableMonths.forEach(key => {
+                const opt = document.createElement('option');
+                opt.value = key;
+                const [y, m] = key.split('-').map(Number);
+                opt.textContent = capitalize(new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('pt-PT', { timeZone: 'UTC', month: 'long', year: 'numeric' }));
+                selectMes.appendChild(opt);
+            });
+
+            // Determine which month to display
+            // Prioritize currently selected (if still valid), otherwise default to the latest month with events
+            const monthToDisplay = currentSelectedMonth && availableMonths.includes(currentSelectedMonth) ? currentSelectedMonth : availableMonths[availableMonths.length - 1];
+            selectMes.value = monthToDisplay;
+            if (resumoBtn) resumoBtn.disabled = false; // Enable summary button now that a month is selected
+
+            // --- Process Availability Data for the selected month ---
+            currentMonthAvailability.clear(); // Clear previous month's data
+            const [anoNum, mesNum] = monthToDisplay.split('-').map(Number);
+
+            disponibilidadeDocs.forEach(doc => {
+                 const d = doc.data();
+                 // Filter for the selected month AND check against the primary event map (eventosDataMap)
+                 if (d?.dataOriginal?.startsWith(monthToDisplay) && d.horario && d.nome) {
+                     const eventInfo = eventosDataMap.get(d.dataOriginal);
+                     // Only include availability if the primary event for that date exists and is NOT canceled
+                     if (eventInfo && eventInfo.estado !== 'cancelado') {
+                         if (!currentMonthAvailability.has(d.dataOriginal)) {
+                             currentMonthAvailability.set(d.dataOriginal, new Map()); // date -> Map
+                         }
+                         const dateMap = currentMonthAvailability.get(d.dataOriginal);
+                         if (!dateMap.has(d.horario)) {
+                             dateMap.set(d.horario, []); // horario -> [confirmations]
+                         }
+                         // Add confirmation details
+                         dateMap.get(d.horario).push({
+                             id: doc.id,
+                             nome: d.nome,
+                             isCapitao: d.isCapitao === true // Ensure boolean
+                         });
+                     }
+                 }
+             });
+            console.log(`Processed availability for ${monthToDisplay}:`, currentMonthAvailability);
+            // --- End Availability Processing ---
+
+            container.innerHTML = ''; // Clear loading message
+
+            // --- Build Calendar Grid ---
+            const firstD = new Date(Date.UTC(anoNum, mesNum - 1, 1)); // First day of month (UTC)
+            const lastD = new Date(Date.UTC(anoNum, mesNum, 0));     // Last day of month (UTC)
+            let startDay = firstD.getUTCDay(); // 0=Sun, 1=Mon,... 6=Sat
+            startDay = (startDay === 0) ? 6 : startDay - 1; // Adjust to 0=Mon, 1=Tue,... 6=Sun
+
+            // Create grid array: null for empty slots, Date object for days
+            const daysInGrid = [];
+            for (let i = 0; i < startDay; i++) daysInGrid.push(null); // Placeholders for previous month
+            for (let i = 1; i <= lastD.getUTCDate(); i++) daysInGrid.push(new Date(Date.UTC(anoNum, mesNum - 1, i))); // Days of current month
+            while (daysInGrid.length % 7 !== 0) daysInGrid.push(null); // Placeholders for next month
+
+            // Add Header Row (Mon-Sun)
+            const headerDiv = document.createElement('div'); headerDiv.className = 'calendar-header';
+            ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'].forEach(dn => headerDiv.appendChild(document.createElement('div')).textContent = dn);
+            container.appendChild(headerDiv);
+
+            // Add Calendar Day Cells
+            const gridDiv = document.createElement('div'); gridDiv.className = 'calendar'; container.appendChild(gridDiv);
+            daysInGrid.forEach(dtObj => {
+                const dayDiv = document.createElement('div');
+                if (dtObj) {
+                     // It's a valid day cell for the current month
+                     const dayNum = dtObj.getUTCDate();
+                     const iso = `${dtObj.getUTCFullYear()}-${String(dtObj.getUTCMonth() + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`; // YYYY-MM-DD
+                     dayDiv.className = 'day'; // Base class
+
+                     // Add day number header
+                     const numHdr = document.createElement('div'); numHdr.className = 'day-number-header'; numHdr.textContent = dayNum; dayDiv.appendChild(numHdr);
+
+                     // Check event status using the primary event map
+                     const eventoDoDia = eventosDataMap.get(iso);
+                     const isEvt = !!eventoDoDia; // Does any event (active or canceled) exist for this day?
+                     const isCanceled = eventoDoDia?.estado === 'cancelado';
+
+                     if (isEvt) {
+                         dayDiv.classList.add('has-event'); // Mark as having an event defined
+                         if (isCanceled) {
+                             dayDiv.classList.add('is-canceled'); // Mark specifically as canceled
+                         }
+                     } else {
+                         dayDiv.classList.add('day-empty'); // Mark as empty (no event defined)
+                     }
+
+                     // Get availability for this specific day (already filtered for active events)
+                     const dayAvail = currentMonthAvailability.get(iso); // Map: horario -> [confs]
+
+                     // Display confirmed names only if the event is NOT canceled AND there's availability data
+                     if (!isCanceled && dayAvail?.size > 0) {
+                         // Sort horarios and display confirmations
+                         Array.from(dayAvail.keys()).sort().forEach(horario => {
+                             const confs = dayAvail.get(horario) || [];
+                             if (confs.length > 0) {
+                                 // Add horario header
+                                 const hHdr = document.createElement('div'); hHdr.className = 'horario-group-header'; hHdr.textContent = horario; dayDiv.appendChild(hHdr);
+                                 // Add list of names
+                                 const ul = document.createElement('ul'); ul.className = 'nomes horario-nomes-list';
+                                 // Sort names: Captain first, then alpha
+                                 confs.sort((a, b) => (a.isCapitao === b.isCapitao) ? a.nome.localeCompare(b.nome) : (a.isCapitao ? -1 : 1));
+                                 confs.forEach(c => {
+                                     const li = document.createElement('li');
+                                     const span = document.createElement('span');
+                                     span.textContent = c.nome + (c.isCapitao ? ' (C)' : '');
+                                     if(c.isCapitao) span.style.fontWeight='bold';
+                                     li.appendChild(span); ul.appendChild(li);
+                                 });
+                                 dayDiv.appendChild(ul);
+                             }
+                         });
+                     } // else: No availability to show for this active event, or event is canceled/doesn't exist
+
+                } else {
+                     // It's a placeholder cell for the previous/next month
+                     dayDiv.className = 'day day-placeholder';
+                 }
+                 gridDiv.appendChild(dayDiv);
+            });
+
+        } catch (e) { console.error("Error rendering calendar:", e); container.innerHTML = `<p style="color: red; text-align:center; padding: 20px;">Erro ao carregar calendário: ${e.message}</p>`; selectMes.innerHTML = '<option value="">Erro</option>'; currentMonthAvailability.clear(); if (resumoBtn) resumoBtn.disabled = true; }
+    }
+
+
+    // --- Funções para Popup de Sugestões ---
+    function openSugestoesPopup() { const modal = document.getElementById('popupSugestoesContainer'); if (!modal) return; modal.style.display = 'flex'; setTimeout(() => modal.classList.add('visible'), 10); renderActiveRules(); }
+    function closeSugestoesPopup() { const modal = document.getElementById('popupSugestoesContainer'); if (!modal) return; modal.classList.remove('visible'); modal.addEventListener('transitionend', () => { if (!modal.classList.contains('visible')) modal.style.display = 'none'; }, { once: true }); }
+
+
+    // --- Funções para Popup de Estatísticas Gerais ---
+    function openStatsPessoasPopup() {
+        const modal = document.getElementById('popupStatsPessoasContainer');
+        if (!modal) return;
+        const contentArea = document.getElementById('statsPessoasContentArea');
+        if(contentArea) contentArea.innerHTML = '<p>Carregando e calculando estatísticas...</p>';
+        modal.style.display = 'flex';
+        setTimeout(() => modal.classList.add('visible'), 10);
+        renderStatsPessoas(); // Call calculation function
+    }
+    function closeStatsPessoasPopup() {
+        const modal = document.getElementById('popupStatsPessoasContainer');
+        if (!modal) return;
+        modal.classList.remove('visible');
+        modal.addEventListener('transitionend', () => {
+            if (!modal.classList.contains('visible')) {
+                modal.style.display = 'none';
+                const contentArea = document.getElementById('statsPessoasContentArea');
+                if (contentArea) contentArea.innerHTML = '<p>Carregando estatísticas...</p>'; // Reset
+            }
+        }, { once: true });
+    }
+    async function renderStatsPessoas() {
+        const contentArea = document.getElementById('statsPessoasContentArea');
+        if (!contentArea) return;
+        try {
+            // Ensure necessary base data is loaded
+            if (allPessoas.length === 0) await loadNomes();
+            if (eventosDataMap.size === 0) await loadDatas(); // Use map check
+
+            console.log("Fetching availability data for general stats...");
+            const disponibilidadeSnapshot = await getDocs(query(disponibilidadeCollectionRef));
+            const allDisponibilidade = disponibilidadeSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            console.log(`Fetched ${allDisponibilidade.length} availability records for general stats.`);
+
+            // Process and Aggregate Data
+            const stats = {
+                totalEscalas: 0,
+                totalEscalasCanceladas: 0,
+                totalHoras: 0,
+                countByMonth: {}, // { count: N, uniquePeople: Set(), canceled: M }
+                countByWeek: {},  // { count: N, uniquePeople: Set(), canceled: M } -> Week key needs better generation maybe
+                countByWeekday: {},// { count: N, uniquePeople: Set() }
+                countByHorario: {},// { count: N, uniquePeople: Set() }
+                countByPerson: {}, // { count: N, hours: H }
+                countByDate: {},   // { count: N, uniquePeople: Set() }
+            };
+            const uniquePeopleAvailableOverall = new Set();
+            const peopleWithAnyActiveEscala = new Set(); // People with at least one scale in an *active* event
+
+            // Helper to get start of week (Monday)
+            const getWeekStartDate = (dateStr) => {
+                try {
+                    const [y, m, d] = dateStr.split('-').map(Number);
+                    const date = new Date(Date.UTC(y, m - 1, d));
+                    const dayOfWeek = date.getUTCDay(); // 0 = Sunday, 6 = Saturday
+                    const diff = date.getUTCDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1); // Adjust to Monday
+                    const monday = new Date(date.setUTCDate(diff));
+                    return `${monday.getUTCFullYear()}-${String(monday.getUTCMonth() + 1).padStart(2, '0')}-${String(monday.getUTCDate()).padStart(2, '0')}`;
+                } catch { return "Semana Inválida"; }
+            };
+
+
+            allDisponibilidade.forEach(disp => {
+                if (!disp.dataOriginal || !disp.nome || !disp.horario) { console.warn("Skipping availability record with missing data:", disp); return; }
+
+                // Use the primary event map to check status
+                const evento = eventosDataMap.get(disp.dataOriginal);
+                const isEventoAtivo = evento && evento.estado !== 'cancelado';
+
+                uniquePeopleAvailableOverall.add(disp.nome); // Track everyone who ever registered
+
+                const monthKey = disp.dataOriginal.substring(0, 7);
+                const weekStartDate = getWeekStartDate(disp.dataOriginal);
+                const weekKey = `Semana de ${weekStartDate}`;
+                const weekdayKey = evento?.diasemana || disp.diasemana || 'Dia Desconhecido'; // Prefer event's weekday if available
+                const horarioKey = disp.horario;
+                const dateKey = disp.dataOriginal;
+                const personKey = disp.nome;
+
+                if (isEventoAtivo) {
+                    stats.totalEscalas++;
+                    peopleWithAnyActiveEscala.add(personKey);
+
+                    // Initialize counters if needed
+                    if (!stats.countByMonth[monthKey]) stats.countByMonth[monthKey] = { count: 0, uniquePeople: new Set(), canceled: 0 };
+                    if (!stats.countByWeek[weekKey]) stats.countByWeek[weekKey] = { count: 0, uniquePeople: new Set(), canceled: 0 };
+                    if (!stats.countByWeekday[weekdayKey]) stats.countByWeekday[weekdayKey] = { count: 0, uniquePeople: new Set() };
+                    if (!stats.countByHorario[horarioKey]) stats.countByHorario[horarioKey] = { count: 0, uniquePeople: new Set() };
+                    if (!stats.countByPerson[personKey]) stats.countByPerson[personKey] = { count: 0, hours: 0 };
+                    if (!stats.countByDate[dateKey]) stats.countByDate[dateKey] = { count: 0, uniquePeople: new Set() };
+
+                    // Increment counts and add to sets
+                    stats.countByMonth[monthKey].count++; stats.countByMonth[monthKey].uniquePeople.add(personKey);
+                    stats.countByWeek[weekKey].count++; stats.countByWeek[weekKey].uniquePeople.add(personKey);
+                    stats.countByWeekday[weekdayKey].count++; stats.countByWeekday[weekdayKey].uniquePeople.add(personKey);
+                    stats.countByHorario[horarioKey].count++; stats.countByHorario[horarioKey].uniquePeople.add(personKey);
+                    stats.countByPerson[personKey].count++;
+                    stats.countByDate[dateKey].count++; stats.countByDate[dateKey].uniquePeople.add(personKey);
+
+                    // Calculate hours
+                    const duration = parseHorarioDuration(disp.horario);
+                    if (duration !== null) {
+                        stats.countByPerson[personKey].hours += duration;
+                        stats.totalHoras += duration;
+                    } else { console.warn(`Could not parse duration for horario: ${disp.horario} on ${disp.dataOriginal}`); }
+
+                } else {
+                    // This availability record is for a Canceled or Non-Existent event
+                    stats.totalEscalasCanceladas++;
+                     // Optionally track canceled count per month/week
+                     if (stats.countByMonth[monthKey]) { stats.countByMonth[monthKey].canceled++; } else { stats.countByMonth[monthKey] = { count: 0, uniquePeople: new Set(), canceled: 1 };}
+                     if (stats.countByWeek[weekKey]) { stats.countByWeek[weekKey].canceled++; } else { stats.countByWeek[weekKey] = { count: 0, uniquePeople: new Set(), canceled: 1 }; }
+                }
+            });
+
+            // Prepare Output HTML
+            let statsHTML = `<h4>Resumo Geral (Eventos Ativos)</h4><ul style="list-style: disc; padding-left: 20px;">`;
+            statsHTML += `<li>Total de Pessoas Registradas: <strong>${allPessoas.length}</strong></li>`;
+            statsHTML += `<li>Total de Escalas Ativas Registradas: <strong>${stats.totalEscalas}</strong></li>`;
+            statsHTML += `<li>Total Estimado de Horas Escalonadas (Eventos Ativos): <strong>${stats.totalHoras.toFixed(1)}h</strong></li>`;
+            statsHTML += `<li>Média de Escalas Ativas por Pessoa (que teve alguma escala): <strong>${(peopleWithAnyActiveEscala.size > 0 ? (stats.totalEscalas / peopleWithAnyActiveEscala.size) : 0).toFixed(1)}</strong></li>`;
+            const peopleNotScheduled = allPessoas.filter(p => !peopleWithAnyActiveEscala.has(p.nome)).length;
+            statsHTML += `<li>Pessoas Registradas SEM Escalas Ativas: <strong>${peopleNotScheduled}</strong></li>`;
+            statsHTML += `<li>Registros de Disponibilidade para Eventos Cancelados/Inexistentes: <strong>${stats.totalEscalasCanceladas}</strong></li></ul>`;
+            statsHTML += `<h4 style="margin-top: 1.5em;">Estatísticas Mensais (Eventos Ativos)</h4>`;
+            const sortedMonths = Object.keys(stats.countByMonth).sort();
+            if (sortedMonths.length > 0) { statsHTML += `<ul style="list-style: none; padding-left: 0;">`; sortedMonths.forEach(month => { const data = stats.countByMonth[month]; const [y, m] = month.split('-'); const monthName = capitalize(new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('pt-PT', { timeZone: 'UTC', month: 'long', year: 'numeric' })); statsHTML += `<li style="margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px dotted #ccc;"><strong>${monthName}:</strong> ${data.count} escalas ativas, ${data.uniquePeople.size} pessoas distintas.`; if (data.canceled > 0) { statsHTML += ` <span style="color: #e74c3c; font-size: 0.9em;">(+${data.canceled} regs. cancelados)</span>`; } statsHTML += `</li>`; }); statsHTML += `</ul>`; } else { statsHTML += `<p>Nenhuma escala ativa encontrada.</p>`; }
+            statsHTML += `<h4 style="margin-top: 1.5em;">Estatísticas Semanais (Eventos Ativos)</h4>`;
+            const sortedWeeks = Object.keys(stats.countByWeek).sort((a, b) => { const dateA = a.match(/\d{4}-\d{2}-\d{2}/)?.[0] || a; const dateB = b.match(/\d{4}-\d{2}-\d{2}/)?.[0] || b; return dateA.localeCompare(dateB); });
+            if (sortedWeeks.length > 0) { statsHTML += `<ul style="list-style: none; padding-left: 0;">`; sortedWeeks.forEach(week => { const data = stats.countByWeek[week]; statsHTML += `<li style="margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px dotted #ccc;"><strong>${week}:</strong> ${data.count} escalas ativas, ${data.uniquePeople.size} pessoas distintas.`; if (data.canceled > 0) { statsHTML += ` <span style="color: #e74c3c; font-size: 0.9em;">(+${data.canceled} regs. cancelados)</span>`; } statsHTML += `</li>`; }); statsHTML += `</ul>`; } else { statsHTML += `<p>Nenhuma escala ativa encontrada.</p>`; }
+            statsHTML += `<h4 style="margin-top: 1.5em;">Escalas Ativas por Dia da Semana</h4>`;
+            const sortedWeekdays = DIAS_SEMANA_NOMES_COMPLETOS.filter(day => stats.countByWeekday[day]); // Only show days with data
+            if (sortedWeekdays.length > 0) { statsHTML += `<ul style="list-style: disc; padding-left: 20px;">`; sortedWeekdays.forEach(day => { const data = stats.countByWeekday[day]; statsHTML += `<li><strong>${day}:</strong> ${data.count} escalas, ${data.uniquePeople.size} pessoas distintas</li>`; }); statsHTML += `</ul>`; } else { statsHTML += `<p>Nenhuma escala ativa encontrada.</p>`; }
+            statsHTML += `<h4 style="margin-top: 1.5em;">Escalas Ativas por Horário</h4>`;
+            const sortedHorarios = Object.entries(stats.countByHorario).sort(([,a], [,b]) => b.count - a.count); // Sort by count desc
+            if (sortedHorarios.length > 0) { statsHTML += `<ul style="list-style: disc; padding-left: 20px;">`; sortedHorarios.forEach(([horario, data]) => { statsHTML += `<li><strong>${horario}:</strong> ${data.count} escalas, ${data.uniquePeople.size} pessoas distintas</li>`; }); statsHTML += `</ul>`; } else { statsHTML += `<p>Nenhuma escala ativa encontrada.</p>`; }
+            statsHTML += `<h4 style="margin-top: 1.5em;">Escalas Ativas por Pessoa</h4>`;
+            const sortedPeople = Object.entries(stats.countByPerson).sort(([,a], [,b]) => b.count - a.count || b.hours - a.hours); // Sort by count desc, then hours desc
+            if (sortedPeople.length > 0) { statsHTML += `<ul style="list-style: none; padding-left: 0;">`; sortedPeople.forEach(([name, data]) => { statsHTML += `<li style="margin-bottom: 5px;"><strong>${name}:</strong> ${data.count} escalas, ~${data.hours.toFixed(1)}h estimadas</li>`; }); statsHTML += `</ul>`; } else { statsHTML += `<p>Nenhuma escala ativa encontrada.</p>`; }
+            statsHTML += `<h4 style="margin-top: 1.5em;">Escalas Ativas por Dia Específico (Top 10)</h4>`;
+            const sortedDates = Object.entries(stats.countByDate).sort(([,a], [,b]) => b.count - a.count); // Sort by count desc
+            if (sortedDates.length > 0) { statsHTML += `<ul style="list-style: disc; padding-left: 20px;">`; sortedDates.slice(0, 10).forEach(([date, data]) => { statsHTML += `<li><strong>${formatarDataParaExibicao(date)}:</strong> ${data.count} escalas, ${data.uniquePeople.size} pessoas distintas</li>`; }); if (sortedDates.length > 10) statsHTML += `<li>... (e mais ${sortedDates.length - 10} datas)</li>`; statsHTML += `</ul>`; } else { statsHTML += `<p>Nenhuma escala ativa encontrada.</p>`; }
+            statsHTML += `<hr style="margin: 2em 0 1em 0;"><h4 style="color: #777;">Estatísticas Não Calculadas</h4><p style="font-size: 0.9em; color: #777;">As seguintes estatísticas solicitadas não puderam ser calculadas (requerem dados adicionais não presentes no sistema):</p><ul style="font-size: 0.85em; color: #777; list-style: circle; padding-left: 20px;">`;
+            statsHTML += `<li>Percentual de disponibilidade</li><li>Horas não cobertas</li><li>Escalas alteradas</li><li>Comparecimento / Atraso / Escalas cumpridas</li><li>Confirmação de escala</li><li>Escalas de última hora</li><li>Escalas por tipo de atividade/cargo/função/localização</li><li>Escalas por faixa etária</li><li>Sobrecarga de escalas</li><li>Ajustes solicitados</li><li>Escalas em feriados</li><li>Dados sobre cancelamento por pessoa</li><li>Etc.</li></ul>`;
+            contentArea.innerHTML = statsHTML;
+        } catch (error) { console.error("Erro ao gerar estatísticas gerais:", error); contentArea.innerHTML = `<p style="color: red;">Erro ao carregar estatísticas: ${error.message}</p>`; }
+    }
+    // --- FIM Funções Popup Estatísticas Gerais ---
+
+
+    // --- Funções para Popup de Estatísticas INDIVIDUAIS ---
+    function openPersonStatsPopup(personId, personName) {
+        const modal = document.getElementById('popupPersonStatsContainer');
+        const titleEl = document.getElementById('personStatsPopupTitle');
+        const contentArea = modal?.querySelector('#personStatsContentArea'); // Select within modal
+        if (!modal || !titleEl || !contentArea) { console.error("Elementos do popup de estatísticas individuais não encontrados."); return; }
+        titleEl.textContent = `Estatísticas: ${personName}`;
+        contentArea.innerHTML = '<p>Carregando e calculando estatísticas...</p>';
+        modal.style.display = 'flex';
+        setTimeout(() => modal.classList.add('visible'), 10);
+        renderPersonStats(personName);
+    }
+
+    function closePersonStatsPopup() {
+        const modal = document.getElementById('popupPersonStatsContainer');
+        if (!modal) return;
+        modal.classList.remove('visible');
+        modal.addEventListener('transitionend', () => {
+            if (!modal.classList.contains('visible')) {
+                modal.style.display = 'none';
+                const contentArea = modal.querySelector('#personStatsContentArea'); // Select within modal
+                const titleEl = document.getElementById('personStatsPopupTitle');
+                if (contentArea) contentArea.innerHTML = '<p>Carregando...</p>'; // Reset content
+                if (titleEl) titleEl.textContent = 'Estatísticas Individuais'; // Reset title
+            }
+        }, { once: true });
+    }
+
+    async function renderPersonStats(personName) {
+        const modal = document.getElementById('popupPersonStatsContainer');
+        const contentArea = modal?.querySelector('#personStatsContentArea'); // Select within modal
+        if (!contentArea) { console.error("Stats content area not found for person."); return; }
+        try {
+            // Ensure base data is loaded
+             if (eventosDataMap.size === 0) await loadDatas();
+
+            console.log(`Fetching availability for ${personName}...`);
+            const q = query(disponibilidadeCollectionRef, where("nome", "==", personName));
+            const personDisponibilidadeSnapshot = await getDocs(q);
+            const personDisponibilidade = personDisponibilidadeSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            console.log(`Found ${personDisponibilidade.length} records for ${personName}.`);
+
+            if (personDisponibilidade.length === 0) { contentArea.innerHTML = '<p>Nenhum registro de disponibilidade encontrado para esta pessoa.</p>'; return; }
+
+            // Process Person's Data
+            const personStats = {
+                totalActiveScales: 0,
+                totalCanceledScales: 0,
+                totalEstimatedHours: 0,
+                scalesByMonth: {},
+                scalesByWeek: {}, // Key: "Semana de YYYY-MM-DD" (Monday)
+                scalesByWeekday: {},
+                scalesByHorario: {},
+                teamworkScales: 0, // Scales where at least one other person was also present
+                scalesOnWeekends: 0,
+                captaincies: 0, // How many times they were captain
+                activeDatesList: [] // List of active dates/times
+            };
+
+             // Fetch all availability data again for teamwork check - Consider optimization later
+             console.log("Fetching *all* availability for teamwork check (individual stats)...");
+             const allDisponibilidadeSnapshot = await getDocs(query(disponibilidadeCollectionRef));
+             const allDisponibilidadeMap = new Map(); // Map: "date|horario" -> Set of names
+             allDisponibilidadeSnapshot.forEach(doc => {
+                 const d = doc.data();
+                 if (d.dataOriginal && d.horario && d.nome) {
+                    const key = `${d.dataOriginal}|${d.horario}`;
+                    if (!allDisponibilidadeMap.has(key)) allDisponibilidadeMap.set(key, new Set());
+                    allDisponibilidadeMap.get(key).add(d.nome);
+                 }
+             });
+             console.log("Finished teamwork check processing.");
+
+             // Helper to get start of week (Monday)
+             const getWeekStartDate = (dateStr) => {
+                 try {
+                     const [y, m, d] = dateStr.split('-').map(Number);
+                     const date = new Date(Date.UTC(y, m - 1, d));
+                     const dayOfWeek = date.getUTCDay();
+                     const diff = date.getUTCDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+                     const monday = new Date(date.setUTCDate(diff));
+                     return `${monday.getUTCFullYear()}-${String(monday.getUTCMonth() + 1).padStart(2, '0')}-${String(monday.getUTCDate()).padStart(2, '0')}`;
+                 } catch { return "Semana Inválida"; }
+             };
+
+            personDisponibilidade.forEach(disp => {
+                if (!disp.dataOriginal || !disp.horario) return; // Basic check
+
+                const evento = eventosDataMap.get(disp.dataOriginal);
+                const isEventoAtivo = evento && evento.estado !== 'cancelado';
+
+                if (isEventoAtivo) {
+                    personStats.totalActiveScales++;
+                    personStats.activeDatesList.push({date: disp.dataOriginal, time: disp.horario, captain: disp.isCapitao === true});
+
+                    const monthKey = disp.dataOriginal.substring(0, 7);
+                    const weekStartDate = getWeekStartDate(disp.dataOriginal);
+                    const weekKey = `Semana de ${weekStartDate}`;
+                    const weekdayKey = evento?.diasemana || disp.diasemana || 'Dia Desconhecido'; // Use event's day name if possible
+                    const horarioKey = disp.horario;
+
+                    personStats.scalesByMonth[monthKey] = (personStats.scalesByMonth[monthKey] || 0) + 1;
+                    personStats.scalesByWeek[weekKey] = (personStats.scalesByWeek[weekKey] || 0) + 1;
+                    personStats.scalesByWeekday[weekdayKey] = (personStats.scalesByWeekday[weekdayKey] || 0) + 1;
+                    personStats.scalesByHorario[horarioKey] = (personStats.scalesByHorario[horarioKey] || 0) + 1;
+
+                    const duration = parseHorarioDuration(disp.horario);
+                    if (duration !== null) personStats.totalEstimatedHours += duration;
+
+                    // Teamwork check
+                    const slotKey = `${disp.dataOriginal}|${disp.horario}`;
+                    if (allDisponibilidadeMap.has(slotKey) && allDisponibilidadeMap.get(slotKey).size > 1) {
+                        personStats.teamworkScales++;
+                    }
+
+                    if (weekdayKey === 'Sábado' || weekdayKey === 'Domingo') {
+                        personStats.scalesOnWeekends++;
+                    }
+                    if (disp.isCapitao === true) {
+                        personStats.captaincies++;
+                    }
+
+                } else {
+                    personStats.totalCanceledScales++;
+                }
+            });
+
+             // Sort active dates list
+             personStats.activeDatesList.sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
+
+            // Build Output HTML
+            let statsHTML = `<h4>Resumo de ${personName} (Eventos Ativos)</h4><ul style="list-style: disc; padding-left: 20px;">`;
+            statsHTML += `<li>Total de Escalas Ativas: <strong>${personStats.totalActiveScales}</strong></li>`;
+            statsHTML += `<li>Total Estimado de Horas (Escalas Ativas): <strong>${personStats.totalEstimatedHours.toFixed(1)}h</strong></li>`;
+            statsHTML += `<li>Escalas como Capitão: <strong>${personStats.captaincies}</strong></li>`;
+            statsHTML += `<li>Escalas com Colegas (mesmo horário): <strong>${personStats.teamworkScales}</strong></li>`;
+            statsHTML += `<li>Escalas em Fins de Semana (Sáb/Dom): <strong>${personStats.scalesOnWeekends}</strong></li>`;
+            statsHTML += `<li>Registros para Eventos Cancelados/Inexistentes: <strong>${personStats.totalCanceledScales}</strong></li></ul>`;
+            statsHTML += `<h4>Escalas Ativas por Mês</h4>`;
+            const sortedMonths = Object.keys(personStats.scalesByMonth).sort();
+            if (sortedMonths.length > 0) { statsHTML += `<ul style="list-style: disc; padding-left: 20px;">`; sortedMonths.forEach(month => { const [y, m] = month.split('-'); const monthName = capitalize(new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('pt-PT', { timeZone: 'UTC', month: 'long', year: 'numeric' })); statsHTML += `<li><strong>${monthName}:</strong> ${personStats.scalesByMonth[month]} escalas</li>`; }); statsHTML += `</ul>`; } else { statsHTML += `<p>Nenhuma escala ativa.</p>`; }
+            statsHTML += `<h4>Escalas Ativas por Semana (Últimas 10)</h4>`;
+            const sortedWeeks = Object.keys(personStats.scalesByWeek).sort((a, b) => { const dateA = a.match(/\d{4}-\d{2}-\d{2}/)?.[0] || a; const dateB = b.match(/\d{4}-\d{2}-\d{2}/)?.[0] || b; return dateA.localeCompare(dateB); });
+            if (sortedWeeks.length > 0) { statsHTML += `<ul style="list-style: disc; padding-left: 20px;">`; const weeksToShow = sortedWeeks.slice(-10); weeksToShow.forEach(week => { statsHTML += `<li><strong>${week}:</strong> ${personStats.scalesByWeek[week]} escalas</li>`; }); if (sortedWeeks.length > 10) statsHTML += `<li>... (e mais ${sortedWeeks.length - 10} semanas anteriores)</li>`; statsHTML += `</ul>`; } else { statsHTML += `<p>Nenhuma escala ativa.</p>`; }
+            statsHTML += `<h4>Escalas Ativas por Dia da Semana</h4>`;
+            const sortedWeekdays = DIAS_SEMANA_NOMES_COMPLETOS.filter(day => personStats.scalesByWeekday[day]); // Only show days with data
+            if (sortedWeekdays.length > 0) { statsHTML += `<ul style="list-style: disc; padding-left: 20px;">`; sortedWeekdays.forEach(day => { statsHTML += `<li><strong>${day}:</strong> ${personStats.scalesByWeekday[day]} escalas</li>`; }); statsHTML += `</ul>`; } else { statsHTML += `<p>Nenhuma escala ativa.</p>`; }
+            statsHTML += `<h4>Escalas Ativas por Horário</h4>`;
+            const sortedHorarios = Object.entries(personStats.scalesByHorario).sort(([,a], [,b]) => b - a); // Sort by count desc
+            if (sortedHorarios.length > 0) { statsHTML += `<ul style="list-style: disc; padding-left: 20px;">`; sortedHorarios.forEach(([horario, count]) => { statsHTML += `<li><strong>${horario}:</strong> ${count} escalas</li>`; }); statsHTML += `</ul>`; } else { statsHTML += `<p>Nenhuma escala ativa.</p>`; }
+             statsHTML += `<h4>Lista de Escalas Ativas (${personStats.activeDatesList.length})</h4>`;
+             if (personStats.activeDatesList.length > 0) {
+                 statsHTML += `<ul style="list-style: none; padding-left: 5px; max-height: 200px; overflow-y: auto; border: 1px solid #eee; padding: 5px;">`;
+                 personStats.activeDatesList.forEach(item => {
+                     statsHTML += `<li style="font-size: 0.9em; margin-bottom: 3px;">${formatarDataParaExibicao(item.date)} | ${item.time}${item.captain ? ' <strong>(C)</strong>' : ''}</li>`;
+                 });
+                 statsHTML += `</ul>`;
+             } else {
+                 statsHTML += `<p>Nenhuma escala ativa registrada.</p>`;
+             }
+
+            statsHTML += `<hr style="margin: 2em 0 1em 0;"><h4 style="color: #777;">Estatísticas Individuais Não Calculadas</h4><p style="font-size: 0.9em; color: #777;">Muitas estatísticas individuais (confirmação, atraso, falta, cancelamentos pela pessoa, alterações, etc.) não podem ser calculadas pois requerem dados adicionais não presentes no sistema.</p>`;
+            contentArea.innerHTML = statsHTML;
+        } catch (error) { console.error(`Erro ao gerar estatísticas para ${personName}:`, error); contentArea.innerHTML = `<p style="color: red;">Erro ao carregar estatísticas para ${personName}: ${error.message}</p>`; }
+    }
+    // --- FIM Funções Popup Estatísticas INDIVIDUAIS ---
+
+
+    // --- Inicialização ---
+    window.onload = async function () {
+        // Assign functions to window scope so inline HTML onclicks work
+        window.criarData = criarData;
+        window.removerData = removerData;
+        window.cancelarData = cancelarData;
+        window.reativarData = reativarData;
+        window.adicionarRegrasESalvarSugestoes = adicionarRegrasESalvarSugestoes;
+        window.removerRegraSugestao = removerRegraSugestao;
+        window.adicionarNome = adicionarNome;
+        window.removerNome = removerNome;
+        window.filterNomes = filterNomes;
+        window.renderCalendario = renderCalendario;
+        window.toggleListVisibility = toggleListVisibility; // Assign the corrected version
+        window.openPopupResumo = openPopupResumo;
+        window.closePopupResumo = closePopupResumo;
+        window.removerConfirmacao = removerConfirmacao;
+        window.exportarResumoPdf = exportarResumoPdf;
+        window.toggleCapitaoStatus = toggleCapitaoStatus;
+        window.openSugestoesPopup = openSugestoesPopup;
+        window.closeSugestoesPopup = closeSugestoesPopup;
+        window.filterSugestoes = filterSugestoes;
+        window.openStatsPessoasPopup = openStatsPessoasPopup;
+        window.closeStatsPessoasPopup = closeStatsPessoasPopup;
+        window.openPersonStatsPopup = openPersonStatsPopup;     // Individual Stats Func
+        window.closePersonStatsPopup = closePersonStatsPopup;   // Individual Stats Func
+
+        console.log("Initializing Admin Panel...");
+        try {
+            // Load base data concurrently for speed
+            await Promise.all([
+               loadSuggestionRulesFromFirestore(),
+               loadNomes(),
+               loadDatas() // This now populates allEventosData and eventosDataMap
+            ]);
+
+            // Render UI elements that depend on the base data
+            renderActiveRules(); // Depends on rules
+            renderNomes(); // Depends on names (Includes individual stats button)
+
+            // Generate initial suggestions AFTER rules are loaded, then render UI
+            // Note: generateEAtualizarSugestoesFirestore calls renderSugestoesVisiveis internally
+            await gerarEAtualizarSugestoesFirestore(); // Depends on rules, updates suggestions in DB, renders suggestion buttons
+
+            // Render other UI elements
+            await renderDatasCriadas(); // Depends on allEventosData
+            await renderCalendario(); // Depends on allEventosData and fetches/processes availability
+
+            // Activate default suggestion filter button ('Este Mês')
+            const initialButton = document.querySelector('#sugestoesFilterButtons .suggestion-filter-btn[data-offset="0"]');
+            if (initialButton && !initialButton.classList.contains('active')) {
+                 document.querySelectorAll('#sugestoesFilterButtons .suggestion-filter-btn.active').forEach(b => b.classList.remove('active'));
+                 initialButton.classList.add('active');
+                 // Initial suggestions are already rendered by gerarEAtualizar... -> renderSugestoesVisiveis
+            } else if (!initialButton) {
+                 console.warn("Initial suggestion filter button not found.");
+            }
+
+            console.log("Admin Panel Initialization complete.");
+
+        } catch (e) {
+            console.error("Error during initial data loading/rendering:", e);
+            const errorDiv = document.createElement('div');
+            errorDiv.innerHTML = `<p style="color: red; background: #ffebee; border: 1px solid red; padding: 10px; text-align: center; margin: 15px;">Erro ao carregar dados iniciais: ${e.message}. Verifique console (F12).</p>`;
+            // Try inserting into body safely
+             if (document.body) {
+                document.body.insertAdjacentElement('afterbegin', errorDiv);
+             } else {
+                 alert("Erro GRAVE na inicialização. Body não encontrado. " + e.message);
+             }
+        }
+
+        // Add listeners for closing modals by clicking overlay backdrop
+        // Ensure these elements exist before adding listeners
+        document.getElementById('popupResumoContainer')?.addEventListener('click', (e) => { if(e.target === e.currentTarget) closePopupResumo(); });
+        document.getElementById('popupSugestoesContainer')?.addEventListener('click', (e) => { if(e.target === e.currentTarget) closeSugestoesPopup(); });
+        document.getElementById('popupStatsPessoasContainer')?.addEventListener('click', (e) => { if(e.target === e.currentTarget) closeStatsPessoasPopup(); });
+        document.getElementById('popupPersonStatsContainer')?.addEventListener('click', (e) => { if(e.target === e.currentTarget) closePersonStatsPopup(); });
+
+    }; // End window.onload
+
+  </script>
+
+</body>
+</html>
+

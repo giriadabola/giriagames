@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Editar GPlayer - G EMPIRE</title>
+    
+    <!-- CSS Externo para ícones (Font Awesome) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+
+    <!-- 1. CSS EXTERNO: Ligação para os estilos do menu -->
+    <link rel="stylesheet" href="css/menu-admin.css">
+
+    <!-- Guardião de segurança -->
+    <script type="module" src="js/auth-guard.js"></script>
+
+    <!-- 2. CSS INTERNO: Estilos específicos para esta página (formulário, popups, etc.) -->
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            min-height: 100vh;
+            background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
+        }
+        .content { 
+            padding: 80px 20px 20px; 
+            max-width: 1200px; 
+            margin: 0 auto; 
+        }
+        h1 { 
+            color: #333; 
+            margin-bottom: 30px; 
+            text-align: center; 
+        }
+        .edit-form { 
+            max-width: 600px; 
+            margin: 20px auto; 
+            background-color: #fff; 
+            padding: 20px; 
+            border-radius: 8px; 
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); 
+            position: relative; 
+        }
+        .form-group { 
+            margin-bottom: 15px; 
+        }
+        .form-group label { 
+            display: block; 
+            margin-bottom: 5px; 
+            color: #555; 
+            font-weight: bold; 
+        }
+        .form-group input[type="text"], 
+        .form-group input[type="email"], 
+        .form-group select { 
+            width: 100%; 
+            padding: 10px; 
+            border: 1px solid #ddd; 
+            border-radius: 4px; 
+            font-size: 16px; 
+        }
+        .form-group select { 
+            appearance: none; -webkit-appearance: none; -moz-appearance: none; 
+            background-image: url('data:image/svg+xml;utf8,<svg fill="black" height="24" viewBox="0 0 24" width="24" xmlns="http://www.w3.org/2000/svg"><path d="M7 10l5 5 5-5z"/><path d="M0 0h24v24H0z" fill="none"/></svg>'); 
+            background-repeat: no-repeat; 
+            background-position-x: 98%; 
+            background-position-y: center; 
+        }
+        .submit-btn, .delete-btn { 
+            padding: 10px 20px; 
+            border: none; 
+            border-radius: 4px; 
+            cursor: pointer; 
+            font-size: 16px; 
+            transition: background-color 0.3s ease; 
+        }
+        .submit-btn { 
+            background-color: #2176ff; 
+            color: white; 
+        }
+        .submit-btn:hover { 
+            background-color: #0b5ed7; 
+        }
+        .delete-btn { 
+            background-color: #f44336; 
+            color: white; 
+        }
+        .delete-btn:hover { 
+            background-color: #d32f2f; 
+        }
+        .error-message, .success-message { 
+            text-align: center; 
+            margin-top: 10px; 
+            padding: 10px; 
+            border-radius: 4px; 
+            display: none; 
+        }
+        .error-message { 
+            background-color: #ffdddd; 
+            color: #ff0000; 
+            border: 1px solid #ff0000; 
+        }
+        .success-message { 
+            background-color: #ddffdd; 
+            color: #00aa00; 
+            border: 1px solid #00aa00; 
+        }
+        .confirmation-popup { 
+            display: none; 
+            position: fixed; 
+            top: 0; left: 0; 
+            width: 100%; height: 100%; 
+            background-color: rgba(0, 0, 0, 0.5); 
+            justify-content: center; 
+            align-items: center; 
+            z-index: 1050; 
+        }
+        .popup-content { 
+            background-color: #fff; 
+            padding: 20px; 
+            border-radius: 8px; 
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.3); 
+            text-align: center; 
+        }
+        .popup-buttons { 
+            margin-top: 20px; 
+            display: flex; 
+            justify-content: center; 
+            gap: 20px; 
+        }
+        .popup-btn { 
+            padding: 10px 20px; 
+            border: none; 
+            border-radius: 4px; 
+            cursor: pointer; 
+            font-size: 16px; 
+        }
+        .popup-btn.yes-btn { 
+            background-color: #f44336; 
+            color: white; 
+        }
+        .popup-btn.yes-btn:hover { 
+            background-color: #d32f2f; 
+        }
+        .popup-btn.no-btn { 
+            background-color: #4CAF50; 
+            color: white; 
+        }
+        .popup-btn.no-btn:hover { 
+            background-color: #45a049; 
+        }
+    </style>
+
+    <link rel="stylesheet" href="css/admin-global.css">
+</head>
+<body style="display: none;">
+
+    <!-- 3. O menu será carregado dinamicamente aqui -->
+    <nav id="menu-placeholder" class="top-menu"></nav>
+    
+    <div class="content">
+        <h1>Editar GPlayer</h1>
+        <form id="editGPlayerForm" class="edit-form">
+            <div class="form-group">
+                <label for="userSelector">Selecionar Utilizador</label>
+                <select id="userSelector"><option value="">Selecionar Utilizador</option></select>
+            </div>
+            <div class="form-group">
+                <label for="email">Email</label>
+                <input type="email" id="email" readonly disabled>
+            </div>
+            <!-- NOVO CAMPO ADICIONADO -->
+            <div class="form-group">
+                <label for="mailing">Mailing</label>
+                <input type="checkbox" id="mailing" style="width: 20px; height: 20px; display: block;">
+            </div>
+            <!-- FIM DO NOVO CAMPO -->
+            <div class="form-group">
+                <label for="nomeDeUsuario">Nome de Utilizador</label>
+                <input type="text" id="nomeDeUsuario" required>
+            </div>
+            <div class="form-group">
+                <label for="nomeTabela">Nome user na Tabela (nome)</label>
+                <input type="text" id="nomeTabela">
+            </div>
+            <div class="form-group">
+                <label for="naTabela">Aparece na Tabela?</label>
+                <select id="naTabela"><option value="No">No</option><option value="Yes">Yes</option></select>
+            </div>
+            <div class="form-group">
+                <label for="arena">Arena?</label>
+                <select id="arena">
+                    <option value="">Selecionar Arena</option>
+                    <option value="Arena 1">Arena 1</option>
+                    <option value="Arena 2">Arena 2</option>
+                    <option value="Arena 3">Arena 3</option>
+                    <option value="Arena 4">Arena 4</option>
+                    <option value="Arena 5">Arena 5</option>
+                    <option value="Arena 6">Arena 6</option>
+                    <option value="Arena 7">Arena 7</option>
+                    <option value="Arena 8">Arena 8</option>
+                    <option value="Arena 9">Arena 9</option>
+                    <option value="Arena 10">Arena 10</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="estatuto">Estatuto</label>
+                <select id="estatuto"><option value="gplayer">gplayer</option><option value="ruler">ruler</option><option value="estafeta">estafeta</option></select>
+            </div>
+            <div class="form-group">
+                <label for="aceite">Aceite</label>
+                <select id="aceite"><option value="No">No</option><option value="Yes">Yes</option></select>
+            </div>
+            
+            <div class="form-group" id="minigames-permissions-section" style="margin-top: 25px; border-top: 1px solid #ddd; padding-top: 15px;">
+                <h3 style="margin-bottom: 12px; font-size: 16px; color: #333;">Permissões de Mini GGames</h3>
+                <div id="minigames-checkboxes-container">
+                    <p style="color: #777; font-size: 14px;">Selecione um utilizador para gerir permissões de mini-games.</p>
+                </div>
+            </div>
+
+            <button type="submit" class="submit-btn">Salvar Alterações</button>
+            <button type="button" id="deleteAccountBtn" class="delete-btn">Eliminar Conta</button>
+        </form>
+        <div id="error-message" class="error-message"></div>
+        <div id="success-message" class="success-message">Alterações salvas com sucesso!</div>
+        <div id="confirmationPopup" class="confirmation-popup">
+            <div class="popup-content">
+                <p>Tem certeza que deseja eliminar esta conta?</p>
+                <div class="popup-buttons">
+                    <button id="confirmDeleteBtn" class="popup-btn yes-btn">Sim</button>
+                    <button id="cancelDeleteBtn" class="popup-btn no-btn">Não</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- O script da página, com a lógica de edição atualizada -->
+    <script type="module">
+        import { db } from './js/auth-guard.js';
+        import { doc, getDoc, updateDoc, collection, getDocs, deleteDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+        // ... (todo o seu código JavaScript existente para editar o GPlayer permanece aqui)
+        const editGPlayerForm = document.getElementById('editGPlayerForm');
+        const emailInput = document.getElementById('email');
+        const nomeDeUsuarioInput = document.getElementById('nomeDeUsuario');
+        const estatutoSelect = document.getElementById('estatuto');
+        const aceiteSelect = document.getElementById('aceite');
+        const errorMessageDiv = document.getElementById('error-message');
+        const successMessageDiv = document.getElementById('success-message');
+        const userSelector = document.getElementById('userSelector');
+        const deleteAccountBtn = document.getElementById('deleteAccountBtn');
+        const confirmationPopup = document.getElementById('confirmationPopup');
+        const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+        const cancelDeleteBtn = document.getElementById('cancelDeleteBtn');
+        const nomeTabelaInput = document.getElementById('nomeTabela');
+        const naTabelaSelect = document.getElementById('naTabela');
+        const arenaSelect = document.getElementById('arena');
+        const mailingCheckbox = document.getElementById('mailing'); // Referência para o novo checkbox
+
+        function showError(message) { 
+            errorMessageDiv.textContent = message;
+            errorMessageDiv.style.display = 'block';
+            setTimeout(() => { errorMessageDiv.style.display = 'none'; }, 3000);
+        }
+        function showSuccess(message = "Alterações salvas com sucesso!") { 
+            successMessageDiv.textContent = message;
+            successMessageDiv.style.display = 'block';
+            setTimeout(() => { successMessageDiv.style.display = 'none'; }, 3000);
+        }
+
+        let allMiniGames = {};
+
+        async function fetchMiniGames() {
+            try {
+                const docRef = doc(db, "settings", "mini-ggames");
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    allMiniGames = docSnap.data();
+                }
+            } catch (error) {
+                console.error("Erro ao buscar mini-games para permissões:", error);
+            }
+        }
+
+        function renderMiniGamesCheckboxes(userMinigamesData) {
+            const container = document.getElementById('minigames-checkboxes-container');
+            container.innerHTML = '';
+            
+            const keys = Object.keys(allMiniGames);
+            if (keys.length === 0) {
+                container.innerHTML = '<p style="color: #777; font-size: 14px;">Nenhum mini-game configurado no sistema.</p>';
+                return;
+            }
+            
+            keys.forEach(key => {
+                const game = allMiniGames[key];
+                const isEnabled = userMinigamesData && userMinigamesData[key] === 'on';
+                
+                const div = document.createElement('div');
+                div.className = 'form-group';
+                div.style.display = 'flex';
+                div.style.alignItems = 'center';
+                div.style.justifyContent = 'space-between';
+                div.style.padding = '8px 0';
+                div.style.borderBottom = '1px solid #eee';
+                
+                div.innerHTML = `
+                    <label for="mg-perm-${key}" style="margin: 0; font-weight: normal; color: #333;">${game.nome} (${key})</label>
+                    <select id="mg-perm-${key}" class="mg-perm-select" data-game-key="${key}" style="width: auto; padding: 5px 15px; margin-bottom: 0;">
+                        <option value="off" ${!isEnabled ? 'selected' : ''}>off</option>
+                        <option value="on" ${isEnabled ? 'selected' : ''}>on</option>
+                    </select>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        async function loadUserData(userId) {
+            if (!userId) {
+                editGPlayerForm.reset();
+                emailInput.value = ''; // Limpa explicitamente o email
+                document.getElementById('minigames-checkboxes-container').innerHTML = '<p style="color: #777; font-size: 14px;">Selecione um utilizador para gerir permissões de mini-games.</p>';
+                return;
+            }
+            const userDocRef = doc(db, 'users', userId);
+            try {
+                const docSnap = await getDoc(userDocRef);
+                if (docSnap.exists()) {
+                    const userData = docSnap.data();
+                    emailInput.value = userData.email || '';
+                    nomeDeUsuarioInput.value = userData.nomeDeUsuario || '';
+                    estatutoSelect.value = userData.estatuto || 'gplayer';
+                    aceiteSelect.value = userData.aceite || 'No';
+                    nomeTabelaInput.value = userData.nometabela || '';
+                    naTabelaSelect.value = userData.natabela || 'No';
+                    arenaSelect.value = userData.arena || '';
+                    mailingCheckbox.checked = userData.mailing || false; // Carrega o estado do mailing
+                    renderMiniGamesCheckboxes(userData.minigames || {});
+                } else { showError("Erro ao carregar dados do usuário."); }
+            } catch (error) { showError("Erro ao carregar dados do usuário."); }
+        }
+
+        async function loadAllUsers() {
+            const usersCollection = collection(db, 'users');
+            try {
+                const querySnapshot = await getDocs(usersCollection);
+                querySnapshot.forEach(doc => {
+                    const userData = doc.data();
+                    const option = document.createElement('option');
+                    option.value = doc.id;
+                    option.textContent = userData.nomeDeUsuario || userData.email;
+                    userSelector.appendChild(option);
+                });
+            } catch (error) { showError("Erro ao carregar lista de usuários."); }
+        }
+
+        async function initializePage() {
+            await fetchMiniGames();
+            loadAllUsers();
+            editGPlayerForm.addEventListener('submit', async (event) => {
+                event.preventDefault();
+                const selectedUserId = userSelector.value;
+                if (!selectedUserId) { showError("Selecione um utilizador para salvar."); return; }
+                const userDocRef = doc(db, 'users', selectedUserId);
+
+                const minigamesObj = {};
+                const selects = document.querySelectorAll('.mg-perm-select');
+                selects.forEach(select => {
+                    const gameKey = select.dataset.gameKey;
+                    minigamesObj[gameKey] = select.value;
+                });
+
+                try {
+                    await updateDoc(userDocRef, {
+                        nomeDeUsuario: nomeDeUsuarioInput.value,
+                        estatuto: estatutoSelect.value,
+                        aceite: aceiteSelect.value,
+                        nometabela: nomeTabelaInput.value,
+                        natabela: naTabelaSelect.value,
+                        arena: arenaSelect.value,
+                        mailing: mailingCheckbox.checked,
+                        minigames: minigamesObj
+                    });
+                    showSuccess();
+                } catch (error) { showError("Erro ao salvar alterações."); }
+            });
+
+            userSelector.addEventListener('change', (event) => { loadUserData(event.target.value); });
+            deleteAccountBtn.addEventListener('click', () => {
+                if (userSelector.value) { confirmationPopup.style.display = 'flex'; }
+                else { showError("Selecione um utilizador para eliminar."); }
+            });
+            cancelDeleteBtn.addEventListener('click', () => { confirmationPopup.style.display = 'none'; });
+            confirmationPopup.addEventListener('click', (event) => { if (event.target === confirmationPopup) { confirmationPopup.style.display = 'none'; } });
+            confirmDeleteBtn.addEventListener('click', async () => {
+                const selectedUserIdToDelete = userSelector.value;
+                if (!selectedUserIdToDelete) return;
+                const userDocRef = doc(db, 'users', selectedUserIdToDelete);
+                try {
+                    await deleteDoc(userDocRef);
+                    confirmationPopup.style.display = 'none';
+                    showSuccess("Utilizador eliminado com sucesso!");
+                    userSelector.querySelector(`option[value="${selectedUserIdToDelete}"]`).remove();
+                    editGPlayerForm.reset();
+                    emailInput.value = '';
+                } catch (error) { showError("Erro ao eliminar utilizador."); confirmationPopup.style.display = 'none'; }
+            });
+        }
+        
+        document.addEventListener('DOMContentLoaded', initializePage);
+    </script>
+
+    <!-- 4. Script para carregar o menu de navegação -->
+    <script src="js/menuadmin-loader.js"></script>
+
+</body>
+</html>

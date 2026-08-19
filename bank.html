@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Banco - Ggames</title>
+        <link rel="icon" type="image/png" href="https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhTl6Ljabwgx-VXdZz8FcAoygQprujSsCoXc32Y_iU0FjYVPu1B6MffWwp8gcCVuV8TWn39FRk9OIe1nc-esubVJYmdLsTptAoR9GyqNuw4R5MBaeaoWXTc3JaqH2YVNtEmfReQqohvQKvHiI0XwE5na2ty2B9Bt4oELxYv2BaZ7R3UmeylpiVEiIbiLnCB/s320/soccer-ball-png.webp">
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 100vh;
+            background-color: #090c10;
+            color: #ffffff;
+            font-family: Arial, sans-serif;
+        }
+
+
+        .content {
+            padding: 20px;
+            margin-bottom: 80px;
+            display: none; /* Hide content initially */
+        }
+
+        h1 {
+            color: #ffffff;
+            margin-bottom: 20px;
+        }
+
+        /* Loading Screen Styles */
+        #loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #090c10;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1001; /* Above content but below popup */
+        }
+
+        .loading-percentage { margin-top: 15px; font-size: 18px; font-weight: bold; color: #2176ff; }
+        .progress-bar-container { width: 200px; height: 10px; background-color: #111622; border-radius: 5px; margin-top: 10px; overflow: hidden; }
+        .progress-bar { height: 100%; width: 0%; background: linear-gradient(135deg, #2176ff 0%, #0056d6 100%); border-radius: 5px; transition: width 0.3s ease-in-out; }
+        .loading-spinner { border: 16px solid #111622; border-top: 16px solid #2ecc71; border-radius: 50%; width: 120px; height: 120px; animation: spin 2s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+
+        /* Transaction List Styles */
+        .transactions-container {
+            margin-top: 20px;
+            background-color: #111622;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            overflow: hidden;
+        }
+
+        .transactions-header {
+            background-color: #1a2232;
+            color: white;
+            padding: 15px 20px;
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .transactions-list {
+            max-height: 70vh;
+            overflow-y: auto;
+        }
+
+        .transaction-item {
+            padding: 15px 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            display: grid; /* Enable grid layout */
+            grid-template-columns: 0.8fr 1.5fr 2fr 1fr 1fr 1.2fr; /* Define 6 columns + date column at the end */
+            align-items: center; /* Vertically align items in the center */
+            transition: background-color 0.2s ease;
+            gap: 10px; /* Espaço entre as colunas */
+        }
+
+        .transaction-item:hover {
+            background-color: #1a2232;
+        }
+
+        .transaction-item:last-child {
+            border-bottom: none;
+        }
+
+        .transaction-col {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start; /* Alinhar conteúdo das colunas à esquerda */
+            justify-content: center; /* Centralizar verticalmente o conteúdo dentro da célula da grid */
+        }
+
+        .transaction-tipo-col {
+            /* Coluna para Tipo */
+            justify-content: center; /* Centralizar tipo horizontalmente */
+        }
+
+        .transaction-tipo {
+            text-align: center; /* Centralizar texto do tipo */
+        }
+
+
+        .transaction-user-col {
+            /* Coluna para Nome de Usuário */
+        }
+
+        .transaction-user {
+            font-weight: bold; /* Destacar nome de usuário */
+            color: #ffffff;
+        }
+
+
+        .transaction-item-name-col {
+            /* Coluna para Nome do Item */
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            gap: 8px; /* Espaço entre a imagem e o nome */
+        }
+
+        .transaction-item-image {
+            width: 24px; /* Ajuste o tamanho conforme necessário */
+            height: 24px;
+            border-radius: 50%; /* Para torná-lo circular */
+            object-fit: cover; /* Para cobrir o espaço sem distorcer */
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+
+        .transaction-item-name {
+            color: #ccc; /* Cor mais suave para o nome do item */
+            font-size: 0.9em;
+        }
+
+
+        .transaction-date-col {
+            /* Coluna para Data */
+            justify-content: center; /* Centralizar data horizontalmente */
+            text-align: center; /* Centralizar texto da data */
+        }
+
+        .transaction-date {
+            font-size: 0.8em; /* Fonte menor para a data */
+            color: #888;
+        }
+
+
+        .transaction-estado-col {
+            /* Coluna para Estado */
+            justify-content: center; /* Centralizar estado horizontalmente */
+        }
+
+        .transaction-estado {
+            text-align: center; /* Centralizar texto do estado */
+            font-weight: bold; /* Destacar o estado */
+            color: #ffffff;
+        }
+
+
+        .transaction-price-col {
+            /* Coluna para Preço - alinhado à direita */
+            justify-content: flex-end;
+            text-align: right;
+        }
+
+        .transaction-price {
+            font-weight: bold;
+            color: #ffd700;
+            margin-left: 0; /* Reset margin left */
+            white-space: nowrap; /* Prevent text wrapping */
+            text-align: right; /* Alinhar texto à direita */
+        }
+
+
+        .transaction-type {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            margin-right: 0; /* Reset margin right */
+        }
+
+        .transaction-type.market {
+            background-color: #182232;
+            color: #2176ff;
+            border: 1px solid rgba(33, 118, 255, 0.2);
+        }
+
+        .transaction-type.empire {
+            background-color: #242217;
+            color: #ff9933;
+            border: 1px solid rgba(255, 153, 51, 0.2);
+        }
+
+        .no-transactions {
+            padding: 20px;
+            text-align: center;
+            color: #aaa;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="loading-screen">
+        <div class="loading-spinner"></div>
+        <div class="loading-percentage">0%</div>
+        <div class="progress-bar-container">
+            <div class="progress-bar"></div>
+        </div>
+    </div>
+
+    <div class="content">
+        <h1>Banco</h1>
+
+        <div class="transactions-container">
+            <div class="transactions-header">
+                <span>Transações</span>
+            </div>
+            <div class="transactions-list" id="transactions-list">
+                <!-- Transactions will be populated dynamically -->
+                <div class="no-transactions">Carregando transações...</div>
+            </div>
+        </div>
+    </div>
+
+
+    <script src="config.js"></script>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getFirestore, doc, getDoc, collection, query, where, getDocs, orderBy, onSnapshot, addDoc, serverTimestamp, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+
+        function logUserAction(actionDescription) {
+    if (!auth.currentUser) {
+        console.log("Nenhum utilizador logado para registar a ação.");
+        return;
+    }
+    
+    try {
+        const eyeCollection = collection(db, 'eye');
+        void addDoc(eyeCollection, {
+            dataacao: serverTimestamp(),
+            acao: actionDescription,
+            userId: auth.currentUser.uid
+        }).catch((error) => console.error("Erro ao registar a ação na coleção 'eye':", error));
+    } catch (error) {
+        console.error("Erro ao registar ação na coleção 'eye':", error);
+    }
+}
+
+        const loadingScreen = document.getElementById('loading-screen');
+        const content = document.querySelector('.content');
+        const transactionsList = document.getElementById('transactions-list');
+
+        let currentUserStatus = null;
+        let userCache = {}; // Cache for user data
+        let playerCache = {}; // Cache for player data
+        let empireItemCache = {}; // Cache for empire items
+
+        // --- Loading Progress ---
+        let loadingProgress = 0;
+        const loadingPercentageElement = document.querySelector('.loading-percentage');
+        const progressBar = document.querySelector('.progress-bar');
+
+        function updateLoadingProgress(increment = 0, absoluteValue = null) {
+            if (absoluteValue !== null) loadingProgress = absoluteValue;
+            else loadingProgress += increment;
+            loadingProgress = Math.max(0, Math.min(100, loadingProgress));
+
+            const displayPercentage = Math.floor(loadingProgress);
+            if (loadingPercentageElement) loadingPercentageElement.textContent = `${displayPercentage}%`;
+            if (progressBar) progressBar.style.width = `${loadingProgress}%`;
+        }
+
+        updateLoadingProgress(0); // Initialize loading to 0%
+
+        function hideLoadingScreen() {
+            if (loadingScreen) loadingScreen.style.display = 'none';
+            if (content) content.style.display = 'block';
+        }
+
+        async function getUserStatus(userId) {
+            const userDoc = doc(db, 'users', userId);
+            const docSnap = await getDoc(userDoc);
+            if (docSnap.exists()) {
+                const userData = docSnap.data();
+                return {
+                    estatuto: userData.estatuto,
+                    aceite: userData.aceite
+                };
+            } else {
+                return null;
+            }
+        }
+
+        async function getUserData(userId) {
+            if (userCache[userId]) {
+                return userCache[userId];
+            }
+            try {
+                const userDoc = await getDoc(doc(db, 'users', userId));
+                if (userDoc.exists()) {
+                    const userData = userDoc.data();
+                    userCache[userId] = userData;
+                    return userData;
+                }
+            } catch (error) {
+                console.error("Error fetching user data:", error);
+            }
+            return null;
+        }
+
+        async function getPlayerData(playerId) {
+            if (playerCache[playerId]) {
+                return playerCache[playerId];
+            }
+            try {
+                const playerDoc = await getDoc(doc(db, 'jogadores', playerId));
+                if (playerDoc.exists()) {
+                    const playerData = playerDoc.data();
+                    playerCache[playerId] = playerData;
+                    return playerData;
+                }
+            } catch (error) {
+                console.error("Error fetching player data:", error);
+            }
+            return null;
+        }
+
+        async function getEmpireItemData(itemId) {
+            if (empireItemCache[itemId]) {
+                return empireItemCache[itemId];
+            }
+            try {
+                const itemDoc = await getDoc(doc(db, 'empireitems', itemId));
+                if (itemDoc.exists()) {
+                    const itemData = itemDoc.data();
+                    empireItemCache[itemId] = itemData;
+                    return itemData;
+                }
+            } catch (error) {
+                console.error("Error fetching empire item data:", error);
+                return null;
+            }
+            return null;
+        }
+
+        async function fetchLatestSeason() {
+            try {
+                const palpitesRef = collection(db, 'palpites');
+                const querySnapshot = await getDocs(palpitesRef);
+                let seasons = new Set();
+                querySnapshot.forEach(doc => {
+                    const data = doc.data();
+                    if (data.temporada) {
+                        seasons.add(data.temporada);
+                    }
+                });
+                if (seasons.size > 0) {
+                    let latestSeasonWithSlash = Array.from(seasons).sort().reverse()[0];
+                    let latestSeasonNoSlash = latestSeasonWithSlash.replace('/', '');
+                    return latestSeasonNoSlash;
+                } else {
+                    return null;
+                }
+            } catch (error) {
+                console.error("Error finding latest season:", error);
+                return null;
+            }
+        }
+
+        function formatDate(timestamp) {
+            if (!timestamp) return 'Data desconhecida';
+            const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+            return date.toLocaleDateString('pt-BR', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        function normalizeSeason(season) {
+            if (!season) {
+                return season;
+            }
+            const digitsOnly = season.replace(/[^0-9]/g, '');
+            if (digitsOnly.length === 8) {
+                return digitsOnly;
+            } else if (digitsOnly.length === 4) {
+                return digitsOnly + digitsOnly;
+            } else {
+                return digitsOnly.substring(0, 8);
+            }
+        }
+
+        async function populateTransactionTable(latestSeason) {
+            transactionsList.innerHTML = '<div class="no-transactions">Carregando transações...</div>';
+            try {
+                const movimentosRef = collection(db, 'movimentos');
+                const q = query(
+                    movimentosRef,
+                    where('temporada', '==', latestSeason),
+                    where('tipo', 'in', ['Mercado', 'Empire']),
+                    orderBy('movimentoData', 'desc')
+                );
+                const querySnapshot = await getDocs(q);
+                if (querySnapshot.empty) {
+                    transactionsList.innerHTML = '<div class="no-transactions">Nenhuma transação encontrada</div>';
+                } else {
+                    let transactionsHTML = '';
+                 for (const doc of querySnapshot.docs) {
+    const data = doc.data();
+    const userData = await getUserData(data.userId);
+    let itemData = null;
+    let userName = 'Usuário Desconhecido';
+    let itemName = 'Item Desconhecido';
+                        if (data.tipo === 'Mercado' && data.jogadorId) {
+                            itemData = await getPlayerData(data.jogadorId);
+                        } else if (data.tipo === 'Empire' && data.empireitem) {
+                            itemData = await getEmpireItemData(data.empireitem);
+                        }
+                        userName = userData ? userData.nometabela : userName; 
+                        itemName = itemData ? (data.tipo === 'Mercado' ? itemData.nome : itemData.name) : itemName;
+                        const itemImage = itemData ? (data.tipo === 'Mercado' ? itemData.imagem : '') : '';
+                        transactionsHTML += `
+                            <div class="transaction-item">
+                                <div class="transaction-col transaction-tipo-col">
+                                    <div class="transaction-tipo">
+                                        <span class="transaction-type ${data.tipo.toLowerCase()}">${data.tipo}</span>
+                                    </div>
+                                </div>
+                                <div class="transaction-col transaction-user-col">
+                                    <div class="transaction-user">${userName}</div>
+                                </div>
+                                <div class="transaction-col transaction-item-name-col">
+                                    ${itemImage ? `<img src="${itemImage}" alt="${itemName}" class="transaction-item-image">` : ''}
+                                    <div class="transaction-item-name">${itemName}</div>
+                                </div>
+                                <div class="transaction-col transaction-estado-col">
+                                    <div class="transaction-estado">${data.estado || 'N/A'}</div>
+                                </div>
+                                 <div class="transaction-col transaction-price-col">
+                                    <div class="transaction-price">${data.preco.toLocaleString('pt-BR') + ' ₲₵'}</div>
+                                </div>
+                                <div class="transaction-col transaction-date-col">
+                                    <div class="transaction-date">${formatDate(data.movimentoData)}</div>
+                                </div>
+                            </div>
+                        `;
+                    }
+                    transactionsList.innerHTML = transactionsHTML;
+                }
+            } catch (error) {
+                console.error('Erro ao popular tabela de transações:', error);
+                transactionsList.innerHTML = '<div class="no-transactions">Erro ao carregar transações. Tente novamente mais tarde.</div>';
+            } finally {
+                hideLoadingScreen();
+            }
+        }
+
+        async function loadTransactions() {
+            updateLoadingProgress(50);
+            transactionsList.innerHTML = '<div class="no-transactions">Carregando transações...</div>';
+            let latestSeason = await fetchLatestSeason();
+            if (!latestSeason) {
+                transactionsList.innerHTML = '<div class="no-transactions">Nenhuma temporada encontrada.</div>';
+                hideLoadingScreen();
+                return;
+            }
+            await populateTransactionTable(latestSeason);
+            let initialLoadComplete = false;
+            try {
+                const movimentosRef = collection(db, 'movimentos');
+                const q = query(
+                    movimentosRef,
+                    where('temporada', '==', latestSeason),
+                    where('tipo', 'in', ['Mercado', 'Empire']),
+                    orderBy('movimentoData', 'desc')
+                );
+                const unsubscribe = onSnapshot(q, (snapshot) => {
+                    if (!initialLoadComplete) {
+                        initialLoadComplete = true;
+                        return;
+                    }
+                    if (snapshot.empty) {
+                        return;
+                    }
+                    let hasChanges = false;
+                    for (const docChange of snapshot.docChanges()) {
+                        if (docChange.type === "added" || docChange.type === "modified" || docChange.type === "removed") {
+                            hasChanges = true;
+                            break;
+                        }
+                    }
+                    if (hasChanges) {
+                        window.location.reload();
+                    }
+                }, (error) => {
+                    console.error("Erro no listener onSnapshot:", error);
+                    transactionsList.innerHTML = '<div class="no-transactions">Erro ao carregar transações em tempo real.</div>';
+                    hideLoadingScreen();
+                });
+            } catch (error) {
+                console.error('Erro ao iniciar o listener de transações:', error);
+                transactionsList.innerHTML = '<div class="no-transactions">Erro ao carregar transações. Tente novamente mais tarde.</div>';
+                hideLoadingScreen();
+            }
+        }
+
+       onAuthStateChanged(auth, async (user) => {
+    updateLoadingProgress(10);
+    if (user) {
+        // --- ADICIONADO: Atualiza o último acesso ---
+        try {
+            void updateDoc(doc(db, 'users', user.uid), {
+                ultimoacesso: serverTimestamp()
+            }).catch((error) => console.error("Erro ao actualizar o último acesso: ", error));
+        } catch (error) {
+            console.error("Erro ao atualizar o campo ultimoacesso: ", error);
+        }
+        // --- FIM DA ADIÇÃO ---
+
+        const userInfo = await getUserStatus(user.uid);
+        updateLoadingProgress(20);
+        if (userInfo && userInfo.aceite === "Yes") {
+            currentUserStatus = userInfo.estatuto;
+            const paineisMenuDoc = await getDoc(doc(db, 'paineis', 'paineis menu'));
+            updateLoadingProgress(30);
+
+            if (paineisMenuDoc.exists()) {
+                const paineisMenuData = paineisMenuDoc.data();
+                if (paineisMenuData.bank === "off" && currentUserStatus !== 'ruler') {
+                    window.location.href = '404.html';
+                    return;
+                }
+                
+                // --- ADICIONADO: Regista a entrada na página ---
+                await logUserAction(`Entrou em ${document.title}`);
+                // --- FIM DA ADIÇÃO ---
+
+                updateMenuVisibility(paineisMenuData);
+                content.style.display = 'block';
+                loadingScreen.style.display = 'none';
+                await loadTransactions();
+            } else {
+                console.error("Painéis menu document not found.");
+                content.style.display = 'block';
+                loadingScreen.style.display = 'none';
+                await loadTransactions();
+            }
+        } else {
+            window.location.href = '404.html';
+        }
+    } else {
+        window.location.href = 'index.html';
+    }
+});
+
+document.addEventListener('click', async (event) => {
+    const menuItem = event.target.closest('a.menu-item');
+
+    if (!menuItem) return;
+
+    const actionName = `Navegou para: ${menuItem.querySelector('.menu-text')?.textContent.trim() || 'Menu'}`;
+    
+    // Impede a navegação, regista a ação e depois navega manualmente
+    event.preventDefault();
+    await logUserAction(actionName);
+    window.location.href = menuItem.href;
+});
+
+    </script>
+    <script src="menu-component.js"></script> 
+    <script src="core/top-bar-component.js" type="module"></script>
+</body>
+</html>

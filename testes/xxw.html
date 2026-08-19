@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Criação Rápida de Sub e 3ª Categoria</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f7f6;
+            margin: 0;
+            padding: 40px 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .container {
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+            width: 700px;
+            max-width: 95%;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 25px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: bold;
+        }
+        .form-group select,
+        .form-group input[type="text"],
+        .form-group textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        .form-group textarea {
+            min-height: 250px;
+            font-family: monospace;
+        }
+        button {
+            background-color: #007bff;
+            color: #fff;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            width: 100%;
+            box-sizing: border-box;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #aaa;
+            cursor: not-allowed;
+        }
+        #status {
+            display: none;
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #e9ecef;
+            border-radius: 4px;
+            text-align: center;
+            font-weight: bold;
+        }
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            border-left-color: #007bff;
+            animation: spin 1s ease infinite;
+            display: inline-block;
+            vertical-align: middle;
+            margin-right: 10px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Criação Rápida de Subcategoria + 3ª Categoria</h1>
+        <form id="bulkCreateForm">
+            <div class="form-group">
+                <label for="categoriaPai">Categoria Pai</label>
+                <select id="categoriaPai" required>
+                    <option value="">Selecione uma Categoria...</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="icon">Icon / Emoji (para todos os itens)</label>
+                <input type="text" id="icon" required placeholder="Ex: ⚽">
+            </div>
+            <div class="form-group">
+                <label for="itemList">Lista de Itens</label>
+                <textarea id="itemList" rows="15" required placeholder="IMPORTANTE: O formato deve ser 'Referencia (Nome Visível)'.
+
+Exemplo com os seus dados, no formato correto:
+
+TotalOffsidesTeam1 (Foras de Jogo: Total Equipa 1)
+Over_1.5_Offsides_T1 (Mais de 1.5)
+Under_1.5_Offsides_T1 (Menos de 1.5)
+
+TotalOffsidesTeam2 (Foras de Jogo: Total Equipa 2)
+Over_1.5_Offsides_T2 (Mais de 1.5)
+Under_1.5_Offsides_T2 (Menos de 1.5)
+"></textarea>
+            </div>
+            <button type="submit" id="submitButton">Criar Itens em Massa</button>
+        </form>
+        <div id="status">
+            <div class="spinner"></div>
+            <span id="statusText">Processando...</span>
+        </div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+    <script type="module">
+        // Initialize Firebase
+        const firebaseConfig = {
+          apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0", // KEEP YOUR ACTUAL API KEY
+          authDomain: "g-games-8a8fc.firebaseapp.com",
+          projectId: "g-games-8a8fc",
+          storageBucket: "g-games-8a8fc.appspot.com",
+          messagingSenderId: "689897349449",
+          appId: "1:689897349449:web:536599794579901beb7a98",
+          measurementId: "G-GTTPJ6G5MD"
+        };
+
+        const app = firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore(app);
+
+        // --- DOM Elements ---
+        const form = document.getElementById('bulkCreateForm');
+        const categoriaPaiSelect = document.getElementById('categoriaPai');
+        const iconInput = document.getElementById('icon');
+        const itemListTextarea = document.getElementById('itemList');
+        const submitButton = document.getElementById('submitButton');
+        const statusDiv = document.getElementById('status');
+        const statusText = document.getElementById('statusText');
+
+        let todasCompeticoes = [];
+
+        // --- Data Loading ---
+        async function popularDropdownCategorias() {
+            try {
+                const querySnapshot = await db.collection('oddcategorias')
+                    .where('categoria_subcategoria_3cat', '==', 'categoria').orderBy('ordem', 'asc').get();
+                querySnapshot.forEach(doc => {
+                    const data = doc.data();
+                    const option = new Option(data.nomecategoria, doc.id);
+                    categoriaPaiSelect.appendChild(option);
+                });
+            } catch (error) { console.error("Erro ao carregar categorias:", error); }
+        }
+
+        async function carregarTodasCompeticoes() {
+            if (todasCompeticoes.length > 0) return todasCompeticoes;
+            try {
+                const snapshot = await db.collection('competicoes').get();
+                todasCompeticoes = snapshot.docs.map(doc => doc.data().nome);
+                return todasCompeticoes;
+            } catch (error) { console.error("Erro ao carregar competições:", error); return []; }
+        }
+        
+        // --- Main Logic ---
+        form.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            
+            const categoriaId = categoriaPaiSelect.value;
+            const iconValue = iconInput.value.trim();
+            const itemsText = itemListTextarea.value.trim();
+
+            if (!categoriaId || !iconValue || !itemsText) {
+                alert("Por favor, preencha todos os campos e a lista de itens.");
+                return;
+            }
+
+            submitButton.disabled = true;
+            statusDiv.style.display = 'block';
+            statusText.textContent = "A iniciar processo...";
+
+            try {
+                // 1. Parsear a lista de itens em blocos
+                statusText.textContent = "A processar a lista...";
+                const blocks = itemsText.split(/\n\s*\n/).filter(b => b.trim() !== '');
+                if (blocks.length === 0) throw new Error("Nenhum bloco de texto encontrado.");
+                
+                let subCategoriasCriadas = 0;
+                let terceiraCategoriasCriadas = 0;
+
+                // 2. Preparar dados de suporte
+                statusText.textContent = "A carregar dados de suporte...";
+                const competicoes = await carregarTodasCompeticoes();
+                const subCountSnapshot = await db.collection('oddcategorias')
+                                                 .where('categoria_subcategoria_3cat', '==', 'subcategoria')
+                                                 .where('categoriapai', '==', categoriaId).get();
+                let ordemSubcategoria = subCountSnapshot.size + 1;
+
+                // 3. Preparar o batch
+                const batch = db.batch();
+                const regex = /(.*)\s*\((.*?)\)/;
+
+                for (const block of blocks) {
+                    const lines = block.trim().split('\n').filter(l => l.trim() !== '');
+                    if (lines.length === 0) continue;
+
+                    // A primeira linha é a Subcategoria
+                    const subcategoriaLine = lines.shift().trim();
+                    const subMatch = subcategoriaLine.match(regex);
+                    if (!subMatch) {
+                        console.warn(`Bloco ignorado. Linha da subcategoria inválida: "${subcategoriaLine}"`);
+                        continue;
+                    }
+
+                    const newSubRef = db.collection("oddcategorias").doc(); // Gera ID no cliente
+                    const subData = {
+                        categoria_subcategoria_3cat: "subcategoria",
+                        categoriapai: categoriaId,
+                        nomesubcategoria: subMatch[2].trim(),
+                        indiceIngles: subMatch[1].trim(),
+                        breveDescricao: "",
+                        ordem: ordemSubcategoria,
+                        competicoes: competicoes,
+                        icon: iconValue,
+                        ativado: true
+                    };
+                    batch.set(newSubRef, subData);
+                    subCategoriasCriadas++;
+
+                    // As linhas restantes são 3ª Categorias filhas
+                    let ordem3aCategoria = 1;
+                    for (const terceiraCatLine of lines) {
+                        const terceiraMatch = terceiraCatLine.trim().match(regex);
+                        if (!terceiraMatch) {
+                           console.warn(`Linha de 3ª categoria ignorada: "${terceiraCatLine}"`);
+                           continue;
+                        }
+                        
+                        const new3CatRef = db.collection("oddcategorias").doc();
+                        const terceiraData = {
+                            categoria_subcategoria_3cat: "3cat",
+                            categoriapai: categoriaId,
+                            subcategoriapai: newSubRef.id, // Usa o ID gerado acima
+                            nome3categoria: terceiraMatch[2].trim(),
+                            indiceIngles: terceiraMatch[1].trim(),
+                            breveDescricao: "",
+                            ordem: ordem3aCategoria,
+                            competicoes: competicoes,
+                            icon: iconValue,
+                            ativado: true
+                        };
+                        batch.set(new3CatRef, terceiraData);
+                        terceiraCategoriasCriadas++;
+                        ordem3aCategoria++;
+                    }
+                    ordemSubcategoria++;
+                }
+
+                if (subCategoriasCriadas === 0) {
+                    throw new Error("Nenhuma subcategoria válida foi encontrada para criar.");
+                }
+
+                // 4. Executar o Batch
+                statusText.textContent = `A enviar ${subCategoriasCriadas} subcategorias e ${terceiraCategoriasCriadas} 3ª categorias...`;
+                await batch.commit();
+
+                alert(`${subCategoriasCriadas} Subcategorias e ${terceiraCategoriasCriadas} 3ª Categorias foram criadas com sucesso!`);
+                itemListTextarea.value = '';
+            
+            } catch (error) {
+                console.error("Erro na criação em massa:", error);
+                alert("Ocorreu um erro: " + error.message);
+            } finally {
+                submitButton.disabled = false;
+                statusDiv.style.display = 'none';
+            }
+        });
+
+        // --- Initial Load ---
+        popularDropdownCategorias();
+
+    </script>
+</body>
+</html>

@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Editar Clubes - G EMPIRE</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    
+    <!-- Estilos do menu -->
+    <link rel="stylesheet" href="css/menu-admin.css">
+    
+    <!-- Guardião de segurança -->
+    <script type="module" src="js/auth-guard.js"></script>
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { min-height: 100vh; background-color: #090c10; font-family: 'Poppins', Arial, sans-serif; color: #f0f2f5; }
+        
+        .content { padding: 110px 20px 40px; max-width: 1200px; margin: 0 auto; }
+        .cards-container { display: flex; flex-direction: column; gap: 20px; margin-top: 10px; }
+        .card { background: #111622; border-radius: 12px; padding: 24px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45); border: 1px solid rgba(255, 255, 255, 0.06); width: 100%; margin-bottom: 0; }
+        h1 { color: #ffffff; margin-bottom: 30px; text-align: center; font-weight: 700; font-size: 28px; }
+        
+        .card-title { font-size: 18px; font-weight: 600; color: #2176ff; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 2px solid rgba(255, 255, 255, 0.05); }
+        .form-group { margin-bottom: 16px; position: relative; }
+        .form-group label { display: block; margin-bottom: 8px; color: #8892b0; font-weight: 500; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; }
+        
+        .form-control { width: 100%; padding: 10px; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; font-size: 16px; transition: border-color 0.2s ease; background-color: #161c28; color: #ffffff; outline: none; }
+        .form-control:focus { border-color: rgba(33, 118, 255, 0.5); }
+        
+        .form-row { display: flex; gap: 16px; }
+        .form-row .form-group { flex: 1; }
+        
+        .image-preview { width: 100px; height: 100px; object-fit: contain; margin-top: 10px; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; display: none; }
+        
+        .dropdown { position: relative; }
+        .dropdown-results { position: absolute; top: 100%; left: 0; right: 0; background: #161c28; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; max-height: 200px; overflow-y: auto; z-index: 1000; display: none; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5); }
+        .dropdown-item { padding: 10px 12px; cursor: pointer; color: #ffffff; }
+        .dropdown-item:hover { background-color: rgba(33, 118, 255, 0.15); }
+        
+        .btn-edit { background: linear-gradient(135deg, #2ecc71, #27ae60); color: white; border: none; padding: 12px 24px; border-radius: 8px; font-size: 16px; font-weight: 700; cursor: pointer; width: 100%; transition: all 0.3s ease; text-transform: uppercase; letter-spacing: 0.5px; box-shadow: 0 4px 15px rgba(46, 204, 113, 0.2); }
+        .btn-edit:hover { background: linear-gradient(135deg, #27ae60, #219653); transform: translateY(-1px); box-shadow: 0 6px 20px rgba(46, 204, 113, 0.35); }
+        
+        /* Controls / Search Bar */
+        .controls-row { display: flex; gap: 16px; margin-bottom: 24px; align-items: center; flex-wrap: wrap; }
+        .search-wrapper { position: relative; width: 320px; }
+        .search-wrapper i { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); color: #8892b0; }
+        .search-input { width: 100%; padding: 12px 42px 12px 16px; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; font-size: 15px; outline: none; background-color: #111622; color: #ffffff; transition: all 0.3s ease; }
+        .search-input:focus { border-color: rgba(33, 118, 255, 0.5); box-shadow: 0 0 10px rgba(33, 118, 255, 0.15); }
+        .filter-select { padding: 12px 36px 12px 16px; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; font-size: 15px; outline: none; background-color: #111622; color: #ffffff; transition: all 0.3s ease; cursor: pointer; min-width: 180px; appearance: none; -webkit-appearance: none; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%238892b0' viewBox='0 0 16 16'><path fill-rule='evenodd' d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/></svg>"); background-repeat: no-repeat; background-position: calc(100% - 14px) center; }
+        .filter-select:focus { border-color: rgba(33, 118, 255, 0.5); box-shadow: 0 0 10px rgba(33, 118, 255, 0.15); }
+
+        /* Excel-like Table Container */
+        .table-container { background-color: #111622; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.06); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45); overflow-x: auto; margin-bottom: 30px; }
+        .excel-table { width: 100%; border-collapse: collapse; text-align: left; min-width: 800px; }
+        .excel-table th, .excel-table td { padding: 12px 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.04); font-size: 14px; }
+        .excel-table th { background-color: #161c28; color: #8892b0; font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px; border-bottom: 2px solid rgba(255, 255, 255, 0.08); user-select: none; }
+        .excel-table th i { margin-left: 6px; font-size: 10px; transition: color 0.2s; }
+        .excel-table tr { cursor: pointer; transition: background-color 0.2s ease; }
+        .excel-table tr:hover { background-color: rgba(33, 118, 255, 0.08); }
+        .excel-table tr:last-child td { border-bottom: none; }
+        
+        .club-row-img { width: 32px; height: 32px; object-fit: contain; border: 1px solid rgba(255, 255, 255, 0.1); margin-right: 8px; vertical-align: middle; }
+        .club-row-name { font-weight: 600; color: #ffffff; display: inline-block; vertical-align: middle; }
+
+        /* Main Modal Overlay */
+        .overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.75); z-index: 1000; backdrop-filter: blur(4px); justify-content: center; align-items: center; }
+        .overlay.active { display: flex; }
+        .modal-content { background: #111622; width: 95%; max-width: 600px; border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 15px 45px rgba(0,0,0,0.6); display: flex; flex-direction: column; max-height: 90vh; animation: zoomIn 0.3s ease; }
+        @keyframes zoomIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        
+        .modal-header { padding: 20px; border-bottom: 1px solid rgba(255,255,255,0.06); display: flex; justify-content: space-between; align-items: center; }
+        .modal-header h3 { font-size: 18px; color: #ffffff; font-weight: bold; }
+        .modal-body { padding: 20px; overflow-y: auto; flex-grow: 1; }
+        .modal-footer { padding: 16px 20px; border-top: 1px solid rgba(255,255,255,0.06); display: flex; justify-content: flex-end; gap: 12px; }
+        
+        .btn { padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s ease; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; }
+        .btn.secondary { background-color: #161c28; color: #8892b0; border: 1px solid rgba(255, 255, 255, 0.08); }
+        .btn.secondary:hover { background-color: #1d2639; color: #ffffff; }
+
+        .search-option { padding: 10px 12px; cursor: pointer; color: #ffffff; }
+        .search-option:hover { background-color: rgba(33, 118, 255, 0.15); }
+
+        /* Small Switch for Table */
+        .table-switch {
+            position: relative;
+            display: inline-block;
+            width: 46px;
+            height: 24px;
+            vertical-align: middle;
+        }
+        .table-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .table-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #e74c3c;
+            transition: .4s;
+            border-radius: 24px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        .table-slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 2px;
+            bottom: 2px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        .table-switch input:checked + .table-slider {
+            background-color: #2ecc71;
+        }
+        .table-switch input:checked + .table-slider:before {
+            transform: translateX(22px);
+        }
+    </style>
+
+    <link rel="stylesheet" href="css/admin-global.css">
+</head>
+<body style="display: none;">
+
+    <nav id="menu-placeholder" class="top-menu"></nav>
+
+    <div class="content">
+        <h1>Editar Clubes</h1>
+        
+        <div class="controls-row">
+            <div class="search-wrapper">
+                <input type="text" class="search-input" placeholder="Pesquisar clube..." id="tableSearch">
+                <i class="fas fa-search"></i>
+            </div>
+            <select id="filter-pais" class="filter-select">
+                <option value="">Todos os Países</option>
+            </select>
+            <select id="filter-competicao" class="filter-select">
+                <option value="">Todas as Competições</option>
+            </select>
+        </div>
+
+        <div class="table-container">
+            <table class="excel-table">
+                <thead>
+                    <tr>
+                        <th data-sort="nome" style="cursor: pointer;">Nome <i class="fas fa-sort"></i></th>
+                        <th data-sort="nome_en" style="cursor: pointer;">Nome (Inglês) <i class="fas fa-sort"></i></th>
+                        <th data-sort="pais" style="cursor: pointer;">País <i class="fas fa-sort"></i></th>
+                        <th data-sort="competicao" style="cursor: pointer;">Competição <i class="fas fa-sort"></i></th>
+                        <th data-sort="tipo" style="cursor: pointer;">Tipo <i class="fas fa-sort"></i></th>
+                        <th data-sort="genero" style="cursor: pointer;">Género <i class="fas fa-sort"></i></th>
+                        <th style="text-align: center;">Ativo</th>
+                    </tr>
+                </thead>
+                <tbody id="clubs-table-body">
+                    <!-- Carregado via JS -->
+                </tbody>
+            </table>
+        </div>
+        <div style="text-align: center; margin-bottom: 30px;">
+            <button id="btn-load-more" class="btn secondary" style="display: none; margin: 0 auto; padding: 10px 30px; font-weight: bold;">Carregar mais</button>
+        </div>
+    </div>
+
+    <!-- MAIN OVERLAY EDIT POPUP -->
+    <div class="overlay" id="edit-clube-popup">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Editar Clube</h3>
+                <button type="submit" form="edit-clube-form" class="btn-edit" style="width: auto; padding: 8px 24px; font-size: 14px; margin: 0 auto; display: inline-block;">Salvar</button>
+                <button class="btn secondary" id="closeModalBtn" style="padding: 5px 10px; min-width: auto;"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <form id="edit-clube-form" class="cards-container">
+                    <div class="card">
+                        <div class="card-title">Informações do Clube</div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="nome-clube">Nome do Clube</label>
+                                <input type="text" class="form-control" id="nome-clube" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="nome-clube-en">Nome do Clube (Inglês)</label>
+                                <input type="text" class="form-control" id="nome-clube-en">
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="codigo-url-clube">Código para Imagem</label>
+                            <input type="text" class="form-control" id="codigo-url-clube" required>
+                            <img id="imagem-preview" class="image-preview" src="" alt="Preview">
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="pais-clube">País do Clube</label>
+                                <div class="dropdown">
+                                    <input type="text" class="form-control" id="pais-clube" placeholder="Digite para pesquisar..." required autocomplete="off">
+                                    <div class="dropdown-results" id="pais-list"></div>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="competicao-clube">Competição do Clube</label>
+                                <div class="dropdown">
+                                    <input type="text" class="form-control" id="competicao-clube" placeholder="Digite para pesquisar..." required autocomplete="off">
+                                    <div class="dropdown-results" id="competicao-list"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="tipo-clube">Tipo</label>
+                                <select class="form-control" id="tipo-clube">
+                                    <option value="Clube">Clube</option>
+                                    <option value="Seleção">Seleção</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="genero-clube">Género</label>
+                                <select class="form-control" id="genero-clube">
+                                    <option value="Masculino">Masculino</option>
+                                    <option value="Feminino">Feminino</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="ativo-clube">Ativo?</label>
+                                <select class="form-control" id="ativo-clube">
+                                    <option value="Sim">Sim</option>
+                                    <option value="Não">Não</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn secondary" id="cancelModalBtn">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { db } from './js/auth-guard.js';
+        import { collection, getDocs, doc, updateDoc, getDoc, arrayRemove, arrayUnion } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        let allClubs = [];
+        let selectedClubId = null;
+        let selectedPaisId = null;
+        let selectedCompeticaoId = null;
+        let originalPaisId = null;
+        let originalCompeticaoId = null;
+        let currentSortColumn = 'nome';
+        let currentSortDirection = 'asc';
+        let displayLimit = 200;
+
+        const fallbackImg = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%238892b0"><path d="M12 2L2 5v6c0 5.52 4.48 10 10 10s10-4.48 10-10V5l-10-3zm0 18c-4.41 0-8-3.59-8-8V6.3l8-2.4 8 2.4V12c0 4.41-3.59 8-8 8z"/></svg>`;
+
+        window.handleImageError = function(img) {
+            img.onerror = null;
+            img.src = fallbackImg;
+        };
+
+        window.resolveClubImage = function(img, pais, code) {
+            if (!img.dataset.tryIndex) {
+                img.dataset.tryIndex = "0";
+            }
+            const extensions = ['webp', 'png', 'jpg', 'jpeg', 'svg'];
+            const currentIndex = parseInt(img.dataset.tryIndex);
+            
+            if (currentIndex < extensions.length) {
+                img.dataset.tryIndex = (currentIndex + 1).toString();
+                img.src = `../assets/equipalogos/${pais}/club_${code}.${extensions[currentIndex]}`;
+            } else {
+                img.onerror = null;
+                img.src = fallbackImg;
+            }
+        };
+
+        async function initPage() {
+            try {
+                const querySnapshot = await getDocs(collection(db, 'clubes'));
+                allClubs = querySnapshot.docs.map(doc => {
+                    const data = doc.data();
+                    return {
+                        id: doc.id,
+                        nome: data.nome || 'Sem Nome',
+                        nome_en: data.nome_en || '',
+                        imagem: data.imagem || '',
+                        codigoUrl: data.codigoUrl || '',
+                        pais: data.pais || 'N/A',
+                        paisId: data.paisId || null,
+                        competicao: data.competicao || 'N/A',
+                        competicaoId: data.competicaoId || null,
+                        tipo: data.tipo || 'Clube',
+                        genero: data.genero || 'Masculino',
+                        ativo: data.ativo !== false
+                    };
+                });
+                populateFilters();
+                renderClubsTable();
+            } catch (error) {
+                console.error("Erro ao carregar dados dos clubes:", error);
+                alert("Erro ao carregar os dados dos clubes.");
+            }
+        }
+
+        function populateFilters() {
+            const paises = [...new Set(allClubs.map(c => c.pais).filter(p => p && p !== 'N/A'))].sort();
+            const competicoes = [...new Set(allClubs.map(c => c.competicao).filter(cp => cp && cp !== 'N/A'))].sort();
+
+            const filterPais = document.getElementById('filter-pais');
+            const filterCompeticao = document.getElementById('filter-competicao');
+
+            const selectedPais = filterPais.value;
+            const selectedCompeticao = filterCompeticao.value;
+
+            filterPais.innerHTML = '<option value="">Todos os Países</option>';
+            filterCompeticao.innerHTML = '<option value="">Todas as Competições</option>';
+
+            paises.forEach(pais => {
+                const opt = document.createElement('option');
+                opt.value = pais;
+                opt.textContent = pais;
+                if (pais === selectedPais) opt.selected = true;
+                filterPais.appendChild(opt);
+            });
+
+            competicoes.forEach(comp => {
+                const opt = document.createElement('option');
+                opt.value = comp;
+                opt.textContent = comp;
+                if (comp === selectedCompeticao) opt.selected = true;
+                filterCompeticao.appendChild(opt);
+            });
+        }
+
+        function renderClubsTable() {
+            const queryText = document.getElementById('tableSearch').value.toLowerCase();
+            const filterPais = document.getElementById('filter-pais').value;
+            const filterCompeticao = document.getElementById('filter-competicao').value;
+            const tableBody = document.getElementById('clubs-table-body');
+            tableBody.innerHTML = '';
+
+            const filtered = allClubs.filter(c => {
+                const matchesSearch = c.nome.toLowerCase().includes(queryText) || 
+                                     c.nome_en.toLowerCase().includes(queryText) || 
+                                     c.pais.toLowerCase().includes(queryText) ||
+                                     c.competicao.toLowerCase().includes(queryText);
+                const matchesPais = !filterPais || c.pais === filterPais;
+                const matchesCompeticao = !filterCompeticao || c.competicao === filterCompeticao;
+                return matchesSearch && matchesPais && matchesCompeticao;
+            });
+
+            if (filtered.length === 0) {
+                tableBody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #8892b0; padding: 20px;">Nenhum clube encontrado.</td></tr>`;
+                document.getElementById('btn-load-more').style.display = 'none';
+                return;
+            }
+
+            filtered.sort((a, b) => {
+                let valA = a[currentSortColumn] || '';
+                let valB = b[currentSortColumn] || '';
+
+                let comparison = 0;
+                if (typeof valA === 'string') {
+                    comparison = valA.localeCompare(valB);
+                } else {
+                    comparison = valA > valB ? 1 : -1;
+                }
+                return currentSortDirection === 'asc' ? comparison : -comparison;
+            });
+
+            const displayed = filtered.slice(0, displayLimit);
+            displayed.forEach(club => {
+                const tr = document.createElement('tr');
+                const localImg = club.imagem ? (club.imagem.startsWith('http') || club.imagem.startsWith('data:') ? club.imagem : '../' + club.imagem) : fallbackImg;
+                const isChecked = club.ativo !== false ? 'checked' : '';
+                
+                const codeMatch = club.imagem ? club.imagem.match(/club_(.+)\.(webp|png|jpe?g|svg)/i) : null;
+                const clubCode = codeMatch ? codeMatch[1] : club.codigoUrl;
+
+                tr.innerHTML = `
+                    <td>
+                        <img src="${localImg}" alt="${club.nome}" class="club-row-img" onerror="resolveClubImage(this, '${club.pais}', '${clubCode}')">
+                        <span class="club-row-name">${club.nome}</span>
+                    </td>
+                    <td>${club.nome_en || '-'}</td>
+                    <td>${club.pais}</td>
+                    <td>${club.competicao}</td>
+                    <td>${club.tipo}</td>
+                    <td>${club.genero}</td>
+                    <td style="text-align: center;">
+                        <label class="table-switch">
+                            <input type="checkbox" class="ativo-toggle" ${isChecked}>
+                            <span class="table-slider"></span>
+                        </label>
+                    </td>
+                `;
+
+                const toggleSwitch = tr.querySelector('.table-switch');
+                toggleSwitch.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                });
+                const toggleInput = tr.querySelector('.ativo-toggle');
+                toggleInput.addEventListener('change', async (e) => {
+                    const activeState = e.target.checked;
+                    try {
+                        const clubRef = doc(db, 'clubes', club.id);
+                        await updateDoc(clubRef, { ativo: activeState });
+                        club.ativo = activeState; // Update local cache
+                    } catch (err) {
+                        console.error("Erro ao atualizar o estado ativo do clube:", err);
+                        e.target.checked = !activeState; // Revert
+                    }
+                });
+
+                tr.addEventListener('click', () => openEditModal(club));
+                tableBody.appendChild(tr);
+            });
+
+            const loadMoreBtn = document.getElementById('btn-load-more');
+            if (filtered.length > displayLimit) {
+                loadMoreBtn.style.display = 'block';
+            } else {
+                loadMoreBtn.style.display = 'none';
+            }
+        }
+
+        function openEditModal(club) {
+            selectedClubId = club.id;
+            selectedPaisId = club.paisId;
+            selectedCompeticaoId = club.competicaoId;
+            originalPaisId = club.paisId;
+            originalCompeticaoId = club.competicaoId;
+
+            document.getElementById('nome-clube').value = club.nome;
+            document.getElementById('nome-clube-en').value = club.nome_en || '';
+            document.getElementById('codigo-url-clube').value = club.codigoUrl || '';
+            
+            let ext = 'webp';
+            if (club.imagem) {
+                const match = club.imagem.match(/club_(.+)\.(webp|png|jpe?g|svg)/i);
+                if (match) ext = match[2];
+            }
+            const previewImg = document.getElementById('imagem-preview');
+            previewImg.removeAttribute('data-try-index');
+            if (club.codigoUrl) {
+                previewImg.onerror = () => window.resolveClubImage(previewImg, club.pais, club.codigoUrl);
+                previewImg.src = club.imagem ? (club.imagem.startsWith('http') || club.imagem.startsWith('data:') ? club.imagem : '../' + club.imagem) : `../assets/equipalogos/${club.pais}/club_${club.codigoUrl}.${ext}`;
+                previewImg.style.display = 'block';
+            } else {
+                previewImg.src = '';
+                previewImg.style.display = 'none';
+            }
+
+            document.getElementById('pais-clube').value = club.pais;
+            document.getElementById('competicao-clube').value = club.competicao;
+            document.getElementById('tipo-clube').value = club.tipo;
+            document.getElementById('genero-clube').value = club.genero;
+            document.getElementById('ativo-clube').value = club.ativo !== false ? 'Sim' : 'Não';
+
+            document.getElementById('edit-clube-popup').classList.add('active');
+        }
+
+        function closeEditModal() {
+            document.getElementById('edit-clube-popup').classList.remove('active');
+            selectedClubId = null;
+        }
+
+        async function searchCountries(searchTerm) {
+            const searchTermLower = searchTerm.toLowerCase();
+            const querySnapshot = await getDocs(collection(db, 'paises'));
+            return querySnapshot.docs
+                .map(doc => ({ id: doc.id, ...doc.data() }))
+                .filter(country => country.nome.toLowerCase().includes(searchTermLower))
+                .sort((a, b) => a.nome.localeCompare(b.nome));
+        }
+
+        async function searchCompetitions(searchTerm) {
+            const searchTermLower = searchTerm.toLowerCase();
+            const querySnapshot = await getDocs(collection(db, 'competicoes'));
+            return querySnapshot.docs
+                .map(doc => ({ id: doc.id, ...doc.data() }))
+                .filter(competition => competition.nome.toLowerCase().includes(searchTermLower));
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initPage();
+
+            const tableSearch = document.getElementById('tableSearch');
+            tableSearch.addEventListener('input', () => {
+                displayLimit = 200;
+                renderClubsTable();
+            });
+
+            const filterPaisSelect = document.getElementById('filter-pais');
+            filterPaisSelect.addEventListener('change', () => {
+                displayLimit = 200;
+                renderClubsTable();
+            });
+
+            const filterCompeticaoSelect = document.getElementById('filter-competicao');
+            filterCompeticaoSelect.addEventListener('change', () => {
+                displayLimit = 200;
+                renderClubsTable();
+            });
+
+            // Sort logic
+            document.querySelectorAll('.excel-table th[data-sort]').forEach(th => {
+                th.addEventListener('click', () => {
+                    const col = th.getAttribute('data-sort');
+                    if (currentSortColumn === col) {
+                        currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        currentSortColumn = col;
+                        currentSortDirection = 'asc';
+                    }
+                    
+                    // Update sort icons
+                    document.querySelectorAll('.excel-table th i').forEach(icon => {
+                        icon.className = 'fas fa-sort';
+                    });
+                    const icon = th.querySelector('i');
+                    icon.className = currentSortDirection === 'asc' ? 'fas fa-sort-up' : 'fas fa-sort-down';
+
+                    displayLimit = 200;
+                    renderClubsTable();
+                });
+            });
+
+            // Button load more listener
+            const loadMoreBtn = document.getElementById('btn-load-more');
+            loadMoreBtn.addEventListener('click', () => {
+                displayLimit += 200;
+                renderClubsTable();
+            });
+
+            // Modal elements
+            const closeModalBtn = document.getElementById('closeModalBtn');
+            const cancelModalBtn = document.getElementById('cancelModalBtn');
+            closeModalBtn.addEventListener('click', closeEditModal);
+            cancelModalBtn.addEventListener('click', closeEditModal);
+
+            // Código imagem preview
+            const codigoUrlInput = document.getElementById('codigo-url-clube');
+            const imagemPreview = document.getElementById('imagem-preview');
+            const paisInput = document.getElementById('pais-clube');
+            const paisList = document.getElementById('pais-list');
+            
+            const updatePreview = () => {
+                const code = codigoUrlInput.value.trim();
+                const pais = paisInput.value.trim();
+                imagemPreview.removeAttribute('data-try-index');
+                if (code && pais) {
+                    imagemPreview.onerror = () => window.resolveClubImage(imagemPreview, pais, code);
+                    imagemPreview.src = `../assets/equipalogos/${pais}/club_${code}.webp`;
+                    imagemPreview.style.display = 'block';
+                } else {
+                    imagemPreview.src = '';
+                    imagemPreview.style.display = 'none';
+                }
+            };
+
+            codigoUrlInput.addEventListener('input', updatePreview);
+            paisInput.addEventListener('input', updatePreview);
+
+            // Dropdowns
+            paisInput.addEventListener('input', async (e) => {
+                const searchTerm = e.target.value.trim();
+                paisList.innerHTML = '';
+                if (searchTerm.length < 2) {
+                    paisList.style.display = 'none';
+                    return;
+                }
+                const countries = await searchCountries(searchTerm);
+                if (countries.length > 0) {
+                    paisList.style.display = 'block';
+                    countries.forEach(country => {
+                        const div = document.createElement('div');
+                        div.className = 'dropdown-item';
+                        div.textContent = country.nome;
+                        div.addEventListener('click', () => {
+                            paisInput.value = country.nome;
+                            selectedPaisId = country.id;
+                            paisList.innerHTML = '';
+                            paisList.style.display = 'none';
+                            updatePreview();
+                        });
+                        paisList.appendChild(div);
+                    });
+                } else {
+                    paisList.style.display = 'none';
+                }
+            });
+
+            const competicaoInput = document.getElementById('competicao-clube');
+            const competicaoList = document.getElementById('competicao-list');
+            competicaoInput.addEventListener('input', async (e) => {
+                const searchTerm = e.target.value.trim();
+                competicaoList.innerHTML = '';
+                if (searchTerm.length < 2) {
+                    competicaoList.style.display = 'none';
+                    return;
+                }
+                const competitions = await searchCompetitions(searchTerm);
+                if (competitions.length > 0) {
+                    competicaoList.style.display = 'block';
+                    competitions.forEach(competition => {
+                        const div = document.createElement('div');
+                        div.className = 'dropdown-item';
+                        div.textContent = competition.nome;
+                        div.addEventListener('click', () => {
+                            competicaoInput.value = competition.nome;
+                            selectedCompeticaoId = competition.id;
+                            competicaoList.innerHTML = '';
+                            competicaoList.style.display = 'none';
+                        });
+                        competicaoList.appendChild(div);
+                    });
+                } else {
+                    competicaoList.style.display = 'none';
+                }
+            });
+
+            // Form Submit
+            const editForm = document.getElementById('edit-clube-form');
+            editForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                if (!selectedClubId) return;
+
+                try {
+                    const clubRef = doc(db, 'clubes', selectedClubId);
+                    
+                    if (originalPaisId !== selectedPaisId) {
+                        if (originalPaisId) {
+                            const oldPaisRef = doc(db, 'paises', originalPaisId);
+                            await updateDoc(oldPaisRef, { clubes: arrayRemove(selectedClubId) });
+                        }
+                        if (selectedPaisId) {
+                            const newPaisRef = doc(db, 'paises', selectedPaisId);
+                            await updateDoc(newPaisRef, { clubes: arrayUnion(selectedClubId) });
+                        }
+                    }
+                    if (originalCompeticaoId !== selectedCompeticaoId) {
+                        if (originalCompeticaoId) {
+                            const oldCompeticaoRef = doc(db, 'competicoes', originalCompeticaoId);
+                            await updateDoc(oldCompeticaoRef, { clubes: arrayRemove(selectedClubId) });
+                        }
+                        if (selectedCompeticaoId) {
+                            const newCompeticaoRef = doc(db, 'competicoes', selectedCompeticaoId);
+                            await updateDoc(newCompeticaoRef, { clubes: arrayUnion(selectedClubId) });
+                        }
+                    }
+
+                    const codigoUrl = codigoUrlInput.value.trim();
+                    const activeValue = document.getElementById('ativo-clube').value === 'Sim';
+                    const previewSrc = document.getElementById('imagem-preview').src;
+                    let ext = 'webp';
+                    if (previewSrc && !previewSrc.includes('data:image')) {
+                        const extMatch = previewSrc.match(/\.(webp|png|jpe?g|svg)/i);
+                        if (extMatch) {
+                            ext = extMatch[1].toLowerCase();
+                        }
+                    }
+                    const updateData = {
+                        nome: document.getElementById('nome-clube').value.trim(),
+                        nome_en: document.getElementById('nome-clube-en').value.trim(),
+                        codigoUrl: codigoUrl,
+                        imagem: codigoUrl ? `assets/equipalogos/${paisInput.value.trim()}/club_${codigoUrl}.${ext}` : '',
+                        pais: paisInput.value,
+                        paisId: selectedPaisId,
+                        competicao: competicaoInput.value,
+                        competicaoId: selectedCompeticaoId,
+                        tipo: document.getElementById('tipo-clube').value,
+                        genero: document.getElementById('genero-clube').value,
+                        ativo: activeValue
+                    };
+
+                    await updateDoc(clubRef, updateData);
+
+                    // Update cached list
+                    const idx = allClubs.findIndex(c => c.id === selectedClubId);
+                    if (idx !== -1) {
+                        allClubs[idx] = {
+                            ...allClubs[idx],
+                            ...updateData
+                        };
+                    }
+
+                    closeEditModal();
+                    populateFilters();
+                    renderClubsTable();
+
+                } catch (error) {
+                    console.error('Erro ao atualizar clube:', error);
+                    alert('Erro ao atualizar clube. Por favor, tente novamente.');
+                }
+            });
+
+            // Dismiss lists on click outside
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('.dropdown')) {
+                    paisList.style.display = 'none';
+                    competicaoList.style.display = 'none';
+                }
+            });
+        });
+    </script>
+    
+    <!-- Script para carregar o menu de navegação -->
+    <script src="js/menuadmin-loader.js"></script>
+
+</body>
+</html>

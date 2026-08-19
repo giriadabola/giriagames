@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhoWins - Roda da Sorte</title>
+    <link rel="icon" type="image/png" href="https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhTl6Ljabwgx-VXdZz8FcAoygQprujSsCoXc32Y_iU0FjYVPu1B6MffWwp8gcCVuV8TWn39FRk9OIe1nc-esubVJYmdLsTptAoR9GyqNuw4R5MBaeaoWXTc3JaqH2YVNtEmfReQqohvQKvHiI0XwE5na2ty2B9Bt4oELxYv2BaZ7R3UmeylpiVEIbiLnCB/s320/soccer-ball-png.webp">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <style>
+        /* --- ESTILOS GERAIS E DE PROTEÇÃO (Mantidos) --- */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        img {
+            pointer-events: none;
+            user-select: none;
+            -webkit-user-drag: none;
+        }
+
+        body {
+            min-height: 100vh;
+            background-color: #263340;
+            font-family: 'Roboto', sans-serif;
+            color: #f0f0f0;
+            font-size: 16px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            overflow: hidden;
+        }
+
+        #loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #263340;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1001;
+            transition: opacity 0.5s ease;
+        }
+
+        .loading-spinner {
+            border: 16px solid #f3f3f3;
+            border-top: 16px solid #3498db;
+            border-radius: 50%;
+            width: 120px;
+            height: 120px;
+            animation: spin 1.5s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* --- ESTILOS DO JOGO ROLETA (Novo) --- */
+        .game-container {
+            display: none; /* Inicia oculto até o login */
+            position: relative;
+            width: 90vw;
+            max-width: 500px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 20px;
+            color: #ffffff;
+            text-shadow: 0 0 10px rgba(52, 152, 219, 0.7);
+        }
+
+        #wheel-container {
+            position: relative;
+            width: 100%;
+            padding-top: 100%; /* Aspect ratio 1:1 */
+            height: 0;
+        }
+
+        #wheel {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border: 8px solid #fff;
+            border-radius: 50%;
+            box-shadow: 0 0 25px rgba(0,0,0,0.5);
+            transition: transform 5s cubic-bezier(0.25, 0.1, 0.25, 1);
+        }
+
+        #pointer-container {
+            position: absolute;
+            top: -15px; /* Ajuste para posicionar acima da roda */
+            left: 50%;
+            transform: translateX(-50%);
+            width: 50px;
+            height: 60px;
+            z-index: 10;
+        }
+
+        #pointer-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 0;
+            height: 0;
+            border-left: 25px solid transparent;
+            border-right: 25px solid transparent;
+            border-top: 40px solid #e74c3c; /* Cor do ponteiro */
+            filter: drop-shadow(0px 2px 3px rgba(0,0,0,0.5));
+        }
+
+        #spin-button {
+            margin-top: 30px;
+            padding: 15px 40px;
+            font-size: 1.4em;
+            font-weight: bold;
+            color: white;
+            background: linear-gradient(135deg, #2ecc71, #27ae60);
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+        
+        #spin-button:hover:not(:disabled) {
+             transform: translateY(-3px);
+             box-shadow: 0 8px 20px rgba(46, 204, 113, 0.4);
+        }
+        
+        #spin-button:disabled {
+            background: #7f8c8d;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        #result-area {
+            margin-top: 25px;
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #f1c40f;
+            min-height: 40px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+        }
+
+    </style>
+</head>
+<body>
+    
+    <!-- Tela de Carregamento (Mantida) -->
+    <div id="loading-screen">
+        <div class="loading-spinner"></div>
+    </div>
+
+    <!-- Conteúdo do Jogo (Novo) -->
+    <div class="game-container" id="game-container">
+        <h1>Roda da Sorte</h1>
+        <div id="pointer-container"></div>
+        <div id="wheel-container">
+            <canvas id="wheel"></canvas>
+        </div>
+        <button id="spin-button">Girar!</button>
+        <p id="result-area"></p>
+    </div>
+    
+    <!-- Menu Component e Config (Mantidos) -->
+    <script src="menu-component.js"></script>
+    <script src="config.js"></script>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, doc, getDoc, updateDoc, addDoc, serverTimestamp, collection } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+
+        // --- INICIALIZAÇÃO FIREBASE E AUTENTICAÇÃO ---
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+        
+        async function logUserAction(actionDescription) {
+            if (!auth.currentUser) return;
+            try {
+                await addDoc(collection(db, 'eye'), {
+                    dataacao: serverTimestamp(),
+                    acao: actionDescription,
+                    userId: auth.currentUser.uid
+                });
+            } catch (error) { console.error("Erro ao registar ação:", error); }
+        }
+
+        const loadingScreen = document.getElementById('loading-screen');
+        const gameContainer = document.getElementById('game-container');
+
+        // --- FUNÇÕES DE ACESSO E AUTENTICAÇÃO ---
+        async function loadAccessSettings() { 
+            return getDoc(doc(db, 'paineis', 'paineis perfil')).then(d => d.exists() ? d.data() : {}); 
+        }
+        async function loadMenuSettings() { 
+            return getDoc(doc(db, 'paineis', 'paineis menu')).then(d => d.exists() ? d.data() : {}); 
+        }
+        function checkPageAccess(userInfo, accessSettings) {
+            if (userInfo.estatuto === 'ruler') return true;
+            // Adapte a regra de acesso se necessário
+            const globalAccessOn = accessSettings['quemganha'] === 'on';
+            const hasIndividualPermission = userInfo.permissoes.whowins === 'yes';
+            return globalAccessOn && hasIndividualPermission;
+        }
+        async function getUserStatus(userId) {
+            const userDoc = await getDoc(doc(db, 'users', userId));
+            if (userDoc.exists() && userDoc.data().aceite === "Yes") return userDoc.data();
+            return null;
+        }
+        
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                try {
+                    await updateDoc(doc(db, 'users', user.uid), { ultimoacesso: serverTimestamp() });
+                } catch (error) { console.error("Erro ao atualizar ultimoacesso:", error); }
+
+                const userInfo = await getUserStatus(user.uid);
+                if (!userInfo) { 
+                    window.location.href = 'index.html'; 
+                    return; 
+                }
+
+                const accessSettings = await loadAccessSettings();
+                if (!checkPageAccess(userInfo, accessSettings)) { 
+                    window.location.href = '404.html'; 
+                    return; 
+                }
+                
+                await logUserAction(`Entrou em ${document.title}`);
+                const menuSettings = await loadMenuSettings();
+                // AQUI ESTAVA O ERRO - AGORA CORRIGIDO
+                if (typeof updateMenuVisibility === 'function') { 
+                    updateMenuVisibility(menuSettings); 
+                }
+                
+                // Esconde o loading e mostra o jogo
+                loadingScreen.style.display = 'none';
+                gameContainer.style.display = 'flex';
+                initializeGame();
+
+            } else { 
+                window.location.href = 'index.html'; 
+            }
+        });
+
+
+        // --- LÓGICA DO JOGO ROLETA ---
+        function initializeGame() {
+            const segments = [
+                { color: "#e74c3c", label: "10" }, { color: "#3498db", label: "50" },
+                { color: "#2ecc71", label: "100" }, { color: "#f1c40f", label: "Nada" },
+                { color: "#9b59b6", label: "20" }, { color: "#e67e22", label: "Jackpot" },
+                { color: "#1abc9c", label: "5" }, { color: "#34495e", label: "200" },
+                { color: "#e74c3c", label: "10" }, { color: "#3498db", label: "50" },
+                { color: "#2ecc71", label: "100" }, { color: "#f1c40f", label: "Nada" }
+            ];
+
+            const wheel = document.getElementById("wheel");
+            const spinButton = document.getElementById("spin-button");
+            const resultArea = document.getElementById("result-area");
+            const ctx = wheel.getContext("2d");
+            
+            let rotation = 0;
+            let isSpinning = false;
+            const segmentCount = segments.length;
+            const segmentAngle = 360 / segmentCount;
+
+            const drawWheel = () => {
+                const size = wheel.width;
+                const radius = size / 2;
+                const angleStep = (2 * Math.PI) / segmentCount;
+
+                ctx.clearRect(0, 0, size, size);
+
+                segments.forEach((segment, i) => {
+                    const angle = i * angleStep;
+                    // Desenha o segmento
+                    ctx.beginPath();
+                    ctx.moveTo(radius, radius);
+                    ctx.arc(radius, radius, radius - 5, angle, angle + angleStep);
+                    ctx.closePath();
+                    ctx.fillStyle = segment.color;
+                    ctx.fill();
+                    ctx.stroke();
+
+                    // Desenha o texto
+                    ctx.save();
+                    ctx.fillStyle = "white";
+                    ctx.font = "bold 20px Roboto";
+                    ctx.translate(
+                        radius + Math.cos(angle + angleStep / 2) * (radius - 50),
+                        radius + Math.sin(angle + angleStep / 2) * (radius - 50)
+                    );
+                    ctx.rotate(angle + angleStep / 2 + Math.PI / 2);
+                    ctx.fillText(segment.label, -ctx.measureText(segment.label).width / 2, 0);
+                    ctx.restore();
+                });
+            };
+
+            const resizeCanvas = () => {
+                const container = document.getElementById('wheel-container');
+                const size = container.clientWidth;
+                wheel.width = size;
+                wheel.height = size;
+                drawWheel();
+            };
+
+            const spin = () => {
+                if (isSpinning) return;
+                isSpinning = true;
+                spinButton.disabled = true;
+                resultArea.textContent = "";
+
+                const randomDegrees = Math.random() * 360;
+                const totalRotation = 360 * 8 + randomDegrees; // Gira várias vezes + resultado aleatório
+                
+                rotation += totalRotation;
+                wheel.style.transform = `rotate(${rotation}deg)`;
+                
+                logUserAction("Girou a Roda da Sorte.");
+
+                setTimeout(() => {
+                    isSpinning = false;
+                    spinButton.disabled = false;
+                    
+                    const actualRotation = rotation % 360;
+                    // O ponteiro está no topo (270 a 90 graus no círculo trigonométrico)
+                    // Ajustamos o ângulo para corresponder ao ponteiro no topo (índice 0)
+                    const winningIndex = Math.floor((360 - actualRotation + segmentAngle / 2) % 360 / segmentAngle);
+                    const winningSegment = segments[winningIndex];
+
+                    resultArea.textContent = `Resultado: ${winningSegment.label}!`;
+                    logUserAction(`Resultado da roleta: ${winningSegment.label}`);
+                    
+                }, 5000); // Deve corresponder à duração da transição no CSS
+            };
+
+            spinButton.addEventListener("click", spin);
+
+            // Redesenha a roleta se o tamanho da janela mudar
+            window.addEventListener('resize', resizeCanvas);
+            // Desenho inicial
+            resizeCanvas();
+        }
+        
+        // Desativa o menu de contexto (botão direito)
+        document.addEventListener('contextmenu', function(e) {
+            e.preventDefault();
+        });
+
+    </script>
+
+</body>
+</html>

@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>G Empire - Editor de Manual</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { min-height: 100vh; background-color: #090c10; color: #f0f2f5; font-family: 'Poppins', Arial, sans-serif; display: none; flex-direction: column; }
+        .top-menu { position: fixed; top: 0; left: 0; width: 100%; background-color: #111622; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5); padding: 12px 0; display: flex; justify-content: center; gap: 24px; align-items: center; z-index: 1000; border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
+        .menu-item { text-decoration: none; color: #8892b0; transition: all 0.3s ease; font-weight: 500; padding: 8px 16px; border-radius: 6px; display: flex; align-items: center; gap: 8px; }
+        .menu-item:hover, .menu-item.active { color: #ffffff; background-color: rgba(33, 118, 255, 0.2); }
+        .content { padding: 110px 20px 40px; max-width: 1300px; width: 100%; margin: 0 auto; }
+        h1 { color: #ffffff; margin-bottom: 30px; font-size: 28px; text-align: center; font-weight: 700; letter-spacing: 0.5px; }
+        .editor-container { display: flex; flex-wrap: wrap; gap: 24px; }
+        
+        .notes-list-panel { 
+            flex: 1; 
+            min-width: 280px; 
+            background: #111622; 
+            padding: 24px; 
+            border-radius: 16px; 
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45); 
+            border: 1px solid rgba(255, 255, 255, 0.06); 
+        }
+        .editor-panel { 
+            flex: 2.5; 
+            min-width: 400px; 
+            background: #111622; 
+            padding: 24px; 
+            border-radius: 16px; 
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45); 
+            border: 1px solid rgba(255, 255, 255, 0.06); 
+            position: relative; 
+        }
+
+        h2 { 
+            color: #ffffff; 
+            margin-bottom: 20px; 
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08); 
+            padding-bottom: 12px; 
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        #list-status { color: #8892b0; margin-bottom: 12px; font-size: 14px; }
+        #notes-list { list-style: none; max-height: 620px; overflow-y: auto; padding-right: 5px; }
+        #notes-list::-webkit-scrollbar { width: 6px; }
+        #notes-list::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 3px; }
+        #notes-list ul { list-style: none; padding-left: 18px; margin-top: 4px; border-left: 1px dashed rgba(255, 255, 255, 0.1); }
+        
+        .list-item { margin-bottom: 4px; }
+        .list-item-header { display: flex; align-items: center; gap: 8px; padding: 10px 12px; cursor: pointer; border-radius: 8px; transition: all 0.2s ease; color: #f0f2f5; }
+        .list-item-header:hover { background-color: rgba(255, 255, 255, 0.05); color: #ffffff; }
+        .list-item.selected > .list-item-header { background-color: rgba(33, 118, 255, 0.2); color: #ffffff; font-weight: 600; border-left: 3px solid #2176ff; }
+        .toggle-icon { transition: transform 0.2s ease-in-out; width: 16px; text-align: center; font-size: 0.8em; color: #8892b0; }
+        .list-item-header:hover .toggle-icon { color: #ffffff; }
+        .list-item.collapsed > .list-item-header .toggle-icon { transform: rotate(-90deg); }
+        .list-item.collapsed > ul { display: none; }
+        .item-title { flex-grow: 1; word-break: break-word; }
+        .item-type { font-size: 0.7em; color: #8892b0; margin-left: auto; padding: 2px 8px; background-color: rgba(255, 255, 255, 0.05); border-radius: 12px; }
+
+        .form-group { margin-bottom: 20px; position: relative; }
+        label { display: block; margin-bottom: 8px; font-weight: 600; color: #8892b0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; }
+        input[type="text"], select { 
+            width: 100%; 
+            padding: 12px 16px; 
+            border: 1px solid rgba(255, 255, 255, 0.08); 
+            border-radius: 8px; 
+            font-size: 15px; 
+            background-color: #161c28; 
+            color: #ffffff;
+            font-family: inherit;
+            transition: all 0.3s ease;
+        }
+        input[type="text"]:focus, select:focus {
+            outline: none;
+            border-color: rgba(33, 118, 255, 0.5);
+            box-shadow: 0 0 10px rgba(33, 118, 255, 0.15);
+            background-color: #19202f;
+        }
+        select option { background-color: #161c28; color: #ffffff; }
+
+        button { 
+            padding: 12px 24px; 
+            border: none; 
+            border-radius: 8px; 
+            cursor: pointer; 
+            font-size: 15px; 
+            font-weight: 700; 
+            font-family: inherit;
+            transition: all 0.3s ease;
+        }
+        #new-note-btn { 
+            width: 100%; 
+            margin-bottom: 16px; 
+            background: linear-gradient(135deg, #2176ff, #0056d6); 
+            color: white; 
+            box-shadow: 0 4px 15px rgba(33, 118, 255, 0.25);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        #new-note-btn:hover {
+            background: linear-gradient(135deg, #1a5cc4, #0d4cb3);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(33, 118, 255, 0.4);
+        }
+        .button-group { display: flex; gap: 12px; margin-top: 24px; }
+        #save-btn { 
+            background: linear-gradient(135deg, #2ecc71, #27ae60); 
+            color: white; 
+            box-shadow: 0 4px 15px rgba(46, 204, 113, 0.25);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        #save-btn:hover {
+            background: linear-gradient(135deg, #27ae60, #219653);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(46, 204, 113, 0.4);
+        }
+        #delete-btn { 
+            background: linear-gradient(135deg, #e74c3c, #c0392b); 
+            color: white; 
+            box-shadow: 0 4px 15px rgba(231, 76, 60, 0.25);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        #delete-btn:hover {
+            background: linear-gradient(135deg, #c0392b, #a62c21);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(231, 76, 60, 0.4);
+        }
+
+        .editor-toolbar {
+            position: -webkit-sticky;
+            position: sticky;
+            top: 110px;
+            z-index: 900;
+            display: flex;
+            gap: 6px;
+            background-color: #161c28;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-bottom: none;
+            padding: 10px;
+            border-radius: 8px 8px 0 0;
+        }
+        .toolbar-btn { 
+            background: #111622; 
+            color: #f0f2f5; 
+            border: 1px solid rgba(255, 255, 255, 0.1); 
+            border-radius: 6px; 
+            cursor: pointer; 
+            padding: 8px 14px; 
+            font-size: 14px; 
+            transition: all 0.2s ease;
+        }
+        .toolbar-btn:hover { 
+            background-color: rgba(33, 118, 255, 0.2); 
+            color: #ffffff; 
+            border-color: rgba(33, 118, 255, 0.4); 
+        }
+        
+        #note-content { 
+            width: 100%; 
+            min-height: 320px; 
+            padding: 16px; 
+            border: 1px solid rgba(255, 255, 255, 0.08); 
+            border-radius: 0 0 8px 8px; 
+            font-size: 15px; 
+            line-height: 1.6; 
+            background-color: #161c28; 
+            color: #ffffff; 
+            resize: vertical; 
+            overflow-y: auto; 
+        }
+        #note-content:focus { 
+            outline: none; 
+            border-color: rgba(33, 118, 255, 0.5); 
+            box-shadow: 0 0 10px rgba(33, 118, 255, 0.15); 
+        }
+        #note-content table { border-collapse: collapse; width: 100%; }
+        #note-content td { border: 1px dashed rgba(255, 255, 255, 0.2); padding: 10px; vertical-align: top; }
+        #note-content manual-link { text-decoration: underline; color: #4dabf7; font-weight: 600; cursor: pointer; }
+
+        #link-context-menu { 
+            position: absolute; 
+            display: none; 
+            background-color: #161c28; 
+            border: 1px solid rgba(255, 255, 255, 0.12); 
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5); 
+            border-radius: 8px; 
+            padding: 6px; 
+            z-index: 1010; 
+        }
+        #link-context-menu button { 
+            background: none; 
+            border: none; 
+            padding: 10px 14px; 
+            width: 100%; 
+            text-align: left; 
+            font-size: 14px; 
+            font-weight: 500; 
+            color: #f0f2f5; 
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        #link-context-menu button:hover { background-color: rgba(33, 118, 255, 0.2); color: #ffffff; }
+
+        .modal-backdrop { 
+            position: fixed; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%; 
+            background-color: rgba(0, 0, 0, 0.75); 
+            z-index: 2000; 
+            display: none; 
+            justify-content: center; 
+            align-items: center; 
+            backdrop-filter: blur(4px);
+        }
+        .modal-content { 
+            background: #111622; 
+            color: #f0f2f5; 
+            padding: 28px; 
+            border-radius: 16px; 
+            width: 90%; 
+            max-width: 520px; 
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55); 
+            border: 1px solid rgba(255, 255, 255, 0.08); 
+        }
+        .modal-content h3 { 
+            color: #ffffff; 
+            margin-bottom: 20px; 
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08); 
+            padding-bottom: 10px; 
+            font-size: 20px; 
+            font-weight: 700; 
+        }
+        
+        #modal-items-list, #reorder-topic-list { 
+            list-style-type: none; 
+            max-height: 260px; 
+            overflow-y: auto; 
+            border: 1px solid rgba(255, 255, 255, 0.08); 
+            padding: 8px; 
+            margin-top: 12px; 
+            background-color: #161c28; 
+            border-radius: 8px; 
+        }
+        #modal-items-list li, #reorder-topic-list li { 
+            padding: 10px 12px; 
+            cursor: pointer; 
+            color: #ffffff; 
+            border-radius: 6px; 
+            margin-bottom: 4px; 
+            background-color: #111622; 
+            border: 1px solid rgba(255, 255, 255, 0.04); 
+            transition: all 0.2s ease;
+        }
+        #modal-items-list li:hover { background-color: rgba(33, 118, 255, 0.2); border-color: rgba(33, 118, 255, 0.3); }
+        
+        #reorder-btn { 
+            position: fixed; 
+            bottom: 25px; 
+            right: 25px; 
+            width: 56px; 
+            height: 56px; 
+            background: linear-gradient(135deg, #2176ff, #0056d6); 
+            color: white; 
+            border-radius: 50%; 
+            border: none; 
+            font-size: 22px; 
+            box-shadow: 0 4px 15px rgba(33, 118, 255, 0.4); 
+            cursor: pointer; 
+            z-index: 999; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            transition: all 0.3s ease;
+        }
+        #reorder-btn:hover { transform: scale(1.08); box-shadow: 0 6px 20px rgba(33, 118, 255, 0.6); }
+
+        #reorder-topic-list li { cursor: grab; display: flex; align-items: center; gap: 10px; }
+        #reorder-topic-list li.dragging { opacity: 0.6; background: rgba(33, 118, 255, 0.3); border-color: #2176ff; }
+        
+        #note-content img { cursor: pointer; }
+        #note-content img.resizable-selected { outline: 2px solid #2176ff; outline-offset: 2px; }
+        #image-resizer { position: absolute; display: none; border: 1px solid #2176ff; z-index: 10; pointer-events: none; }
+        .resize-handle { position: absolute; width: 10px; height: 10px; background-color: #2176ff; border: 1px solid white; pointer-events: auto; }
+        .resize-handle.br { bottom: -5px; right: -5px; cursor: nwse-resize; }
+        
+        .checkbox-group { display: flex; align-items: center; gap: 10px; margin-top: 18px; }
+        .checkbox-group label { margin-bottom: 0; font-weight: 500; color: #8892b0; cursor: pointer; text-transform: none; font-size: 15px; }
+        .checkbox-group input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; accent-color: #2176ff; }
+
+        #save-confirmation-indicator { 
+            position: absolute; 
+            bottom: 25px; 
+            right: 25px; 
+            background-color: #28a745; 
+            color: white; 
+            width: 50px; 
+            height: 50px; 
+            border-radius: 50%; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            font-size: 24px; 
+            box-shadow: 0 4px 15px rgba(40, 167, 69, 0.4); 
+            opacity: 0; 
+            transform: scale(0.5); 
+            transition: opacity 0.3s ease, transform 0.3s ease; 
+            pointer-events: none; 
+        }
+        #save-confirmation-indicator.visible { opacity: 1; transform: scale(1); }
+        
+        #scale-controls { position: absolute; top: -35px; left: 0; display: flex; align-items: center; gap: 6px; pointer-events: auto; background: rgba(17, 22, 34, 0.9); padding: 4px 8px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.15); box-shadow: 0 4px 12px rgba(0,0,0,0.4); backdrop-filter: blur(4px); z-index: 20; }
+        #scale-controls button { width: 26px; height: 26px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.2); background-color: #2176ff; color: white; cursor: pointer; font-size: 12px; display: flex; align-items: center; justify-content: center; transition: all 0.2s ease; padding: 0; }
+        #scale-controls button:hover { background-color: #0056b3; transform: scale(1.05); }
+        #image-size-select { background-color: #161c28; color: #ffffff; border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 6px; padding: 3px 8px; font-size: 12px; font-weight: 500; cursor: pointer; height: 26px; outline: none; font-family: inherit; transition: all 0.2s ease; }
+        #image-size-select:hover { border-color: #2176ff; background-color: #1c2434; }
+        #image-size-select option { background-color: #111622; color: #ffffff; padding: 6px; }
+    </style>
+
+    <link rel="stylesheet" href="css/admin-global.css">
+
+    <link rel="stylesheet" href="css/menu-admin.css">
+</head>
+<body>
+    <nav class="top-menu">
+        <a href="engrenagem.html" class="menu-item"><i class="fas fa-home"></i>Home</a>
+        <a href="fusiveis.html" class="menu-item"><i class="fas fa-bolt"></i>Fusíveis</a>
+        <a href="arbitro.html" class="menu-item"><i class="fas fa-gavel"></i>Árbitro</a>
+        <a href="criar-manual.html" class="menu-item active"><i class="fas fa-book"></i>Manual</a>
+        <a href="criar-banca.html" class="menu-item"><i class="fas fa-university"></i>Banca</a>
+        <a href="email.html" class="menu-item"><i class="fas fa-envelope"></i>Email</a>
+        <a href="gerir-notificacoes.html" class="menu-item"><i class="fas fa-bell"></i>Notificações</a>
+        <a href="#" id="mini-ggames-menu-btn" class="menu-item"><i class="fas fa-gamepad"></i>Mini-gGames</a>
+    </nav>
+    <main class="content">
+        <h1><i class="fas fa-book-open"></i> Editor do Manual</h1>
+        <div class="editor-container">
+            <div class="notes-list-panel">
+                <h2>Notas Existentes</h2>
+                <button id="new-note-btn"><i class="fas fa-plus"></i> Criar Nova Nota</button>
+                <p id="list-status">A carregar notas...</p>
+                <ul id="notes-list"></ul>
+            </div>
+            <div class="editor-panel">
+                <form id="editor-form">
+                    <input type="hidden" id="note-id">
+                    <div class="form-group"><label for="note-type">Tipo de Conteúdo:</label><select id="note-type"><option value="Tema">Tema</option><option value="Tópico">Tópico</option><option value="Elemento">Elemento</option><option value="Pergunta">Pergunta</option><option value="Explicação">Explicação</option></select></div>
+                    <div id="parent-selectors-container" style="display: none;"><div class="form-group" id="theme-selector-container" style="display: none;"><label for="parent-theme-selector">Tema Pai:</label><select id="parent-theme-selector"></select></div><div class="form-group" id="topic-selector-container" style="display: none;"><label for="parent-topic-selector">Tópico Pai:</label><select id="parent-topic-selector"></select></div></div>
+                    <div class="form-group"><label for="note-title">Título:</label><input type="text" id="note-title" required></div>
+                    <div class="form-group">
+                        <label for="note-content">Conteúdo:</label>
+                        <div class="editor-toolbar"><button type="button" class="toolbar-btn" id="bold-btn" title="Negrito"><i class="fas fa-bold"></i></button><button type="button" class="toolbar-btn" id="italic-btn" title="Itálico"><i class="fas fa-italic"></i></button><button type="button" class="toolbar-btn" id="columns-btn" title="Duas Colunas"><i class="fas fa-columns"></i></button><button type="button" class="toolbar-btn" id="image-btn" title="Inserir Imagem"><i class="fas fa-image"></i></button><button type="button" class="toolbar-btn" id="link-btn" title="Anexar Painel"><i class="fas fa-link"></i></button></div>
+                        <div id="note-content" contenteditable="true"></div>
+                    </div>
+                    <div class="checkbox-group"><input type="checkbox" id="note-visible"><label for="note-visible">visível?</label></div>
+                    <div class="button-group" style="margin-top: 20px;"><button type="submit" id="save-btn"><i class="fas fa-save"></i> Guardar</button><button type="button" id="delete-btn" style="display: none;"><i class="fas fa-trash"></i> Apagar</button></div>
+                </form>
+                <div id="image-resizer">
+                    <div id="scale-controls">
+                        <button id="scale-down-btn" title="Diminuir 10%"><i class="fas fa-minus"></i></button>
+                        <button id="scale-up-btn" title="Aumentar 10%"><i class="fas fa-plus"></i></button>
+                        <select id="image-size-select" title="Escolher Tamanho">
+                            <option value="" disabled selected hidden>Tamanho</option>
+                            <option value="150px">Pequeno</option>
+                            <option value="300px">Razoável</option>
+                            <option value="500px">Médio</option>
+                            <option value="750px">Grande</option>
+                            <option value="100%">Gigante</option>
+                        </select>
+                    </div>
+                    <div class="resize-handle br"></div>
+                </div>
+                <div id="save-confirmation-indicator"><i class="fas fa-check"></i></div>
+            </div>
+        </div>
+    </main>
+    <div id="link-context-menu"><button id="edit-link-btn"><i class="fas fa-pencil-alt"></i> Editar Link</button><button id="remove-link-btn"><i class="fas fa-unlink"></i> Remover Link</button></div>
+    <div id="link-modal" class="modal-backdrop"><div class="modal-content"><h3>Anexar Painel de Informação</h3><div class="form-group"><label for="modal-type-selector">Selecione o tipo de conteúdo a anexar:</label><select id="modal-type-selector"><option value="Tema">Tema</option><option value="Tópico">Tópico</option><option value="Elemento">Elemento</option><option value="Pergunta">Pergunta</option><option value="Explicação">Explicação</option></select></div><ul id="modal-items-list"><p>Selecione um tipo para ver a lista.</p></ul><div style="text-align: right; margin-top: 15px;"><button type="button" id="modal-cancel-btn">Cancelar</button><button type="button" id="modal-attach-btn" style="background-color: #2176ff; color: white;">Anexar</button></div></div></div>
+    <button id="reorder-btn" title="Reordenar Tópicos"><i class="fas fa-sort"></i></button>
+    <div id="reorder-modal" class="modal-backdrop"><div class="modal-content"><h3>Reordenar Itens</h3><div class="form-group"><label for="reorder-type-selector">Selecione o que pretende reordenar:</label><select id="reorder-type-selector"><option value="">Selecione uma opção...</option><option value="Tópicos">Tópicos (dentro de um Tema)</option><option value="Explicações">Explicações</option></select></div><div class="form-group" id="reorder-theme-selector-container" style="display: none;"><label for="reorder-theme-selector">Selecione o Tema:</label><select id="reorder-theme-selector"></select></div><p style="font-size:0.8em; color:#666;">Arraste e solte os itens para reordenar.</p><ul id="reorder-topic-list"><p>Selecione o que pretende reordenar para ver a lista.</p></ul><div style="text-align: right; margin-top: 15px;"><button type="button" id="reorder-cancel-btn">Cancelar</button><button type="button" id="reorder-save-btn" style="background-color: #28a745; color: white;">Guardar Ordem</button></div></div></div>
+
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+        import { getFirestore, collection, getDocs, doc, getDoc, addDoc, updateDoc, deleteDoc, orderBy, query, where, writeBatch } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+        const firebaseConfig = { apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0", authDomain: "g-games-8a8fc.firebaseapp.com", projectId: "g-games-8a8fc", storageBucket: "g-games-8a8fc.appspot.com", messagingSenderId: "689897349449", appId: "1:689897349449:web:536599794579901beb7a98" };
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        
+        const notesList=document.getElementById("notes-list"),editorForm=document.getElementById("editor-form"),noteIdInput=document.getElementById("note-id"),noteTypeSelect=document.getElementById("note-type"),parentSelectorsContainer=document.getElementById("parent-selectors-container"),themeSelectorContainer=document.getElementById("theme-selector-container"),parentThemeSelect=document.getElementById("parent-theme-selector"),topicSelectorContainer=document.getElementById("topic-selector-container"),parentTopicSelect=document.getElementById("parent-topic-selector"),noteTitleInput=document.getElementById("note-title"),noteContentInput=document.getElementById("note-content"),newNoteBtn=document.getElementById("new-note-btn"),deleteBtn=document.getElementById("delete-btn"),noteVisibleCheckbox=document.getElementById("note-visible");
+        const boldBtn=document.getElementById('bold-btn'),italicBtn=document.getElementById('italic-btn'),imageBtn=document.getElementById('image-btn'),linkBtn=document.getElementById('link-btn'),columnsBtn=document.getElementById('columns-btn');
+        const linkModal=document.getElementById("link-modal"),modalTypeSelect=document.getElementById("modal-type-selector"),modalItemsList=document.getElementById("modal-items-list"),modalAttachBtn=document.getElementById("modal-attach-btn"),modalCancelBtn=document.getElementById("modal-cancel-btn");
+        const linkContextMenu=document.getElementById('link-context-menu'),editLinkBtn=document.getElementById('edit-link-btn'),removeLinkBtn=document.getElementById('remove-link-btn');
+        const reorderBtn=document.getElementById('reorder-btn'),reorderModal=document.getElementById('reorder-modal'),reorderThemeSelect=document.getElementById('reorder-theme-selector'),reorderTopicList=document.getElementById('reorder-topic-list'),reorderSaveBtn=document.getElementById('reorder-save-btn'),reorderCancelBtn=document.getElementById('reorder-cancel-btn');
+        const reorderTypeSelect=document.getElementById('reorder-type-selector'),reorderThemeContainer=document.getElementById('reorder-theme-selector-container');
+        const editorPanel=document.querySelector('.editor-panel'),imageResizer=document.getElementById('image-resizer'),saveIndicator=document.getElementById('save-confirmation-indicator');
+        const scaleDownBtn = document.getElementById('scale-down-btn');
+        const scaleUpBtn = document.getElementById('scale-up-btn');
+        const imageSizeSelect = document.getElementById('image-size-select');
+
+        let currentSelectedLi=null,selectedModalItem=null,savedSelection=null,currentLinkElement=null;
+        let currentImage=null,isResizing=false,resizeStartX,resizeStartWidth;
+        let explicacoesMap = new Map(); // <-- Variável para auto-linking
+
+        // --- Funções do Auto-Link --- //
+
+        function escapeRegex(string) {
+            return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        }
+
+        /**
+         * Carrega todos os documentos do tipo "Explicação" do Firestore
+         * e armazena-os num Map para acesso rápido (Título -> ID).
+         */
+ async function loadExplicacoesParaAutoLink() {
+    try {
+        const q = query(collection(db, "manual"), where("type", "==", "Explicação"));
+        const snapshot = await getDocs(q);
+        explicacoesMap.clear(); // Limpa o mapa antes de preencher
+
+        // Elemento temporário para extrair texto puro do HTML
+        const tempDiv = document.createElement('div');
+        // Expressão Regular para encontrar e remover a maioria dos emojis e símbolos Unicode
+        const emojiRegex = /(?:[\u2700-\u27bf]|(?:\ud83c[\udde6-\uddff]){2}|[\ud800-\udbff][\udc00-\udfff]|[\u0023-\u0039]\ufe0f?\u20e3|\u3299|\u3297|\u303d|\u3030|\u24c2|\ud83c[\udd70-\udd71]|\ud83c[\udd7e-\udd7f]|\ud83c\udd8e|\ud83c[\udd91-\udd9a]|\ud83c[\udde6-\uddff]|\ud83c[\ude01-\ude02]|\ud83c\ude1a|\ud83c\ude2f|\ud83c[\ude32-\ude3a]|\ud83c[\ude50-\ude51]|\u203c|\u2049|[\u25aa-\u25ab]|\u25b6|\u25c0|[\u25fb-\u25fe]|\u00a9|\u00ae|\u2122|\u2139|\ud83c\udc04|[\u2600-\u26ff]|\u2b05|\u2b06|\u2b07|\u2b1b|\u2b1c|\u2b50|\u2b55|\u231a|\u231b|\u2328|\u23cf|[\u23e9-\u23f3]|[\u23f8-\u23fa]|\ud83c\udccf|\u2934|\u2935|[\u2190-\u21ff])/g;
+
+        snapshot.forEach(doc => {
+            const titleWithHtml = doc.data().title;
+            if (!titleWithHtml) return;
+
+            // Passo 1: Remover HTML para obter texto puro (que ainda pode ter emojis)
+            tempDiv.innerHTML = titleWithHtml;
+            const textWithEmojis = (tempDiv.textContent || tempDiv.innerText);
+
+            // Passo 2: Remover emojis e fazer trim final
+            const cleanTextTitle = textWithEmojis.replace(emojiRegex, '').trim();
+
+            // Apenas adiciona se o título de texto puro e limpo não for vazio
+            if (cleanTextTitle) {
+                explicacoesMap.set(cleanTextTitle, doc.id);
+            }
+        });
+        console.log(`Carregadas ${explicacoesMap.size} explicações para auto-linking.`, explicacoesMap);
+    } catch (error) {
+        console.error("Erro ao carregar explicações para auto-link:", error);
+    }
+}
+
+        /**
+         * Função que é chamada no evento 'keyup' do editor para verificar e criar links automaticamente.
+         */
+       function handleAutoLink(e) {
+    // Só aciona a verificação em teclas que indicam o fim de uma palavra/frase
+    if (![' ', 'Enter', ',', '.', ';'].includes(e.key)) {
+        return;
+    }
+
+    const sel = window.getSelection();
+    if (!sel.rangeCount) return;
+
+    const range = sel.getRangeAt(0);
+    const currentNode = range.startContainer;
+
+    // Garante que estamos a trabalhar num nó de texto e que não estamos já dentro de um link
+    if (currentNode.nodeType !== Node.TEXT_NODE || currentNode.parentNode.tagName === 'MANUAL-LINK') {
+        return;
+    }
+
+    const textContent = currentNode.textContent;
+    
+    // Itera sobre todas as "Explicações" que carregámos
+    explicacoesMap.forEach((id, title) => {
+        // Usa uma expressão regular com \b (word boundary) e o flag 'i' (insensitive)
+        const regex = new RegExp(`\\b(${escapeRegex(title)})\\b`, 'gi'); // <--- A ÚNICA MUDANÇA ESTÁ AQUI
+        let match;
+        
+        // Procura pela expressão no conteúdo do nó de texto atual
+        while ((match = regex.exec(textContent)) !== null) {
+            // Se encontrarmos uma correspondência, procedemos à substituição
+            const matchIndex = match.index;
+            const matchedText = match[1];
+
+            // Preserva a posição do cursor
+            const originalOffset = range.startOffset;
+
+            // Divide o nó de texto em três: antes do link, o texto do link, e depois do link
+            const textAfterNode = currentNode.splitText(matchIndex + matchedText.length);
+            const textToLinkNode = currentNode.splitText(matchIndex);
+
+            // Cria o novo elemento <manual-link>
+            const linkNode = document.createElement('manual-link');
+            linkNode.dataset.id = id;
+            linkNode.textContent = matchedText; // Mantém a caixa que o utilizador escreveu
+
+            // Substitui o nó de texto pelo novo link
+            currentNode.parentNode.replaceChild(linkNode, textToLinkNode);
+            
+            // Restaura a posição do cursor para depois do link que foi inserido
+            const newRange = document.createRange();
+            // Coloca o cursor no início do nó de texto que vem a seguir ao link
+            newRange.setStart(textAfterNode, originalOffset - (matchIndex + matchedText.length));
+            newRange.collapse(true);
+            sel.removeAllRanges();
+            sel.addRange(newRange);
+        }
+    });
+}
+
+        // --- Funções Originais do Editor --- //
+
+        function formatDoc(command, value = null) { noteContentInput.focus(); document.execCommand(command, false, value); }
+        function insertImage() { const url = prompt("Introduza o URL da imagem:"); if (url) { const imgTag = `<img src="${url}" style="max-width: 100%; height: auto;">`; formatDoc('insertHTML', imgTag); } }
+        function insertTwoColumns() { const html = `<p>&nbsp;</p><table style="width:100%; border-collapse: collapse;"><tbody><tr><td style="width:50%; padding:10px; border:1px dashed #ccc; vertical-align:top;"><p>Coluna 1...</p></td><td style="width:50%; padding:10px; border:1px dashed #ccc; vertical-align:top;"><p>Coluna 2...</p></td></tr></tbody></table><p>&nbsp;</p>`; formatDoc('insertHTML', html); }
+        function saveSelection() { const sel = window.getSelection(); if (sel.rangeCount > 0) savedSelection = sel.getRangeAt(0); }
+        function restoreSelection() { if (savedSelection) { const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(savedSelection); } }
+        
+        function scaleImage(scaleFactor) {
+            if (!currentImage) return;
+            const currentWidth = currentImage.offsetWidth;
+            const newWidth = currentWidth * scaleFactor;
+            if (newWidth < 20) return; 
+            currentImage.style.width = `${newWidth}px`;
+            currentImage.style.height = 'auto';
+            showImageResizer(currentImage);
+        }
+
+        async function loadNoteForEditing(id, listItem){
+            hideImageResizer();
+            const docRef = doc(db,"manual", id);
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists()){
+                const data = docSnap.data();
+                noteIdInput.value = docSnap.id;
+                noteTypeSelect.value = data.type || "Tema";
+                noteTitleInput.value = data.title;
+                noteContentInput.innerHTML = data.content || "";
+                noteVisibleCheckbox.checked = data.visible || false;
+                deleteBtn.style.display="inline-block";
+                await handleTypeChange();
+                if(data.type === "Tópico" && data.parentId) parentThemeSelect.value = data.parentId;
+                if(data.type === "Elemento"){
+                    if (data.parentId) parentThemeSelect.value = data.parentId;
+                    await populateTopicSelector(data.parentId);
+                    if (data.topicParentId) parentTopicSelect.value = data.topicParentId;
+                }
+                if (currentSelectedLi) currentSelectedLi.classList.remove("selected");
+                listItem.classList.add("selected");
+                currentSelectedLi = listItem;
+            }
+        }
+
+        function prepareNewNoteForm(){
+            editorForm.reset();
+            noteIdInput.value="";
+            noteContentInput.innerHTML="";
+            noteVisibleCheckbox.checked = false;
+            deleteBtn.style.display="none";
+            handleTypeChange();
+            if(currentSelectedLi) {
+                currentSelectedLi.classList.remove("selected");
+                currentSelectedLi=null;
+            }
+            hideImageResizer();
+        }
+
+        async function saveNote(e){
+            e.preventDefault();
+            const id = noteIdInput.value;
+            const type = noteTypeSelect.value;
+            const title = noteTitleInput.value.trim();
+            const content = noteContentInput.innerHTML.trim();
+            if(!title) return alert("O título não pode estar vazio.");
+            const dataToSave = { type: type, title: title, content: content, visible: noteVisibleCheckbox.checked };
+            if(type === 'Tópico') dataToSave.parentId = parentThemeSelect.value;
+            if(type === 'Elemento') {
+                dataToSave.parentId = parentThemeSelect.value;
+                dataToSave.topicParentId = parentTopicSelect.value;
+            }
+            if(!id && (type === 'Tópico' || type === 'Explicação')){
+                let q = (type === 'Tópico') ? query(collection(db,"manual"), where("parentId", "==", dataToSave.parentId), where("type", "==", "Tópico")) : query(collection(db,"manual"), where("type", "==", "Explicação"));
+                const snapshot = await getDocs(q);
+                dataToSave.posicao = snapshot.size;
+            }
+            try {
+                if (id) {
+                    await updateDoc(doc(db,"manual", id), dataToSave);
+                } else {
+                    const newDocRef = await addDoc(collection(db,"manual"), dataToSave);
+                    noteIdInput.value = newDocRef.id;
+                    deleteBtn.style.display = 'inline-block';
+                }
+                saveIndicator.classList.add('visible');
+                setTimeout(() => { saveIndicator.classList.remove('visible'); }, 2000);
+                await loadNotesList(); 
+                if (type === 'Explicação') await loadExplicacoesParaAutoLink(); // Recarrega explicações se uma for salva
+            } catch(err) {
+                console.error("Erro ao guardar nota: ", err);
+                alert("Erro ao guardar nota.");
+            }
+        }
+
+        async function loadNotesList() {
+            const listStatus = document.getElementById("list-status");
+            listStatus.textContent = "A carregar notas...";
+            const q = query(collection(db, "manual"), orderBy("title"));
+            const snapshot = await getDocs(q);
+            notesList.innerHTML = "";
+            if (snapshot.empty) { listStatus.textContent = "Nenhuma nota encontrada."; return; }
+            const themes = [], topicsByParent = new Map(), elementsByParent = new Map(), others = [];
+            snapshot.forEach(doc => {
+                const data = { id: doc.id, ...doc.data() };
+                switch (data.type) {
+                    case 'Tema': themes.push(data); break;
+                    case 'Tópico':
+                        if (!topicsByParent.has(data.parentId)) topicsByParent.set(data.parentId, []);
+                        topicsByParent.get(data.parentId).push(data);
+                        break;
+                    case 'Elemento':
+                        if (!elementsByParent.has(data.topicParentId)) elementsByParent.set(data.topicParentId, []);
+                        elementsByParent.get(data.topicParentId).push(data);
+                        break;
+                    default: others.push(data); break;
+                }
+            });
+            const fragment = document.createDocumentFragment();
+            themes.forEach(theme => {
+                const themeLi = createListItem(theme, true);
+                const topics = topicsByParent.get(theme.id) || [];
+                topics.sort((a,b) => (a.posicao ?? Infinity) - (b.posicao ?? Infinity) || a.title.localeCompare(b.title));
+                if (topics.length > 0) {
+                    const topicUl = document.createElement('ul');
+                    topics.forEach(topic => {
+                        const topicLi = createListItem(topic, true);
+                        const elements = elementsByParent.get(topic.id) || [];
+                        elements.sort((a,b) => a.title.localeCompare(b.title));
+                        if (elements.length > 0) {
+                            const elementUl = document.createElement('ul');
+                            elements.forEach(element => { elementUl.appendChild(createListItem(element, false)); });
+                            topicLi.appendChild(elementUl);
+                        }
+                        topicUl.appendChild(topicLi);
+                    });
+                    themeLi.appendChild(topicUl);
+                }
+                fragment.appendChild(themeLi);
+            });
+            others.sort((a,b) => (a.posicao ?? Infinity) - (b.posicao ?? Infinity) || a.title.localeCompare(b.title));
+            others.forEach(other => { fragment.appendChild(createListItem(other, false)); });
+            notesList.appendChild(fragment);
+            listStatus.textContent = "";
+        }
+
+        function createListItem(data, isCollapsible) {
+            const li = document.createElement('li');
+            li.className = 'list-item';
+            if (isCollapsible) li.classList.add('collapsed');
+            li.dataset.id = data.id;
+            const header = document.createElement('div');
+            header.className = 'list-item-header';
+            let toggleIcon = isCollapsible ? '<i class="fas fa-chevron-right toggle-icon"></i>' : '<i class="fas fa-file-alt toggle-icon" style="opacity:0.4;"></i>';
+            header.innerHTML = `${toggleIcon}<span class="item-title">${data.title}</span><span class="item-type">${data.type}</span>`;
+            li.appendChild(header);
+            return li;
+        }
+        
+        async function deleteNote(){const e=noteIdInput.value;if(e&&confirm("Tem a certeza?")){const t=await getDoc(doc(db,"manual",e)),o=t.data()?.type;await deleteDoc(doc(db,"manual",e)),alert("Nota apagada!"),prepareNewNoteForm(),await loadNotesList(),"Explicação"===o&&await loadExplicacoesParaAutoLink()}}
+        async function populateThemeSelector(){parentThemeSelect.innerHTML='<option value="">Selecione um Tema</option>';const e=query(collection(db,"manual"),where("type","==","Tema"),orderBy("title")),t=await getDocs(e);t.forEach(e=>{parentThemeSelect.innerHTML+=`<option value="${e.id}">${e.data().title}</option>`})}
+        async function populateTopicSelector(e){parentTopicSelect.innerHTML='<option value="">Selecione um Tópico</option>';if(!e)return;const t=query(collection(db,"manual"),where("type","==","Tópico"),where("parentId","==",e),orderBy("title")),o=await getDocs(t);o.forEach(e=>{parentTopicSelect.innerHTML+=`<option value="${e.id}">${e.data().title}</option>`})}
+        async function handleTypeChange(){const e=noteTypeSelect.value;parentSelectorsContainer.style.display="none",themeSelectorContainer.style.display="none",topicSelectorContainer.style.display="none","Tópico"===e?(await populateThemeSelector(),parentSelectorsContainer.style.display="block",themeSelectorContainer.style.display="block"):"Elemento"===e&&(await populateThemeSelector(),parentSelectorsContainer.style.display="block",themeSelectorContainer.style.display="block",topicSelectorContainer.style.display="block",await populateTopicSelector(parentThemeSelect.value))}
+        async function populateModalList(e){modalItemsList.innerHTML="<p>A carregar...</p>",selectedModalItem=null;const t=query(collection(db,"manual"),where("type","==",e),orderBy("title")),o=await getDocs(t);modalItemsList.innerHTML="",o.empty?modalItemsList.innerHTML="<p>Nenhum item encontrado.</p>":o.forEach(e=>{const t=document.createElement("li");t.textContent=e.data().title,t.dataset.id=e.id,t.dataset.title=e.data().title,t.onclick=()=>{selectedModalItem={id:e.id,title:t.dataset.title},Array.from(modalItemsList.children).forEach(e=>e.style.backgroundColor=""),t.style.backgroundColor="#e0eafc"},modalItemsList.appendChild(t)})}
+        
+        function attachLink() {
+            if (!selectedModalItem) { alert("Selecione um item da lista."); return; }
+            noteContentInput.focus();
+            restoreSelection();
+            if (savedSelection) {
+                const selectedText = savedSelection.toString().trim() || selectedModalItem.title;
+                const linkElement = document.createElement('manual-link');
+                linkElement.dataset.id = selectedModalItem.id;
+                linkElement.textContent = selectedText;
+                savedSelection.deleteContents();
+                savedSelection.insertNode(linkElement);
+                const sel = window.getSelection();
+                const range = document.createRange();
+                range.setStartAfter(linkElement);
+                range.collapse(true);
+                sel.removeAllRanges();
+                sel.addRange(range);
+            } else {
+                alert("Não foi possível encontrar a seleção de texto para aplicar o link.");
+            }
+            closeModal();
+        }
+
+        function openModal(){saveSelection(),linkModal.style.display="flex",populateModalList(modalTypeSelect.value)}
+        function closeModal(){linkModal.style.display="none",selectedModalItem=null,savedSelection=null,modalItemsList.innerHTML="<p>Selecione um tipo para ver a lista.</p>"}
+        function showLinkContextMenu(e,t){currentLinkElement=e,linkContextMenu.style.display="block",linkContextMenu.style.left=`${t.pageX}px`,linkContextMenu.style.top=`${t.pageY}px`}
+        function removeLink(){if(currentLinkElement){const e=document.createTextNode(currentLinkElement.textContent);currentLinkElement.parentNode.replaceChild(e,currentLinkElement),currentLinkElement=null}linkContextMenu.style.display="none"}
+        
+        async function openReorderModal(){reorderTypeSelect.value="",reorderThemeContainer.style.display="none",reorderThemeSelect.innerHTML="",reorderTopicList.innerHTML="<p>Selecione o que pretende reordenar para ver a lista.</p>",reorderThemeSelect.innerHTML='<option value="">Selecione um Tema...</option>';const e=query(collection(db,"manual"),where("type","==","Tema"),orderBy("title")),t=await getDocs(e);t.forEach(e=>{reorderThemeSelect.innerHTML+=`<option value="${e.id}">${e.data().title}</option>`}),reorderModal.style.display="flex"}
+        async function populateListForReorder(){const e=reorderTypeSelect.value,t=reorderThemeSelect.value,o=reorderTopicList;o.innerHTML="<p>A carregar...</p>";let n;if("Tópicos"===e){if(!t)return void(o.innerHTML="<p>Selecione um tema para ver os tópicos.</p>");n=query(collection(db,"manual"),where("parentId","==",t),where("type","==","Tópico"))}else{if("Explicações"!==e)return void(o.innerHTML="<p>Selecione o que pretende reordenar para ver a lista.</p>");n=query(collection(db,"manual"),where("type","==","Explicação"))}const l=await getDocs(n);if(o.innerHTML="",l.empty)return void(o.innerHTML=`<p>Nenhum item do tipo '${e}' encontrado.</p>`);const i=[];l.forEach(e=>i.push({id:e.id,...e.data()})),i.sort((e,t)=>(e.posicao??1/0)-(t.posicao??1/0)),i.forEach(e=>{const t=document.createElement("li");t.dataset.id=e.id,t.draggable=!0,t.innerHTML=`<i class="fas fa-grip-vertical"></i> ${e.title}`,o.appendChild(t)})}
+        function getDragAfterElement(e,t){const o=[...e.querySelectorAll("li:not(.dragging)")];return o.reduce((e,o)=>{const n=o.getBoundingClientRect(),l=t-n.top-n.height/2;return l<0&&l>e.offset?{offset:l,element:o}:e},{offset:Number.NEGATIVE_INFINITY}).element}
+        async function saveNewOrder(){const e=reorderTopicList.querySelectorAll("li");if(0===e.length)return void alert("Nada para guardar.");const t=writeBatch(db);e.forEach((e,o)=>{const n=doc(db,"manual",e.dataset.id);t.update(n,{posicao:o})});try{await t.commit(),alert("Ordem guardada com sucesso!"),reorderModal.style.display="none",await loadNotesList()}catch(e){console.error("Erro ao guardar a nova ordem:",e),alert("Ocorreu um erro ao guardar a ordem.")}}
+        
+        function showImageResizer(e){currentImage&&currentImage.classList.remove("resizable-selected"),currentImage=e,currentImage.classList.add("resizable-selected");const t=editorPanel.getBoundingClientRect(),o=currentImage.getBoundingClientRect();imageResizer.style.display="block",imageResizer.style.left=`${o.left-t.left+editorPanel.scrollLeft}px`,imageResizer.style.top=`${o.top-t.top+editorPanel.scrollTop}px`,imageResizer.style.width=`${o.width}px`,imageResizer.style.height=`${o.height}px`;if(imageSizeSelect){const w=currentImage.style.width;["150px","300px","500px","750px","100%"].includes(w)?imageSizeSelect.value=w:imageSizeSelect.value=""}}
+        function setPresetImageSize(e){currentImage&&(currentImage.style.width=e,currentImage.style.height="auto",showImageResizer(currentImage))}
+        function hideImageResizer(){currentImage&&currentImage.classList.remove("resizable-selected"),currentImage=null,imageResizer.style.display="none"}
+        function startResize(e){e.preventDefault(),isResizing=!0,resizeStartX=e.clientX,resizeStartWidth=currentImage.width,document.addEventListener("mousemove",handleResize),document.addEventListener("mouseup",stopResize)}
+        function handleResize(e){if(!isResizing)return;const t=e.clientX-resizeStartX,o=resizeStartWidth+t;o>20&&(currentImage.style.width=`${o}px`,currentImage.style.height="auto",showImageResizer(currentImage))}
+        function stopResize(){isResizing=!1,document.removeEventListener("mousemove",handleResize),document.removeEventListener("mouseup",stopResize)}
+
+        function initializeAppEditor() {
+            document.body.style.display = 'flex'; 
+            loadNotesList();
+            loadExplicacoesParaAutoLink();
+            prepareNewNoteForm();
+
+            notesList.addEventListener('click', e => {
+                const t = e.target.closest('.list-item-header'); if (!t) return;
+                const o = t.parentElement, n = o.dataset.id;
+                if (e.target.classList.contains('toggle-icon') && o.classList.contains('list-item')) { const e = o.querySelector('ul'); if (e) return void o.classList.toggle('collapsed') }
+                n && loadNoteForEditing(n, o)
+            });
+            editorForm.addEventListener('submit', saveNote);
+            newNoteBtn.addEventListener('click', prepareNewNoteForm);
+            deleteBtn.addEventListener('click', deleteNote);
+            noteTypeSelect.addEventListener('change', e => { if ("" !== noteIdInput.value) { const t = e.target.value; prepareNewNoteForm(), noteTypeSelect.value = t } handleTypeChange() });
+            parentThemeSelect.addEventListener('change', () => { "Elemento" === noteTypeSelect.value && populateTopicSelector(parentThemeSelect.value) });
+            boldBtn.addEventListener('click', () => formatDoc('bold'));
+            italicBtn.addEventListener('click', () => formatDoc('italic'));
+            columnsBtn.addEventListener('click', insertTwoColumns);
+            imageBtn.addEventListener('click', insertImage);
+            linkBtn.addEventListener('click', openModal);
+            modalTypeSelect.addEventListener('change', e => populateModalList(e.target.value)); modalAttachBtn.addEventListener('click', attachLink); modalCancelBtn.addEventListener('click', closeModal); linkModal.addEventListener('click', e => { e.target === linkModal && closeModal() });
+            document.body.addEventListener('click', e => { e.target.closest('manual-link') || e.target.closest('#image-resizer') || (linkContextMenu.style.display = 'none') }, !0);
+            removeLinkBtn.addEventListener('click', removeLink); editLinkBtn.addEventListener('click', () => { linkContextMenu.style.display = 'none', openModal() });
+            reorderBtn.addEventListener('click', openReorderModal); reorderCancelBtn.addEventListener('click', () => reorderModal.style.display = 'none'); reorderModal.addEventListener('click', e => { e.target === reorderModal && (reorderModal.style.display = 'none') });
+            reorderTypeSelect.addEventListener('change', () => { "Tópicos" === reorderTypeSelect.value ? (reorderThemeContainer.style.display = 'block', reorderTopicList.innerHTML = '<p>Selecione um tema para ver os tópicos.</p>') : (reorderThemeContainer.style.display = 'none', populateListForReorder()) });
+            reorderThemeSelect.addEventListener('change', () => { "Tópicos" === reorderTypeSelect.value && populateListForReorder() });
+            reorderSaveBtn.addEventListener('click', saveNewOrder);
+            reorderTopicList.addEventListener('dragstart', e => { "LI" === e.target.tagName && e.target.classList.add('dragging') }); reorderTopicList.addEventListener('dragend', e => { "LI" === e.target.tagName && e.target.classList.remove('dragging') });
+            reorderTopicList.addEventListener('dragover', e => { e.preventDefault(); const t = getDragAfterElement(reorderTopicList, e.clientY), o = document.querySelector('.dragging'); o && (null == t ? reorderTopicList.appendChild(o) : reorderTopicList.insertBefore(o, t)) });
+            
+            noteContentInput.addEventListener('click', e => {
+                if (e.target.tagName === 'IMG') {
+                    e.preventDefault();
+                    linkContextMenu.style.display = 'none';
+                    showImageResizer(e.target);
+                    return;
+                }
+                const t = e.target.closest('manual-link');
+                if (t) {
+                    e.preventDefault();
+                    hideImageResizer();
+                    showLinkContextMenu(t, e);
+                    return;
+                }
+                if (!e.target.closest('#image-resizer')) {
+                    hideImageResizer();
+                    linkContextMenu.style.display = 'none';
+                }
+            });
+
+            noteContentInput.addEventListener('keyup', handleAutoLink);
+
+            imageResizer.querySelector('.resize-handle.br').addEventListener('mousedown', startResize);
+            scaleDownBtn.addEventListener('click', () => scaleImage(0.9));
+            scaleUpBtn.addEventListener('click', () => scaleImage(1.1));
+            imageSizeSelect.addEventListener('change', e => { e.target.value && setPresetImageSize(e.target.value); });
+        }
+        
+        onAuthStateChanged(auth, async (user) => { initializeAppEditor(); });
+    </script>
+</body>
+</html>
