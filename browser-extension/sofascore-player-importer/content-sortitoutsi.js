@@ -30,3 +30,11 @@ function reportPlayerLink() {
 reportPlayerLink();
 new MutationObserver(reportPlayerLink).observe(document.documentElement, { childList: true, subtree: true });
 setTimeout(reportPlayerLink, 1500);
+
+setTimeout(() => {
+  if (!resultSent && isDatabaseSearchPage()) {
+    resultSent = true;
+    chrome.runtime.sendMessage({ type: 'SORTITOUTSI_NOT_FOUND' });
+  }
+}, 6000);
+

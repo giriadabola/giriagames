@@ -130,6 +130,14 @@ const RAW_COUNTRY_ALIASES = {
     KG: ['kyrgyzstan', 'quirguistao'],
     TJ: ['tajikistan', 'tajiquistao'],
 
+    KH: ['cambodia', 'camboja'],
+    LA: ['laos'],
+    MM: ['myanmar', 'burma', 'birmania'],
+    CV: ['cape verde', 'cabo verde'],
+    GW: ['guinea bissau', 'guine bissau'],
+    ST: ['sao tome and principe', 'sao tome e principe'],
+    GQ: ['equatorial guinea', 'guine equatorial'],
+
     AU: ['australia', 'australia'],
     NZ: ['new zealand', 'nova zelandia'],
     FJ: ['fiji', 'fiji'],

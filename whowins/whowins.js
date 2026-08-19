@@ -1,6 +1,8 @@
 import { db, auth } from "../core/firebase.js";
 import { collection, getDocs, doc, getDoc, Timestamp, setDoc, query, where, updateDoc, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getLatestSeason, getSeasonData, mergeUserSeasonData } from '../core/user-season.js';
+import { checkPageContentAccess } from '../js/page-content-guard.js';
 
 let currentUserId = null;
 let gamesDataMap = {};
@@ -18,8 +20,14 @@ window.closeTutorial = async () => {
     if (currentUserId) {
         const userDocRef = doc(db, 'users', currentUserId);
         try {
+            const seasonLabel = await getLatestSeason(db);
+            const userSnapshot = await getDoc(userDocRef);
+            const seasonData = userSnapshot.exists() ? getSeasonData(userSnapshot.data(), seasonLabel) : {};
             await updateDoc(userDocRef, {
-                hasSeenWhoWinsTutorial: true
+                [seasonLabel]: {
+                    ...seasonData,
+                    hasSeenWhoWinsTutorial: true
+                }
             });
             console.log("Utilizador marcou o tutorial como visto.");
         } catch (error) {
@@ -101,7 +109,10 @@ function checkPageAccess(userInfo, accessSettings) {
 
 async function getUserStatus(userId) {
     const userDoc = await getDoc(doc(db, 'users', userId));
-    if (userDoc.exists() && userDoc.data().aceite === "Yes") return userDoc.data();
+    if (userDoc.exists() && userDoc.data().aceite === "Yes") {
+        const seasonLabel = await getLatestSeason(db);
+        return mergeUserSeasonData(userDoc.data(), seasonLabel);
+    }
     return null;
 }
 
@@ -125,11 +136,17 @@ onAuthStateChanged(auth, async (user) => {
             window.location.href = '404.html';
             return;
         }
-        await logUserAction(`Entrou em ${document.title}`);
         const menuSettings = await loadMenuSettings();
-        if (typeof updateMenuVisibility === 'function') {
+        if (typeof updateMenuVisibility === 'function' && menuSettings) {
             updateMenuVisibility(menuSettings);
         }
+        const hasContentAccess = await checkPageContentAccess('whowins', userInfo.estatuto, db);
+        if (!hasContentAccess) {
+            const loadingScreen = document.getElementById('loading-screen');
+            if (loadingScreen) loadingScreen.style.display = 'none';
+            return;
+        }
+        await logUserAction(`Entrou em ${document.title}`);
         document.getElementById('user-name').textContent = userInfo.nomeDeUsuario || 'Jogador';
         const arenaDocRef = doc(db, 'paineis', 'paineis arena');
         const arenaDocSnap = await getDoc(arenaDocRef);

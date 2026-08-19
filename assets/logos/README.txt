@@ -12,6 +12,6 @@ Inclui:
 - logo-original-transparente.png: logo original preservado.
 
 Nota: para usar o estilo glass no iPhone/iPad, mantém no <head>:
-<link rel="apple-touch-icon" href="./apple-touch-icon-glass.png">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png?v=2">
 
 Todos os PNG foram exportados com fundo transparente.

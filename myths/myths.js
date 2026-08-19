@@ -1,6 +1,7 @@
 import { db, auth } from '../core/firebase.js';
 import { collection, getDocs, doc, getDoc, query, where } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+import { checkPageContentAccess } from '../js/page-content-guard.js';
 
 // --- Elementos do DOM ---
 const loadingScreen = document.getElementById('loading-screen');
@@ -483,8 +484,14 @@ function initializeAppLogic() {
                 
                 const paineisMenuRef = doc(db, 'paineis', 'paineis menu');
                 const paineisMenuDoc = await getDoc(paineisMenuRef);
-                if (paineisMenuDoc.exists()) {
+                if (paineisMenuDoc.exists() && window.updateMenuVisibility) {
                     window.updateMenuVisibility(paineisMenuDoc.data());
+                }
+
+                const hasContentAccess = await checkPageContentAccess('myths', userStatus, db);
+                if (!hasContentAccess) {
+                    if (loadingScreen) loadingScreen.classList.add('hidden');
+                    return;
                 }
 
                 if (loadingScreen) loadingScreen.classList.add('hidden');

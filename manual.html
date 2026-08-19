@@ -45,6 +45,7 @@
         #content-body h1, #content-body h2, #content-body h3 { margin-top: 1.5em; margin-bottom: 0.5em; color: #ffffff; }
         #content-body p { margin-bottom: 1em; color: #8892b0; }
         #content-body img { max-width: 100%; height: auto; vertical-align: middle; margin: 0 0.3em; }
+        #content-body svg, #manual-nav svg, .modal-title svg, .topic-pickcard svg { vertical-align: middle; display: inline-block; margin-right: 6px; stroke-width: 1.5; }
         manual-link { color: #2ecc71; text-decoration: underline; cursor: pointer; font-weight: bold; }
         .modal-backdrop { position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; padding: 15px; transition: background-color 0.3s ease; }
         .modal-backdrop.has-opaque-background { background-color: rgba(0,0,0,0.85); backdrop-filter: blur(5px); }
@@ -125,6 +126,7 @@
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getFirestore, collection, getDocs, doc, getDoc, query, where, addDoc, serverTimestamp, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { checkPageContentAccess } from "./js/page-content-guard.js";
 
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
@@ -313,7 +315,7 @@ import { getFirestore, collection, getDocs, doc, getDoc, query, where, addDoc, s
         newModal.removeAttribute('id');
         newModal.style.zIndex = modalZIndex++;
         newModal.classList.add('has-opaque-background');
-        newModal.querySelector('.modal-title').textContent = data.title;
+        newModal.querySelector('.modal-title').innerHTML = data.title;
         newModal.querySelector('.modal-body').innerHTML = data.content;
         document.body.appendChild(newModal);
         newModal.style.display = 'flex';
@@ -578,7 +580,12 @@ import { getFirestore, collection, getDocs, doc, getDoc, query, where, addDoc, s
         if (userInfo && userInfo.aceite && userInfo.aceite.toLowerCase() === "yes") {
             const menuSettings = await loadMenuSettings();
             if (checkPageAccess(userInfo.estatuto, menuSettings)) {
-                
+                const hasContentAccess = await checkPageContentAccess('manual', userInfo.estatuto, db);
+                if (!hasContentAccess) {
+                    loadingScreen.style.display = 'none';
+                    return;
+                }
+
                 // Regista a entrada na página no log
                 await logUserAction(`Entrou em ${document.title}`);
 
@@ -612,6 +619,17 @@ import { getFirestore, collection, getDocs, doc, getDoc, query, where, addDoc, s
                 }
                 
                 initializeAppManual(finalFilteredCache);
+
+                const urlParams = new URLSearchParams(window.location.search);
+                const targetItemId = urlParams.get('item');
+                if (targetItemId && finalFilteredCache.has(targetItemId)) {
+                    const itemData = finalFilteredCache.get(targetItemId);
+                    if (itemData.type === 'Tema' || itemData.type === 'Tópico' || itemData.type === 'Elemento') {
+                        navigateToManualItem(targetItemId);
+                    } else {
+                        createAndShowModal(targetItemId);
+                    }
+                }
 
             } else { window.location.href = '404.html'; }
         } else { window.location.href = 'index.html'; }

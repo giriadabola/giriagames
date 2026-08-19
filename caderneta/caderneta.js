@@ -9,12 +9,14 @@ import { buildNormalizedCadernetaPackPricing, getCadernetaPackDefinitionByType, 
 import { createStickerPayload, drawPackPlayers, VALID_CADERNETA_RARITIES } from "./pack-engine.js";
 import { CADERNETA_FREE_PACK_TYPE, CADERNETA_GIFT_OFFERS_COLLECTION, CADERNETA_GIFT_REDIRECT_PARAM } from "./pack-offers.js";
 import { fetchUniqueSeasons, getPlayerSeasonData, hasPlayerDataForSeason } from "../admin/js/player-season-helper.js";
+import { compactSeason, getLatestSeason, getSeasonData, mergeUserSeasonData } from "../core/user-season.js";
 
 // App state
 let currentUser = null;
 let currentSeason = "";
 let currentSeasonLabel = "";
 let currentGcoinsField = "";
+let currentSeasonData = {};
 let userGcoins = 0;
 let userMiniGcoins = 0;
 let currentUserStatus = "";
@@ -173,6 +175,20 @@ const REVEAL_PACK_THEME = {
     }
 };
 
+function logUserAction(actionDescription) {
+    if (!currentUser) return;
+    try {
+        const eyeCollection = collection(db, 'eye');
+        void addDoc(eyeCollection, {
+            dataacao: serverTimestamp(),
+            acao: actionDescription,
+            userId: currentUser.uid
+        }).catch((error) => console.error("Erro ao registar a ação na coleção 'eye':", error));
+    } catch (error) {
+        console.error("Erro ao registar ação na coleção 'eye':", error);
+    }
+}
+
 // Initialize App
 onAuthStateChanged(auth, async (user) => {
     if (user) {
@@ -180,13 +196,16 @@ onAuthStateChanged(auth, async (user) => {
         try {
             showLoader();
             await loadSeasonAndUserGcoins();
+            await applyMenuVisibilitySettings();
             await loadCadernetaPackPricing();
             await loadUserSeasonPredictionCount();
             await loadDatabaseData();
+            checkUrlParametersForDirectNavigation();
             setupEventListeners();
             updateShopAvailability();
             updateNavigation();
             hideLoader();
+            await logUserAction(`Entrou em ${document.title}`);
             await maybeProcessGiftPackOffersFromRankings();
         } catch (error) {
             console.error("Erro durante a inicialização:", error);
@@ -197,26 +216,36 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
+async function applyMenuVisibilitySettings() {
+    try {
+        const menuSettingsSnap = await getDoc(doc(db, 'paineis', 'paineis menu'));
+        if (menuSettingsSnap.exists()) {
+            const menuSettings = menuSettingsSnap.data();
+            if (typeof window.updateMenuVisibility === 'function') {
+                window.updateMenuVisibility(menuSettings);
+            }
+        }
+    } catch (err) {
+        console.error("Erro ao carregar configurações do menu:", err);
+    }
+}
+
 // Load the current season and GCoins field
 async function loadSeasonAndUserGcoins() {
-    const configSnap = await getDoc(doc(db, 'paineis', 'configuracoes_gerais'));
-    if (configSnap.exists()) {
-        const temp = configSnap.data().temporadaAtual || "";
-        currentSeasonLabel = temp;
-        currentSeason = temp.replace('/', ''); // e.g. "20252026"
-    } else {
-        currentSeasonLabel = "2025/2026";
-        currentSeason = "20252026"; // Fallback
-    }
+    currentSeasonLabel = await getLatestSeason(db);
+    currentSeason = compactSeason(currentSeasonLabel);
     
-    currentGcoinsField = currentSeason + "GCoins";
+    currentGcoinsField = "GCoins";
 
     // Load user GCoins
     const userSnap = await getDoc(doc(db, 'users', currentUser.uid));
     if (userSnap.exists()) {
-        currentUserStatus = userSnap.data().estatuto || "";
-        userGcoins = userSnap.data()[currentGcoinsField] || 0;
-        userMiniGcoins = userSnap.data().whowinsgCoins || 0;
+        const rawUserData = userSnap.data();
+        const userData = mergeUserSeasonData(rawUserData, currentSeasonLabel);
+        currentSeasonData = getSeasonData(rawUserData, currentSeasonLabel);
+        currentUserStatus = userData.estatuto || "";
+        userGcoins = userData.GCoins || 0;
+        userMiniGcoins = userData.whowinsgCoins || 0;
     }
 }
 
@@ -286,7 +315,8 @@ async function claimGiftPackOffer(offer) {
 
         drawnPlayers.forEach((draw) => {
             const stickerRef = doc(collection(db, 'caderneta'));
-            transaction.set(stickerRef, createStickerPayload(draw, currentUser.uid, serverTimestamp()));
+            const seasonToSave = currentSeasonLabel || offerData.temporadaKey || currentSeason;
+            transaction.set(stickerRef, createStickerPayload(draw, currentUser.uid, serverTimestamp(), seasonToSave));
         });
 
         const movimentoRef = doc(collection(db, 'movimentos'));
@@ -703,6 +733,9 @@ async function loadDatabaseData() {
 
     // Render stats on continent cards
     renderContinentStats();
+    if (currentView === 'world') {
+        renderWorldMap();
+    }
 }
 
 // Calculate and render progress stats per continent
@@ -1023,12 +1056,20 @@ function updateNavigation() {
         crumbs.push(`<span class="breadcrumb-item active">${selectedContinent}</span>`);
         renderCountries();
     } else if (currentView === "clubs") {
-        viewClubs.classList.remove('hidden');
-        crumbs.push(`<span class="breadcrumb-separator"><i class="fas fa-chevron-right"></i></span>`);
-        crumbs.push(`<span class="breadcrumb-item" id="breadcrumb-continent">${selectedContinent}</span>`);
-        crumbs.push(`<span class="breadcrumb-separator"><i class="fas fa-chevron-right"></i></span>`);
-        crumbs.push(`<span class="breadcrumb-item active">${selectedCountry.nome}</span>`);
-        renderClubs();
+        if (!selectedCountry) {
+            currentView = "countries";
+            viewCountries.classList.remove('hidden');
+            crumbs.push(`<span class="breadcrumb-separator"><i class="fas fa-chevron-right"></i></span>`);
+            crumbs.push(`<span class="breadcrumb-item active">${selectedContinent || 'Europa'}</span>`);
+            renderCountries();
+        } else {
+            viewClubs.classList.remove('hidden');
+            crumbs.push(`<span class="breadcrumb-separator"><i class="fas fa-chevron-right"></i></span>`);
+            crumbs.push(`<span class="breadcrumb-item" id="breadcrumb-continent">${selectedContinent}</span>`);
+            crumbs.push(`<span class="breadcrumb-separator"><i class="fas fa-chevron-right"></i></span>`);
+            crumbs.push(`<span class="breadcrumb-item active">${selectedCountry.nome}</span>`);
+            renderClubs();
+        }
     } else if (currentView === "album-page") {
         viewAlbumPage.classList.remove('hidden');
         crumbs.push(`<span class="breadcrumb-separator"><i class="fas fa-chevron-right"></i></span>`);
@@ -1318,25 +1359,37 @@ function buildContinentStatsSummary() {
 
 function renderCountries() {
     countriesListContainer.innerHTML = '';
-    document.getElementById('countries-title').innerHTML = `<i class="fas fa-map-marker-alt"></i> Paises de ${selectedContinent}`;
+    countriesListContainer.classList.remove('hidden');
+    document.getElementById('countries-title').innerHTML = `<i class="fas fa-map-marker-alt"></i> Países de ${selectedContinent}`;
 
     const countries = countriesList.filter(c => continentMatches(c.continente, selectedContinent));
 
-    if (countries.length === 0) {
-        countriesListContainer.innerHTML = `<p class="subtitle">Nao existem paises configurados para este continente.</p>`;
+    const countriesWithPlayers = countries.filter(country => {
+        const clubsInCountry = clubsList.filter(club => getClubCountry(club)?.id === country.id);
+        return clubsInCountry.some(club => eligiblePlayers.some(player => playerBelongsToClub(player, club.id)));
+    });
+
+    if (countriesWithPlayers.length === 0) {
+        countriesListContainer.innerHTML = `<p class="subtitle">Não existem países com equipas disponíveis neste continente.</p>`;
         return;
     }
 
-    const continentKey = getContinentKey(selectedContinent);
-    const availableCountriesCount = countries.filter(country => hasAvailableClubs(country.id)).length;
-    const continentLabel = CONTINENT_MAP_PRESETS[continentKey]?.label || selectedContinent;
-
-    if (continentFocusKicker) continentFocusKicker.textContent = continentLabel;
-    if (continentFocusName) continentFocusName.textContent = `Mapa de ${continentLabel}`;
-    if (continentFocusSummary) continentFocusSummary.textContent = `${availableCountriesCount} paises com equipas disponiveis ficam destacados. Clica diretamente no mapa para entrar num pais; os restantes continuam visiveis mas inativos.`;
-    renderContinentMap(continentKey, countries);
-    renderContinentFlags(countries);
-    countriesListContainer.classList.add('hidden');
+    countriesWithPlayers.sort((a, b) => a.nome.localeCompare(b.nome, 'pt', { sensitivity: 'base' })).forEach(country => {
+        const countryIso = resolveCountryIso(country);
+        const flagImage = getFlagImageUrl(countryIso) || country.imagem || '';
+        const card = document.createElement('div');
+        card.className = 'country-btn-card';
+        card.innerHTML = `
+            <img src="${flagImage}" alt="Bandeira de ${country.nome}">
+            <span>${country.nome}</span>
+        `;
+        card.addEventListener('click', () => {
+            selectedCountry = country;
+            currentView = "clubs";
+            updateNavigation();
+        });
+        countriesListContainer.appendChild(card);
+    });
 }
 
 function renderContinentFlags(countries) {
@@ -1405,7 +1458,19 @@ function getContinentStatsId(continentName) {
 }
 
 function resolveCountryIso(country) {
-    const candidates = [country?.nome_en, country?.nome, country?.pais, country?.name];
+    if (!country) return null;
+
+    if (country.iso && typeof country.iso === 'string' && country.iso.length === 2) {
+        return country.iso.toUpperCase();
+    }
+    if (country.codigoUrl && typeof country.codigoUrl === 'string' && country.codigoUrl.length === 2) {
+        return country.codigoUrl.toUpperCase();
+    }
+    if (country.id && typeof country.id === 'string' && country.id.length === 2) {
+        return country.id.toUpperCase();
+    }
+
+    const candidates = [country.nome_en, country.nome, country.pais, country.name];
     for (const candidate of candidates) {
         const normalized = normalizeCountryName(candidate || "");
         if (COUNTRY_NAME_TO_ISO[normalized]) {
@@ -1441,7 +1506,28 @@ function buildWorldRegionValues() {
 }
 
 function getCountryByIso(isoCode) {
-    return countriesList.find((country) => resolveCountryIso(country) === isoCode) || null;
+    if (!isoCode) return null;
+    const searchIso = isoCode.toUpperCase();
+
+    // 1. Direct match with resolveCountryIso
+    let found = countriesList.find((country) => resolveCountryIso(country) === searchIso);
+    if (found) return found;
+
+    // 2. Direct property match (id, iso, codigoUrl)
+    found = countriesList.find((country) => {
+        const cId = (country.id || '').toUpperCase();
+        const cIso = (country.iso || '').toUpperCase();
+        const cCode = (country.codigoUrl || '').toUpperCase();
+        return cId === searchIso || cIso === searchIso || cCode === searchIso;
+    });
+    if (found) return found;
+
+    // 3. Match normalized name or alias
+    return countriesList.find((country) => {
+        const normName = normalizeCountryName(country.nome || country.pais || country.name || '');
+        const aliasIso = COUNTRY_NAME_TO_ISO[normName];
+        return aliasIso && aliasIso.toUpperCase() === searchIso;
+    }) || null;
 }
 
 function openContinentFromKey(continentKey) {
@@ -1459,37 +1545,159 @@ function openContinentFromKey(continentKey) {
     updateNavigation();
 }
 
-function renderWorldMap() {
+async function renderWorldMap() {
     if (!worldMapContainer) return;
 
-    // O mapa mundo principal fica como asset local em CSS.
-    // Aqui garantimos apenas que nenhum renderer dinâmico o tapa.
-    destroyVectorMap(worldMapObject, '#world-map');
-    worldMapObject = null;
+    if (!worldMapContainer.querySelector('.world-ultra-svg')) {
+        try {
+            const res = await fetch('assets/worldUltra.svg');
+            if (res.ok) {
+                const svgText = await res.text();
+                worldMapContainer.innerHTML = svgText;
+                const svg = worldMapContainer.querySelector('svg');
+                if (svg) {
+                    svg.removeAttribute('style');
+                    svg.setAttribute('class', 'world-ultra-svg');
+                }
+            }
+        } catch (err) {
+            console.error("Erro ao carregar worldUltra.svg:", err);
+        }
+    }
+
+    setupWorldUltraInteractivity();
+}
+
+function setupWorldUltraInteractivity() {
+    const svg = worldMapContainer?.querySelector('svg');
+    if (!svg) return;
+
+    const isoToContinentMap = {
+        PT: "Europa", ES: "Europa", FR: "Europa", DE: "Europa", IT: "Europa", GB: "Europa", IE: "Europa", NL: "Europa", BE: "Europa", LU: "Europa", CH: "Europa", AT: "Europa", DK: "Europa", NO: "Europa", SE: "Europa", FI: "Europa", IS: "Europa", PL: "Europa", CZ: "Europa", SK: "Europa", HU: "Europa", RO: "Europa", BG: "Europa", GR: "Europa", TR: "Europa", HR: "Europa", RS: "Europa", SI: "Europa", BA: "Europa", ME: "Europa", AL: "Europa", MK: "Europa", UA: "Europa", BY: "Europa", LT: "Europa", LV: "Europa", EE: "Europa", RU: "Europa", MD: "Europa", CY: "Europa", MT: "Europa",
+        US: "América Norte", CA: "América Norte", MX: "América Norte", CR: "América Norte", PA: "América Norte", JM: "América Norte", HT: "América Norte", HN: "América Norte", SV: "América Norte", GT: "América Norte", NI: "América Norte", DO: "América Norte", CU: "América Norte", TT: "América Norte",
+        BR: "América Sul", AR: "América Sul", UY: "América Sul", PY: "América Sul", CL: "América Sul", BO: "América Sul", PE: "América Sul", EC: "América Sul", CO: "América Sul", VE: "América Sul",
+        MA: "África", DZ: "África", TN: "África", EG: "África", LY: "África", SD: "África", SN: "África", CI: "África", GH: "África", NG: "África", CM: "África", ML: "África", BF: "África", GN: "África", GA: "África", CD: "África", CG: "África", AO: "África", ZA: "África", MZ: "África", ZM: "África", KE: "África", ET: "África", UG: "África", TZ: "África", RW: "África", BI: "África", MG: "África",
+        JP: "Ásia", KR: "Ásia", KP: "Ásia", CN: "Ásia", TW: "Ásia", HK: "Ásia", MN: "Ásia", VN: "Ásia", TH: "Ásia", MY: "Ásia", SG: "Ásia", ID: "Ásia", PH: "Ásia", IN: "Ásia", PK: "Ásia", BD: "Ásia", LK: "Ásia", NP: "Ásia", IR: "Ásia", IQ: "Ásia", SA: "Ásia", QA: "Ásia", AE: "Ásia", OM: "Ásia", JO: "Ásia", IL: "Ásia", LB: "Ásia", SY: "Ásia", KZ: "Ásia", UZ: "Ásia", TM: "Ásia", KG: "Ásia", TJ: "Ásia", KH: "Ásia", LA: "Ásia", MM: "Ásia",
+        AU: "Oceania", NZ: "Oceania", FJ: "Oceania", PG: "Oceania", NC: "Oceania"
+    };
+
+    if (Array.isArray(countriesList)) {
+        countriesList.forEach((country) => {
+            const iso = resolveCountryIso(country);
+            if (iso && country.continente) {
+                isoToContinentMap[iso] = country.continente;
+            }
+        });
+    }
+
+    const activeIsoSet = new Set();
+    if (Array.isArray(countriesList)) {
+        countriesList.forEach((country) => {
+            const iso = resolveCountryIso(country);
+            if (!iso) return;
+            const clubsInCountry = clubsList.filter((club) => getClubCountry(club)?.id === country.id);
+            const clubsWithPlayers = clubsInCountry.filter((club) => eligiblePlayers.some((player) => playerBelongsToClub(player, club.id)));
+            if (clubsWithPlayers.length > 0) {
+                activeIsoSet.add(iso);
+            }
+        });
+    }
+
+    let tooltipEl = document.getElementById('world-ultra-tooltip');
+    if (!tooltipEl) {
+        tooltipEl = document.createElement('div');
+        tooltipEl.id = 'world-ultra-tooltip';
+        tooltipEl.className = 'jvm-tooltip';
+        document.body.appendChild(tooltipEl);
+    }
+
+    svg.querySelectorAll('.land').forEach((path) => {
+        const iso = (path.id || '').toUpperCase();
+        const titleText = (path.getAttribute('title') || '').toLowerCase();
+
+        if (iso === 'AQ' || titleText.includes('antarctica') || titleText.includes('antartida')) {
+            path.style.pointerEvents = 'none';
+            path.style.cursor = 'default';
+            return;
+        }
+
+        const continent = isoToContinentMap[iso];
+        const hasTeams = activeIsoSet.has(iso);
+
+        if (hasTeams) {
+            path.classList.add('has-teams');
+        } else {
+            path.classList.remove('has-teams');
+        }
+
+        path.addEventListener('mouseenter', (e) => {
+            const country = getCountryByIso(iso);
+            const countryName = country ? country.nome : (path.getAttribute('title') || iso);
+            
+            if (continent) {
+                const clubsInCountry = country ? clubsList.filter((club) => getClubCountry(club)?.id === country.id) : [];
+                const clubsWithPlayers = clubsInCountry.filter((club) => eligiblePlayers.some((player) => playerBelongsToClub(player, club.id)));
+                if (clubsWithPlayers.length > 0) {
+                    tooltipEl.textContent = `${countryName} (${continent}) - ${clubsWithPlayers.length} equipas. Clica para abrir!`;
+                } else {
+                    tooltipEl.textContent = `${countryName} (${continent}) - Clica para abrir`;
+                }
+            } else {
+                tooltipEl.textContent = countryName;
+            }
+            tooltipEl.style.display = 'block';
+        });
+
+        path.addEventListener('mousemove', (e) => {
+            tooltipEl.style.left = (e.pageX + 14) + 'px';
+            tooltipEl.style.top = (e.pageY + 14) + 'px';
+        });
+
+        path.addEventListener('mouseleave', () => {
+            tooltipEl.style.display = 'none';
+        });
+
+        path.addEventListener('click', () => {
+            tooltipEl.style.display = 'none';
+            const country = getCountryByIso(iso);
+            const targetContinent = country?.continente || continent || isoToContinentMap[iso] || "Ásia";
+
+            if (country) {
+                selectedContinent = targetContinent;
+                selectedCountry = country;
+                currentView = "clubs";
+                updateNavigation();
+            } else if (targetContinent) {
+                selectedCountry = null;
+                selectedContinent = targetContinent;
+                currentView = "countries";
+                updateNavigation();
+            }
+        });
+    });
+}
+
+function checkUrlParametersForDirectNavigation() {
+    const params = new URLSearchParams(window.location.search);
+    const countryParam = params.get('pais') || params.get('country') || params.get('paisId') || params.get('countryId');
+    if (countryParam) {
+        const normParam = normalizeText(countryParam);
+        const matchedCountry = countriesList.find(c => 
+            c.id === countryParam || 
+            normalizeText(c.nome || '') === normParam || 
+            normalizeText(c.nome_en || '') === normParam ||
+            resolveCountryIso(c)?.toLowerCase() === normParam
+        );
+        if (matchedCountry) {
+            selectedContinent = matchedCountry.continente || "Europa";
+            selectedCountry = matchedCountry;
+            currentView = "clubs";
+        }
+    }
 }
 
 function renderContinentMap(continentKey, countries) {
-    continentMapObject = mountContinentMap({
-        containerSelector: '#continent-map',
-        existingMapObject: continentMapObject,
-        continentKey,
-        countries,
-        resolveCountryIso,
-        getCountryMeta(country) {
-            const clubsInCountry = clubsList.filter((club) => getClubCountry(club)?.id === country.id);
-            const clubsWithPlayers = clubsInCountry.filter((club) => eligiblePlayers.some((player) => playerBelongsToClub(player, club.id)));
-
-            return {
-                hasTeams: clubsWithPlayers.length > 0,
-                clubCount: clubsWithPlayers.length
-            };
-        },
-        onCountrySelect(country) {
-            selectedCountry = country;
-            currentView = "clubs";
-            updateNavigation();
-        }
-    });
+    // Mapa removido
 }
 
 // Render clubs belonging to current country
@@ -1527,8 +1735,10 @@ function renderAlbumPage() {
     document.getElementById('club-view-logo').src = selectedClub.imagem;
     document.getElementById('club-view-name').textContent = selectedClub.nome;
 
-    // Filter players for this club (Limit to 10 as requested)
-    const clubPlayers = eligiblePlayers.filter((player) => playerBelongsToClub(player, selectedClub.id)).slice(0, 10);
+    // Filter players for this club, sort by position (Guarda-redes -> Defesa -> Médio -> Avançado), and limit to 10
+    const rawClubPlayers = eligiblePlayers.filter((player) => playerBelongsToClub(player, selectedClub.id));
+    const sortedClubPlayers = sortPlayersByPosition(rawClubPlayers);
+    const clubPlayers = sortedClubPlayers.slice(0, 10);
     
     // Fill remaining to 10 with empty placeholders if club has fewer
     const slots = [...clubPlayers];
@@ -1611,26 +1821,102 @@ function getStickerMeta(player) {
     };
 }
 
-function getPositionClass(position = '') {
-    const normalized = position
+function getPositionPriority(position = '') {
+    const normalized = (position || '')
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '')
         .toLowerCase()
         .trim();
 
-    if (normalized.includes('guarda') || normalized.includes('goleiro') || normalized.includes('redes')) {
-        return 'pos-guarda-redes';
+    if (
+        normalized.includes('guarda') ||
+        normalized.includes('goleiro') ||
+        normalized.includes('redes') ||
+        normalized === 'gk' ||
+        normalized === 'gr'
+    ) {
+        return 1; // Guarda-redes
     }
-    if (normalized.includes('defesa') || normalized.includes('defender')) {
-        return 'pos-defesa';
+
+    if (
+        normalized.includes('defesa') ||
+        normalized.includes('defender') ||
+        normalized.includes('lateral') ||
+        normalized.includes('zagueiro') ||
+        normalized === 'df' ||
+        normalized === 'cb' ||
+        normalized === 'lb' ||
+        normalized === 'rb' ||
+        normalized === 'dc' ||
+        normalized === 'de' ||
+        normalized === 'dd'
+    ) {
+        return 2; // Defesa
     }
-    if (normalized.includes('medio') || normalized.includes('meio') || normalized.includes('mid')) {
-        return 'pos-medio';
+
+    if (
+        normalized.includes('medio') ||
+        normalized.includes('meio') ||
+        normalized.includes('mid') ||
+        normalized.includes('volante') ||
+        normalized === 'mc' ||
+        normalized === 'cm' ||
+        normalized === 'cam' ||
+        normalized === 'cdm' ||
+        normalized === 'md' ||
+        normalized === 'me'
+    ) {
+        return 3; // Médio
     }
-    if (normalized.includes('avanc') || normalized.includes('atac') || normalized.includes('forward')) {
-        return 'pos-avancado';
+
+    if (
+        normalized.includes('avanc') ||
+        normalized.includes('atac') ||
+        normalized.includes('forward') ||
+        normalized.includes('ponta') ||
+        normalized.includes('extremo') ||
+        normalized.includes('lanca') ||
+        normalized.includes('striker') ||
+        normalized === 'st' ||
+        normalized === 'cf' ||
+        normalized === 'lw' ||
+        normalized === 'rw' ||
+        normalized === 'pl'
+    ) {
+        return 4; // Avançado
     }
-    return 'pos-outro';
+
+    return 5; // Outro / Desconhecido
+}
+
+function sortPlayersByPosition(players) {
+    return [...players].sort((left, right) => {
+        const priorityLeft = getPositionPriority(left.posicao || left.position || '');
+        const priorityRight = getPositionPriority(right.posicao || right.position || '');
+
+        if (priorityLeft !== priorityRight) {
+            return priorityLeft - priorityRight;
+        }
+
+        const numLeft = parseInt(left.numero || left.numeroCamisola || left.camisola, 10);
+        const numRight = parseInt(right.numero || right.numeroCamisola || right.camisola, 10);
+        if (!isNaN(numLeft) && !isNaN(numRight) && numLeft !== numRight) {
+            return numLeft - numRight;
+        }
+
+        return (left.nome || '').localeCompare(right.nome || '', 'pt', { sensitivity: 'base' });
+    });
+}
+
+function getPositionClass(position = '') {
+    const priority = getPositionPriority(position);
+    switch (priority) {
+        case 1: return 'pos-guarda-redes';
+        case 2: return 'pos-defesa';
+        case 3: return 'pos-medio';
+        case 4: return 'pos-avancado';
+        default: return 'pos-outro';
+    }
 }
 
 function createStickerCardMarkup(player, casta, variant = 'inventory') {
@@ -1695,29 +1981,14 @@ function createStickerCardMarkup(player, casta, variant = 'inventory') {
 }
 
 function getPositionIconClass(position = '') {
-    const normalized = position
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .toLowerCase()
-        .trim();
-
-    if (normalized.includes('guarda') || normalized.includes('goleiro') || normalized.includes('redes')) {
-        return 'fas fa-hand-paper';
+    const priority = getPositionPriority(position);
+    switch (priority) {
+        case 1: return 'fas fa-hand-paper';
+        case 2: return 'fas fa-shield-alt';
+        case 3: return 'fas fa-puzzle-piece';
+        case 4: return 'fas fa-bullseye';
+        default: return 'fas fa-futbol';
     }
-
-    if (normalized.includes('defesa') || normalized.includes('defender')) {
-        return 'fas fa-shield-alt';
-    }
-
-    if (normalized.includes('medio') || normalized.includes('meio') || normalized.includes('mid')) {
-        return 'fas fa-puzzle-piece';
-    }
-
-    if (normalized.includes('avanc') || normalized.includes('atac') || normalized.includes('forward')) {
-        return 'fas fa-bullseye';
-    }
-
-    return 'fas fa-futbol';
 }
 
 // Generate HTML layout for a sticker card
@@ -1746,6 +2017,22 @@ function renderInventory() {
 
             return stickerMatchesInventoryContext(player, context);
         });
+
+    // Sort available stickers by player position (Guarda-redes -> Defesa -> Médio -> Avançado)
+    availableStickers.sort((leftSticker, rightSticker) => {
+        const playerLeft = allPlayersCatalog.find((entry) => entry.id === leftSticker.idplayer);
+        const playerRight = allPlayersCatalog.find((entry) => entry.id === rightSticker.idplayer);
+        const prioLeft = playerLeft ? getPositionPriority(playerLeft.posicao) : 99;
+        const prioRight = playerRight ? getPositionPriority(playerRight.posicao) : 99;
+        if (prioLeft !== prioRight) return prioLeft - prioRight;
+        const numLeft = parseInt(playerLeft?.numero || playerLeft?.numeroCamisola || playerLeft?.camisola, 10);
+        const numRight = parseInt(playerRight?.numero || playerRight?.numeroCamisola || playerRight?.camisola, 10);
+        if (!isNaN(numLeft) && !isNaN(numRight) && numLeft !== numRight) {
+            return numLeft - numRight;
+        }
+        return (playerLeft?.nome || '').localeCompare(playerRight?.nome || '', 'pt', { sensitivity: 'base' });
+    });
+
     inventoryCountSpan.textContent = availableStickers.length;
 
     if (availableStickers.length === 0) {
@@ -1803,6 +2090,7 @@ async function pasteSticker(playerId, slotEl) {
 
         // Local state update
         stickerDoc.Nacaderneta = true;
+        logUserAction(`Colou cromo no álbum da Caderneta`);
         
         // Re-render
         renderAlbumPage();
@@ -1870,7 +2158,12 @@ async function handlePackPurchase(packType) {
         const isMiniGcoinsPurchase = currency === 'mini-gcoins';
         const newBalance = isMiniGcoinsPurchase ? userMiniGcoins - price : userGcoins - price;
         const updatedUserBalanceField = isMiniGcoinsPurchase ? 'whowinsgCoins' : currentGcoinsField;
-        batch.update(userRef, { [updatedUserBalanceField]: newBalance });
+        batch.update(userRef, {
+            [currentSeasonLabel]: {
+                ...currentSeasonData,
+                [updatedUserBalanceField]: newBalance
+            }
+        });
 
         // 2. Create movimento
         const movimentoRef = doc(collection(db, 'movimentos'));
@@ -1891,11 +2184,13 @@ async function handlePackPurchase(packType) {
         // 3. Create stickers
         drawnPlayers.forEach(draw => {
             const stickerRef = doc(collection(db, 'caderneta'));
-            batch.set(stickerRef, createStickerPayload(draw, currentUser.uid, serverTimestamp()));
+            const seasonToSave = currentSeasonLabel || currentSeason;
+            batch.set(stickerRef, createStickerPayload(draw, currentUser.uid, serverTimestamp(), seasonToSave));
         });
 
         // Execute Batch
         await batch.commit();
+        logUserAction(`Comprou saqueta (${packType}) na Caderneta`);
 
         // Update local balance
         if (isMiniGcoinsPurchase) {

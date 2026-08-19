@@ -12,7 +12,15 @@ async function debugLog(event, details = '') {
 }
 
 function isSofascoreUrl(url) { return /^https:\/\/(www\.)?sofascore\.com\//i.test(url || ''); }
-function isAdminUrl(url) { return /\/admin\/criar-jogadores\.html(?:[?#]|$)/i.test(url || ''); }
+function isAdminUrl(url) { return /criar-jogadores(?:\.html)?(?:[?#]|$)/i.test(url || ''); }
+
+chrome.tabs.onRemoved.addListener((tabId) => {
+  if (pendingImports.has(tabId)) {
+    debugLog('Aba de pesquisa fechada pelo utilizador/sistema', `tab=${tabId}`);
+    pendingImports.delete(tabId);
+    importInProgress = false;
+  }
+});
 
 async function getActiveSofascoreTab() {
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -66,7 +74,7 @@ async function fillAdminWithExtracted(adminTabId, extracted, faceId) {
     type: 'FILL_ADMIN_PLAYER',
     text: extracted.text,
     statsText: extracted.statsText,
-    faceId,
+    faceId: faceId || '',
     playerName: extracted.name
   }, 'content-admin.js');
   if (!filled?.ok) throw new Error(filled?.error || 'Não foi possível preencher o formulário.');
@@ -81,11 +89,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.type === 'IMPORT_CURRENT_PLAYER') {
-    if (importInProgress || pendingImports.size > 0) { sendResponse({ ok: false, error: 'Já existe uma importação em curso.' }); return true; }
+    // Limpar estados presos
+    pendingImports.clear();
     importInProgress = true;
+
     (async () => {
       await debugLog('Início da importação');
-      const sofascoreTab = await getActiveSofascoreTab();
+      const sofascoreTab = (sender.tab && isSofascoreUrl(sender.tab.url)) ? sender.tab : await getActiveSofascoreTab();
       const adminTab = await getAdminTab();
       await debugLog('Abas detectadas', `Sofascore=${sofascoreTab.id}; admin=${adminTab?.id || 'nenhuma'}`);
       if (!adminTab) throw new Error('Não encontrei uma aba aberta em admin/criar-jogadores.html.');
@@ -102,6 +112,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ ok: true });
     })().catch(error => { debugLog('ERRO', error.stack || error.message); sendResponse({ ok: false, error: error.message }); }).finally(() => { importInProgress = false; });
     return true;
+  }
+
+  if (message.type === 'SORTITOUTSI_NOT_FOUND') {
+    if (!sender.tab?.id) return;
+    (async () => {
+      const pending = pendingImports.get(sender.tab.id);
+      if (!pending) return;
+      pendingImports.delete(sender.tab.id);
+
+      await debugLog('Jogador não encontrado no Sortitoutsi; a prosseguir sem face');
+      await chrome.tabs.remove(sender.tab.id);
+      await chrome.tabs.update(pending.adminTabId, { active: true });
+      await waitForAdminPageToSettle(pending.adminTabId);
+      await fillAdminWithExtracted(pending.adminTabId, pending.extracted, '');
+    })().catch(error => debugLog('ERRO FALLBACK SORTITOUTSI', error.message));
+    return;
   }
 
   if (message.type === 'SORTITOUTSI_PLAYER_FOUND') {
@@ -122,24 +148,28 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       await chrome.tabs.update(sender.tab.id, { url: profileUrl });
 
       await debugLog('A iniciar download da imagem', `ID=${id}`);
-      const faceResponse = await fetch('http://127.0.0.1:8765/download-face', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id })
-      });
-      await debugLog('Resposta do servidor de imagens', `HTTP ${faceResponse.status}`);
-      if (!faceResponse.ok) throw new Error('Não foi possível descarregar a imagem. Verifique se o servidor local está activo.');
-      const faceResult = await faceResponse.json();
-      if (!faceResult.ok) throw new Error(faceResult.error || 'O servidor não conseguiu guardar a imagem.');
+      try {
+        const faceResponse = await fetch('http://127.0.0.1:8765/download-face', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id })
+        });
+        await debugLog('Resposta do servidor de imagens', `HTTP ${faceResponse.status}`);
+        if (!faceResponse.ok) throw new Error('Servidor de imagens indisponível.');
+        const faceResult = await faceResponse.json();
+        if (!faceResult.ok) throw new Error(faceResult.error || 'Erro no servidor de imagens.');
+      } catch (err) {
+        await debugLog('Aviso: Servidor de imagem offline ou erro no download. A prosseguir sem imagem.', err.message);
+      }
 
-      await debugLog('Imagem guardada; a fechar perfil Sortitoutsi');
+      await debugLog('A fechar perfil Sortitoutsi e focar admin');
       await chrome.tabs.remove(sender.tab.id);
       await chrome.tabs.update(pending.adminTabId, { active: true });
       await debugLog('A aguardar actualização do host no admin');
       await waitForAdminPageToSettle(pending.adminTabId);
 
       const imageCodeResult = await sendMessageWithInjection(pending.adminTabId, { type: 'SET_IMAGE_CODE', faceId: id }, 'content-admin.js');
-      if (!imageCodeResult?.ok) throw new Error(imageCodeResult?.error || 'Não foi possível preencher o Código para Imagem.');
+      if (!imageCodeResult?.ok) await debugLog('Aviso', 'Não foi possível preencher o Código para Imagem.');
       await debugLog('Código para Imagem preenchido; a iniciar dados Sofascore', id);
 
       const filled = await fillAdminWithExtracted(pending.adminTabId, pending.extracted, id);
@@ -147,3 +177,4 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     })().catch(error => { debugLog('ERRO FINAL', error.stack || error.message); console.error('Importação concluída com erro:', error); });
   }
 });
+

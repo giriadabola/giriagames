@@ -2,6 +2,7 @@ import { db, auth } from '../core/firebase.js';
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { addDoc, collection, doc, getDoc, serverTimestamp, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { initRivalSquadsView } from '../core/rival-squads-view.js';
+import { checkPageContentAccess } from '../js/page-content-guard.js';
 
 const loadingScreen = document.getElementById('loading-screen');
 const content = document.querySelector('.content');
@@ -93,6 +94,12 @@ onAuthStateChanged(auth, async (user) => {
             return;
         }
 
+        let hasContentAccess = true;
+        hasContentAccess = await checkPageContentAccess('team', userData.estatuto, db);
+        if (!hasContentAccess) {
+            return;
+        }
+
         await logUserAction(`Entrou em ${document.title}`);
         rivalSquadsView = await initRivalSquadsView({
             root: rivalViewRoot,
@@ -104,6 +111,6 @@ onAuthStateChanged(auth, async (user) => {
         console.error('Erro ao inicializar o Relvado:', error);
     } finally {
         loadingScreen.style.display = 'none';
-        content.style.display = 'block';
+        if (hasContentAccess) content.style.display = 'block';
     }
 });

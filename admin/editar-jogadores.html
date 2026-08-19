@@ -144,6 +144,70 @@
         .table-switch input:checked + .table-slider:before {
             transform: translateX(22px);
         }
+
+        /* Pagination Container */
+        .pagination-wrapper {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+            margin-top: 20px;
+            margin-bottom: 30px;
+            padding: 14px 20px;
+            background-color: #111622;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+        }
+        .pagination-info {
+            font-size: 14px;
+            color: #8892b0;
+        }
+        .pagination-info strong {
+            color: #ffffff;
+        }
+        .pagination-controls {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .pagination-btn {
+            background-color: #161c28;
+            color: #ffffff;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 7px 14px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            user-select: none;
+        }
+        .pagination-btn:hover:not(:disabled) {
+            background-color: #2176ff;
+            border-color: #2176ff;
+            color: #ffffff;
+            transform: translateY(-1px);
+        }
+        .pagination-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .pagination-btn.active {
+            background-color: #2176ff;
+            border-color: #2176ff;
+            color: #ffffff;
+        }
+        .pagination-ellipsis {
+            color: #8892b0;
+            padding: 0 4px;
+            font-size: 14px;
+        }
     </style>
 
     <link rel="stylesheet" href="css/admin-global.css">
@@ -192,6 +256,10 @@
                 </tbody>
             </table>
         </div>
+
+        <div class="pagination-wrapper" id="pagination-controls">
+            <!-- Dinâmico -->
+        </div>
     </div>
 
     <!-- MAIN OVERLAY EDIT POPUP -->
@@ -225,6 +293,7 @@
                         <div class="form-group"><label for="playerTier">Casta do Jogador</label><select class="form-control" id="playerTier"><option value="Jogador Ouro">Jogador Ouro</option><option value="Jogador Prata">Jogador Prata</option><option value="Jogador Bronze">Jogador Bronze</option><option value="Jogador Platina">Jogador Platina</option></select></div>
                         <div class="form-group"><label for="playerMarket">No Mercado?</label><select class="form-control" id="playerMarket"><option value="Sim">Sim</option><option value="Não">Não</option></select></div>
                         <div class="form-group"><label for="playerActive">Ativo?</label><select class="form-control" id="playerActive"><option value="Sim">Sim</option><option value="Não">Não</option></select></div>
+                        <div class="form-group"><label for="playerRetired">Retirado?</label><select class="form-control" id="playerRetired"><option value="Não">Não</option><option value="Sim">Sim</option></select></div>
                         <div class="form-group"><label for="playerPrice">Preço</label><input type="number" class="form-control" id="playerPrice" min="0" max="1000"></div>
                         <div class="form-group"><label for="playerBuyer">Comprado por (Opcional)</label><select class="form-control" id="playerBuyer"><option value="">Ninguém</option></select></div>
                         <div class="form-group"><label>Mini Games? (Opcional)</label><div class="checkbox-group" id="minigames-container"><!-- Carregando mini-games... --></div></div>
@@ -238,6 +307,7 @@
             </div>
             <div class="modal-footer">
                 <button class="btn secondary" id="cancelModalBtn">Cancelar</button>
+                <button type="submit" form="editPlayerForm" class="btn primary" style="background: #2ecc71; color: white; border: none; padding: 10px 24px; font-weight: bold; border-radius: 6px; cursor: pointer;">Editar Jogador</button>
                <script type="module">
         import { db } from './js/auth-guard.js';
         import { collection, getDocs, query, where, doc, getDoc, updateDoc, deleteDoc, setDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
@@ -253,8 +323,17 @@
         let currentSortColumn = 'nome';
         let currentSortDirection = 'asc';
         let activeMiniGames = [];
+        let currentPage = 1;
+        const ITEMS_PER_PAGE = 50;
+
+        const DEFAULT_SVG_PLACEHOLDER = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="100%" height="100%" fill="%23161c28"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%238892b0" font-size="11">Sem Imagem</text></svg>';
 
         window.resolvePlayerImage = function(img, code) {
+            if (!code || code === 'undefined' || code === 'null' || code.trim() === '') {
+                img.onerror = null;
+                img.src = DEFAULT_SVG_PLACEHOLDER;
+                return;
+            }
             if (!img.dataset.tryIndex) {
                 img.dataset.tryIndex = "0";
             }
@@ -266,19 +345,34 @@
                 img.src = `../assets/faces/face_${code}.${extensions[currentIndex]}`;
             } else {
                 img.onerror = null;
-                img.src = 'placeholder.jpg';
+                img.src = DEFAULT_SVG_PLACEHOLDER;
             }
         };
 
         async function initPage() {
             try {
-                // Fetch seasons, players, countries and mini-games in parallel
-                const [uniqueSeasons, playersSnap, countriesSnap, minigamesSnap] = await Promise.all([
+                // Fetch seasons, players, countries, clubs and mini-games in parallel
+                const [uniqueSeasons, playersSnap, countriesSnap, clubsSnap, minigamesSnap] = await Promise.all([
                     fetchUniqueSeasons(db),
                     getDocs(collection(db, 'jogadores')),
                     getDocs(collection(db, 'paises')),
+                    getDocs(collection(db, 'clubes')),
                     getDoc(doc(db, 'settings', 'mini-ggames'))
                 ]);
+
+                // Inject clubs data for Cromo-ggames extension
+                let clubsDataEl = document.getElementById('ggames-clubs-data');
+                if (!clubsDataEl) {
+                    clubsDataEl = document.createElement('script');
+                    clubsDataEl.id = 'ggames-clubs-data';
+                    clubsDataEl.type = 'application/json';
+                    document.head.appendChild(clubsDataEl);
+                }
+                const clubsArray = clubsSnap.docs.map(d => ({
+                    nome: d.data().nome || '',
+                    nome_en: d.data().nome_en || ''
+                })).filter(c => c.nome);
+                clubsDataEl.textContent = JSON.stringify(clubsArray);
 
                 // Set seasons
                 seasons = uniqueSeasons;
@@ -305,6 +399,78 @@
                     id: d.id,
                     rawData: d.data()
                 }));
+
+                // Ponte de Comunicação com a Extensão Cromo-ggames
+                window.addEventListener('CROMO_GET_PAGE_INFO', (e) => {
+                    const seasonsList = seasons || [];
+                    const players = allRawPlayers || [];
+                    const reqSeason = e.detail?.targetSeason;
+                    const missingBySeason = {};
+
+                    seasonsList.forEach(s => {
+                        const count = players.filter(p => !hasPlayerDataForSeason(p.rawData, s)).length;
+                        missingBySeason[s] = count;
+                    });
+
+                    let playersMissingSeason = [];
+                    if (reqSeason) {
+                        playersMissingSeason = players
+                            .filter(p => !hasPlayerDataForSeason(p.rawData, reqSeason))
+                            .map(p => {
+                                const baseData = getPlayerSeasonData(p.rawData, seasons[0] || '2025/2026');
+                                return {
+                                    id: p.id,
+                                    nome: baseData.nome || 'Sem Nome',
+                                    clube: baseData.clube || '',
+                                    posicao: baseData.posicao || '',
+                                    pais: baseData.pais || countriesMap.get(baseData.paisId) || ''
+                                };
+                            });
+                    }
+
+                    window.dispatchEvent(new CustomEvent('CROMO_PAGE_INFO_RESPONSE', {
+                        detail: { seasons: seasonsList, missingBySeason, currentSeason, playersMissingSeason }
+                    }));
+                });
+
+                window.addEventListener('CROMO_OPEN_PLAYER_FOR_SEASON', (e) => {
+                    const playerId = e.detail?.playerId || e.detail?.id;
+                    const targetSeason = e.detail?.targetSeason || currentSeason;
+                    console.log('[EDITAR-JOGADOR] Evento CROMO_OPEN_PLAYER_FOR_SEASON recebido:', e.detail, '-> playerId:', playerId);
+                    const item = allRawPlayers.find(p => p.id === playerId);
+                    if (item) {
+                        const modalSeasonSelect = document.getElementById('modalSeasonSelect');
+                        if (modalSeasonSelect) modalSeasonSelect.value = targetSeason;
+                        selectPlayerForSeason(playerId, item.rawData, targetSeason);
+                        document.getElementById('edit-player-popup').classList.add('active');
+
+                        // Garantir que o campo estatísticas (Coeficientes) fica totalmente vazio para a nova época
+                        const playerStatsInput = document.getElementById('playerStats');
+                        if (playerStatsInput) playerStatsInput.value = '';
+
+                        const coefSection = document.getElementById('coeficientes-section');
+                        if (coefSection) coefSection.style.display = 'none';
+
+                        const coefDisplay = document.getElementById('firebase-data-display');
+                        if (coefDisplay) coefDisplay.innerHTML = '';
+                    } else {
+                        console.warn('[EDITAR-JOGADOR] CROMO_OPEN_PLAYER_FOR_SEASON: Jogador não encontrado com ID:', playerId);
+                    }
+                });
+
+                window.addEventListener('CROMO_SAVE_PLAYER_FORM', (e) => {
+                    console.log('[EDITAR-JOGADOR] Evento CROMO_SAVE_PLAYER_FORM recebido:', e.detail);
+                    const form = document.getElementById('editPlayerForm');
+                    if (form) {
+                        const playerStatsInput = document.getElementById('playerStats');
+                        if (playerStatsInput) playerStatsInput.value = '';
+                        form.requestSubmit();
+                    }
+                });
+
+                window.addEventListener('CROMO_CLOSE_PLAYER_MODAL', () => {
+                    closeEditModal();
+                });
 
                 // Render dynamic mini-games
                 const minigamesContainer = document.getElementById('minigames-container');
@@ -367,8 +533,9 @@
             const filteredRaw = allRawPlayers.filter(item => hasPlayerDataForSeason(item.rawData, season, defaultBaseSeason));
 
             allPlayers = filteredRaw.map(item => {
-                const sData = getPlayerSeasonData(item.rawData, season);
+                const sData = getPlayerSeasonData(item.rawData, season) || {};
                 return {
+                    ...sData,
                     id: item.id,
                     nome: sData.nome || 'Sem Nome',
                     paisId: sData.paisId || '',
@@ -387,11 +554,11 @@
                     dataNascimento: sData.dataNascimento || '',
                     altura: sData.altura || null,
                     miniGames: sData.miniGames || [],
-                    rawData: item.rawData,
-                    ...sData
+                    rawData: item.rawData
                 };
             });
 
+            currentPage = 1;
             populateFilters();
             renderPlayersTable();
         }
@@ -443,11 +610,6 @@
                 return matchesSearch && matchesPais && matchesPosicao;
             });
 
-            if (filtered.length === 0) {
-                tableBody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #8892b0; padding: 20px;">Nenhum jogador encontrado para a temporada selecionada.</td></tr>`;
-                return;
-            }
-
             filtered.sort((a, b) => {
                 let valA = a[currentSortColumn] || '';
                 let valB = b[currentSortColumn] || '';
@@ -460,62 +622,130 @@
                 }
 
                 return currentSortDirection === 'asc' ? comparison : -comparison;
-            }).forEach(p => {
-                const tr = document.createElement('tr');
-                
-                const posClassMap = {
-                    'Guarda-Redes': 'guarda-redes',
-                    'Defesa': 'defesa',
-                    'Médio': 'medio',
-                    'Avançado': 'avancado'
-                };
-                const badgeClass = posClassMap[p.posicao] || '';
-
-                const displayImg = p.imagem ? (p.imagem.startsWith('http') || p.imagem.startsWith('data:') ? p.imagem : '../' + p.imagem) : 'placeholder.jpg';
-                const isChecked = p.ativo !== false ? 'checked' : '';
-                
-                const codeMatch = p.imagem ? p.imagem.match(/face_(.+)\.(webp|png|jpe?g|svg)/i) : null;
-                const playerCode = codeMatch ? codeMatch[1] : p.codigoUrl;
-
-                tr.innerHTML = `
-                    <td>
-                        <img src="${displayImg}" class="player-row-img" onerror="resolvePlayerImage(this, '${playerCode}')">
-                        <span class="player-row-name">${p.nome}</span>
-                    </td>
-                    <td>${p.paisNome}</td>
-                    <td>${p.clube}</td>
-                    <td><span class="pos-badge ${badgeClass}">${p.posicao}</span></td>
-                    <td style="text-align: center; font-weight: bold; color: #2ecc71;">${p.overall || 0}</td>
-                    <td style="text-align: center;">
-                        <label class="table-switch">
-                            <input type="checkbox" class="ativo-toggle" ${isChecked}>
-                            <span class="table-slider"></span>
-                        </label>
-                    </td>
-                `;
-                
-                const toggleSwitch = tr.querySelector('.table-switch');
-                toggleSwitch.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                });
-                const toggleInput = tr.querySelector('.ativo-toggle');
-                toggleInput.addEventListener('change', async (e) => {
-                    const activeState = e.target.checked;
-                    try {
-                        const playerRef = doc(db, 'jogadores', p.id);
-                        const updatePayload = buildPlayerSeasonUpdatePayload(currentSeason, { ...p, ativo: activeState });
-                        await setDoc(playerRef, updatePayload, { merge: true });
-                        p.ativo = activeState; // Update local cache
-                    } catch (err) {
-                        console.error("Erro ao atualizar o estado ativo do jogador:", err);
-                        e.target.checked = !activeState; // Revert
-                    }
-                });
-                
-                tr.addEventListener('click', () => openEditModal(p));
-                tableBody.appendChild(tr);
             });
+
+            const totalItems = filtered.length;
+            const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE) || 1;
+
+            if (currentPage > totalPages) currentPage = totalPages;
+            if (currentPage < 1) currentPage = 1;
+
+            const startIndex = totalItems > 0 ? (currentPage - 1) * ITEMS_PER_PAGE : 0;
+            const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, totalItems);
+            const pageItems = filtered.slice(startIndex, endIndex);
+
+            if (totalItems === 0) {
+                tableBody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #8892b0; padding: 20px;">Nenhum jogador encontrado para a temporada selecionada.</td></tr>`;
+            } else {
+                pageItems.forEach(p => {
+                    const tr = document.createElement('tr');
+                    
+                    const posClassMap = {
+                        'Guarda-Redes': 'guarda-redes',
+                        'Defesa': 'defesa',
+                        'Médio': 'medio',
+                        'Avançado': 'avancado'
+                    };
+                    const badgeClass = posClassMap[p.posicao] || '';
+
+                    const displayImg = p.imagem ? (p.imagem.startsWith('http') || p.imagem.startsWith('data:') ? p.imagem : '../' + p.imagem) : 'placeholder.jpg';
+                    const isChecked = p.ativo !== false ? 'checked' : '';
+                    
+                    const codeMatch = p.imagem ? p.imagem.match(/face_(.+)\.(webp|png|jpe?g|svg)/i) : null;
+                    const playerCode = codeMatch ? codeMatch[1] : p.codigoUrl;
+
+                    tr.innerHTML = `
+                        <td>
+                            <img src="${displayImg}" class="player-row-img" onerror="resolvePlayerImage(this, '${playerCode}')">
+                            <span class="player-row-name">${p.nome}</span>
+                        </td>
+                        <td>${p.paisNome}</td>
+                        <td>${p.clube}</td>
+                        <td><span class="pos-badge ${badgeClass}">${p.posicao}</span></td>
+                        <td style="text-align: center; font-weight: bold; color: #2ecc71;">${p.overall || 0}</td>
+                        <td style="text-align: center;">
+                            <label class="table-switch">
+                                <input type="checkbox" class="ativo-toggle" ${isChecked}>
+                                <span class="table-slider"></span>
+                            </label>
+                        </td>
+                    `;
+                    
+                    const toggleSwitch = tr.querySelector('.table-switch');
+                    toggleSwitch.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                    });
+                    const toggleInput = tr.querySelector('.ativo-toggle');
+                    toggleInput.addEventListener('change', async (e) => {
+                        const activeState = e.target.checked;
+                        try {
+                            const playerRef = doc(db, 'jogadores', p.id);
+                            const updatePayload = buildPlayerSeasonUpdatePayload(currentSeason, { ...p, ativo: activeState });
+                            await setDoc(playerRef, updatePayload, { merge: true });
+                            p.ativo = activeState; // Update local cache
+                        } catch (err) {
+                            console.error("Erro ao atualizar o estado ativo do jogador:", err);
+                            e.target.checked = !activeState; // Revert
+                        }
+                    });
+                    
+                    tr.addEventListener('click', () => openEditModal(p));
+                    tableBody.appendChild(tr);
+                });
+            }
+
+            renderPagination(totalItems, totalPages);
         }
+
+        function renderPagination(totalItems, totalPages) {
+            const container = document.getElementById('pagination-controls');
+            if (!container) return;
+
+            if (totalItems === 0) {
+                container.innerHTML = `<div class="pagination-info">Sem resultados</div>`;
+                return;
+            }
+
+            const startIndex = (currentPage - 1) * ITEMS_PER_PAGE + 1;
+            const endIndex = Math.min(currentPage * ITEMS_PER_PAGE, totalItems);
+
+            let buttonsHtml = '';
+            
+            // Button Previous
+            buttonsHtml += `<button class="pagination-btn" ${currentPage === 1 ? 'disabled' : ''} onclick="window.changeEditPage(${currentPage - 1})"><i class="fas fa-chevron-left"></i> Anterior</button>`;
+
+            // Page numbers
+            let pagesToDisplay = [];
+            for (let i = 1; i <= totalPages; i++) {
+                if (i === 1 || i === totalPages || (i >= currentPage - 1 && i <= currentPage + 1)) {
+                    pagesToDisplay.push(i);
+                }
+            }
+
+            let lastPage = 0;
+            pagesToDisplay.forEach(p => {
+                if (lastPage > 0 && p - lastPage > 1) {
+                    buttonsHtml += `<span class="pagination-ellipsis">...</span>`;
+                }
+                buttonsHtml += `<button class="pagination-btn ${p === currentPage ? 'active' : ''}" onclick="window.changeEditPage(${p})">${p}</button>`;
+                lastPage = p;
+            });
+
+            // Button Next
+            buttonsHtml += `<button class="pagination-btn" ${currentPage === totalPages ? 'disabled' : ''} onclick="window.changeEditPage(${currentPage + 1})">Próxima <i class="fas fa-chevron-right"></i></button>`;
+
+            container.innerHTML = `
+                <div class="pagination-info">Mostrando <strong>${startIndex}</strong> a <strong>${endIndex}</strong> de <strong>${totalItems}</strong> jogadores</div>
+                <div class="pagination-controls">${buttonsHtml}</div>
+            `;
+        }
+
+        window.changeEditPage = function(page) {
+            currentPage = page;
+            renderPlayersTable();
+            const tableEl = document.querySelector('.table-container');
+            if (tableEl) tableEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        };
 
         function updateSortHeaders() {
             const headers = document.querySelectorAll('.excel-table th[data-sort]');
@@ -535,6 +765,10 @@
         }
 
         function openEditModal(player) {
+            console.log('[EDITAR-JOGADOR] openEditModal chamado com player:', player);
+            if (!player || !player.id) {
+                console.error('[EDITAR-JOGADOR] Erro: Objeto player sem id válido!', player);
+            }
             const modalSeasonSelect = document.getElementById('modalSeasonSelect');
             if (modalSeasonSelect) {
                 modalSeasonSelect.value = currentSeason;
@@ -544,6 +778,7 @@
         }
 
         function closeEditModal() {
+            console.log('[EDITAR-JOGADOR] closeEditModal chamado. Limpando selectedPlayerId.');
             document.getElementById('edit-player-popup').classList.remove('active');
             document.getElementById('editPlayerForm').reset();
             document.getElementById('imagePreview').src = "";
@@ -571,7 +806,11 @@
         }
 
         async function selectPlayerForSeason(playerId, rawData, season) {
+            console.log('[EDITAR-JOGADOR] selectPlayerForSeason -> Atribuindo selectedPlayerId =', playerId, '(época:', season, ')');
             selectedPlayerId = playerId;
+            if (!playerId) {
+                console.warn('[EDITAR-JOGADOR] ATENÇÃO: playerId é nulo ou indefinido ao selecionar jogador!');
+            }
             const player = getPlayerSeasonData(rawData, season);
 
             document.getElementById('playerName').value = player.nome || 'Sem Nome';
@@ -581,14 +820,14 @@
                 const match = player.imagem.match(/face_(.+)\.(webp|png|jpe?g|svg)/i);
                 if (match) ext = match[2];
             }
-            const imagePreview = document.getElementById('imagePreview');
+            const DEFAULT_PLACEHOLDER = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="100%" height="100%" fill="%23161c28"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%238892b0" font-size="11">Sem Imagem</text></svg>';
             imagePreview.removeAttribute('data-try-index');
-            if (player.codigoUrl) {
+            if (player.codigoUrl && player.codigoUrl.trim() !== '') {
                 imagePreview.onerror = () => window.resolvePlayerImage(imagePreview, player.codigoUrl);
                 imagePreview.src = player.imagem ? (player.imagem.startsWith('http') || player.imagem.startsWith('data:') ? player.imagem : '../' + player.imagem) : `../assets/faces/face_${player.codigoUrl}.${ext}`;
             } else {
                 imagePreview.onerror = null;
-                imagePreview.src = 'placeholder.jpg';
+                imagePreview.src = DEFAULT_PLACEHOLDER;
             }
             document.getElementById('playerPrice').value = player.preco || '';
             document.getElementById('playerBuyer').value = player.compradopor || '';
@@ -606,6 +845,7 @@
             document.getElementById('playerTier').value = player.casta || 'Jogador Bronze';
             document.getElementById('playerMarket').value = player.noMercado ? 'Sim' : 'Não';
             document.getElementById('playerActive').value = player.ativo !== false ? 'Sim' : 'Não';
+            document.getElementById('playerRetired').value = player.retirado ? 'Sim' : 'Não';
             document.getElementById('playerStats').value = player.estatisticas || '';
             document.getElementById('playerPosition').value = player.posicao || '';
             document.getElementById('playerBirthDate').value = player.dataNascimento || '';
@@ -808,11 +1048,12 @@
             const modalSeasonSelect = document.getElementById('modalSeasonSelect');
             if (modalSeasonSelect) {
                 modalSeasonSelect.addEventListener('change', (e) => {
-                    const chosenModalSeason = e.target.value;
+                    const targetSeason = e.target.value;
+                    console.log('[EDITAR-JOGADOR] modalSeasonSelect alterado para:', targetSeason, 'selectedPlayerId:', selectedPlayerId);
                     if (selectedPlayerId) {
-                        const rawDoc = allRawPlayers.find(p => p.id === selectedPlayerId);
-                        if (rawDoc) {
-                            selectPlayerForSeason(rawDoc.id, rawDoc.rawData, chosenModalSeason);
+                        const item = allRawPlayers.find(p => p.id === selectedPlayerId);
+                        if (item) {
+                            selectPlayerForSeason(selectedPlayerId, item.rawData, targetSeason);
                         }
                     }
                 });
@@ -823,16 +1064,19 @@
             const playerClub = document.getElementById('playerClub');
 
             tableSearch.addEventListener('input', () => {
+                currentPage = 1;
                 renderPlayersTable();
             });
 
             const filterPaisSelect = document.getElementById('filter-pais');
             filterPaisSelect.addEventListener('change', () => {
+                currentPage = 1;
                 renderPlayersTable();
             });
 
             const filterPosicaoSelect = document.getElementById('filter-posicao');
             filterPosicaoSelect.addEventListener('change', () => {
+                currentPage = 1;
                 renderPlayersTable();
             });
 
@@ -863,7 +1107,7 @@
                     imagePreview.src = `../assets/faces/face_${code}.webp`;
                 } else {
                     imagePreview.onerror = null;
-                    imagePreview.src = 'placeholder.jpg';
+                    imagePreview.src = DEFAULT_SVG_PLACEHOLDER;
                 }
             });
 
@@ -898,7 +1142,12 @@
                 if (searchTerm.length < 1) { document.getElementById('clubResults').style.display = 'none'; return; }
                 const snapshot = await getDocs(collection(db, 'clubes'));
                 const clubs = [];
-                snapshot.forEach(doc => { if (doc.data().nome.toLowerCase().includes(searchTerm)) clubs.push(doc.data()); });
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    if ((data.nome || '').toLowerCase().includes(searchTerm) || (data.nome_en || '').toLowerCase().includes(searchTerm)) {
+                        clubs.push(data);
+                    }
+                });
                 displayClubResults(clubs);
             });
 
@@ -912,18 +1161,70 @@
                 }
             });
 
+            document.querySelectorAll('button[form="editPlayerForm"], .btn-edit').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    console.log('[EDITAR-JOGADOR] Botão "Editar Jogador" clicado:', e.target);
+                    const isNativeSubmit = btn.type === 'submit' && btn.getAttribute('form') === 'editPlayerForm';
+                    if (!isNativeSubmit) {
+                        const form = document.getElementById('editPlayerForm');
+                        if (form) {
+                            console.log('[EDITAR-JOGADOR] Executando form.requestSubmit() via script');
+                            form.requestSubmit();
+                        } else {
+                            console.warn('[EDITAR-JOGADOR] Formulário editPlayerForm não encontrado!');
+                        }
+                    } else {
+                        console.log('[EDITAR-JOGADOR] O botão é de submit nativo; o envio ocorrerá via evento de formulário.');
+                    }
+                });
+            });
+
+            let isSubmitting = false;
+
             document.getElementById('editPlayerForm').addEventListener('submit', async (e) => {
                 e.preventDefault();
-                if (!selectedPlayerId) return;
+                console.log('[EDITAR-JOGADOR] Evento submit disparado para o formulário.');
+                
+                if (isSubmitting) {
+                    console.warn('[EDITAR-JOGADOR] Submissão já em andamento. Ignorando envio duplicado.');
+                    return;
+                }
+
+                const playerIdToSave = selectedPlayerId;
+                console.log('[EDITAR-JOGADOR] playerIdToSave:', playerIdToSave);
+                if (!playerIdToSave) {
+                    console.warn('[EDITAR-JOGADOR] Operação cancelada: selectedPlayerId é nulo ou indefinido.');
+                    return;
+                }
+
+                const currentNameVal = (document.getElementById('playerName')?.value || '').trim();
+                const currentNameLower = currentNameVal.toLowerCase();
+                if (!currentNameVal || currentNameLower === 'sem nome' || currentNameLower === 'sem_nome' || currentNameLower === 'sem-nome') {
+                    alert('⚠️ [BLOQUEIO DE SEGURANÇA] O nome do jogador está vazio ou como "Sem Nome"! O processo foi imediatamente BLOQUEADO e a gravação cancelada.');
+                    console.error('[EDITAR-JOGADOR] Gravação bloqueada devido a nome inválido:', currentNameVal);
+                    return;
+                }
+
+                const submitBtns = document.querySelectorAll('button[form="editPlayerForm"], .btn-edit');
                 try {
+                    isSubmitting = true;
+                    submitBtns.forEach(btn => btn.disabled = true);
+
                     const targetModalSeason = document.getElementById('modalSeasonSelect')?.value || currentSeason;
                     const countryName = document.getElementById('playerCountry').value;
                     const newClubName = document.getElementById('playerClub').value;
-                    const playerRef = doc(db, 'jogadores', selectedPlayerId);
+                    const playerRef = doc(db, 'jogadores', playerIdToSave);
+                    console.log('[EDITAR-JOGADOR] Dados iniciais do form:', {
+                        targetModalSeason,
+                        countryName,
+                        newClubName,
+                        playerIdToSave
+                    });
 
                     let paisId = null;
                     const paisSnapshot = await getDocs(query(collection(db, 'paises'), where('nome', '==', countryName)));
                     if (!paisSnapshot.empty) paisId = paisSnapshot.docs[0].id;
+                    console.log('[EDITAR-JOGADOR] País resolvido ID:', paisId);
 
                     let clubeId = null; 
                     if (newClubName) {
@@ -932,6 +1233,7 @@
                             clubeId = clubeSnapshot.docs[0].id;
                         }
                     }
+                    console.log('[EDITAR-JOGADOR] Clube resolvido ID:', clubeId);
 
                     const miniGamesPrices = {};
                     document.querySelectorAll('.mini-game-checkbox').forEach(cb => {
@@ -944,7 +1246,7 @@
                         }
                     });
 
-                    const rawItem = allRawPlayers.find(p => p.id === selectedPlayerId);
+                    const rawItem = allRawPlayers.find(p => p.id === playerIdToSave);
                     const oldSeasonData = getPlayerSeasonData(rawItem ? rawItem.rawData : null, targetModalSeason);
                     const oldMiniGames = oldSeasonData?.miniGames || {};
                     let newMiniGamesObj = {};
@@ -982,14 +1284,17 @@
                             ext = extMatch[1].toLowerCase();
                         }
                     }
+                    const isRetired = document.getElementById('playerRetired')?.value === 'Sim';
+
                     const playerData = {
                         nome: document.getElementById('playerName').value,
                         codigoUrl: imageCode,
                         imagem: imageCode ? `assets/faces/face_${imageCode}.${ext}` : '',
                         pais: countryName, 
                         paisId: paisId, 
-                        clube: newClubName,
-                        clubeId: clubeId, 
+                        clube: isRetired ? '' : newClubName,
+                        clubeId: isRetired ? '' : clubeId, 
+                        retirado: isRetired,
                         posicao: document.getElementById('playerPosition').value,
                         dataNascimento: document.getElementById('playerBirthDate').value,
                         altura: parseFloat(document.getElementById('playerHeight').value) || null,
@@ -1005,19 +1310,31 @@
                         ultimaAtualizacao: new Date().toISOString()
                     };
 
+                    console.log('[EDITAR-JOGADOR] Objeto playerData montado:', playerData);
+
                     const updatePayload = buildPlayerSeasonUpdatePayload(targetModalSeason, playerData);
+                    console.log('[EDITAR-JOGADOR] Payload final para setDoc (buildPlayerSeasonUpdatePayload):', updatePayload);
+
+                    console.log('[EDITAR-JOGADOR] A guardar no Firestore no doc jogadores/', playerIdToSave, '...');
                     await setDoc(playerRef, updatePayload, { merge: true });
+                    console.log('[EDITAR-JOGADOR] Guardado com sucesso no doc de jogadores!');
 
                     if (originalClubName !== newClubName) {
+                        console.log('[EDITAR-JOGADOR] Clube foi alterado. De:', originalClubName, 'Para:', newClubName);
                         if (originalClubName) {
                             const oldClubSnapshot = await getDocs(query(collection(db, 'clubes'), where('nome', '==', originalClubName)));
-                            if (!oldClubSnapshot.empty) await deleteDoc(doc(db, 'clubes', oldClubSnapshot.docs[0].id, 'jogadores', selectedPlayerId));
+                            if (!oldClubSnapshot.empty) {
+                                console.log('[EDITAR-JOGADOR] A remover jogador do clube antigo:', oldClubSnapshot.docs[0].id);
+                                await deleteDoc(doc(db, 'clubes', oldClubSnapshot.docs[0].id, 'jogadores', playerIdToSave));
+                            }
                         }
                         if (newClubName && clubeId) {
-                            await setDoc(doc(db, 'clubes', clubeId, 'jogadores', selectedPlayerId), playerData);
+                            console.log('[EDITAR-JOGADOR] A adicionar jogador ao novo clube:', clubeId);
+                            await setDoc(doc(db, 'clubes', clubeId, 'jogadores', playerIdToSave), playerData);
                         }
                     } else if (newClubName && clubeId) {
-                        await setDoc(doc(db, 'clubes', clubeId, 'jogadores', selectedPlayerId), playerData, { merge: true });
+                        console.log('[EDITAR-JOGADOR] A atualizar dados no clube existente:', clubeId);
+                        await setDoc(doc(db, 'clubes', clubeId, 'jogadores', playerIdToSave), playerData, { merge: true });
                     }
                     
                     // Update cache local
@@ -1028,12 +1345,17 @@
                         };
                     }
 
+                    console.log('[EDITAR-JOGADOR] Sucesso total! A fechar modal e re-renderizar tabela.');
                     closeEditModal();
                     processPlayersAndRender();
                     
                 } catch (error) {
-                    console.error('Erro ao atualizar jogador:', error);
-                    alert('Erro ao atualizar jogador');
+                    console.error('[EDITAR-JOGADOR] Erro ao atualizar jogador:', error);
+                    const errorDetail = error && error.message ? error.message : String(error);
+                    alert(`🛑 NÃO FOI POSSÍVEL GRAVAR O JOGADOR!\n\nMOTIVO DA FALHA:\n${errorDetail}\n\nPor favor, corrija este problema e tente novamente.`);
+                } finally {
+                    isSubmitting = false;
+                    submitBtns.forEach(btn => btn.disabled = false);
                 }
             });
 

@@ -4,6 +4,8 @@ import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/
 import { doc, getDoc, collection, getDocs, query, orderBy, limit, where, updateDoc, addDoc, serverTimestamp, onSnapshot, writeBatch, increment } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 import { buildUserPredictionStats, renderUserStats } from "./profile-stats.js";
 import { initProfileNotifications } from "./profile-notifications.js";
+import { compactSeason, getLatestSeason, getSeasonData, mergeUserSeasonData } from "../core/user-season.js";
+import { checkPageContentAccess } from "../js/page-content-guard.js";
 
 const functions = getFunctions(app, 'us-central1');
 
@@ -283,6 +285,8 @@ if (debtDisplay) {
 
 // Check Firebase panel settings for myths visibility
 const checkMythsVisibility = async () => {
+    if (!auth.currentUser) return;
+
     try {
         const painelDoc = await getDoc(doc(db, 'paineis', 'paineis perfil'));
         if (painelDoc.exists()) {
@@ -499,21 +503,6 @@ async function loadBancaValue() {
     }
 }
 
-function findLatestGcoinsField(userData) {
-    let latestSeason = 0;
-    let latestGcoinsField = null;
-    for (const key in userData) {
-        if (key.endsWith('GCoins')) {
-            const season = parseInt(key.slice(0, 8));
-            if (!isNaN(season) && season > latestSeason) {
-                latestSeason = season;
-                latestGcoinsField = key;
-            }
-        }
-    }
-    return latestGcoinsField;
-}
-
 async function loadUserDebts() {
     const user = auth.currentUser;
     if (!user) return;
@@ -553,23 +542,16 @@ async function updateGCoinsDisplay() {
 
     if (user) {
         try {
-            const configRef = doc(db, 'paineis', 'configuracoes_gerais');
             const userRef = doc(db, 'users', user.uid);
-            
-            const [configSnap, userSnap] = await Promise.all([
-                getDoc(configRef),
+
+            const [seasonLabel, userSnap] = await Promise.all([
+                getLatestSeason(db),
                 getDoc(userRef)
             ]);
 
             if (userSnap.exists()) {
-                const userData = userSnap.data();
-                const temporadaAtual = configSnap.exists() ? configSnap.data().temporadaAtual : '';
-                
-                if (temporadaAtual) {
-                    const seasonString = temporadaAtual.replace('/', '');
-                    const gcoinsField = seasonString + 'GCoins';
-                    
-                    const gcoins = userData[gcoinsField] || 0;
+                if (seasonLabel) {
+                    const gcoins = getSeasonData(userSnap.data(), seasonLabel).GCoins || 0;
                     gcoinsValue.textContent = gcoins.toFixed(0);
 
                     return gcoins; 
@@ -735,6 +717,10 @@ onAuthStateChanged(auth, async (user) => {
     // Se o utilizador estiver autenticado, prossiga
     if (user) {
         try {
+            // Inicializa as notificações antes dos restantes carregamentos do perfil.
+            // Assim, um erro noutra secção não impede o registo do dispositivo.
+            await initProfileNotifications(user);
+
             // Inicia um listener em tempo real para as configurações do painel de perfil
             const panelDocRef = doc(db, 'paineis', 'paineis perfil');
             isInitialPanelLoad = true; // Flag para ignorar a primeira chamada do listener (que é o estado inicial)
@@ -778,12 +764,27 @@ onAuthStateChanged(auth, async (user) => {
             }
 
             await logUserAction(`Entrou em ${document.title}`);
-            const userData = userDocSnap.data();
+            const latestSeason = await getLatestSeason(db);
+            const userData = mergeUserSeasonData(userDocSnap.data(), latestSeason);
             const userStatus = userData.estatuto || null;
+
+            if (testMockBtn) {
+                testMockBtn.style.display = userStatus === 'ruler' ? 'inline-block' : 'none';
+            }
 
             if (menuSettings.profile !== 'on' && userStatus !== 'ruler') {
                 loadingScreen.style.display = 'none';
                 window.location.href = '404.html';
+                return;
+            }
+
+            if (typeof updateMenuVisibility === 'function' && menuSettings) {
+                updateMenuVisibility(menuSettings); // Controla APENAS o menu inferior
+            }
+
+            const hasContentAccess = await checkPageContentAccess('profile', userStatus, db);
+            if (!hasContentAccess) {
+                loadingScreen.style.display = 'none';
                 return;
             }
 
@@ -794,10 +795,6 @@ onAuthStateChanged(auth, async (user) => {
                 console.error("Erro ao atualizar o campo ultimoacesso: ", error);
             }
 
-            // Aplica as configurações de visibilidade (agora corretamente separadas)
-            if (typeof updateMenuVisibility === 'function') {
-                updateMenuVisibility(menuSettings); // Controla APENAS o menu inferior
-            }
             initialPanelSettings = panelSettings; // Guarda as configurações iniciais para o listener
 
             if (panelSettings) {
@@ -835,7 +832,6 @@ onAuthStateChanged(auth, async (user) => {
 
             // --- CARREGAR MINI-GAMES DINÂMICOS ---
             await loadDynamicMiniGames(userData);
-            await initProfileNotifications(user);
 
             // --- CARREGAR CAIXA DE ENTRADA (PROPOSTAS) ---
             if (panelSettings && panelSettings.inbox === 'on') {
@@ -987,6 +983,8 @@ async function initUserPredictions(userId) {
                 tabButtons.forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 const group = parseInt(btn.dataset.group);
+                const tabLabel = btn.querySelector('span')?.textContent?.trim() || `Grupo ${group}`;
+                logUserAction(`Mudou a aba de estatísticas no perfil para: ${tabLabel}`);
                 renderActiveTabPredictions(group);
             });
         });
@@ -1144,7 +1142,8 @@ if (testMockBtn && testMockContainer && testMockSelect) {
             try {
                 const simUserSnap = await getDoc(doc(db, 'users', selectedId));
                 if (simUserSnap.exists()) {
-                    await loadDynamicMiniGames(simUserSnap.data());
+                    const latestSeason = await getLatestSeason(db);
+                    await loadDynamicMiniGames(mergeUserSeasonData(simUserSnap.data(), latestSeason));
                 }
             } catch (err) {
                 console.error("Erro ao carregar mini-games para utilizador simulado:", err);
@@ -1238,18 +1237,112 @@ function parseInboxMessage(text) {
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
 
-    // Replace images: ![alt](url)
+    // Replace images: ![alt](url) - Protected against contextmenu / drag / URL copy
     escaped = escaped.replace(/!\[(.*?)\]\((.*?)\)/g, (match, alt, url) => {
-        return `<img src="${url}" alt="${alt}" style="max-width: 100%; max-height: 250px; object-fit: contain; border-radius: 8px; margin-top: 8px; display: block; border: 1.5px solid rgba(255,255,255,0.1);">`;
+        return `<img src="${url}" alt="${alt}" draggable="false" oncontextmenu="return false;" onselectstart="return false;" style="max-width: 100%; max-height: 250px; object-fit: contain; border-radius: 8px; margin-top: 8px; display: block; border: 1.5px solid rgba(255,255,255,0.1); pointer-events: none; -webkit-user-drag: none; -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none;">`;
     });
 
-    // Replace links: [text](url)
-    escaped = escaped.replace(/\[(.*?)\]\((.*?)\)/g, (match, label, url) => {
+    // Replace manual links FIRST: [text](manual:id)
+    escaped = escaped.replace(/\[([^\]]+)\]\((manual:[^\)]+)\)/gi, (match, label, url) => {
+        const manualId = url.replace(/manual:/i, '').trim();
+        return `<a href="#" class="inbox-manual-link" data-manual-id="${manualId}" style="color: #ffb703; text-decoration: underline; font-weight: 700; cursor: pointer; padding: 0 2px;"><i class="fas fa-book" style="font-size: 11px; margin-right: 4px;"></i>${label}</a>`;
+    });
+
+    // Replace standard links SECOND: [text](url)
+    escaped = escaped.replace(/\[([^\]]+)\]\(([^\)]+)\)/gi, (match, label, url) => {
         return `<a href="${url}" target="_blank" style="color: #ffb703; text-decoration: underline; font-weight: 600;">${label}</a>`;
     });
 
     return escaped;
 }
+
+// Bloquear clique direito e arrastar imagens na caixa de entrada para impedir copiar URL
+document.addEventListener('contextmenu', (e) => {
+    if (e.target.closest('#inboxSection img, #inboxGrid img, .inbox-card img, #manualPreviewBody img')) {
+        e.preventDefault();
+        return false;
+    }
+}, true);
+
+document.addEventListener('dragstart', (e) => {
+    if (e.target.closest('#inboxSection img, #inboxGrid img, .inbox-card img, #manualPreviewBody img')) {
+        e.preventDefault();
+        return false;
+    }
+}, true);
+
+async function openManualPreviewModal(manualId) {
+    let modal = document.getElementById('inboxManualPreviewModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'inboxManualPreviewModal';
+        modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(5px); z-index: 99999; display: flex; align-items: center; justify-content: center; padding: 20px;';
+        document.body.appendChild(modal);
+    }
+
+    modal.innerHTML = `
+        <div style="background: #161b26; border: 1.5px solid #ffb703; border-radius: 16px; width: 90%; max-width: 600px; max-height: 85vh; display: flex; flex-direction: column; box-shadow: 0 15px 35px rgba(0,0,0,0.6); overflow: hidden;">
+            <div style="padding: 18px 24px; border-bottom: 1px solid rgba(255,255,255,0.08); display: flex; justify-content: space-between; align-items: center; background: #111622;">
+                <h3 id="manualPreviewTitle" style="color: #ffb703; font-size: 18px; font-weight: 700; margin: 0; display: flex; align-items: center; gap: 8px;"><i class="fas fa-spinner fa-spin"></i> A carregar...</h3>
+                <button id="closeManualPreviewBtn" style="background: none; border: none; color: #8892b0; font-size: 22px; cursor: pointer; transition: color 0.2s;"><i class="fas fa-times"></i></button>
+            </div>
+            <div id="manualPreviewBody" style="padding: 20px 24px; overflow-y: auto; flex: 1; color: #e2e8f0; font-size: 14px; line-height: 1.6;">
+                <p style="text-align: center; color: #8892b0;"><i class="fas fa-spinner fa-spin"></i> A carregar informação do Manual...</p>
+            </div>
+            <div style="padding: 16px 24px; border-top: 1px solid rgba(255,255,255,0.08); background: #111622; display: flex; justify-content: flex-end; align-items: center; gap: 12px;">
+                <button id="closeManualPreviewSecondaryBtn" style="background: rgba(255,255,255,0.08); color: #e2e8f0; border: none; padding: 10px 18px; border-radius: 8px; font-weight: 600; cursor: pointer;">Fechar</button>
+                <a id="goToManualBtn" href="manual.html?item=${manualId}" style="background: linear-gradient(135deg, #ffb703, #e69c00); color: #090c10; text-decoration: none; padding: 10px 18px; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 4px 15px rgba(255, 183, 3, 0.25);">ver mais no Manual <i class="fas fa-chevron-right"></i></a>
+            </div>
+        </div>
+    `;
+
+    modal.style.display = 'flex';
+
+    const closeBtn = modal.querySelector('#closeManualPreviewBtn');
+    const closeSecBtn = modal.querySelector('#closeManualPreviewSecondaryBtn');
+    const closeModalHandler = () => { modal.style.display = 'none'; };
+    closeBtn.addEventListener('click', closeModalHandler);
+    closeSecBtn.addEventListener('click', closeModalHandler);
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeModalHandler();
+    });
+
+    try {
+        const docSnap = await getDoc(doc(db, 'manual', manualId));
+        const titleEl = modal.querySelector('#manualPreviewTitle');
+        const bodyEl = modal.querySelector('#manualPreviewBody');
+
+        if (docSnap.exists()) {
+            const data = docSnap.data();
+            titleEl.innerHTML = `<i class="fas fa-book"></i> ${data.title || 'Informação do Manual'}`;
+            bodyEl.innerHTML = `
+                ${data.type ? `<span style="display: inline-block; background: rgba(255, 183, 3, 0.15); color: #ffb703; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; text-transform: uppercase; margin-bottom: 12px;">${data.type}</span>` : ''}
+                <div>${data.content || '<p style="color: #8892b0;">Sem conteúdo disponível.</p>'}</div>
+            `;
+        } else {
+            titleEl.innerHTML = `<i class="fas fa-exclamation-triangle" style="color: #e74c3c;"></i> Item não encontrado`;
+            bodyEl.innerHTML = `<p style="color: #e74c3c;">O conteúdo especificado do manual não foi encontrado ou foi removido.</p>`;
+        }
+    } catch (err) {
+        console.error("Erro ao carregar item do manual:", err);
+        const titleEl = modal.querySelector('#manualPreviewTitle');
+        const bodyEl = modal.querySelector('#manualPreviewBody');
+        titleEl.innerHTML = `<i class="fas fa-exclamation-circle" style="color: #e74c3c;"></i> Erro`;
+        bodyEl.innerHTML = `<p style="color: #e74c3c;">Não foi possível carregar as informações do manual.</p>`;
+    }
+}
+
+document.addEventListener('click', (e) => {
+    const manualLink = e.target.closest('.inbox-manual-link');
+    if (manualLink) {
+        e.preventDefault();
+        e.stopPropagation();
+        const manualId = manualLink.dataset.manualId;
+        if (manualId) {
+            openManualPreviewModal(manualId);
+        }
+    }
+});
 
 let inboxUnsubscribe = null;
 
@@ -1316,6 +1409,44 @@ function showInboxConfirm(message, onConfirm, onCancel) {
     }
 }
 
+function formatInboxDate(rawDate) {
+    if (!rawDate) return '';
+    let d = null;
+    if (typeof rawDate.toDate === 'function') {
+        d = rawDate.toDate();
+    } else if (rawDate && typeof rawDate.seconds === 'number') {
+        d = new Date(rawDate.seconds * 1000);
+    } else if (rawDate instanceof Date) {
+        d = rawDate;
+    } else if (typeof rawDate === 'string' || typeof rawDate === 'number') {
+        d = new Date(rawDate);
+    }
+    if (!d || isNaN(d.getTime())) return '';
+    
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    
+    return `${day}/${month}/${year} ${hours}:${minutes}`;
+}
+
+function isScheduledInFuture(data) {
+    if (!data || !data.dataAgendada) return false;
+    let scheduledMs = 0;
+    if (typeof data.dataAgendada.toMillis === 'function') {
+        scheduledMs = data.dataAgendada.toMillis();
+    } else if (data.dataAgendada && typeof data.dataAgendada.seconds === 'number') {
+        scheduledMs = data.dataAgendada.seconds * 1000;
+    } else if (typeof data.dataAgendada === 'number') {
+        scheduledMs = data.dataAgendada;
+    } else if (typeof data.dataAgendada === 'string') {
+        scheduledMs = new Date(data.dataAgendada).getTime();
+    }
+    return scheduledMs > Date.now();
+}
+
 async function loadInbox(userId) {
     const inboxSection = document.getElementById('inboxSection');
     const inboxGrid = document.getElementById('inboxGrid');
@@ -1332,11 +1463,8 @@ async function loadInbox(userId) {
         
         inboxUnsubscribe = onSnapshot(q, async (snapshot) => {
             inboxSection.style.display = 'block';
-            const bottomMenuBadge = document.querySelector('[data-menu-key="profile"] .menu-badge');
-
             if (snapshot.empty) {
                 if (inboxBadge) inboxBadge.style.display = 'none';
-                if (bottomMenuBadge) bottomMenuBadge.style.display = 'none';
                 inboxGrid.innerHTML = `<div class="inbox-status-msg" style="color: #8892b0; grid-column: 1 / -1; font-size: 14px;">Sem propostas pendentes de momento.</div>`;
                 return;
             }
@@ -1346,6 +1474,9 @@ async function loadInbox(userId) {
             const promises = snapshot.docs.map(async (inboxDoc) => {
                 const data = inboxDoc.data();
                 
+                // Ignorar mensagens agendadas para o futuro
+                if (isScheduledInFuture(data)) return null;
+
                 // If it is a generic email/message
                 if (data.tipo === 'email' || !data.jogadorId) {
                     return {
@@ -1385,15 +1516,6 @@ async function loadInbox(userId) {
                 }
             }
 
-            if (bottomMenuBadge) {
-                if (emailCount > 0) {
-                    bottomMenuBadge.textContent = emailCount;
-                    bottomMenuBadge.style.display = 'flex';
-                } else {
-                    bottomMenuBadge.style.display = 'none';
-                }
-            }
-
             if (proposals.length === 0) {
                 inboxGrid.innerHTML = `<div class="inbox-status-msg" style="color: #8892b0; grid-column: 1 / -1; font-size: 14px;">Sem propostas pendentes de momento.</div>`;
                 return;
@@ -1405,6 +1527,9 @@ async function loadInbox(userId) {
                 card.style.cssText = 'background: #161b26; border: 1px solid rgba(255,255,255,0.08); padding: 15px; border-radius: 10px; color: white; display: flex; flex-direction: column; gap: 10px;';
                 
                 if (p.isEmail) {
+                    const rawDate = p.data.timestamp || p.data.data || p.data.createdAt || p.data.date;
+                    const dateStr = formatInboxDate(rawDate);
+
                     card.style.cssText = 'background: #1b160a; border: 1px solid rgba(241, 196, 15, 0.25); padding: 12px 18px; border-radius: 12px; color: white; display: flex; flex-direction: column; gap: 0; cursor: pointer; transition: background 0.2s;';
                     card.innerHTML = `
                         <!-- Cabeçalho (Sempre Visível) -->
@@ -1413,7 +1538,10 @@ async function loadInbox(userId) {
                                 <div style="width: 32px; height: 32px; border-radius: 50%; background: #ffb703; display: flex; align-items: center; justify-content: center; font-size: 13px; color: #090c10; border: 1.5px solid rgba(255,255,255,0.15); flex-shrink: 0;"><i class="fas fa-envelope"></i></div>
                                 <div style="min-width: 0; flex: 1;">
                                     <div style="font-weight: 700; font-size: 14px; color: #ffb703; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${p.data.titulo || 'Nova Mensagem'}</div>
-                                    <div style="font-size: 11px; color: #a0aec0;">De: <strong style="color: #e2e8f0;">${p.senderName}</strong></div>
+                                    <div style="font-size: 11px; color: #a0aec0; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                        <span>De: <strong style="color: #e2e8f0;">${p.senderName}</strong></span>
+                                        ${dateStr ? `<span style="color: #8892b0; font-size: 11px;">• ${dateStr}</span>` : ''}
+                                    </div>
                                 </div>
                             </div>
                             <div style="margin-left: 10px; color: #ffb703; font-size: 12px; display: flex; align-items: center; gap: 5px;">
@@ -1424,9 +1552,9 @@ async function loadInbox(userId) {
                         <!-- Corpo e Ações (Colapsado por Padrão) -->
                         <div class="email-body" style="max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out, margin-top 0.3s ease-out; margin-top: 0;">
                             <div style="border-top: 1px solid rgba(255,255,255,0.08); padding-top: 12px; margin-top: 8px;">
-                                <div style="font-size: 24px; color: #e2e8f0; line-height: 1.5; margin-bottom: 12px; white-space: pre-wrap;">${parseInboxMessage(p.data.mensagem)}</div>
+                                <div style="font-size: 20px; color: #e2e8f0; line-height: 1.5; margin-bottom: 12px; white-space: pre-wrap;">${parseInboxMessage(p.data.mensagem)}</div>
                                 <div style="display: flex; justify-content: flex-end;">
-                                    <button class="dismiss-btn" style="background: #ffb703; color: #090c10; border: none; padding: 6px 14px; border-radius: 6px; font-weight: 700; cursor: pointer; font-size: 12px; transition: opacity 0.2s;">Lido</button>
+                                    <button class="dismiss-btn" style="background: #ffb703; color: #090c10; border: none; padding: 6px 14px; border-radius: 6px; font-weight: 700; cursor: pointer; font-size: 12px; transition: opacity 0.2s; display: inline-flex; align-items: center; gap: 5px;"><i class="fas fa-check"></i> Marcar como Lido</button>
                                 </div>
                             </div>
                         </div>
@@ -1439,6 +1567,7 @@ async function loadInbox(userId) {
                         dismissBtn.style.opacity = '0.5';
                         try {
                             await updateDoc(doc(db, 'inbox', p.id), { status: false, estado: 'Lido' });
+                            logUserAction(`Marcou mensagem '${p.data.titulo || 'Sem título'}' como lida`);
                         } catch (err) {
                             console.error(err);
                             alert("Erro ao arquivar mensagem.");
@@ -1451,16 +1580,27 @@ async function loadInbox(userId) {
                         const emailBody = card.querySelector('.email-body');
                         const toggleIcon = card.querySelector('.toggle-icon i');
                         
-                        if (emailBody.style.maxHeight === '0px' || !emailBody.style.maxHeight || emailBody.style.maxHeight === '0') {
-                            emailBody.style.maxHeight = emailBody.scrollHeight + 'px';
+                        const isClosed = emailBody.style.maxHeight === '0px' || !emailBody.style.maxHeight || emailBody.style.maxHeight === '0';
+                        if (isClosed) {
+                            emailBody.style.maxHeight = (emailBody.scrollHeight + 120) + 'px';
                             emailBody.style.marginTop = '8px';
                             toggleIcon.className = 'fas fa-chevron-up';
                             card.style.background = '#29210c';
+                            setTimeout(() => {
+                                if (emailBody.style.maxHeight !== '0px') {
+                                    emailBody.style.maxHeight = 'none';
+                                    emailBody.style.overflow = 'visible';
+                                }
+                            }, 320);
                         } else {
-                            emailBody.style.maxHeight = '0px';
-                            emailBody.style.marginTop = '0px';
-                            toggleIcon.className = 'fas fa-chevron-down';
-                            card.style.background = '#1b160a';
+                            emailBody.style.overflow = 'hidden';
+                            emailBody.style.maxHeight = emailBody.scrollHeight + 'px';
+                            setTimeout(() => {
+                                emailBody.style.maxHeight = '0px';
+                                emailBody.style.marginTop = '0px';
+                                toggleIcon.className = 'fas fa-chevron-down';
+                                card.style.background = '#1b160a';
+                            }, 10);
                         }
                     });
                     
@@ -1474,6 +1614,9 @@ async function loadInbox(userId) {
                 else if (p.player.casta === "Jogador Bronze") castaClassName = 'color: #cd7f32;';
                 else if (p.player.casta === "Jogador Platina") castaClassName = 'color: #e5e5e5;';
                 
+                const propRawDate = p.data.data || p.data.timestamp || p.data.createdAt || p.data.date;
+                const propDateStr = formatInboxDate(propRawDate);
+
                 card.innerHTML = `
                     <div style="display: flex; gap: 10px; align-items: center;">
                         <img src="${p.player.imagem || 'placeholder.png'}" alt="${p.player.nome}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 50%; background: #0c1017; border: 1.5px solid rgba(255,255,255,0.15);">
@@ -1482,8 +1625,9 @@ async function loadInbox(userId) {
                             <div style="font-size: 12px; color: #8892b0;">${p.player.posicao} | ${p.player.preco} GCoins</div>
                         </div>
                     </div>
-                    <div style="font-size: 13px; color: #8892b0; margin-top: 5px;">
-                        Proposta de venda recebida de: <strong style="color: white;">${p.senderName}</strong>
+                    <div style="font-size: 13px; color: #8892b0; margin-top: 5px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px;">
+                        <span>Proposta de venda recebida de: <strong style="color: white;">${p.senderName}</strong></span>
+                        ${propDateStr ? `<span style="color: #718096; font-size: 11px;">• ${propDateStr}</span>` : ''}
                     </div>
                     <div style="display: flex; gap: 10px; margin-top: 10px;">
                         <button class="accept-btn" style="flex: 1; background: #2ecc71; color: #090c10; border: none; padding: 8px; border-radius: 6px; font-weight: 700; cursor: pointer; font-size: 13px; transition: opacity 0.2s;">Aceitar</button>
@@ -1522,16 +1666,14 @@ async function loadInbox(userId) {
                                 bankBalance = configSnap.data().valor || 0;
                             }
 
-                            const seasonsQuery = query(collection(db, 'palpites'), orderBy('temporada', 'desc'), limit(1));
-                            const seasonsSnapshot = await getDocs(seasonsQuery);
-                            let latestSeason = seasonsSnapshot.docs[0]?.data()?.temporada || '';
-                            latestSeason = latestSeason.replace('/', '');
+                            const latestSeason = await getLatestSeason(db);
 
                             const buyerRef = doc(db, 'users', userId);
                             const buyerSnap = await getDoc(buyerRef);
                             if (!buyerSnap.exists()) return;
                             const buyerData = buyerSnap.data();
-                            const buyerGCoins = buyerData[`${latestSeason}GCoins`] || 0;
+                            const buyerSeasonData = getSeasonData(buyerData, latestSeason);
+                            const buyerGCoins = buyerSeasonData.GCoins || 0;
 
                             if (buyerGCoins < p.player.preco) {
                                 alert(`Não tens GCoins suficientes para aceitar esta proposta! Preço: ${p.player.preco} GCoins, O teu Saldo: ${buyerGCoins} GCoins.`);
@@ -1556,7 +1698,8 @@ async function loadInbox(userId) {
                                 return;
                             }
 
-                            const sellerGCoins = sellerData[`${latestSeason}GCoins`] || 0;
+                            const sellerSeasonData = getSeasonData(sellerData, latestSeason);
+                            const sellerGCoins = sellerSeasonData.GCoins || 0;
                             const buyerName = buyerData.nometabela || 'Utilizador';
 
                             const batch = writeBatch(db);
@@ -1566,12 +1709,18 @@ async function loadInbox(userId) {
                             });
 
                             batch.update(buyerRef, {
-                                [`${latestSeason}GCoins`]: buyerGCoins - p.player.preco
+                                [latestSeason]: {
+                                    ...buyerSeasonData,
+                                    GCoins: buyerGCoins - p.player.preco
+                                }
                             });
 
                             const finalSellerGains = Math.max(0, p.player.preco - comissaoBancaVenda);
                             batch.update(sellerRef, {
-                                [`${latestSeason}GCoins`]: sellerGCoins + finalSellerGains
+                                [latestSeason]: {
+                                    ...sellerSeasonData,
+                                    GCoins: sellerGCoins + finalSellerGains
+                                }
                             });
 
                             batch.update(doc(db, "paineis", "Banca"), {
@@ -1592,7 +1741,7 @@ async function loadInbox(userId) {
                                 posicao: p.player.posicao,
                                 preco: -p.player.preco,
                                 valorreal: -p.player.preco,
-                                temporada: latestSeason,
+                                temporada: compactSeason(latestSeason),
                                 tipo: 'Mercado',
                                 movimentoData: serverTimestamp(),
                                 descricao: `Compra de jogador ${p.player.nome} a ${p.senderName}`
@@ -1607,7 +1756,7 @@ async function loadInbox(userId) {
                                 posicao: p.player.posicao,
                                 preco: p.player.preco,
                                 valorreal: finalSellerGains,
-                                temporada: latestSeason,
+                                temporada: compactSeason(latestSeason),
                                 tipo: 'Mercado',
                                 movimentoData: serverTimestamp(),
                                 descricao: `Venda de jogador ${p.player.nome} a ${buyerName} (Comissão da Banca: ${comissaoBancaVenda} gCoins)`
@@ -1616,7 +1765,7 @@ async function loadInbox(userId) {
                             batch.set(doc(collection(db, 'movimentos')), {
                                 preco: comissaoBancaVenda,
                                 tipo: "Banca",
-                                temporada: latestSeason,
+                                temporada: compactSeason(latestSeason),
                                 movimentoData: serverTimestamp(),
                                 descricao: `Comissão de venda de jogador ${p.player.nome} entre ${p.senderName} e ${buyerName}`
                             });

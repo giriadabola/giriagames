@@ -1,8 +1,22 @@
-// endless-championship/endless-championship.js
 import { app, db, auth } from '../core/firebase.js';
-import { getDoc, doc, collection, query, where, getDocs, setDoc, writeBatch, Timestamp, increment, updateDoc, onSnapshot, orderBy, limit, deleteField } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getDoc, doc, collection, query, where, getDocs, setDoc, writeBatch, Timestamp, increment, updateDoc, onSnapshot, orderBy, limit, deleteField, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js";
+import { checkPageContentAccess } from "../js/page-content-guard.js";
+
+function logUserAction(actionDescription) {
+    if (!auth.currentUser) return;
+    try {
+        const eyeCollection = collection(db, 'eye');
+        void addDoc(eyeCollection, {
+            dataacao: serverTimestamp(),
+            acao: actionDescription,
+            userId: auth.currentUser.uid
+        }).catch((error) => console.error("Erro ao registar a ação na coleção 'eye':", error));
+    } catch (error) {
+        console.error("Erro ao registar ação na coleção 'eye':", error);
+    }
+}
 
 const functions = getFunctions(app);
 
@@ -289,6 +303,13 @@ onAuthStateChanged(auth, async (user) => {
                 return;
             }
 
+            const hasContentAccess = await checkPageContentAccess('endless-championship', userInfo.estatuto, db);
+            if (!hasContentAccess) {
+                const loadingScreen = document.getElementById('loading-screen');
+                if (loadingScreen) loadingScreen.style.display = 'none';
+                return;
+            }
+
             console.log("[Endless Championship] Loading menu settings...");
             const menuSettings = await loadMenuSettings();
             if (typeof updateMenuVisibility === 'function') {
@@ -297,6 +318,7 @@ onAuthStateChanged(auth, async (user) => {
 
             console.log("[Endless Championship] Checking user club...");
             await checkUserClub(user.uid);
+            await logUserAction(`Entrou em ${document.title}`);
 
         } catch (error) {
             console.error("[Endless Championship] Ocorreu um erro crítico durante a inicialização:", error);

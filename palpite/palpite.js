@@ -2,6 +2,7 @@
 import { db, auth } from '../core/firebase.js';
 import { doc, getDoc, addDoc, collection, serverTimestamp, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { checkPageContentAccess } from "../js/page-content-guard.js";
 
 const loadingScreen = document.getElementById('loading-screen');
 const content = document.querySelector('.content');
@@ -314,6 +315,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
+function logUserAction(actionDescription) {
+    if (!auth.currentUser) return;
+    try {
+        const eyeCollection = collection(db, 'eye');
+        void addDoc(eyeCollection, {
+            dataacao: serverTimestamp(),
+            acao: actionDescription,
+            userId: auth.currentUser.uid
+        }).catch((error) => console.error("Erro ao registar a ação na coleção 'eye':", error));
+    } catch (error) {
+        console.error("Erro ao registar ação na coleção 'eye':", error);
+    }
+}
+
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         currentUserStatus = await getUserStatus(user.uid);
@@ -323,12 +338,19 @@ onAuthStateChanged(auth, async (user) => {
             return;
         }
 
-        if (window.updateMenuVisibility) {
+        if (window.updateMenuVisibility && paineisMenuSettings) {
             window.updateMenuVisibility(paineisMenuSettings);
+        }
+
+        const hasContentAccess = await checkPageContentAccess('palpite', currentUserStatus, db);
+        if (!hasContentAccess) {
+            if (loadingScreen) loadingScreen.style.display = 'none';
+            return;
         }
 
         console.log(`User is logged in on palpite.html with status: ${currentUserStatus}`);
         await loadGameDetails();
+        await logUserAction(`Entrou em ${document.title}`);
         if (loadingScreen) loadingScreen.style.display = 'none';
         if (content) content.style.display = 'block';
     } else {

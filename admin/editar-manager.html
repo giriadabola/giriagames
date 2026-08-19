@@ -947,6 +947,7 @@ import {
     query, where, addDoc, orderBy, limit
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getLatestSeason, getSeasonData } from '../core/user-season.js';
 
 let competicoesChoicesInstance = null;
 let compradoPorChoicesInstance = null;
@@ -1495,10 +1496,14 @@ function initializePage() {
             });
 
             const userDocRef = doc(db, 'users', userId);
-            const temporadaGcoinsField = `${temporada}GCoins`;
-            
+            const seasonLabel = await getLatestSeason(db);
+            const userSnapshot = await getDoc(userDocRef);
+            const seasonData = userSnapshot.exists() ? getSeasonData(userSnapshot.data(), seasonLabel) : {};
             await updateDoc(userDocRef, {
-                [temporadaGcoinsField]: totalGcoinsRecalculado
+                [seasonLabel]: {
+                    ...seasonData,
+                    GCoins: totalGcoinsRecalculado
+                }
             });
             
             console.log(`Saldo de GCoins do utilizador ${userId} reconciliado para: ${totalGcoinsRecalculado}`);

@@ -14,7 +14,7 @@ function destroyVectorMap(mapObject, containerSelector) {
 }
 
 function getMapDataset() {
-    return window.jvm?.Map?.maps?.world_mill_en || null;
+    return window.jsVectorMap?.maps?.world || window.jvm?.Map?.maps?.world_mill_en || null;
 }
 
 function getRegionState(entry, selectedIso, previewIso, iso) {

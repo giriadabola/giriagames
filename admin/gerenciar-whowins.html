@@ -109,6 +109,7 @@
         import { db, auth } from './js/auth-guard.js';
         import { collection, query, getDocs, doc, getDoc, updateDoc, Timestamp, where, writeBatch, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { getSeasonData } from '../core/user-season.js';
 
         document.addEventListener('DOMContentLoaded', () => {
             const temporadaSelect = document.getElementById('temporada-select');
@@ -163,11 +164,13 @@
                         }
                     });
 
-                    const userUpdateBatch = writeBatch(db);
-                    for (const userId of userIds) {
-                        const userRef = doc(db, 'users', userId);
-                        userUpdateBatch.update(userRef, { whowinsgCoins: userTotals[userId] });
-                    }
+                     const userUpdateBatch = writeBatch(db);
+                     for (const userId of userIds) {
+                         const userRef = doc(db, 'users', userId);
+                         const userSnapshot = await getDoc(userRef);
+                         const seasonData = userSnapshot.exists() ? getSeasonData(userSnapshot.data(), season) : {};
+                         userUpdateBatch.update(userRef, { [season]: { ...seasonData, whowinsgCoins: userTotals[userId] } });
+                     }
 
                     await userUpdateBatch.commit();
                     return userIds.size;
@@ -215,11 +218,13 @@
 
         console.log("--- [IMPORTANTE] TOTAIS DE FAMA CALCULADOS ANTES DE ATUALIZAR A BD: ---", userFameTotals);
 
-        const userUpdateBatch = writeBatch(db);
-        for (const userId of userIds) {
-            const userRef = doc(db, 'users', userId);
-            userUpdateBatch.update(userRef, { fame: userFameTotals[userId] });
-        }
+         const userUpdateBatch = writeBatch(db);
+         for (const userId of userIds) {
+             const userRef = doc(db, 'users', userId);
+             const userSnapshot = await getDoc(userRef);
+             const seasonData = userSnapshot.exists() ? getSeasonData(userSnapshot.data(), season) : {};
+             userUpdateBatch.update(userRef, { [season]: { ...seasonData, fame: userFameTotals[userId] } });
+         }
 
         console.log("- A preparar a atualização em lote para o campo 'fame' de cada utilizador...");
         await userUpdateBatch.commit();

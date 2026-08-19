@@ -1,15 +1,24 @@
-const APP_SHELL_CACHE = 'gGames-shell-v4';
+const APP_SHELL_CACHE = 'gGames-shell-v15';
 const APP_SHELL_FILES = [
   './index.html',
   './1x.html',
   './1x.webmanifest',
   './assets/logos/manifest.webmanifest',
   './profile.html',
+  './rankings.html',
+  './rankings/rankings.js',
+  './rankings/rankings.css',
+  './myteam.html',
+  './myteam/myteam.js',
+  './myteam/myteam.css',
   './config.js',
   './menu-component.js',
+  './core/menu-component.js',
+  './core/profile-menu-badge.js',
   './core/top-bar-component.js',
   './core/firebase.js',
   './core/pwa/register-pwa.js',
+  './core/pwa/loading-watchdog.js',
   './core/pwa/push-config.js',
   './js/page-content-guard.js',
   './profile/profile-notifications.js',
@@ -82,8 +91,61 @@ async function staleWhileRevalidate(request) {
   }
 }
 
+async function cacheFirst(request) {
+  const cache = await caches.open(APP_SHELL_CACHE);
+  const cachedResponse = await cache.match(request);
+
+  if (cachedResponse) {
+    return cachedResponse;
+  }
+
+  try {
+    const response = await fetch(request);
+
+    if (response.ok) {
+      await cache.put(request, response.clone());
+    }
+
+    return response;
+  } catch (error) {
+    return Response.error();
+  }
+}
+
 function refreshCacheInBackground(promise) {
   promise.catch(() => Promise.resolve());
+}
+
+async function serveNavigation(request) {
+  const cache = await caches.open(APP_SHELL_CACHE);
+  const cachedPage = await cache.match(request);
+
+  if (cachedPage) {
+    refreshCacheInBackground(
+      fetch(request).then((response) => {
+        if (response.ok) {
+          return cache.put(request, response.clone());
+        }
+
+        return Promise.resolve();
+      })
+    );
+
+    return cachedPage;
+  }
+
+  return fetch(request).catch(async () => {
+    const offlinePage = await cache.match(request);
+
+    if (offlinePage) {
+      return offlinePage;
+    }
+
+    return new Response('Página indisponível sem ligação à Internet.', {
+      status: 503,
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+    });
+  });
 }
 
 self.addEventListener('fetch', (event) => {
@@ -99,6 +161,7 @@ self.addEventListener('fetch', (event) => {
   const isSameOrigin = requestUrl.origin === self.location.origin;
 
   if (event.request.mode === 'navigate') {
+    /*
     event.respondWith(
       fetch(event.request).catch(async () => {
         const cache = await caches.open(APP_SHELL_CACHE);
@@ -114,6 +177,8 @@ self.addEventListener('fetch', (event) => {
         });
       })
     );
+    */
+    event.respondWith(serveNavigation(event.request));
     return;
   }
 
@@ -121,7 +186,12 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  if (['script', 'style', 'image'].includes(event.request.destination)) {
+  if (event.request.destination === 'image') {
+    event.respondWith(cacheFirst(event.request));
+    return;
+  }
+
+  if (['script', 'style'].includes(event.request.destination)) {
     event.respondWith(staleWhileRevalidate(event.request));
     return;
   }
@@ -156,8 +226,10 @@ self.addEventListener('push', (event) => {
     icon: payload.icon || './assets/logos/icons/icon-192x192.png',
     badge: payload.badge || './assets/logos/icons/icon-192x192.png',
     tag: payload.tag || 'giria-market-notification',
+    renotify: true,
+    vibrate: [200, 100, 200],
     data: {
-      url: payload.url || './market.html'
+      url: new URL(payload.url || './market.html', self.location.origin).href
     }
   };
 
@@ -167,7 +239,7 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
 
-  const targetUrl = event.notification.data?.url || './market.html';
+  const targetUrl = event.notification.data?.url || new URL('./market.html', self.location.origin).href;
 
   event.waitUntil((async () => {
     const windowClients = await clients.matchAll({

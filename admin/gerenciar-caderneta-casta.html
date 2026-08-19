@@ -92,6 +92,7 @@
                 <input type="text" class="search-input" placeholder="Pesquisar jogador..." id="tableSearch">
                 <i class="fas fa-search"></i>
             </div>
+            <select id="filter-temporada" class="filter-select" style="font-weight: 700; color: #2176ff; border-color: rgba(33, 118, 255, 0.4);"></select>
             <select id="filter-clube" class="filter-select">
                 <option value="">Todos os Clubes</option>
             </select>
@@ -102,9 +103,6 @@
                 <option value="Médio">Médio</option>
                 <option value="Avançado">Avançado</option>
             </select>
-            <button id="btnSave" class="btn-save" disabled>
-                <i class="fas fa-save"></i> Salvar Alterações (<span id="changes-count">0</span>)
-            </button>
         </div>
 
         <div class="table-container">
@@ -137,13 +135,16 @@
 
     <script type="module">
         import { db } from './js/auth-guard.js';
-        import { collection, getDocs, doc, writeBatch } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        import { collection, getDocs, doc, setDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        import { fetchUniqueSeasons, getPlayerSeasonData } from './js/player-season-helper.js';
 
+        let allRawPlayers = [];
         let allPlayers = [];
         let clubsMap = new Map();
-        let changedPlayers = new Map();
         let currentSortColumn = 'nome';
         let currentSortDirection = 'asc';
+        let seasonsList = [];
+        let currentSeason = '2025/2026';
 
         function normalizeMiniGamesForSave(originalMiniGames) {
             if (!originalMiniGames) return {};
@@ -183,52 +184,35 @@
 
         async function initPage() {
             try {
-                // Fetch players and clubs in parallel
-                const [playersSnap, clubsSnap] = await Promise.all([
+                // Fetch seasons, players and clubs in parallel
+                const [seasons, playersSnap, clubsSnap] = await Promise.all([
+                    fetchUniqueSeasons(db),
                     getDocs(collection(db, 'jogadores')),
                     getDocs(collection(db, 'clubes'))
                 ]);
 
+                seasonsList = seasons;
+                currentSeason = seasonsList[0] || '2025/2026';
+
+                const filterTemporada = document.getElementById('filter-temporada');
+                if (filterTemporada) {
+                    filterTemporada.innerHTML = seasonsList.map(s => `<option value="${s}">${s}</option>`).join('');
+                    filterTemporada.value = currentSeason;
+                    filterTemporada.addEventListener('change', (e) => {
+                        currentSeason = e.target.value;
+                        processPlayersAndRender();
+                    });
+                }
+
                 clubsSnap.forEach(d => clubsMap.set(d.id, d.data().nome));
 
-                // Process players
-                allPlayers = playersSnap.docs.map(doc => {
-                    const data = doc.data();
-                    
-                    // Safe parse of miniGames (might be array or object)
-                    let cadernetaActive = false;
-                    let cadernetaCasta = 'comum';
+                // Store raw docs
+                allRawPlayers = playersSnap.docs.map(d => ({
+                    id: d.id,
+                    rawData: d.data()
+                }));
 
-                    if (data.miniGames) {
-                        if (Array.isArray(data.miniGames)) {
-                            cadernetaActive = data.miniGames.includes('caderneta');
-                        } else if (typeof data.miniGames === 'object') {
-                            const cad = data.miniGames.caderneta;
-                            if (cad && typeof cad === 'object') {
-                                cadernetaActive = cad.estado === true;
-                                cadernetaCasta = cad.casta || 'comum';
-                            } else {
-                                cadernetaActive = data.miniGames.caderneta === true;
-                            }
-                        }
-                    }
-
-                    return {
-                        id: doc.id,
-                        nome: data.nome || 'Sem Nome',
-                        clube: data.clube || 'N/A',
-                        posicao: data.posicao || 'N/A',
-                        casta: data.casta || 'Jogador Bronze',
-                        imagem: data.imagem || '',
-                        codigoUrl: data.codigoUrl || '',
-                        cadernetaActive,
-                        cadernetaCasta,
-                        originalData: data
-                    };
-                });
-
-                populateFilters();
-                renderTable();
+                processPlayersAndRender();
 
                 document.getElementById('loading-screen').style.display = 'none';
                 document.body.style.display = 'block';
@@ -239,9 +223,51 @@
             }
         }
 
+        function processPlayersAndRender() {
+            allPlayers = allRawPlayers.map(item => {
+                const sData = getPlayerSeasonData(item.rawData, currentSeason) || {};
+
+                let cadernetaActive = false;
+                let cadernetaCasta = 'comum';
+
+                if (sData.miniGames) {
+                    if (Array.isArray(sData.miniGames)) {
+                        cadernetaActive = sData.miniGames.includes('caderneta');
+                    } else if (typeof sData.miniGames === 'object') {
+                        const cad = sData.miniGames.caderneta;
+                        if (cad && typeof cad === 'object') {
+                            cadernetaActive = cad.estado === true;
+                            cadernetaCasta = cad.casta || 'comum';
+                        } else {
+                            cadernetaActive = sData.miniGames.caderneta === true;
+                        }
+                    }
+                }
+
+                return {
+                    id: item.id,
+                    nome: sData.nome || item.rawData.nome || 'Sem Nome',
+                    clube: sData.clube || item.rawData.clube || 'N/A',
+                    posicao: sData.posicao || item.rawData.posicao || 'N/A',
+                    casta: sData.casta || item.rawData.casta || 'Jogador Bronze',
+                    imagem: sData.imagem || item.rawData.imagem || '',
+                    codigoUrl: sData.codigoUrl || item.rawData.codigoUrl || '',
+                    cadernetaActive,
+                    cadernetaCasta,
+                    originalSeasonData: sData,
+                    rawData: item.rawData
+                };
+            });
+
+            populateFilters();
+            renderTable();
+        }
+
         function populateFilters() {
             const clubes = [...new Set(allPlayers.map(p => p.clube).filter(c => c && c !== 'N/A'))].sort();
             const filterClube = document.getElementById('filter-clube');
+            const currentSelectedClube = filterClube.value;
+
             filterClube.innerHTML = '<option value="">Todos os Clubes</option>';
             clubes.forEach(c => {
                 const opt = document.createElement('option');
@@ -249,6 +275,12 @@
                 opt.textContent = c;
                 filterClube.appendChild(opt);
             });
+
+            if (clubes.includes(currentSelectedClube)) {
+                filterClube.value = currentSelectedClube;
+            } else {
+                filterClube.value = '';
+            }
         }
 
         function getTierBadgeClass(casta) {
@@ -262,6 +294,77 @@
 
         function getCastaShort(casta) {
             return casta ? casta.replace('Jogador ', '') : 'Bronze';
+        }
+
+        function getActiveCountForClub(clubName, excludePlayerId = null) {
+            if (!clubName || clubName === 'N/A') return 0;
+            const normClub = clubName.trim().toLowerCase();
+
+            let count = 0;
+            allPlayers.forEach(p => {
+                if (excludePlayerId && p.id === excludePlayerId) return;
+                if (!p.clube || p.clube.trim().toLowerCase() !== normClub) return;
+
+                if (p.cadernetaActive) {
+                    count++;
+                }
+            });
+
+            return count;
+        }
+
+        async function savePlayerInlineCaderneta(playerId, newActive, newCasta) {
+            const rawItem = allRawPlayers.find(item => item.id === playerId);
+            const player = allPlayers.find(p => p.id === playerId);
+            if (!rawItem || !player) return;
+
+            try {
+                const playerRef = doc(db, 'jogadores', playerId);
+                const existingSeasonData = (rawItem.rawData[currentSeason] && typeof rawItem.rawData[currentSeason] === 'object')
+                    ? { ...rawItem.rawData[currentSeason] }
+                    : {};
+
+                const newMiniGames = normalizeMiniGamesForSave(existingSeasonData.miniGames || {});
+                newMiniGames.caderneta = {
+                    estado: newActive,
+                    casta: newCasta
+                };
+
+                const seasonUpdate = {
+                    miniGames: newMiniGames,
+                    ultimaAtualizacao: new Date().toISOString()
+                };
+
+                const updatePayload = {
+                    [currentSeason]: {
+                        ...existingSeasonData,
+                        ...seasonUpdate
+                    }
+                };
+
+                await setDoc(playerRef, updatePayload, { merge: true });
+
+                if (!rawItem.rawData[currentSeason] || typeof rawItem.rawData[currentSeason] !== 'object') {
+                    rawItem.rawData[currentSeason] = {};
+                }
+                rawItem.rawData[currentSeason].miniGames = newMiniGames;
+                rawItem.rawData[currentSeason].ultimaAtualizacao = seasonUpdate.ultimaAtualizacao;
+
+                player.cadernetaActive = newActive;
+                player.cadernetaCasta = newCasta;
+
+                const toast = document.getElementById('toast');
+                if (toast) {
+                    toast.textContent = "Alterações gravadas com sucesso!";
+                    toast.style.display = 'block';
+                    setTimeout(() => { toast.style.display = 'none'; }, 2000);
+                }
+
+            } catch (err) {
+                console.error("Erro ao gravar cromo do jogador:", err);
+                alert("Erro ao gravar cromo do jogador.");
+                renderTable();
+            }
         }
 
         function renderTable() {
@@ -304,9 +407,8 @@
                     ? `../assets/faces/face_${p.codigoUrl}.${ext}` 
                     : '../assets/faces/face_placeholder.jpg';
 
-                // Rarity style
-                const isChecked = changedPlayers.has(p.id) ? changedPlayers.get(p.id).cadernetaActive : p.cadernetaActive;
-                const activeCasta = changedPlayers.has(p.id) ? changedPlayers.get(p.id).cadernetaCasta : p.cadernetaCasta;
+                const isChecked = p.cadernetaActive;
+                const activeCasta = p.cadernetaCasta;
 
                 tr.innerHTML = `
                     <td>
@@ -334,113 +436,29 @@
                     </td>
                 `;
 
-                // Add Event Listeners for inline changes
-                tr.querySelector('.toggle-caderneta-active').addEventListener('change', (e) => {
-                    updatePlayerChange(p.id, 'cadernetaActive', e.target.checked);
+                // Add Event Listeners for inline changes with auto-save and limit check
+                tr.querySelector('.toggle-caderneta-active').addEventListener('change', async (e) => {
+                    const isChecked = e.target.checked;
+                    if (isChecked) {
+                        const activeCount = getActiveCountForClub(p.clube, p.id);
+                        if (activeCount >= 10) {
+                            alert("Equipa Já com 10 cromos");
+                            e.target.checked = false;
+                            return;
+                        }
+                    }
+                    await savePlayerInlineCaderneta(p.id, isChecked, p.cadernetaCasta);
                 });
 
-                tr.querySelector('.select-casta').addEventListener('change', (e) => {
+                tr.querySelector('.select-casta').addEventListener('change', async (e) => {
                     const select = e.target;
                     select.className = `select-casta ${select.value}`;
-                    updatePlayerChange(p.id, 'cadernetaCasta', select.value);
+                    await savePlayerInlineCaderneta(p.id, p.cadernetaActive, select.value);
                 });
 
                 tableBody.appendChild(tr);
             });
         }
-
-        function updatePlayerChange(playerId, field, value) {
-            const player = allPlayers.find(p => p.id === playerId);
-            if (!player) return;
-
-            let change = changedPlayers.get(playerId) || {
-                cadernetaActive: player.cadernetaActive,
-                cadernetaCasta: player.cadernetaCasta
-            };
-
-            change[field] = value;
-
-            // If it is identical to database data, remove the change tracking
-            if (change.cadernetaActive === player.cadernetaActive && change.cadernetaCasta === player.cadernetaCasta) {
-                changedPlayers.delete(playerId);
-            } else {
-                changedPlayers.set(playerId, change);
-            }
-
-            // Update UI Button states
-            const btnSave = document.getElementById('btnSave');
-            const countSpan = document.getElementById('changes-count');
-            countSpan.textContent = changedPlayers.size;
-            
-            if (changedPlayers.size > 0) {
-                btnSave.removeAttribute('disabled');
-            } else {
-                btnSave.setAttribute('disabled', 'true');
-            }
-        }
-
-        // Save batch
-        document.getElementById('btnSave').addEventListener('click', async () => {
-            const btnSave = document.getElementById('btnSave');
-            btnSave.setAttribute('disabled', 'true');
-            document.getElementById('loading-screen').style.display = 'flex';
-
-            const batch = writeBatch(db);
-
-            try {
-                for (const [playerId, change] of changedPlayers.entries()) {
-                    const player = allPlayers.find(p => p.id === playerId);
-                    if (!player) continue;
-
-                    const playerRef = doc(db, 'jogadores', playerId);
-                    const newMiniGames = normalizeMiniGamesForSave(player.originalData.miniGames);
-
-                    newMiniGames.caderneta = {
-                        estado: change.cadernetaActive,
-                        casta: change.cadernetaCasta
-                    };
-
-                    batch.set(playerRef, {
-                        miniGames: newMiniGames,
-                        ultimaAtualizacao: new Date().toISOString()
-                    }, { merge: true });
-                }
-
-                await batch.commit();
-
-                // Apply changes locally
-                for (const [playerId, change] of changedPlayers.entries()) {
-                    const player = allPlayers.find(p => p.id === playerId);
-                    if (player) {
-                        player.cadernetaActive = change.cadernetaActive;
-                        player.cadernetaCasta = change.cadernetaCasta;
-                        if (!player.originalData.miniGames || Array.isArray(player.originalData.miniGames)) {
-                            player.originalData.miniGames = {};
-                        }
-                        player.originalData.miniGames.caderneta = {
-                            estado: change.cadernetaActive,
-                            casta: change.cadernetaCasta
-                        };
-                    }
-                }
-
-                changedPlayers.clear();
-                document.getElementById('changes-count').textContent = '0';
-                
-                // Show Success Toast
-                const toast = document.getElementById('toast');
-                toast.style.display = 'block';
-                setTimeout(() => { toast.style.display = 'none'; }, 3000);
-
-                renderTable();
-
-            } catch (err) {
-                console.error("Erro ao gravar alterações:", err);
-                alert("Erro ao gravar alterações. Verifique o console.");
-            } finally {
-                document.getElementById('loading-screen').style.display = 'none';
-            }
-        });
 
         // Set up search and filters
         document.getElementById('tableSearch').addEventListener('input', renderTable);

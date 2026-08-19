@@ -60,144 +60,13 @@ service cloud.firestore {
         );
     }
 
-    function votingIsOpen() {
-      return exists(/databases/$(database)/documents/settings/endateworld) &&
-        request.time < get(/databases/$(database)/documents/settings/endateworld).data.end;
-    }
-
-    function matchDocPathById(matchId) {
-      return /databases/$(database)/documents/worldcupextraMatches/$(matchId < 10
-        ? 'match_00' + string(matchId)
-        : matchId < 100
-          ? 'match_0' + string(matchId)
-          : 'match_' + string(matchId));
-    }
-
-    function matchKickoffPassed(matchId) {
-      return exists(matchDocPathById(matchId)) &&
-        request.time >= get(matchDocPathById(matchId)).data.kickoff + duration.value(1, 's');
-    }
-
-    function secureSourcePath(matchDocId) {
-      return /databases/$(database)/documents/worldcupextraMatches/$(matchDocId);
-    }
-
-    function validMissingFinishedStatusUpdate() {
-      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']) &&
-        request.resource.data.status == 'finished' &&
-        resource.data.finished == true &&
-        resource.data.kickoff is timestamp &&
-        request.time >= resource.data.kickoff + duration.value(3, 'h');
-    }
-
-    function validSecureHtCreate(matchDocId) {
-      return !exists(/databases/$(database)/documents/WoldCupSecureHT/$(matchDocId))
-        && exists(secureSourcePath(matchDocId))
-        && get(secureSourcePath(matchDocId)).data.status == 'finished'
-        && get(secureSourcePath(matchDocId)).data.finished == true
-        && get(secureSourcePath(matchDocId)).data.kickoff is timestamp
-        && request.time >= get(secureSourcePath(matchDocId)).data.kickoff + duration.value(3, 'h')
-        && request.resource.data.keys().hasOnly([
-          'documentId',
-          'matchDocId',
-          'matchId',
-          'homeTeam',
-          'awayTeam',
-          'stage',
-          'stageLabel',
-          'group',
-          'date',
-          'time',
-          'timezone',
-          'city',
-          'country',
-          'venue',
-          'kickoff',
-          'kickoffIso',
-          'status',
-          'finished',
-          'live',
-          'homeGoals',
-          'awayGoals',
-          'winnerTeam',
-          'timeElapsed',
-          'sealedAt'
-        ])
-        && request.resource.data.documentId == matchDocId
-        && request.resource.data.matchDocId == matchDocId
-        && request.resource.data.matchId == get(secureSourcePath(matchDocId)).data.matchId
-        && request.resource.data.homeTeam == get(secureSourcePath(matchDocId)).data.homeTeam
-        && request.resource.data.awayTeam == get(secureSourcePath(matchDocId)).data.awayTeam
-        && request.resource.data.kickoff == get(secureSourcePath(matchDocId)).data.kickoff
-        && request.resource.data.homeGoals == get(secureSourcePath(matchDocId)).data.homeGoals
-        && request.resource.data.awayGoals == get(secureSourcePath(matchDocId)).data.awayGoals
-        && request.resource.data.status == 'finished'
-        && request.resource.data.finished == true
-        && request.resource.data.live == false
-        && request.resource.data.timeElapsed == 'FT';
-    }
-
-    function validWorldcupSofaWrite(matchDocId) {
-      return isRuler()
-        && matchDocId.matches('^match_[0-9]{3}$')
-        && request.resource.data.keys().hasOnly([
-          'documentId',
-          'matchDocId',
-          'matchId',
-          'stage',
-          'stageLabel',
-          'group',
-          'date',
-          'time',
-          'homeTeam',
-          'awayTeam',
-          'venue',
-          'city',
-          'country',
-          'homeGoals',
-          'awayGoals',
-          'homeGoalsList',
-          'awayGoalsList',
-          'status',
-          'updatedAt',
-          'updatedBy',
-          'updatedByEmail'
-        ])
-        && request.resource.data.documentId == matchDocId
-        && request.resource.data.matchDocId == matchDocId
-        && request.resource.data.matchId is int
-        && request.resource.data.stage is string
-        && request.resource.data.stageLabel is string
-        && request.resource.data.homeTeam is string
-        && request.resource.data.awayTeam is string
-        && request.resource.data.homeGoalsList is list
-        && request.resource.data.awayGoalsList is list
-        && request.resource.data.status in ['draft', 'finished']
-        && (
-          request.resource.data.homeGoals == null ||
-          request.resource.data.homeGoals is int
-        )
-        && (
-          request.resource.data.awayGoals == null ||
-          request.resource.data.awayGoals is int
-        );
-    }
-
-    function reformWindowIsOpen(stage) {
-      return exists(/databases/$(database)/documents/settings/worldcupReformWindows) && (
-        (stage == 'round32' && request.time >= get(/databases/$(database)/documents/settings/worldcupReformWindows).data.dezasseisAvosOpen && request.time < get(/databases/$(database)/documents/settings/worldcupReformWindows).data.dezasseisAvosClose) ||
-        (stage == 'round16' && request.time >= get(/databases/$(database)/documents/settings/worldcupReformWindows).data.oitavosOpen && request.time < get(/databases/$(database)/documents/settings/worldcupReformWindows).data.oitavosClose) ||
-        (stage == 'quarterfinals' && request.time >= get(/databases/$(database)/documents/settings/worldcupReformWindows).data.quartosOpen && request.time < get(/databases/$(database)/documents/settings/worldcupReformWindows).data.quartosClose) ||
-        (stage == 'semifinals' && request.time >= get(/databases/$(database)/documents/settings/worldcupReformWindows).data.meiasOpen && request.time < get(/databases/$(database)/documents/settings/worldcupReformWindows).data.meiasClose) ||
-        (stage == 'third_place' && request.time >= get(/databases/$(database)/documents/settings/worldcupReformWindows).data.terceiroLugarOpen && request.time < get(/databases/$(database)/documents/settings/worldcupReformWindows).data.terceiroLugarClose) ||
-        (stage == 'final' && request.time >= get(/databases/$(database)/documents/settings/worldcupReformWindows).data.finalOpen && request.time < get(/databases/$(database)/documents/settings/worldcupReformWindows).data.finalClose)
-      );
-    }
-
     match /users/{userId} {
       allow read: if isAuthenticated();
       allow create: if isOwner(userId);
       allow update: if
+        (isOwner(userId) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['notificacoesMercado'])
+        ) ||
         (isOwner(userId) &&
           request.resource.data.estatuto == resource.data.estatuto &&
           request.resource.data.aceite == resource.data.aceite
@@ -514,27 +383,21 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    match /settings/worldcupScoringRules {
-      allow read: if true;
-
-      allow create: if isAdmin()
-        || (
-          request.resource.data.keys().hasOnly(['bugs'])
-          && request.resource.data.bugs in ['on', 'off']
-        );
-
-      allow update: if isAdmin()
-        || (
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['bugs'])
-          && request.resource.data.bugs in ['on', 'off']
-        );
-
-      allow delete: if isAdmin();
+    match /settings/temporadas {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
     }
 
-    match /settings/worldcupReformWindows {
-      allow read: if true;
-      allow create, update, delete: if isAdmin();
+    match /settings/investimentos {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /investimentos/{investimentoId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update: if (isAuthenticated() && (resource.data.userId == request.auth.uid || request.resource.data.userId == request.auth.uid)) || isAdmin();
+      allow delete: if isAdmin();
     }
 
     match /cadernetaPackOffers/{offerId} {
@@ -561,177 +424,6 @@ service cloud.firestore {
     match /eye/{logId} {
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
       allow read, update, delete: if isAdmin();
-    }
-
-    match /worldcupextra/{docId} {
-      allow read: if true;
-
-      allow create: if
-        (
-          votingIsOpen() &&
-          request.resource.data.status != 'official' &&
-          request.resource.data.status != 'section2' &&
-          request.resource.data.participantKey == docId &&
-          request.resource.data.participantName is string &&
-          request.resource.data.participantName.size() >= 2 &&
-          request.resource.data.visitorKey is string &&
-          !exists(/databases/$(database)/documents/worldcupextra/$(docId)) &&
-          !exists(/databases/$(database)/documents/worldcupextraVisitors/$(request.resource.data.visitorKey)) &&
-          existsAfter(/databases/$(database)/documents/worldcupextraVisitors/$(request.resource.data.visitorKey))
-        )
-        ||
-        (
-          isRuler() &&
-          request.resource.data.status == 'official' &&
-          request.resource.data.type == 'officialResult' &&
-          request.resource.data.matchId is int
-        )
-        ||
-        (
-          request.resource.data.status == 'section2' &&
-          request.resource.data.type == 'knockoutRevision' &&
-          request.resource.data.participantKey is string &&
-          request.resource.data.participantName is string &&
-          request.resource.data.participantName.size() >= 2 &&
-          request.resource.data.matchId is int &&
-          request.resource.data.stage in ['round32', 'round16', 'quarterfinals', 'semifinals', 'third_place', 'final']
-        );
-
-      allow update: if
-        (
-          isRuler() &&
-          request.resource.data.status == 'official' &&
-          request.resource.data.type == 'officialResult' &&
-          request.resource.data.matchId is int
-        )
-        ||
-        (
-          request.resource.data.status == 'section2' &&
-          request.resource.data.type == 'knockoutRevision' &&
-          request.resource.data.participantKey is string &&
-          request.resource.data.participantName is string &&
-          request.resource.data.participantName.size() >= 2 &&
-          request.resource.data.matchId is int &&
-          request.resource.data.stage in ['round32', 'round16', 'quarterfinals', 'semifinals', 'third_place', 'final']
-        );
-
-      allow delete: if isRuler();
-    }
-
-    match /worldcupextraVisitors/{visitorKey} {
-      allow read: if isAdmin();
-
-      allow create: if
-        votingIsOpen() &&
-        request.resource.data.participantKey is string &&
-        request.resource.data.participantName is string &&
-        !exists(/databases/$(database)/documents/worldcupextraVisitors/$(visitorKey)) &&
-        existsAfter(/databases/$(database)/documents/worldcupextra/$(request.resource.data.participantKey));
-
-      allow update, delete: if isAdmin();
-    }
-
-    match /worldcupextraReforms/{docId} {
-      allow read: if true;
-      allow create, update: if
-        request.resource.data.status == 'section2' &&
-        request.resource.data.type == 'knockoutRevision' &&
-        request.resource.data.participantKey is string &&
-        request.resource.data.participantName is string &&
-        request.resource.data.stage is string &&
-        request.resource.data.matchId is int &&
-        reformWindowIsOpen(request.resource.data.stage);
-      allow delete: if isAdmin();
-    }
-
-    match /worldcupextraMatches/{matchDocId} {
-      allow read: if true;
-
-      allow create: if isAdmin() && (
-        matchDocId.matches('^match_[0-9]{3}$') ||
-        (
-          matchDocId.matches('^official-match-[0-9]+$') &&
-          request.resource.data.matchId is int &&
-          matchKickoffPassed(request.resource.data.matchId)
-        )
-      );
-
-      allow update: if
-        (
-          isAdmin() &&
-          resource.data.matchId is int &&
-          matchKickoffPassed(resource.data.matchId)
-        )
-        ||
-        validMissingFinishedStatusUpdate();
-
-      allow delete: if isAdmin()
-        && resource.data.matchId is int
-        && matchKickoffPassed(resource.data.matchId);
-    }
-
-    match /WoldCupSecureHT/{matchDocId} {
-      allow read: if true;
-      allow create: if validSecureHtCreate(matchDocId);
-      allow update, delete: if false;
-    }
-
-    match /worldcupSofa/{matchDocId} {
-      allow read: if true;
-      allow create, update: if validWorldcupSofaWrite(matchDocId);
-      allow delete: if isRuler();
-    }
-
-    match /worldcupextraLiveBattles/{battleId} {
-      allow read: if true;
-      allow create, update: if
-        request.resource.data.matchDocId is string &&
-        request.resource.data.matchId is int &&
-        request.resource.data.playerAKey is string &&
-        request.resource.data.playerAName is string &&
-        request.resource.data.playerBKey is string &&
-        request.resource.data.playerBName is string &&
-        request.resource.data.status is string &&
-        request.resource.data.createdOrder is int;
-      allow delete: if isAdmin();
-    }
-
-    match /worldcupextraLiveBattleMatches/{matchDocId} {
-      allow read: if true;
-      allow create, update: if
-        request.resource.data.matchId is int &&
-        request.resource.data.matchDocId is string &&
-        request.resource.data.status is string &&
-        request.resource.data.battlesCreated == true &&
-        request.resource.data.battlesCount is int;
-      allow delete: if isAdmin();
-    }
-
-    match /worldcupextraBattles/{battleId} {
-      allow read: if true;
-      allow create, update: if isAdmin();
-      allow delete: if isAdmin();
-    }
-
-    match /worldcupextraBattleScorers/{pickId} {
-      allow read: if true;
-
-      allow create: if
-        request.resource.data.matchDocId is string &&
-        exists(/databases/$(database)/documents/worldcupextraMatches/$(request.resource.data.matchDocId)) &&
-        request.time < get(/databases/$(database)/documents/worldcupextraMatches/$(request.resource.data.matchDocId)).data.kickoff &&
-        request.resource.data.participantKey is string &&
-        exists(/databases/$(database)/documents/worldcupextra/$(request.resource.data.participantKey)) &&
-        request.resource.data.pinHash is string &&
-        request.resource.data.pinHash == get(/databases/$(database)/documents/worldcupextra/$(request.resource.data.participantKey)).data.pinHash &&
-        request.resource.data.battleId is string &&
-        request.resource.data.pickedPlayerName is string &&
-        request.resource.data.pickedPlayerName.size() >= 2 &&
-        request.resource.data.pickedPlayerTeam is string &&
-        !('pin' in request.resource.data) &&
-        !exists(/databases/$(database)/documents/worldcupextraBattleScorers/$(pickId));
-
-      allow update, delete: if isAdmin();
     }
 
     match /mods/{modId} {

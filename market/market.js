@@ -3,6 +3,8 @@ import { db, auth } from '../core/firebase.js';
 import { collection, getDocs, doc, getDoc, updateDoc, setDoc, Timestamp, addDoc, query, where, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { fetchUniqueSeasons, getPlayerSeasonData, hasPlayerDataForSeason } from "../admin/js/player-season-helper.js";
+import { compactSeason, getLatestSeason, getSeasonData } from "../core/user-season.js";
+import { checkPageContentAccess } from "../js/page-content-guard.js";
 
 const activeListeners = new Map();
 
@@ -139,31 +141,6 @@ function getTierClass(casta) {
         case 'Jogador Platina': return 'platinum';
         default: return '';
     }
-}
-
-/**
- * Finds the most recent 'YYYYMMDDGCoins' field in user data.
- * @param {object} userData - The user's data object from Firestore.
- * @returns {string|null} The key of the latest GCoins field or null.
- */
-function findLatestGcoinsField(userData) {
-    let latestSeason = 0;
-    let latestGcoinsField = null;
-    if (!userData) return null;
-
-    for (const key in userData) {
-        if (key.match(/^\d{8}GCoins$/)) {
-            const season = parseInt(key.slice(0, 8), 10);
-            if (!isNaN(season) && season >= latestSeason) {
-                latestSeason = season;
-                latestGcoinsField = key;
-            }
-        }
-    }
-    if (!latestGcoinsField) {
-        console.warn("Could not determine the latest GCoins field for user.");
-    }
-    return latestGcoinsField;
 }
 
 // --- Core Logic Functions ---
@@ -548,8 +525,10 @@ async function createPlayerCard(player) {
                     }
                     const userData = userSnap.data();
                     const playerPrice = checkPlayerData.preco || 0;
-                    const gCoinsField = findLatestGcoinsField(userData);
-                    const userGcoins = (gCoinsField && typeof userData?.[gCoinsField] === 'number') ? userData[gCoinsField] : 0;
+                    const mostRecentSeason = await getLatestSeason(db);
+                    const seasonData = getSeasonData(userData, mostRecentSeason);
+                    const gCoinsField = 'GCoins';
+                    const userGcoins = typeof seasonData.GCoins === 'number' ? seasonData.GCoins : 0;
                     if (userGcoins < playerPrice) {
                         displayErrorMessage(playerPopupContent, "Fundos insuficientes.");
                         popupBuyButton.disabled = false;
@@ -564,11 +543,9 @@ async function createPlayerCard(player) {
                     }
 
                     popupBuyButton.textContent = 'Processando...';
-                    const currentSeason = gCoinsField.replace('GCoins', '');
+                    const currentSeason = compactSeason(mostRecentSeason);
 
                     try {
-                        const seasonsList = await fetchUniqueSeasons(db);
-                        const mostRecentSeason = seasonsList[0] || '2025/2026';
                         await setDoc(playerDocRefPopup, {
                             [mostRecentSeason]: {
                                 compradopor: auth.currentUser.uid,
@@ -626,7 +603,10 @@ async function createPlayerCard(player) {
 
                     // Agora o saldo será atualizado com o valor correto
                     await updateDoc(userRef, {
-                        [gCoinsField]: totalValorReal
+                        [mostRecentSeason]: {
+                            ...seasonData,
+                            [gCoinsField]: totalValorReal
+                        }
                     });
 
                     displaySuccessMessage(playerPopupContent, "Jogador comprado com sucesso!");
@@ -1031,8 +1011,9 @@ async function loadUserGcoins(userId) {
         const userSnap = await getDoc(doc(db, 'users', userId));
         if (userSnap.exists()) {
             const userData = userSnap.data();
-            const gCoinsField = findLatestGcoinsField(userData);
-            const userGcoins = (gCoinsField && typeof userData?.[gCoinsField] === 'number') ? userData[gCoinsField] : 0;
+            const latestSeason = await getLatestSeason(db);
+            const seasonData = getSeasonData(userData, latestSeason);
+            const userGcoins = typeof seasonData.GCoins === 'number' ? seasonData.GCoins : 0;
             const coinValEl = document.getElementById('user-gcoins-value');
             if (coinValEl) {
                 coinValEl.textContent = userGcoins.toLocaleString('pt-PT');
@@ -1143,18 +1124,24 @@ onAuthStateChanged(auth, async (user) => {
                 const menuSettings = await loadMenuSettings();
                 updateLoadingProgress(10);
 
+                if (window.updateMenuVisibility && menuSettings) {
+                    window.updateMenuVisibility(menuSettings);
+                }
+
                 if (!checkPageAccess(currentUserEstatuto, menuSettings)) return;
                 updateLoadingProgress(10);
+
+                const hasContentAccess = await checkPageContentAccess('market', currentUserEstatuto, db);
+                if (!hasContentAccess) {
+                    if (loadingScreen) loadingScreen.style.display = 'none';
+                    return;
+                }
 
                 await logUserAction(`Entrou em ${document.title}`);
 
                 const transactionButton = document.getElementById('transaction-button-link');
                 if (transactionButton && menuSettings?.bank === 'off') {
                     transactionButton.style.display = 'none';
-                }
-
-                if (window.updateMenuVisibility) {
-                    window.updateMenuVisibility(menuSettings);
                 }
 
                 initializeMarketCountdown();

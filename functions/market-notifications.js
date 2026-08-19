@@ -6,6 +6,7 @@ const webpush = require("web-push");
 const VAPID_PUBLIC_KEY = "BNQqYP8I9537wDNcLm5Bfzj1-dR7ynWXs064sLLbJ3T6RxaZqVbNvPXX-ryv7I6rgBYET5mZCuwxXpUn7Jsiv9I";
 const VAPID_PRIVATE_KEY = "6SGGrihGmcnwfF_Fipd_V5hNc2th1M8Ez0FFGd0E9YU";
 const VAPID_SUBJECT = "mailto:admin@giriagames.com";
+const NOTIFICATION_TIME_ZONE = "Europe/Lisbon";
 const DEFAULT_CONFIG = {
   beforeOpenEnabled: true,
   beforeOpenHours: 2,
@@ -22,7 +23,7 @@ const DEFAULT_CONFIG = {
   predictionsClosingSoonTime: "20:00",
   predictionsClosingSoonHours: 2,
 };
-const DISPATCH_WINDOW_MS = 5 * 60 * 1000;
+const DISPATCH_WINDOW_MS = 15 * 60 * 1000;
 const MARKET_NOTIFICATION_FIELD = "notificacoesMercado";
 const ADMIN_ROLES = new Set(["ruler", "estafeta"]);
 
@@ -46,6 +47,28 @@ function asDate(value) {
 
   if (value instanceof Date) {
     return value;
+  }
+
+  if (typeof value === "number") {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  if (typeof value === "string") {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  if (typeof value.seconds === "number") {
+    const milliseconds = (value.seconds * 1000) + Math.floor((value.nanoseconds || 0) / 1000000);
+    const date = new Date(milliseconds);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  if (typeof value._seconds === "number") {
+    const milliseconds = (value._seconds * 1000) + Math.floor((value._nanoseconds || 0) / 1000000);
+    const date = new Date(milliseconds);
+    return Number.isNaN(date.getTime()) ? null : date;
   }
 
   return null;
@@ -78,7 +101,7 @@ function buildPayload(type, scheduleId, scheduleData, hoursBeforeOpen) {
   const abertura = asDate(scheduleData.abertura);
   const fechamento = asDate(scheduleData.fechamento);
   const targetLabel = scheduleData.observacoes || "a janela de mercado";
-  const formatDate = (date) => date ? date.toLocaleString("pt-PT", { timeZone: "Europe/Lisbon" }) : "brevemente";
+  const formatDate = (date) => date ? date.toLocaleString("pt-PT", { timeZone: NOTIFICATION_TIME_ZONE }) : "brevemente";
 
   if (type === "beforeOpen") {
     return {
@@ -116,11 +139,14 @@ function getInterestedUsers(users, type) {
 
 async function sendPayloadToUser(userEntry, payload) {
   const validSubscriptions = [];
+  let delivered = 0;
+  const attempted = userEntry.settings.pushSubscriptions.length;
 
   for (const subscription of userEntry.settings.pushSubscriptions) {
     try {
       await webpush.sendNotification(subscription, JSON.stringify(payload));
       validSubscriptions.push(subscription);
+      delivered += 1;
     } catch (error) {
       const statusCode = error?.statusCode || null;
       const isExpired = statusCode === 404 || statusCode === 410;
@@ -148,6 +174,22 @@ async function sendPayloadToUser(userEntry, payload) {
       pushEnabled: validSubscriptions.length > 0,
     };
   }
+
+  return {
+    delivered,
+    attempted,
+  };
+}
+
+async function sendPayloadToUsers(userEntries, payload) {
+  const results = await Promise.all(
+    userEntries.map((userEntry) => sendPayloadToUser(userEntry, payload))
+  );
+
+  return results.reduce((summary, result) => ({
+    delivered: summary.delivered + result.delivered,
+    attempted: summary.attempted + result.attempted,
+  }), { delivered: 0, attempted: 0 });
 }
 
 async function dispatchForEvent(scheduleEntry, users, type, hoursBeforeOpen) {
@@ -158,8 +200,8 @@ async function dispatchForEvent(scheduleEntry, users, type, hoursBeforeOpen) {
     return false;
   }
 
-  await Promise.all(interestedUsers.map((userEntry) => sendPayloadToUser(userEntry, payload)));
-  return true;
+  const delivery = await sendPayloadToUsers(interestedUsers, payload);
+  return delivery.delivered > 0;
 }
 
 async function loadEligibleUsers() {
@@ -216,17 +258,60 @@ function isValidHoursBefore(value) {
   return Number.isInteger(value) && value > 0 && value <= 48;
 }
 
+function getZonedParts(date) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: NOTIFICATION_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date).reduce((result, part) => {
+    if (part.type !== "literal") {
+      result[part.type] = Number.parseInt(part.value, 10);
+    }
+    return result;
+  }, {});
+
+  return parts;
+}
+
+function getTimeZoneOffsetMs(date) {
+  const parts = getZonedParts(date);
+  const zonedAsUtc = Date.UTC(
+    parts.year,
+    parts.month - 1,
+    parts.day,
+    parts.hour,
+    parts.minute,
+    parts.second
+  );
+
+  return zonedAsUtc - date.getTime();
+}
+
+function zonedLocalDateToUtc(localDate) {
+  let timestamp = localDate.getTime();
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    timestamp = localDate.getTime() - getTimeZoneOffsetMs(new Date(timestamp));
+  }
+
+  return new Date(timestamp);
+}
+
 function getWeekKey(date) {
-  const current = new Date(date);
-  current.setHours(0, 0, 0, 0);
-
-  const day = current.getDay();
+  const parts = getZonedParts(date);
+  const current = new Date(Date.UTC(parts.year, parts.month - 1, parts.day));
+  const day = current.getUTCDay();
   const diffToMonday = (day + 6) % 7;
-  current.setDate(current.getDate() - diffToMonday);
+  current.setUTCDate(current.getUTCDate() - diffToMonday);
 
-  const year = current.getFullYear();
-  const month = String(current.getMonth() + 1).padStart(2, "0");
-  const dayOfMonth = String(current.getDate()).padStart(2, "0");
+  const year = current.getUTCFullYear();
+  const month = String(current.getUTCMonth() + 1).padStart(2, "0");
+  const dayOfMonth = String(current.getUTCDate()).padStart(2, "0");
 
   return `${year}-${month}-${dayOfMonth}`;
 }
@@ -237,13 +322,14 @@ function getWeeklyTriggerDate(now, weekday, timeString) {
   }
 
   const [hours, minutes] = timeString.split(":").map((value) => Number.parseInt(value, 10));
-  const target = new Date(now);
-  const diffDays = (weekday - now.getDay() + 7) % 7;
+  const localNow = getZonedParts(now);
+  const target = new Date(Date.UTC(localNow.year, localNow.month - 1, localNow.day));
+  const diffDays = (weekday - target.getUTCDay() + 7) % 7;
 
-  target.setDate(now.getDate() + diffDays);
-  target.setHours(hours, minutes, 0, 0);
+  target.setUTCDate(target.getUTCDate() + diffDays);
+  target.setUTCHours(hours, minutes, 0, 0);
 
-  return target;
+  return zonedLocalDateToUtc(target);
 }
 
 function getWeeklyTriggerDateWithOffset(now, weekday, timeString, hoursBefore) {
@@ -458,7 +544,11 @@ exports.processMarketNotifications = onSchedule({
         weeklyEvent.timeString
       );
 
-    await Promise.all(interestedUsers.map((userEntry) => sendPayloadToUser(userEntry, payload)));
+    const delivery = await sendPayloadToUsers(interestedUsers, payload);
+
+    if (delivery.delivered === 0) {
+      continue;
+    }
 
     await configRef.set({
       weeklyDispatchLog: {
@@ -473,6 +563,63 @@ exports.processMarketNotifications = onSchedule({
   return null;
 });
 
+exports.sendInboxNotification = onCall({
+  invoker: "public",
+  cors: [
+    "https://g-games-8a8fc.web.app",
+    "https://giriagames.com",
+    "http://127.0.0.1:5502",
+    "http://localhost:5502",
+    "http://127.0.0.1:5503",
+    "http://localhost:5503",
+  ],
+}, async (request) => {
+  await ensureAdminAccess(request.auth?.uid || null);
+
+  const sender = typeof request.data?.sender === "string" ? request.data.sender.trim() : "";
+  const emailTitle = typeof request.data?.emailTitle === "string" ? request.data.emailTitle.trim() : "";
+  const rawMessage = typeof request.data?.message === "string" ? request.data.message : "";
+  const message = sanitizeManualMessage(`${emailTitle}\n${rawMessage}`);
+
+  if (!sender || !emailTitle) {
+    throw new HttpsError("invalid-argument", "O remetente e o título são obrigatórios.");
+  }
+  const targetUserIds = Array.isArray(request.data?.targetUserIds)
+    ? [...new Set(request.data.targetUserIds.filter((userId) => typeof userId === "string" && userId.trim()))]
+    : [];
+
+  if (targetUserIds.length === 0) {
+    throw new HttpsError("invalid-argument", "Seleciona pelo menos um destinat\u00e1rio.");
+  }
+
+  const users = await loadEligibleUsers();
+  const targetUsers = getInterestedUsers(users)
+    .filter((userEntry) => targetUserIds.includes(userEntry.id));
+
+  if (targetUsers.length === 0) {
+    return {
+      success: true,
+      deliveredTo: 0,
+      message: "N\u00e3o h\u00e1 dispositivos ativos para receber esta notifica\u00e7\u00e3o.",
+    };
+  }
+
+  const payload = {
+    title: `(${sender}) :: gGames`,
+    body: message,
+    tag: `inbox-notification-${Date.now()}`,
+    url: "./profile.html",
+  };
+
+  const delivery = await sendPayloadToUsers(targetUsers, payload);
+
+  return {
+    success: true,
+    deliveredTo: delivery.delivered,
+    message: "Notifica\u00e7\u00e3o enviada com sucesso.",
+  };
+});
+
 exports.sendManualMarketNotification = onCall({
   cors: [
     "https://g-games-8a8fc.web.app",
@@ -485,9 +632,24 @@ exports.sendManualMarketNotification = onCall({
 }, async (request) => {
   await ensureAdminAccess(request.auth?.uid || null);
 
-  const message = sanitizeManualMessage(request.data?.message);
+  const hasTargetFilter = Array.isArray(request.data?.targetUserIds);
+  const targetUserIds = hasTargetFilter
+    ? [...new Set(request.data.targetUserIds.filter((userId) => typeof userId === "string" && userId.trim()))]
+    : [];
+  const sender = typeof request.data?.sender === "string" ? request.data.sender.trim() : "";
+  const emailTitle = typeof request.data?.emailTitle === "string" ? request.data.emailTitle.trim() : "";
+  const rawMessage = typeof request.data?.message === "string" ? request.data.message : "";
+
+  if (hasTargetFilter && (targetUserIds.length === 0 || !sender || !emailTitle)) {
+    throw new HttpsError("invalid-argument", "O remetente, o título e os destinatários são obrigatórios.");
+  }
+
+  const message = hasTargetFilter
+    ? sanitizeManualMessage(`${emailTitle}\n${rawMessage}`)
+    : sanitizeManualMessage(request.data?.message);
   const users = await loadEligibleUsers();
-  const interestedUsers = getInterestedUsers(users);
+  const interestedUsers = getInterestedUsers(users)
+    .filter((userEntry) => !hasTargetFilter || targetUserIds.includes(userEntry.id));
 
   if (interestedUsers.length === 0) {
     return {
@@ -498,17 +660,17 @@ exports.sendManualMarketNotification = onCall({
   }
 
   const payload = {
-    title: "Mensagem do mercado",
+    title: hasTargetFilter ? `(${sender}) :: gGames` : "gGames",
     body: message,
     tag: `market-manual-${Date.now()}`,
-    url: "./market.html",
+    url: "./profile.html",
   };
 
-  await Promise.all(interestedUsers.map((userEntry) => sendPayloadToUser(userEntry, payload)));
+  const delivery = await sendPayloadToUsers(interestedUsers, payload);
 
   return {
     success: true,
-    deliveredTo: interestedUsers.length,
+    deliveredTo: delivery.delivered,
     message: "Notificação enviada com sucesso.",
   };
 });

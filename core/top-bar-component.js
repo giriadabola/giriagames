@@ -1,7 +1,8 @@
 // core/top-bar-component.js
 import { db, auth } from './firebase.js';
-import { doc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { doc, onSnapshot, addDoc, collection, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getLatestSeason, getSeasonData } from './user-season.js';
 
 document.addEventListener("DOMContentLoaded", () => {
     // 1. Determine active page to toggle page-specific features
@@ -275,7 +276,7 @@ document.addEventListener("DOMContentLoaded", () => {
             </a>
 
             ${isProfilePage ? `
-            <button class="top-menu-btn" id="top-notifications-btn" title="Notificações">
+            <button class="top-menu-btn" id="top-notifications-btn" title="Definições">
                 <i class="fas fa-cog"></i>
             </button>
             ` : ''}
@@ -345,6 +346,25 @@ document.addEventListener("DOMContentLoaded", () => {
     // Run initial check
     checkAndShowTopBar();
 
+    // Registo de cliques nos ícones do topo na coleção 'eye'
+    if (topBar) {
+        topBar.querySelectorAll('a, button').forEach(el => {
+            el.addEventListener('click', () => {
+                if (!auth.currentUser) return;
+                const title = el.getAttribute('title') || el.textContent.trim() || 'Ícone do Topo';
+                try {
+                    void addDoc(collection(db, 'eye'), {
+                        dataacao: serverTimestamp(),
+                        acao: `Clicou no ícone do topo: ${title}`,
+                        userId: auth.currentUser.uid
+                    }).catch(e => console.error("Erro ao registar clique no topo:", e));
+                } catch (e) {
+                    console.error(e);
+                }
+            });
+        });
+    }
+
     // 3. Setup Logout Event Handlers (specifically for profile page)
     if (isProfilePage) {
         const topLogoutBtn = document.getElementById('top-logout-btn');
@@ -385,36 +405,24 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // 4. User gCoins Real-time updating logic
-    function findLatestGcoinsField(userData) {
-        let latestSeason = 0;
-        let latestGcoinsField = null;
-        if (!userData) return null;
-
-        for (const key in userData) {
-            if (key.match(/^\d{8}GCoins$/)) {
-                const season = parseInt(key.slice(0, 8), 10);
-                if (!isNaN(season) && season >= latestSeason) {
-                    latestSeason = season;
-                    latestGcoinsField = key;
-                }
-            }
-        }
-        return latestGcoinsField;
-    }
-
     onAuthStateChanged(auth, (user) => {
         if (user) {
             const userDocRef = doc(db, 'users', user.uid);
-            onSnapshot(userDocRef, (docSnap) => {
-                if (docSnap.exists()) {
-                    const userData = docSnap.data();
-                    const gCoinsField = findLatestGcoinsField(userData);
-                    const userGcoins = (gCoinsField && typeof userData?.[gCoinsField] === 'number') ? userData[gCoinsField] : 0;
-                    
-                    const coinValueElement = document.getElementById('top-user-gcoins-value');
-                    if (coinValueElement) {
-                        coinValueElement.textContent = userGcoins.toLocaleString('pt-PT');
+            onSnapshot(userDocRef, async (docSnap) => {
+                try {
+                    if (docSnap.exists()) {
+                        const userData = docSnap.data();
+                        const latestSeason = await getLatestSeason(db);
+                        const seasonData = getSeasonData(userData, latestSeason);
+                        const userGcoins = typeof seasonData.GCoins === 'number' ? seasonData.GCoins : 0;
+
+                        const coinValueElement = document.getElementById('top-user-gcoins-value');
+                        if (coinValueElement) {
+                            coinValueElement.textContent = userGcoins.toLocaleString('pt-PT');
+                        }
                     }
+                } catch (error) {
+                    console.error("Error updating gCoins in top menu:", error);
                 }
             }, (error) => {
                 console.error("Error listening to user doc for top menu:", error);
@@ -440,6 +448,8 @@ document.addEventListener("DOMContentLoaded", () => {
                         }
                     }
                 }
+            }, (error) => {
+                console.error("Error listening to menu settings for top menu:", error);
             });
         }
     });

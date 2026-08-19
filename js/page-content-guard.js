@@ -12,7 +12,9 @@ import { getFirestore, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10
  * @returns {Promise<boolean>} True if allowed, false if blocked
  */
 export async function checkPageContentAccess(pageKey, userStatus, db) {
-    if (userStatus === 'ruler') {
+    const isRuler = String(userStatus || '').trim().toLowerCase() === 'ruler';
+    if (isRuler) {
+        console.log(`[PageGuard] Page '${pageKey}' check skipped for Ruler.`);
         return true; // Ruler always has full access
     }
 
@@ -22,13 +24,14 @@ export async function checkPageContentAccess(pageKey, userStatus, db) {
         
         if (pagesDocSnap.exists()) {
             const pagesData = pagesDocSnap.data();
+            console.log(`[PageGuard] Page '${pageKey}' state:`, pagesData[pageKey]);
             if (pagesData[pageKey] === 'off') {
                 showContentBlockedOverlay();
                 return false;
             }
         }
     } catch (error) {
-        console.error("Error checking page content access:", error);
+        console.error("[PageGuard] Error checking page content access:", error);
     }
     return true;
 }
@@ -38,7 +41,7 @@ export async function checkPageContentAccess(pageKey, userStatus, db) {
  */
 export function showContentBlockedOverlay() {
     // Hide main content elements
-    const mainContentElements = document.querySelectorAll('main, .content, #content, .container, .main-container');
+    const mainContentElements = document.querySelectorAll('main, .content, #content, .container, .main-container, #main-content-wrapper');
     mainContentElements.forEach(el => {
         if (!el.classList.contains('top-menu') && !el.classList.contains('bottom-menu')) {
             el.style.display = 'none';

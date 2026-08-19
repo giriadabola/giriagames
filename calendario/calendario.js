@@ -1,6 +1,8 @@
 import { db, auth } from '../core/firebase.js';
 import { collection, getDocs, doc, getDoc, query, orderBy, addDoc, serverTimestamp, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { checkPageContentAccess } from "../js/page-content-guard.js";
+import { getLatestSeason } from "../core/user-season.js";
 
 function logUserAction(actionDescription) {
     if (!auth.currentUser) {
@@ -36,7 +38,25 @@ async function loadCalendar() {
     try {
         const gamesQuery = query(collection(db, 'jogos'), orderBy("dataJogo", "asc"));
         const querySnapshot = await getDocs(gamesQuery);
-        const allGames = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const fetchedGames = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+        let latestSeason = null;
+        try {
+            latestSeason = await getLatestSeason(db);
+        } catch (err) {
+            console.warn("Erro ao obter temporada mais recente de settings/temporadas:", err);
+        }
+        let allGames = [];
+        if (latestSeason) {
+            allGames = fetchedGames.filter(g => g.temporada === latestSeason);
+        } else {
+            const seasonsInGames = [...new Set(fetchedGames.map(g => g.temporada).filter(Boolean))].sort().reverse();
+            if (seasonsInGames.length > 0) {
+                allGames = fetchedGames.filter(g => g.temporada === seasonsInGames[0]);
+            } else {
+                allGames = fetchedGames;
+            }
+        }
 
         if (allGames.length === 0) {
             container.innerHTML = '<p class="no-games">Nenhum jogo encontrado no calendário.</p>';
@@ -139,12 +159,37 @@ async function loadCalendar() {
                 competitionList.innerHTML = `<div class="competition-header"><img src="${competition.image}" alt="${competition.name}"><h3>${competition.name}</h3></div>`;
 
                 for (const game of competition.games) {
+                    let homeLogo = '';
+                    let awayLogo = '';
+
+                    if (game.equipaCasaId) {
+                        const cacheKey = `club_${game.equipaCasaId}`;
+                        if (!dataCache.has(cacheKey)) {
+                            const clubDoc = await getDoc(doc(db, 'clubes', game.equipaCasaId));
+                            dataCache.set(cacheKey, clubDoc.exists() ? (clubDoc.data().imagem || '') : '');
+                        }
+                        homeLogo = dataCache.get(cacheKey);
+                    }
+
+                    if (game.equipaForaId) {
+                        const cacheKey = `club_${game.equipaForaId}`;
+                        if (!dataCache.has(cacheKey)) {
+                            const clubDoc = await getDoc(doc(db, 'clubes', game.equipaForaId));
+                            dataCache.set(cacheKey, clubDoc.exists() ? (clubDoc.data().imagem || '') : '');
+                        }
+                        awayLogo = dataCache.get(cacheKey);
+                    }
+
                     const gameDate = game.dataJogo.toDate();
                     const formattedDate = gameDate.toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' });
                     const formattedTime = gameDate.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
                     const gameElement = document.createElement('div');
                     gameElement.className = 'game-list-item';
-                    gameElement.innerHTML = `<div class="game-teams"><div class="team-row"><span class="team-name">${game.equipaCasa}</span> <span class="vs">vs</span></div><div class="team-row"><span class="team-name">${game.equipaFora}</span></div></div><div class="game-datetime">${formattedDate} - ${formattedTime}</div>`;
+
+                    const homeImgHtml = homeLogo ? `<img src="${homeLogo}" class="team-logo" alt="${game.equipaCasa}">` : '';
+                    const awayImgHtml = awayLogo ? `<img src="${awayLogo}" class="team-logo" alt="${game.equipaFora}">` : '';
+
+                    gameElement.innerHTML = `<div class="game-teams"><div class="team-row">${homeImgHtml}<span class="team-name">${game.equipaCasa}</span> <span class="vs">vs</span></div><div class="team-row">${awayImgHtml}<span class="team-name">${game.equipaFora}</span></div></div><div class="game-datetime">${formattedDate} - ${formattedTime}</div>`;
                     competitionList.appendChild(gameElement);
                 }
                 contentWrapper.appendChild(competitionList);
@@ -186,6 +231,11 @@ onAuthStateChanged(auth, async (user) => {
         if (userInfo && userInfo.aceite === "Yes") {
             const menuSettings = await loadMenuSettings();
             if (checkPageAccess(userInfo.estatuto, menuSettings)) {
+                const hasContentAccess = await checkPageContentAccess('calendario', userInfo.estatuto, db);
+                if (!hasContentAccess) {
+                    loadingScreen.style.display = 'none';
+                    return;
+                }
                 await logUserAction(`Entrou em ${document.title}`);
                 mainContentWrapper.style.display = 'block';
                 window.updateMenuVisibility(menuSettings);

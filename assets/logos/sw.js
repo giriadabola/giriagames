@@ -1,4 +1,4 @@
-const CACHE_NAME = 'giria-games-v1';
+const CACHE_NAME = 'giria-games-v6';
 const ASSETS = [
   './',
   './index.html',

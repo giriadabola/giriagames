@@ -155,6 +155,13 @@
             filter: none;
         }
 
+        .notification-submit-btn {
+            margin-top: 10px;
+            background: linear-gradient(135deg, #2d9cdb, #1769aa);
+            color: #ffffff;
+            box-shadow: 0 4px 15px rgba(45, 156, 219, 0.25);
+        }
+
         .toggle-history-btn {
             background: transparent;
             border: 2px solid #ffb703;
@@ -230,15 +237,34 @@
 
                 <div class="form-group">
                     <label for="corpo">Corpo da Mensagem</label>
-                    <div style="display: flex; gap: 10px; margin-bottom: 8px;">
+                    <div style="display: flex; gap: 10px; margin-bottom: 8px; flex-wrap: wrap;">
                         <button type="button" id="addLinkBtn" class="form-control" style="width: auto; padding: 6px 12px; font-size: 13px; background: #0c1017; color: #ffb703; border-color: rgba(255,183,3,0.3); font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 5px;"><i class="fas fa-link"></i> Adicionar Link</button>
                         <button type="button" id="addImageBtn" class="form-control" style="width: auto; padding: 6px 12px; font-size: 13px; background: #0c1017; color: #ffb703; border-color: rgba(255,183,3,0.3); font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 5px;"><i class="fas fa-image"></i> Adicionar Imagem</button>
+                        <button type="button" id="addManualBtn" class="form-control" style="width: auto; padding: 6px 12px; font-size: 13px; background: #0c1017; color: #ffb703; border-color: rgba(255,183,3,0.3); font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 5px;"><i class="fas fa-book"></i> Anexar do Manual</button>
                     </div>
                     <textarea id="corpo" class="form-control" placeholder="Escreva aqui a sua mensagem..." required></textarea>
                 </div>
 
+                <!-- Campo de Agendamento -->
+                <div class="form-group" style="background: rgba(255,255,255,0.02); padding: 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06); margin-bottom: 22px;">
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; text-transform: none; font-size: 14px; margin-bottom: 0; color: #f0f2f5;">
+                        <input type="checkbox" id="agendarCheck" style="width: 18px; height: 18px; accent-color: #ffb703; cursor: pointer;">
+                        <span style="font-weight: 600;"><i class="fas fa-clock" style="color: #ffb703;"></i> Agendar envio deste email</span>
+                    </label>
+                    <div id="agendamentoGroup" style="display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.06);">
+                        <label for="dataAgendada" style="font-size: 12px; color: #8892b0; margin-bottom: 6px; display: block;">Data e Hora de Envio (Programada)</label>
+                        <input type="datetime-local" id="dataAgendada" class="form-control" style="color-scheme: dark;">
+                        <small style="color: #8892b0; font-size: 11px; margin-top: 4px; display: block;">
+                            <i class="fas fa-info-circle"></i> O email só ficará visível na Caixa de Entrada dos utilizadores a partir desta data e hora.
+                        </small>
+                    </div>
+                </div>
+
                 <button type="submit" id="sendBtn" class="submit-btn">
                     <i class="fas fa-paper-plane"></i> Enviar Mensagem
+                </button>
+                <button type="button" id="sendWithNotificationBtn" class="submit-btn notification-submit-btn">
+                    <i class="fas fa-bell"></i> Enviar com notificação
                 </button>
             </form>
             
@@ -254,6 +280,22 @@
                 <p style="text-align: center; color: #8892b0;">A carregar histórico...</p>
             </div>
         </div>
+
+        <!-- Modal para Selecionar Conteúdo do Manual -->
+        <div id="manualSelectModal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); z-index: 3000; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+            <div style="background: #161b26; border: 1px solid rgba(255, 183, 3, 0.4); border-radius: 16px; width: 90%; max-width: 550px; max-height: 85vh; display: flex; flex-direction: column; box-shadow: 0 15px 35px rgba(0,0,0,0.6); overflow: hidden;">
+                <div style="padding: 18px 24px; border-bottom: 1px solid rgba(255,255,255,0.08); display: flex; justify-content: space-between; align-items: center; background: #111622;">
+                    <h3 style="color: #ffb703; font-size: 18px; margin: 0; font-weight: 700; display: flex; align-items: center; gap: 8px;"><i class="fas fa-book"></i> Anexar do Manual</h3>
+                    <button id="closeManualSelectModalBtn" type="button" style="background: none; border: none; color: #8892b0; font-size: 20px; cursor: pointer;"><i class="fas fa-times"></i></button>
+                </div>
+                <div style="padding: 16px 24px; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                    <input type="text" id="manualSearchInput" class="form-control" placeholder="Pesquisar tópico ou explicação do manual..." style="font-size: 14px; padding: 10px 14px;">
+                </div>
+                <div id="manualSelectItemsList" style="padding: 16px 24px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 10px;">
+                    <p style="color: #8892b0; text-align: center;"><i class="fas fa-spinner fa-spin"></i> A carregar itens do manual...</p>
+                </div>
+            </div>
+        </div>
     </main>
 
     <div id="toast" class="notification"></div>
@@ -261,7 +303,8 @@
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
         import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
-        import { getFirestore, doc, getDoc, getDocs, collection, addDoc, query, where, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        import { getFirestore, doc, getDoc, getDocs, collection, addDoc, query, where, serverTimestamp, Timestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
 
         const firebaseConfig = {
             apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0",
@@ -276,6 +319,8 @@
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
+        const functions = getFunctions(app, 'us-central1');
+        const sendManualNotificationCallable = httpsCallable(functions, 'sendManualMarketNotification');
 
         const emailCard = document.querySelector('.email-card');
         const historyCard = document.getElementById('historyCard');
@@ -284,6 +329,7 @@
         const destinatarioSelect = document.getElementById('destinatario');
         const emailForm = document.getElementById('emailForm');
         const sendBtn = document.getElementById('sendBtn');
+        const sendWithNotificationBtn = document.getElementById('sendWithNotificationBtn');
         const toast = document.getElementById('toast');
 
         let allGPlayers = [];
@@ -331,17 +377,54 @@
             }
         }
 
-        async function handleSend(e) {
+        async function handleSend(e, withNotification = false) {
             e.preventDefault();
+
+            if (!emailForm.reportValidity()) {
+                return;
+            }
             
             const remetente = document.getElementById('remetente').value;
             const destinatario = destinatarioSelect.value;
             const titulo = document.getElementById('titulo').value;
             const corpo = document.getElementById('corpo').value;
+            const isAgendado = document.getElementById('agendarCheck').checked;
+            const dataAgendadaVal = document.getElementById('dataAgendada').value;
+
+            let dataAgendadaTimestamp = null;
+            if (isAgendado) {
+                if (!dataAgendadaVal) {
+                    showToast('Por favor, selecione a data e hora para o agendamento do email.', 'error');
+                    return;
+                }
+                const scheduledDate = new Date(dataAgendadaVal);
+                if (isNaN(scheduledDate.getTime())) {
+                    showToast('Data de agendamento inválida.', 'error');
+                    return;
+                }
+                if (scheduledDate <= new Date()) {
+                    showToast('A data e hora de agendamento deve ser no futuro.', 'error');
+                    return;
+                }
+                dataAgendadaTimestamp = Timestamp.fromDate(scheduledDate);
+            }
+
+            const targetUserIds = destinatario === 'todos'
+                ? allGPlayers.map(gp => gp.uid)
+                : [destinatario];
+
+            const notificationContent = `${titulo.trim()}\n${corpo.trim()}`.replace(/\s+/g, ' ');
+
+            if (withNotification && notificationContent.length > 180) {
+                showToast('Para enviar com notificação, o título e o corpo não podem ultrapassar 180 caracteres.', 'error');
+                return;
+            }
 
             sendBtn.disabled = true;
-            const originalBtnHTML = sendBtn.innerHTML;
-            sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> A enviar...';
+            sendWithNotificationBtn.disabled = true;
+            const actionButton = withNotification ? sendWithNotificationBtn : sendBtn;
+            const originalBtnHTML = actionButton.innerHTML;
+            actionButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> A processar...';
 
             try {
                 // Criar um ID único de grupo para agrupar estes envios no histórico
@@ -355,6 +438,8 @@
                     status: true,
                     estado: 'Pendente',
                     groupId: groupId,
+                    agendado: isAgendado,
+                    dataAgendada: dataAgendadaTimestamp,
                     timestamp: serverTimestamp()
                 };
 
@@ -367,19 +452,45 @@
                         });
                     });
                     await Promise.all(promises);
-                    showToast(`Mensagem enviada com sucesso para os ${allGPlayers.length} GPlayers!`);
+                    showToast(isAgendado 
+                        ? `Mensagem agendada com sucesso para ${allGPlayers.length} GPlayers!`
+                        : `Mensagem enviada com sucesso para os ${allGPlayers.length} GPlayers!`);
                 } else {
                     // Enviar para um GPlayer específico
                     await addDoc(collection(db, 'inbox'), {
                         ...messageData,
                         para: destinatario
                     });
-                    showToast("Mensagem enviada com sucesso!");
+                    showToast(isAgendado ? "Mensagem agendada com sucesso!" : "Mensagem enviada com sucesso!");
+                }
+
+                if (withNotification) {
+                    try {
+                        const notificationResult = await sendManualNotificationCallable({
+                            sender: remetente,
+                            emailTitle: titulo,
+                            message: corpo,
+                            targetUserIds
+                        });
+                        const deliveredTo = Number(notificationResult.data?.deliveredTo || 0);
+                        showToast(
+                            deliveredTo > 0
+                                ? `Mensagem e notificação enviadas (${deliveredTo} dispositivo(s)).`
+                                : 'Mensagem guardada, mas não há dispositivos ativos para notificar.',
+                            deliveredTo > 0 ? 'success' : 'error'
+                        );
+                    } catch (notificationError) {
+                        console.error('Erro ao enviar notificação da mensagem:', notificationError);
+                        showToast('Mensagem enviada, mas a notificação não foi enviada.', 'error');
+                    }
                 }
 
                 // Reset do formulário exceto remetente
                 document.getElementById('titulo').value = '';
                 document.getElementById('corpo').value = '';
+                document.getElementById('agendarCheck').checked = false;
+                document.getElementById('agendamentoGroup').style.display = 'none';
+                document.getElementById('dataAgendada').value = '';
 
                 // Recarrega histórico se estiver aberto
                 if (showingHistory) {
@@ -391,7 +502,113 @@
                 showToast("Erro ao enviar a mensagem.", "error");
             } finally {
                 sendBtn.disabled = false;
-                sendBtn.innerHTML = originalBtnHTML;
+                sendWithNotificationBtn.disabled = false;
+                actionButton.innerHTML = originalBtnHTML;
+            }
+        }
+
+        function formatEmailMessageForDisplay(text) {
+            if (!text) return '';
+
+            // Escape HTML to prevent XSS
+            let html = text
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+
+            // Replace Markdown images: ![alt](url)
+            html = html.replace(/!\[(.*?)\]\((.*?)\)/g, (match, alt, url) => {
+                return `<div style="margin: 14px 0; text-align: center;"><img src="${url.trim()}" alt="${alt || 'Imagem'}" draggable="false" oncontextmenu="return false;" onselectstart="return false;" style="max-width: 100%; max-height: 360px; object-fit: contain; border-radius: 12px; border: 1.5px solid rgba(255, 183, 3, 0.35); box-shadow: 0 8px 25px rgba(0,0,0,0.5); display: inline-block;"></div>`;
+            });
+
+            // Replace Manual links FIRST: [text](manual:id)
+            html = html.replace(/\[([^\]]+)\]\((manual:[^\)]+)\)/gi, (match, label, url) => {
+                const manualId = url.replace(/manual:/i, '').trim();
+                return `<a href="#" class="inbox-manual-link" data-manual-id="${manualId}" style="color: #ffb703; text-decoration: underline; font-weight: 700; cursor: pointer; padding: 0 2px;"><i class="fas fa-book" style="font-size: 11px; margin-right: 4px;"></i>${label}</a>`;
+            });
+
+            // Replace Standard links SECOND: [text](url)
+            html = html.replace(/\[([^\]]+)\]\(([^\)]+)\)/gi, (match, label, url) => {
+                return `<a href="${url}" target="_blank" style="color: #ffb703; text-decoration: underline; font-weight: 600; word-break: break-all;">${label}</a>`;
+            });
+
+            // Replace Bold: **text**
+            html = html.replace(/\*\*(.*?)\*\*/g, '<strong style="color: #ffffff;">$1</strong>');
+
+            // Parse blockquotes and line formatting
+            const lines = html.split('\n');
+            const processedLines = lines.map(line => {
+                const trimmed = line.trim();
+                if (trimmed.startsWith('&gt;&gt;') || trimmed.startsWith('&gt;')) {
+                    const cleanQuote = line.replace(/^(&gt;)+/, '').trim();
+                    return `<blockquote style="border-left: 3px solid #ffb703; background: rgba(255, 183, 3, 0.06); margin: 8px 0; padding: 10px 14px; border-radius: 0 8px 8px 0; color: #f0f2f5; font-style: italic; font-size: 13.5px;"><i class="fas fa-quote-left" style="color: #ffb703; font-size: 11px; margin-right: 8px; opacity: 0.7;"></i>${cleanQuote}</blockquote>`;
+                }
+                return line;
+            });
+
+            return processedLines.join('\n');
+        }
+
+        async function openManualPreviewModal(manualId) {
+            let modal = document.getElementById('inboxManualPreviewModal');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'inboxManualPreviewModal';
+                modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(5px); z-index: 99999; display: flex; align-items: center; justify-content: center; padding: 20px;';
+                document.body.appendChild(modal);
+            }
+
+            modal.innerHTML = `
+                <div style="background: #161b26; border: 1.5px solid #ffb703; border-radius: 16px; width: 90%; max-width: 600px; max-height: 85vh; display: flex; flex-direction: column; box-shadow: 0 15px 35px rgba(0,0,0,0.6); overflow: hidden;">
+                    <div style="padding: 18px 24px; border-bottom: 1px solid rgba(255,255,255,0.08); display: flex; justify-content: space-between; align-items: center; background: #111622;">
+                        <h3 id="manualPreviewTitle" style="color: #ffb703; font-size: 18px; font-weight: 700; margin: 0; display: flex; align-items: center; gap: 8px;"><i class="fas fa-spinner fa-spin"></i> A carregar...</h3>
+                        <button id="closeManualPreviewBtn" style="background: none; border: none; color: #8892b0; font-size: 22px; cursor: pointer;"><i class="fas fa-times"></i></button>
+                    </div>
+                    <div id="manualPreviewBody" style="padding: 20px 24px; overflow-y: auto; flex: 1; color: #e2e8f0; font-size: 14px; line-height: 1.6;">
+                        <p style="text-align: center; color: #8892b0;"><i class="fas fa-spinner fa-spin"></i> A carregar informação do Manual...</p>
+                    </div>
+                    <div style="padding: 16px 24px; border-top: 1px solid rgba(255,255,255,0.08); background: #111622; display: flex; justify-content: flex-end; align-items: center; gap: 12px;">
+                        <button id="closeManualPreviewSecondaryBtn" style="background: rgba(255,255,255,0.08); color: #e2e8f0; border: none; padding: 10px 18px; border-radius: 8px; font-weight: 600; cursor: pointer;">Fechar</button>
+                        <a id="goToManualBtn" href="../manual.html?item=${manualId}" target="_blank" style="background: linear-gradient(135deg, #ffb703, #e69c00); color: #090c10; text-decoration: none; padding: 10px 18px; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 4px 15px rgba(255, 183, 3, 0.25);">ver mais no Manual <i class="fas fa-chevron-right"></i></a>
+                    </div>
+                </div>
+            `;
+
+            modal.style.display = 'flex';
+
+            const closeBtn = modal.querySelector('#closeManualPreviewBtn');
+            const closeSecBtn = modal.querySelector('#closeManualPreviewSecondaryBtn');
+            const closeModalHandler = () => { modal.style.display = 'none'; };
+            closeBtn.addEventListener('click', closeModalHandler);
+            closeSecBtn.addEventListener('click', closeModalHandler);
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) closeModalHandler();
+            });
+
+            try {
+                const docSnap = await getDoc(doc(db, 'manual', manualId));
+                const titleEl = modal.querySelector('#manualPreviewTitle');
+                const bodyEl = modal.querySelector('#manualPreviewBody');
+
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    titleEl.innerHTML = `<i class="fas fa-book"></i> ${data.title || 'Informação do Manual'}`;
+                    bodyEl.innerHTML = `
+                        ${data.type ? `<span style="display: inline-block; background: rgba(255, 183, 3, 0.15); color: #ffb703; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; text-transform: uppercase; margin-bottom: 12px;">${data.type}</span>` : ''}
+                        <div>${data.content || '<p style="color: #8892b0;">Sem conteúdo disponível.</p>'}</div>
+                    `;
+                } else {
+                    titleEl.innerHTML = `<i class="fas fa-exclamation-triangle" style="color: #e74c3c;"></i> Item não encontrado`;
+                    bodyEl.innerHTML = `<p style="color: #e74c3c;">O conteúdo especificado do manual não foi encontrado ou foi removido.</p>`;
+                }
+            } catch (err) {
+                console.error("Erro ao carregar item do manual:", err);
+                const titleEl = modal.querySelector('#manualPreviewTitle');
+                const bodyEl = modal.querySelector('#manualPreviewBody');
+                titleEl.innerHTML = `<i class="fas fa-exclamation-circle" style="color: #e74c3c;"></i> Erro`;
+                bodyEl.innerHTML = `<p style="color: #e74c3c;">Não foi possível carregar as informações do manual.</p>`;
             }
         }
 
@@ -419,6 +636,8 @@
                             titulo: msg.titulo,
                             mensagem: msg.mensagem,
                             timestamp: msg.timestamp,
+                            agendado: msg.agendado,
+                            dataAgendada: msg.dataAgendada,
                             recipients: []
                         };
                     }
@@ -446,30 +665,57 @@
                 sortedGroups.forEach((group, index) => {
                     const date = group.timestamp ? new Date(group.timestamp.seconds * 1000).toLocaleString('pt-PT') : 'Data desconhecida';
                     const groupEl = document.createElement('div');
-                    groupEl.style.cssText = 'background: #0c1017; border: 1px solid rgba(255,255,255,0.08); padding: 15px; border-radius: 12px; cursor: pointer; transition: border-color 0.2s; display: flex; flex-direction: column; gap: 5px;';
+                    groupEl.style.cssText = 'background: #111622; border: 1px solid rgba(255, 255, 255, 0.08); padding: 18px 20px; border-radius: 14px; cursor: pointer; transition: all 0.2s; display: flex; flex-direction: column; gap: 6px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);';
                     
                     // Contar quem leu
                     const readCount = group.recipients.filter(r => !r.status || r.estado === 'Lido').length;
                     const totalCount = group.recipients.length;
+
+                    // Verificar estado de agendamento
+                    let scheduleBadgeHTML = '';
+                    if (group.dataAgendada) {
+                        let schedMs = 0;
+                        if (typeof group.dataAgendada.toMillis === 'function') schedMs = group.dataAgendada.toMillis();
+                        else if (group.dataAgendada.seconds) schedMs = group.dataAgendada.seconds * 1000;
+                        else if (typeof group.dataAgendada === 'string') schedMs = new Date(group.dataAgendada).getTime();
+
+                        const isFuture = schedMs > Date.now();
+                        const schedDateStr = schedMs ? new Date(schedMs).toLocaleString('pt-PT') : '';
+
+                        if (isFuture) {
+                            scheduleBadgeHTML = `<span style="font-size: 11px; background: rgba(45, 156, 219, 0.15); color: #2d9cdb; border: 1px solid rgba(45, 156, 219, 0.3); padding: 3px 8px; border-radius: 6px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;"><i class="fas fa-clock"></i> Agendado: ${schedDateStr}</span>`;
+                        } else {
+                            scheduleBadgeHTML = `<span style="font-size: 11px; background: rgba(46, 204, 113, 0.15); color: #2ecc71; border: 1px solid rgba(46, 204, 113, 0.3); padding: 3px 8px; border-radius: 6px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;"><i class="fas fa-check-circle"></i> Publicado (${schedDateStr})</span>`;
+                        }
+                    }
                     
                     groupEl.innerHTML = `
                         <div class="history-group-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; width: 100%;">
                             <div>
-                                <strong style="color: #ffb703; font-size: 15px;">${group.titulo}</strong>
-                                <div style="font-size: 11px; color: #8892b0; margin-top: 2px;">De: ${group.de} | ${date}</div>
+                                <strong style="color: #ffb703; font-size: 16px; font-weight: 700;">${group.titulo}</strong>
+                                <div style="font-size: 12px; color: #8892b0; margin-top: 4px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                                    <span><i class="fas fa-user-circle" style="color: #ffb703;"></i> De: <strong style="color: #e2e8f0;">${group.de}</strong></span>
+                                    <span><i class="fas fa-calendar-alt" style="color: #8892b0;"></i> ${date}</span>
+                                </div>
                             </div>
-                            <div style="display: flex; align-items: center; gap: 10px;">
-                                <span style="font-size: 11px; background: rgba(255,255,255,0.05); padding: 4px 8px; border-radius: 6px; color: #e2e8f0;">
-                                    Lidos: <strong style="color: #2ecc71;">${readCount}</strong> / ${totalCount}
+                            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                                ${scheduleBadgeHTML}
+                                <span style="font-size: 11px; background: rgba(46, 204, 113, 0.1); border: 1px solid rgba(46, 204, 113, 0.25); padding: 4px 10px; border-radius: 6px; color: #e2e8f0; display: flex; align-items: center; gap: 5px;">
+                                    <i class="fas fa-eye" style="color: #2ecc71;"></i> Lidos: <strong style="color: #2ecc71;">${readCount}</strong> / ${totalCount}
                                 </span>
-                                <span class="toggle-arrow" style="color: #ffb703; font-size: 12px;"><i class="fas fa-chevron-down"></i></span>
+                                <span class="toggle-arrow" style="color: #ffb703; font-size: 13px; transition: transform 0.2s;"><i class="fas fa-chevron-down"></i></span>
                             </div>
                         </div>
-                        <div class="history-group-details" style="display: none; margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 12px;">
-                            <div style="font-size: 13px; color: #e2e8f0; white-space: pre-wrap; margin-bottom: 15px; line-height: 1.5; background: rgba(0,0,0,0.25); padding: 12px; border-radius: 8px;">${group.mensagem}</div>
+                        <div class="history-group-details" style="display: none; margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 16px;">
+                            <div style="font-size: 11px; font-weight: 700; color: #ffb703; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                                <i class="fas fa-envelope-open-text"></i> Conteúdo da Mensagem
+                            </div>
+                            <div style="font-size: 14px; color: #e2e8f0; line-height: 1.6; background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(255, 255, 255, 0.08); padding: 18px 20px; border-radius: 12px; margin-bottom: 20px; white-space: pre-wrap; word-break: break-word;">${formatEmailMessageForDisplay(group.mensagem)}</div>
                             
-                            <div style="font-size: 12px; font-weight: 700; color: #ffb703; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Estado dos Destinatários</div>
-                            <div class="recipients-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px;">
+                            <div style="font-size: 11px; font-weight: 700; color: #ffb703; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
+                                <i class="fas fa-users"></i> Estado dos Destinatários (${totalCount})
+                            </div>
+                            <div class="recipients-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px;">
                                 <!-- Destinatários aqui -->
                             </div>
                         </div>
@@ -489,21 +735,32 @@
                     }).sort((a, b) => a.nome.localeCompare(b.nome));
                     
                     mappedRecipients.forEach(r => {
-                        const badgeColor = r.isRead ? '#2ecc71' : '#e74c3c';
-                        const badgeText = r.isRead ? 'Lido' : 'Pendente';
+                        const isRead = r.isRead;
+                        const badgeBg = isRead ? 'rgba(46, 204, 113, 0.15)' : 'rgba(231, 76, 60, 0.15)';
+                        const badgeColor = isRead ? '#2ecc71' : '#e74c3c';
+                        const badgeBorder = isRead ? 'rgba(46, 204, 113, 0.3)' : 'rgba(231, 76, 60, 0.3)';
+                        const badgeIcon = isRead ? '<i class="fas fa-check"></i>' : '<i class="fas fa-clock"></i>';
+                        const badgeText = isRead ? 'Lido' : 'Pendente';
                         
                         const rEl = document.createElement('div');
-                        rEl.style.cssText = 'background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); padding: 6px 10px; border-radius: 6px; font-size: 11px; display: flex; justify-content: space-between; align-items: center;';
+                        rEl.style.cssText = 'background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); padding: 8px 12px; border-radius: 8px; font-size: 12px; display: flex; justify-content: space-between; align-items: center; transition: border-color 0.2s;';
                         rEl.innerHTML = `
-                            <span style="color: white; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 120px;" title="${r.nome}">${r.nome}</span>
-                            <span style="background: ${badgeColor}; color: #0c1017; font-weight: 700; font-size: 8px; padding: 2px 5px; border-radius: 4px; text-transform: uppercase;">${badgeText}</span>
+                            <span style="color: #e2e8f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 130px; font-weight: 500; display: flex; align-items: center; gap: 6px;" title="${r.nome}"><i class="fas fa-user-circle" style="color: #8892b0; font-size: 11px;"></i>${r.nome}</span>
+                            <span style="background: ${badgeBg}; color: ${badgeColor}; border: 1px solid ${badgeBorder}; font-weight: 700; font-size: 9px; padding: 3px 7px; border-radius: 6px; text-transform: uppercase; display: flex; align-items: center; gap: 4px;">${badgeIcon} ${badgeText}</span>
                         `;
                         recipientsListEl.appendChild(rEl);
                     });
+
+                    groupEl.addEventListener('mouseenter', () => groupEl.style.borderColor = 'rgba(255, 183, 3, 0.3)');
+                    groupEl.addEventListener('mouseleave', () => {
+                        if (detailsEl.style.display === 'none') {
+                            groupEl.style.borderColor = 'rgba(255, 255, 255, 0.08)';
+                        }
+                    });
                     
                     groupEl.addEventListener('click', (e) => {
-                        // Impedir cliques secundários de colapsar
-                        if (e.target.closest('.recipients-list') || e.target.closest('.history-group-details pre')) return;
+                        // Impedir cliques em links manuais ou lista de destinatários de colapsar
+                        if (e.target.closest('.recipients-list') || e.target.closest('.inbox-manual-link') || e.target.closest('a')) return;
                         
                         if (detailsEl.style.display === 'none') {
                             detailsEl.style.display = 'block';
@@ -525,11 +782,97 @@
             }
         }
 
+        let cachedManualItems = null;
+
+        async function openManualSelectModal() {
+            const modal = document.getElementById('manualSelectModal');
+            const itemsList = document.getElementById('manualSelectItemsList');
+            const searchInput = document.getElementById('manualSearchInput');
+            
+            modal.style.display = 'flex';
+            searchInput.value = '';
+
+            const textarea = document.getElementById('corpo');
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            const selectedText = textarea.value.substring(start, end).trim();
+
+            async function renderItems(filterQuery = '') {
+                itemsList.innerHTML = '<p style="color: #8892b0; text-align: center;"><i class="fas fa-spinner fa-spin"></i> A carregar itens do manual...</p>';
+                
+                if (!cachedManualItems) {
+                    try {
+                        const q = query(collection(db, 'manual'));
+                        const snapshot = await getDocs(q);
+                        cachedManualItems = [];
+                        snapshot.forEach(docSnap => {
+                            cachedManualItems.push({ id: docSnap.id, ...docSnap.data() });
+                        });
+                        cachedManualItems.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+                    } catch (err) {
+                        console.error("Erro ao procurar manual:", err);
+                        itemsList.innerHTML = '<p style="color: #e74c3c; text-align: center;">Erro ao carregar conteúdo do manual.</p>';
+                        return;
+                    }
+                }
+
+                const queryStr = filterQuery.toLowerCase().trim();
+                const filtered = cachedManualItems.filter(item => {
+                    const title = (item.title || '').toLowerCase();
+                    const type = (item.type || '').toLowerCase();
+                    const content = (item.content || '').toLowerCase().replace(/<[^>]*>?/gm, '');
+                    return !queryStr || title.includes(queryStr) || type.includes(queryStr) || content.includes(queryStr);
+                });
+
+                if (filtered.length === 0) {
+                    itemsList.innerHTML = '<p style="color: #8892b0; text-align: center;">Nenhum item encontrado no manual.</p>';
+                    return;
+                }
+
+                itemsList.innerHTML = '';
+                filtered.forEach(item => {
+                    const itemEl = document.createElement('div');
+                    itemEl.style.cssText = 'background: #0c1017; border: 1px solid rgba(255,255,255,0.08); padding: 12px 15px; border-radius: 8px; cursor: pointer; transition: all 0.2s; display: flex; justify-content: space-between; align-items: center; gap: 10px;';
+                    itemEl.innerHTML = `
+                        <div style="min-width: 0; flex: 1;">
+                            <div style="font-weight: 700; color: #ffffff; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${item.title || 'Sem título'}</div>
+                            ${item.content ? `<div style="font-size: 11px; color: #8892b0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 3px;">${item.content.replace(/<[^>]*>?/gm, '')}</div>` : ''}
+                        </div>
+                        <span style="font-size: 10px; background: rgba(255, 183, 3, 0.15); color: #ffb703; padding: 3px 8px; border-radius: 12px; font-weight: 700; flex-shrink: 0;">${item.type || 'Manual'}</span>
+                    `;
+
+                    itemEl.addEventListener('mouseenter', () => itemEl.style.borderColor = '#ffb703');
+                    itemEl.addEventListener('mouseleave', () => itemEl.style.borderColor = 'rgba(255,255,255,0.08)');
+
+                    itemEl.addEventListener('click', () => {
+                        let textToInsert = selectedText;
+                        if (!textToInsert) {
+                            const promptedText = prompt("Texto a exibir para o link do Manual:", item.title || "Ver Manual");
+                            if (promptedText === null) return;
+                            textToInsert = promptedText.trim() || item.title || "Ver Manual";
+                        }
+
+                        const value = textarea.value;
+                        textarea.value = value.substring(0, start) + `[${textToInsert}](manual:${item.id})` + value.substring(end);
+                        textarea.focus();
+                        modal.style.display = 'none';
+                    });
+
+                    itemsList.appendChild(itemEl);
+                });
+            }
+
+            renderItems();
+
+            searchInput.oninput = (e) => renderItems(e.target.value);
+        }
+
         function initializePage() {
             statusMessage.style.display = 'none';
             emailCard.style.display = 'block';
             loadGPlayers();
             emailForm.addEventListener('submit', handleSend);
+            sendWithNotificationBtn.addEventListener('click', (event) => handleSend(event, true));
             
             document.getElementById('addLinkBtn').addEventListener('click', () => {
                 const url = prompt("Introduza o URL do link:", "https://");
@@ -554,6 +897,21 @@
                 const value = textarea.value;
                 textarea.value = value.substring(0, start) + `![${alt || 'Imagem'}](${url})` + value.substring(end);
                 textarea.focus();
+            });
+
+            document.getElementById('addManualBtn').addEventListener('click', openManualSelectModal);
+
+            document.getElementById('agendarCheck').addEventListener('change', (e) => {
+                document.getElementById('agendamentoGroup').style.display = e.target.checked ? 'block' : 'none';
+            });
+
+            document.getElementById('closeManualSelectModalBtn').addEventListener('click', () => {
+                document.getElementById('manualSelectModal').style.display = 'none';
+            });
+            document.getElementById('manualSelectModal').addEventListener('click', (e) => {
+                if (e.target.id === 'manualSelectModal') {
+                    document.getElementById('manualSelectModal').style.display = 'none';
+                }
             });
             
             toggleHistoryBtn.addEventListener('click', () => {

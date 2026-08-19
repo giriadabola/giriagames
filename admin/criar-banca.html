@@ -703,6 +703,7 @@
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
         import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
         import { getFirestore, doc, getDoc, setDoc, collection, query, where, getDocs, addDoc, Timestamp, writeBatch, orderBy } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        import { compactSeason, getLatestSeason, getSeasonData } from '../core/user-season.js';
 
         const firebaseConfig = { apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0", authDomain: "g-games-8a8fc.firebaseapp.com", projectId: "g-games-8a8fc", storageBucket: "g-games-8a8fc.appspot.com", messagingSenderId: "689897349449", appId: "1:689897349449:web:536599794579901beb7a98", measurementId: "G-GTTPJ6G5MD" };
         const app = initializeApp(firebaseConfig); const auth = getAuth(app); const db = getFirestore(app);
@@ -741,7 +742,7 @@
         const simAmountInput = document.getElementById('sim-amount-input');
         const simAdviceText = document.getElementById('sim-advice-text');
 
-        let movimentosSum = 0; let currentSeason = null;
+        let movimentosSum = 0; let currentSeason = null; let currentSeasonLabel = null;
 
         function updateSimulation() {
             const rate = parseFloat(taxaInput.value);
@@ -775,9 +776,8 @@
         }
 
         async function fetchCurrentSeason() {
-            const docSnap = await getDoc(doc(db, "paineis", "configuracoes_gerais"));
-            if (docSnap.exists() && docSnap.data().temporadaAtual) return docSnap.data().temporadaAtual.replace(/\//g, '');
-            throw new Error("Sem temporada.");
+            currentSeasonLabel = await getLatestSeason(db);
+            return compactSeason(currentSeasonLabel);
         }
 
         async function calculateMovimentosSum(season) {
@@ -821,8 +821,9 @@
                 batch.set(doc(collection(db, 'movimentos')), { tipo: "Banca", preco: -amt, movimentoData: Timestamp.now(), temporada: currentSeason, descricao: `Empréstimo`, para_userId: uid });
                 batch.set(doc(collection(db, 'movimentos')), { userId: uid, valorreal: amt, tipo: "Empréstimo", movimentoData: Timestamp.now(), temporada: currentSeason, de: "Banca", descricao: loanDescriptionInput.value || "Empréstimo", valorJuros: parseFloat(loanInterestInput.value) || 0, valorTotalAPagar: amt + (parseFloat(loanInterestInput.value) || 0), estado: "Por Pagar" });
                 const uRef = doc(db, 'users', uid); const uSnap = await getDoc(uRef);
-                const newBal = (uSnap.data()[`${currentSeason}GCoins`] || 0) + amt;
-                batch.update(uRef, { [`${currentSeason}GCoins`]: newBal });
+                const seasonData = getSeasonData(uSnap.data(), currentSeasonLabel);
+                const newBal = (seasonData.GCoins || 0) + amt;
+                batch.update(uRef, { [currentSeasonLabel]: { ...seasonData, GCoins: newBal } });
                 batch.set(doc(db, "paineis", "Banca"), { valor: movimentosSum - amt }, { merge: true });
                 await batch.commit();
                 movimentosSum -= amt; updateCalculatedTotal(); loanPopup.style.display = 'none';

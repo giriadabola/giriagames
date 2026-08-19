@@ -1,6 +1,7 @@
 import { db, auth } from '../core/firebase.js';
 import { collection, getDocs, doc, getDoc, query, where, addDoc, serverTimestamp, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { checkPageContentAccess } from "../js/page-content-guard.js";
 
 function logUserAction(actionDescription) {
     if (!auth.currentUser) {
@@ -380,6 +381,11 @@ onAuthStateChanged(auth, async (user) => {
         }
 
         if (currentUserStatus !== null) {
+            const hasContentAccess = await checkPageContentAccess('mods', currentUserStatus, db);
+            if (!hasContentAccess) {
+                loadingScreen.style.display = 'none';
+                return;
+            }
             await logUserAction(`Entrou em ${document.title}`);
             window.updateMenuVisibility(paineisMenuData);
 
