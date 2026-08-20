@@ -1060,6 +1060,65 @@ function findCountryByName(value) {
     return allCountries.find(country => normalizeCountryName(country.nome) === portugueseAlias);
 }
 
+const clubAliases = {
+    'ac milan': 'milan',
+    'inter milan': 'inter',
+    'internazionale': 'inter',
+    'fc barcelona': 'barcelona',
+    'real madrid cf': 'real madrid',
+    'sporting cp': 'sporting',
+    'sl benfica': 'benfica',
+    'fc porto': 'porto',
+    'manchester united fc': 'manchester united',
+    'manchester city fc': 'manchester city'
+};
+
+function normalizeClubName(value) {
+    return String(value || '')
+        .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+        .replace(/[*_`]/g, '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/\b(ac|fc|afc|sc|cf|cd|sd|rb|us|ss|as|spg|vfb|vfl|bvb|tsv|fsv|clube|club)\b/g, '')
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim();
+}
+
+function findClubByName(value) {
+    const rawClean = String(value || '').trim().toLowerCase();
+    if (!rawClean || rawClean.length < 2) return null;
+
+    // 1. Correspondência exacta por nome, nome_en ou name
+    const exactMatch = allClubs.find(club => {
+        const clubNames = [club.nome, club.nome_en, club.name].filter(Boolean);
+        return clubNames.some(name => String(name).trim().toLowerCase() === rawClean);
+    });
+    if (exactMatch) return exactMatch;
+
+    // 2. Tentar alias (ex: "ac milan" -> "milan")
+    const aliasTarget = clubAliases[rawClean];
+    if (aliasTarget) {
+        const aliasMatch = allClubs.find(club => {
+            const clubNames = [club.nome, club.nome_en, club.name].filter(Boolean);
+            return clubNames.some(name => String(name).trim().toLowerCase() === aliasTarget);
+        });
+        if (aliasMatch) return aliasMatch;
+    }
+
+    // 3. Correspondência por normalização
+    const normValue = normalizeClubName(value);
+    if (!normValue || normValue.length < 2) return null;
+
+    const normMatch = allClubs.find(club => {
+        const normNome = normalizeClubName(club.nome);
+        const normNomeEn = normalizeClubName(club.nome_en);
+        return (normNome && (normNome === normValue || normNome.includes(normValue) || normValue.includes(normNome))) ||
+               (normNomeEn && (normNomeEn === normValue || normNomeEn.includes(normValue) || normValue.includes(normNomeEn)));
+    });
+    return normMatch || null;
+}
+
 // --- Funções no escopo global ---
 
 async function searchCountries(searchTerm) {
@@ -1641,6 +1700,14 @@ function parseAndFillForm() {
         }
     }
 
+    let extractedClubCandidate = '';
+    if (lines.length > 1) {
+        const potentialClubLine = lines[1];
+        if (!dateRegex.test(potentialClubLine) && !heightRegex.test(potentialClubLine) && !posicoes.some(p => p.toLowerCase() === potentialClubLine.toLowerCase())) {
+            extractedClubCandidate = potentialClubLine;
+        }
+    }
+
     lines.forEach(line => {
         if (!countryFound) {
             const foundCountry = findCountryByName(line);
@@ -1650,24 +1717,39 @@ function parseAndFillForm() {
                 countryFound = true;
             }
         }
+    });
 
-        if (!clubFound) {
-            const foundClub = allClubs.find(club => 
-                line.toLowerCase() === club.nome.toLowerCase() || 
-                (club.nome_en && line.toLowerCase() === club.nome_en.toLowerCase())
-            );
+    if (extractedClubCandidate) {
+        const foundClub = findClubByName(extractedClubCandidate);
+        if (foundClub) {
+            clubeInput.value = foundClub.nome;
+            selectedClubeId = foundClub.id;
+            clubFound = true;
+        }
+    }
+
+    if (!clubFound) {
+        for (let i = 0; i < Math.min(lines.length, 3); i++) {
+            const foundClub = findClubByName(lines[i]);
             if (foundClub) {
                 clubeInput.value = foundClub.nome;
                 selectedClubeId = foundClub.id;
                 clubFound = true;
+                break;
             }
         }
-    });
+    }
 
     const missingFields = [];
     if (!nameFound) missingFields.push("Nome do Jogador");
     if (!countryFound) missingFields.push("País do Jogador");
-    if (!clubFound) missingFields.push("Clube do Jogador");
+    if (!clubFound) {
+        if (extractedClubCandidate) {
+            missingFields.push(`Clube do Jogador (O clube "${extractedClubCandidate}" não existe na base de dados do Firebase)`);
+        } else {
+            missingFields.push("Clube do Jogador (Não encontrado no Firebase)");
+        }
+    }
     if (!positionFound) missingFields.push("Posição do Jogador");
     if (!dateFound) missingFields.push("Data Nascimento");
     if (!heightFound) missingFields.push("Altura");
