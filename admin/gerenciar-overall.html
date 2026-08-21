@@ -550,7 +550,7 @@
     <nav id="menu-placeholder" class="top-menu"></nav>
 
     <main class="content">
-        <h1>Gerenciar Overall <i class="fas fa-cog gear-icon" id="params-settings-icon"></i></h1>
+        <h1>Gerenciar Overall <i class="fas fa-cog gear-icon" id="params-settings-icon"></i> <i class="fas fa-chart-line gear-icon" id="quality-curve-icon" style="margin-left: 10px; cursor: pointer; color: #2176ff;" title="Calcular Curva da Qualidade"></i></h1>
         
         <div class="controls-row">
             <div class="search-wrapper">
@@ -699,11 +699,60 @@
         <button class="save-params-btn" id="save-params-btn"><i class="fas fa-save"></i> Salvar Configurações</button>
     </div>
 
+    <!-- MODAL CURVA DA QUALIDADE -->
+    <div class="overlay" id="quality-curve-popup">
+        <div class="modal-content" style="max-width: 850px; width: 92%;">
+            <div class="modal-header">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <i class="fas fa-chart-line" style="font-size: 20px; color: #2176ff;"></i>
+                    <h3 style="color: #ffffff; margin: 0;">Curva da Qualidade (Cálculo de Castas)</h3>
+                </div>
+                <button class="btn secondary" id="closeQualityCurveModalBtn" style="padding: 5px 10px; min-width: auto;"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body" style="padding: 24px;">
+                <!-- TABS HEADER (Sticky no Topo) -->
+                <div style="position: sticky; top: -24px; z-index: 20; background-color: #111622; display: flex; gap: 10px; padding: 16px 24px; margin: -24px -24px 20px -24px; border-bottom: 1px solid rgba(255, 255, 255, 0.08);">
+                    <button id="tabQualityCurveBtn" style="padding: 10px 18px; border-radius: 8px; font-weight: 600; font-size: 14px; cursor: pointer; background-color: #2176ff; color: #ffffff; border: none; transition: all 0.2s; display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-calculator"></i> Curva da Qualidade (Cálculo)
+                    </button>
+                    <button id="tabManualLimitsBtn" style="padding: 10px 18px; border-radius: 8px; font-weight: 600; font-size: 14px; cursor: pointer; background-color: #161c28; color: #8892b0; border: 1px solid rgba(255, 255, 255, 0.08); transition: all 0.2s; display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-edit"></i> Edição Manual de Limites
+                    </button>
+                </div>
+
+                <!-- TAB 1: CURVA DA QUALIDADE -->
+                <div id="tabQualityCurveContent">
+                    <div style="display: flex; gap: 16px; align-items: center; margin-bottom: 24px; flex-wrap: wrap; background-color: #161c28; padding: 16px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.06);">
+                        <div>
+                            <label style="display: block; font-size: 12px; text-transform: uppercase; color: #8892b0; font-weight: 600; margin-bottom: 6px;">Época / Temporada</label>
+                            <select id="qualityCurveSeasonSelect" class="table-filter-select" style="min-width: 160px; font-weight: bold; color: #2176ff; background-color: #111622;">
+                            </select>
+                        </div>
+                        <div style="margin-top: 18px;">
+                            <button id="calcQualityCurveBtn" class="btn primary" style="background: linear-gradient(135deg, #2176ff, #1a5cc4); color: #ffffff; padding: 10px 20px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 15px rgba(33, 118, 255, 0.3);">
+                                <i class="fas fa-calculator"></i> Calcular a curva da qualidade
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="qualityCurveResultsContainer" style="display: none;">
+                    </div>
+                </div>
+
+                <!-- TAB 2: EDIÇÃO MANUAL -->
+                <div id="tabManualLimitsContent" style="display: none;">
+                    <div id="manualLimitsFormContainer">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script type="module">
         import { db, auth } from './js/auth-guard.js';
         import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import { collection, getDocs, doc, getDoc, updateDoc, setDoc, query, where, Timestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-        import { fetchUniqueSeasons, getPlayerSeasonData, buildPlayerSeasonUpdatePayload } from './js/player-season-helper.js';
+        import { fetchUniqueSeasons, getPlayerSeasonData, buildPlayerSeasonUpdatePayload, hasPlayerDataForSeason } from './js/player-season-helper.js';
 
         let allRawPlayers = [];
         let allPlayers = [];
@@ -1608,6 +1657,324 @@
                 }
             });
         });
+
+        // --- CURVA DA QUALIDADE & EDIÇÃO MANUAL ---
+        const qualityCurveIcon = document.getElementById('quality-curve-icon');
+        const qualityCurvePopup = document.getElementById('quality-curve-popup');
+        const closeQualityCurveModalBtn = document.getElementById('closeQualityCurveModalBtn');
+        const qualityCurveSeasonSelect = document.getElementById('qualityCurveSeasonSelect');
+        const calcQualityCurveBtn = document.getElementById('calcQualityCurveBtn');
+
+        const tabQualityCurveBtn = document.getElementById('tabQualityCurveBtn');
+        const tabManualLimitsBtn = document.getElementById('tabManualLimitsBtn');
+        const tabQualityCurveContent = document.getElementById('tabQualityCurveContent');
+        const tabManualLimitsContent = document.getElementById('tabManualLimitsContent');
+
+        if (tabQualityCurveBtn && tabManualLimitsBtn) {
+            tabQualityCurveBtn.addEventListener('click', () => {
+                tabQualityCurveBtn.style.backgroundColor = '#2176ff';
+                tabQualityCurveBtn.style.color = '#ffffff';
+                tabQualityCurveBtn.style.border = 'none';
+
+                tabManualLimitsBtn.style.backgroundColor = '#161c28';
+                tabManualLimitsBtn.style.color = '#8892b0';
+                tabManualLimitsBtn.style.border = '1px solid rgba(255, 255, 255, 0.08)';
+
+                tabQualityCurveContent.style.display = 'block';
+                tabManualLimitsContent.style.display = 'none';
+            });
+
+            tabManualLimitsBtn.addEventListener('click', () => {
+                tabManualLimitsBtn.style.backgroundColor = '#2176ff';
+                tabManualLimitsBtn.style.color = '#ffffff';
+                tabManualLimitsBtn.style.border = 'none';
+
+                tabQualityCurveBtn.style.backgroundColor = '#161c28';
+                tabQualityCurveBtn.style.color = '#8892b0';
+                tabQualityCurveBtn.style.border = '1px solid rgba(255, 255, 255, 0.08)';
+
+                tabManualLimitsContent.style.display = 'block';
+                tabQualityCurveContent.style.display = 'none';
+
+                loadManualLimitsForm();
+            });
+        }
+
+        if (qualityCurveIcon) {
+            qualityCurveIcon.addEventListener('click', () => {
+                if (qualityCurveSeasonSelect && seasons.length > 0) {
+                    qualityCurveSeasonSelect.innerHTML = seasons.map(s => `<option value="${s}">${s}</option>`).join('');
+                    qualityCurveSeasonSelect.value = currentSeason;
+                }
+                qualityCurvePopup.classList.add('active');
+            });
+        }
+
+        if (closeQualityCurveModalBtn) {
+            closeQualityCurveModalBtn.addEventListener('click', () => {
+                qualityCurvePopup.classList.remove('active');
+            });
+        }
+
+        if (qualityCurvePopup) {
+            qualityCurvePopup.addEventListener('click', (e) => {
+                if (e.target === qualityCurvePopup) {
+                    qualityCurvePopup.classList.remove('active');
+                }
+            });
+        }
+
+        async function loadManualLimitsForm() {
+            const container = document.getElementById('manualLimitsFormContainer');
+            if (!container) return;
+
+            container.innerHTML = '<div style="text-align: center; color: #8892b0; padding: 20px;"><i class="fas fa-spinner fa-spin fa-2x"></i><p style="margin-top: 10px;">A carregar limites do Firestore...</p></div>';
+
+            try {
+                const limitsSnap = await getDoc(doc(db, 'paineis', 'paineis overall'));
+                const limits = limitsSnap.exists() ? limitsSnap.data() : (overallLimitsData || {});
+
+                const positions = ["Guarda-Redes", "Defesa", "Médio", "Avançado"];
+                let html = '<h4 style="color: #ffffff; margin-bottom: 16px; font-size: 16px;">Edição Manual dos Limites de Casta (paineis overall)</h4>';
+                html += '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px;">';
+
+                positions.forEach(pos => {
+                    const posId = pos.replace(/\s+/g, '');
+                    const posLimits = limits[pos] || {};
+                    const platina = posLimits.Platina ? (posLimits.Platina[0] ?? '') : '';
+                    const ouro0 = posLimits.Ouro ? (posLimits.Ouro[0] ?? '') : '';
+                    const ouro1 = posLimits.Ouro ? (posLimits.Ouro[1] ?? '') : '';
+                    const prata0 = posLimits.Prata ? (posLimits.Prata[0] ?? '') : '';
+                    const prata1 = posLimits.Prata ? (posLimits.Prata[1] ?? '') : '';
+                    const bronze = posLimits.Bronze ? (posLimits.Bronze[0] ?? '') : '';
+
+                    html += `
+                        <div style="background-color: #161c28; border-radius: 10px; padding: 18px; border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
+                            <h5 style="color: #2176ff; font-size: 16px; font-weight: bold; margin-bottom: 14px; border-bottom: 1px solid rgba(255, 255, 255, 0.06); padding-bottom: 6px;">${pos}</h5>
+                            
+                            <div style="margin-bottom: 12px;">
+                                <label style="display: block; font-size: 12px; color: #e5e4e2; font-weight: 600; margin-bottom: 4px;">💎 Jogador Platina (Acima de)</label>
+                                <input type="number" step="0.1" id="manual-platina-${posId}" value="${platina}" placeholder="Ex: 164.0" style="width: 100%; padding: 8px 12px; background-color: #111622; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 6px; color: #fff; font-weight: bold; outline: none;">
+                            </div>
+
+                            <div style="margin-bottom: 12px;">
+                                <label style="display: block; font-size: 12px; color: #ffd700; font-weight: 600; margin-bottom: 4px;">🟡 Jogador Ouro (Entre ... e ...)</label>
+                                <div style="display: flex; gap: 8px;">
+                                    <input type="number" step="0.1" id="manual-ouro-min-${posId}" value="${ouro0}" placeholder="Mín (Ex: 138.8)" style="width: 50%; padding: 8px 12px; background-color: #111622; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 6px; color: #fff; font-weight: bold; outline: none;">
+                                    <input type="number" step="0.1" id="manual-ouro-max-${posId}" value="${ouro1}" placeholder="Máx (Ex: 163.9)" style="width: 50%; padding: 8px 12px; background-color: #111622; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 6px; color: #fff; font-weight: bold; outline: none;">
+                                </div>
+                            </div>
+
+                            <div style="margin-bottom: 12px;">
+                                <label style="display: block; font-size: 12px; color: #c0c0c0; font-weight: 600; margin-bottom: 4px;">⚪ Jogador Prata (Entre ... e ...)</label>
+                                <div style="display: flex; gap: 8px;">
+                                    <input type="number" step="0.1" id="manual-prata-min-${posId}" value="${prata0}" placeholder="Mín (Ex: 114.4)" style="width: 50%; padding: 8px 12px; background-color: #111622; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 6px; color: #fff; font-weight: bold; outline: none;">
+                                    <input type="number" step="0.1" id="manual-prata-max-${posId}" value="${prata1}" placeholder="Máx (Ex: 138.7)" style="width: 50%; padding: 8px 12px; background-color: #111622; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 6px; color: #fff; font-weight: bold; outline: none;">
+                                </div>
+                            </div>
+
+                            <div style="margin-bottom: 12px;">
+                                <label style="display: block; font-size: 12px; color: #cd7f32; font-weight: 600; margin-bottom: 4px;">🔴 Jogador Bronze (Abaixo de)</label>
+                                <input type="number" step="0.1" id="manual-bronze-${posId}" value="${bronze}" placeholder="Ex: 114.3" style="width: 100%; padding: 8px 12px; background-color: #111622; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 6px; color: #fff; font-weight: bold; outline: none;">
+                            </div>
+                        </div>
+                    `;
+                });
+
+                html += '</div>';
+
+                html += `
+                    <div style="margin-top: 24px; text-align: right; border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 16px;">
+                        <button id="saveManualFormBtn" class="btn primary" style="background: linear-gradient(135deg, #2ecc71, #27ae60); color: #fff; padding: 10px 24px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer;">
+                            <i class="fas fa-save" style="margin-right: 6px;"></i> Salvar Alterações no Firestore (paineis overall)
+                        </button>
+                    </div>
+                `;
+
+                container.innerHTML = html;
+
+                document.getElementById('saveManualFormBtn').addEventListener('click', async () => {
+                    const btn = document.getElementById('saveManualFormBtn');
+                    btn.disabled = true;
+                    btn.textContent = 'A guardar...';
+
+                    const payload = {};
+                    positions.forEach(pos => {
+                        const posId = pos.replace(/\s+/g, '');
+                        const platinaVal = parseFloat(document.getElementById(`manual-platina-${posId}`).value);
+                        const ouroMin = parseFloat(document.getElementById(`manual-ouro-min-${posId}`).value);
+                        const ouroMax = parseFloat(document.getElementById(`manual-ouro-max-${posId}`).value);
+                        const prataMin = parseFloat(document.getElementById(`manual-prata-min-${posId}`).value);
+                        const prataMax = parseFloat(document.getElementById(`manual-prata-max-${posId}`).value);
+                        const bronzeVal = parseFloat(document.getElementById(`manual-bronze-${posId}`).value);
+
+                        payload[pos] = {
+                            "Platina": [isNaN(platinaVal) ? null : platinaVal],
+                            "Ouro": [isNaN(ouroMin) ? null : ouroMin, isNaN(ouroMax) ? null : ouroMax],
+                            "Prata": [isNaN(prataMin) ? null : prataMin, isNaN(prataMax) ? null : prataMax],
+                            "Bronze": [isNaN(bronzeVal) ? null : bronzeVal]
+                        };
+                    });
+
+                    try {
+                        await setDoc(doc(db, 'paineis', 'paineis overall'), payload);
+                        alert('Limites de overall salvos manualmente com sucesso!');
+                        overallLimitsData = payload;
+                    } catch (err) {
+                        console.error('Erro ao salvar limites manuais:', err);
+                        alert('Erro ao salvar no Firestore: ' + err.message);
+                    } finally {
+                        btn.disabled = false;
+                        btn.innerHTML = '<i class="fas fa-save" style="margin-right: 6px;"></i> Salvar Alterações no Firestore (paineis overall)';
+                    }
+                });
+
+            } catch (err) {
+                console.error("Erro ao carregar limites manuais:", err);
+                container.innerHTML = '<p style="color: #e74c3c;">Erro ao carregar formulário de limites manuais: ' + err.message + '</p>';
+            }
+        }
+
+        async function calculateQualityCurve() {
+            const selectedSeason = qualityCurveSeasonSelect.value;
+            const container = document.getElementById('qualityCurveResultsContainer');
+            if (!container) return;
+
+            container.style.display = 'block';
+            container.innerHTML = '<div style="text-align: center; color: #8892b0; padding: 20px;"><i class="fas fa-spinner fa-spin fa-2x"></i><p style="margin-top: 10px;">A calcular curva da qualidade para a época ' + selectedSeason + '...</p></div>';
+
+            const defaultBaseSeason = seasons[seasons.length - 1] || '2025/2026';
+            
+            const seasonPlayers = allRawPlayers
+                .filter(item => hasPlayerDataForSeason(item.rawData, selectedSeason, defaultBaseSeason))
+                .map(item => {
+                    const sData = getPlayerSeasonData(item.rawData, selectedSeason) || {};
+                    return {
+                        id: item.id,
+                        nome: sData.nome || 'Sem Nome',
+                        posicao: sData.posicao || 'N/A',
+                        overall: parseFloat(sData.overall) || 0,
+                        casta: sData.casta || ''
+                    };
+                })
+                .filter(p => p.overall > 0 && p.posicao !== 'N/A');
+
+            if (seasonPlayers.length === 0) {
+                container.innerHTML = '<div style="background: rgba(231, 76, 60, 0.1); border: 1px solid rgba(231, 76, 60, 0.3); color: #e74c3c; padding: 16px; border-radius: 8px; text-align: center;">Nenhum jogador com overall válido encontrado para a época ' + selectedSeason + '.</div>';
+                return;
+            }
+
+            const positions = ["Guarda-Redes", "Defesa", "Médio", "Avançado"];
+            const calculatedLimits = {};
+            let html = '<h4 style="color: #ffffff; margin-bottom: 16px; font-size: 16px;">Resultados da Curva da Qualidade (' + seasonPlayers.length + ' Jogadores Analisados)</h4>';
+            html += '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px;">';
+
+            positions.forEach(pos => {
+                const posPlayers = seasonPlayers.filter(p => p.posicao === pos).map(p => p.overall).sort((a, b) => a - b);
+                const count = posPlayers.length;
+
+                if (count === 0) {
+                    html += `
+                        <div style="background-color: #161c28; border-radius: 10px; padding: 16px; border: 1px solid rgba(255, 255, 255, 0.06);">
+                            <h5 style="color: #2176ff; font-size: 15px; margin-bottom: 8px;">${pos}</h5>
+                            <p style="color: #8892b0; font-size: 13px;">Sem jogadores nesta posição.</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                const min = posPlayers[0];
+                const max = posPlayers[count - 1];
+                const sum = posPlayers.reduce((acc, v) => acc + v, 0);
+                const avg = (sum / count).toFixed(1);
+
+                const getPercentile = (p) => {
+                    const index = Math.floor((count - 1) * p);
+                    return posPlayers[index];
+                };
+
+                let bronzeVal = Number(getPercentile(0.25).toFixed(1));
+                let prataMaxVal = Number(getPercentile(0.60).toFixed(1));
+                let ouroMaxVal = Number(getPercentile(0.90).toFixed(1));
+
+                if (prataMaxVal <= bronzeVal) prataMaxVal = Number((bronzeVal + 10).toFixed(1));
+                if (ouroMaxVal <= prataMaxVal) ouroMaxVal = Number((prataMaxVal + 10).toFixed(1));
+
+                const prataMinVal = Number((bronzeVal + 0.1).toFixed(1));
+                const ouroMinVal = Number((prataMaxVal + 0.1).toFixed(1));
+                const platinaMinVal = Number((ouroMaxVal + 0.1).toFixed(1));
+
+                calculatedLimits[pos] = {
+                    "Bronze": [bronzeVal],
+                    "Prata": [prataMinVal, prataMaxVal],
+                    "Ouro": [ouroMinVal, ouroMaxVal],
+                    "Platina": [platinaMinVal]
+                };
+
+                html += `
+                    <div style="background-color: #161c28; border-radius: 10px; padding: 18px; border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.06); padding-bottom: 8px;">
+                            <h5 style="color: #2176ff; font-size: 16px; font-weight: bold; margin: 0;">${pos}</h5>
+                            <span style="background-color: rgba(33, 118, 255, 0.15); color: #60a5fa; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 600;">${count} jogadores</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-around; background: #111622; padding: 8px; border-radius: 6px; margin-bottom: 14px; text-align: center;">
+                            <div><span style="font-size: 11px; color: #8892b0; display: block;">MÍN</span><strong style="color: #fff; font-size: 14px;">${min}</strong></div>
+                            <div><span style="font-size: 11px; color: #8892b0; display: block;">MÉDIA</span><strong style="color: #f1c40f; font-size: 14px;">${avg}</strong></div>
+                            <div><span style="font-size: 11px; color: #8892b0; display: block;">MÁX</span><strong style="color: #2ecc71; font-size: 14px;">${max}</strong></div>
+                        </div>
+                        <table style="width: 100%; font-size: 13px; border-collapse: collapse;">
+                            <thead>
+                                <tr style="color: #8892b0; text-transform: uppercase; font-size: 11px; text-align: left;">
+                                    <th style="padding: 4px 0;">Casta</th>
+                                    <th style="padding: 4px 0; text-align: right;">Corte Sugerido</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td style="color: #e5e7eb; padding: 4px 0;">🔴 Bronze</td><td style="text-align: right; color: #cd7f32; font-weight: bold;">&le; ${bronzeVal}</td></tr>
+                                <tr><td style="color: #e5e7eb; padding: 4px 0;">⚪ Prata</td><td style="text-align: right; color: #c0c0c0; font-weight: bold;">${prataMinVal} a ${prataMaxVal}</td></tr>
+                                <tr><td style="color: #e5e7eb; padding: 4px 0;">🟡 Ouro</td><td style="text-align: right; color: #ffd700; font-weight: bold;">${ouroMinVal} a ${ouroMaxVal}</td></tr>
+                                <tr><td style="color: #e5e7eb; padding: 4px 0;">💎 Platina</td><td style="text-align: right; color: #e5e4e2; font-weight: bold;">&ge; ${platinaMinVal}</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            });
+
+            html += '</div>';
+
+            html += `
+                <div style="margin-top: 24px; text-align: right; border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 16px;">
+                    <button id="saveCalculatedLimitsBtn" class="btn primary" style="background: linear-gradient(135deg, #2ecc71, #27ae60); color: #fff; padding: 10px 20px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer;">
+                        <i class="fas fa-save" style="margin-right: 6px;"></i> Guardar estes limites no Firestore (paineis overall)
+                    </button>
+                </div>
+            `;
+
+            container.innerHTML = html;
+
+            const saveBtn = document.getElementById('saveCalculatedLimitsBtn');
+            if (saveBtn) {
+                saveBtn.addEventListener('click', async () => {
+                    saveBtn.disabled = true;
+                    saveBtn.textContent = 'A guardar no Firestore...';
+                    try {
+                        await setDoc(doc(db, 'paineis', 'paineis overall'), calculatedLimits);
+                        alert('Limites da curva da qualidade guardados com sucesso em paineis overall!');
+                        overallLimitsData = calculatedLimits;
+                    } catch (err) {
+                        console.error('Erro ao guardar limites:', err);
+                        alert('Erro ao guardar os limites: ' + err.message);
+                    } finally {
+                        saveBtn.disabled = false;
+                        saveBtn.innerHTML = '<i class="fas fa-save" style="margin-right: 6px;"></i> Guardar estes limites no Firestore (paineis overall)';
+                    }
+                });
+            }
+        }
+
+        if (calcQualityCurveBtn) {
+            calcQualityCurveBtn.addEventListener('click', calculateQualityCurve);
+        }
 
     </script>
 
