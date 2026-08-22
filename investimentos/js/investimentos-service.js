@@ -1,5 +1,8 @@
 import { doc, getDoc, collection, setDoc, updateDoc, arrayUnion, addDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
+let cloudflareDetectedGlobal = false;
+const footyStatsHtmlCache = new Map();
+
 export function isClubActive(clube) {
     if (!clube) return false;
 
