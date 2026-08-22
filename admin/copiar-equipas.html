@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Copiar & Atualizar Equipas - G EMPIRE</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    
+    <!-- Auth Guard -->
+    <script type="module" src="js/auth-guard.js"></script>
+
+    <link rel="stylesheet" href="css/admin-global.css">
+    <link rel="stylesheet" href="css/menu-admin.css">
+
+    <style>
+        .step-card {
+            background-color: #111622;
+            padding: 24px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            margin-bottom: 24px;
+        }
+        .step-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #2176ff;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .step-desc {
+            color: #8892b0;
+            font-size: 14px;
+            margin-bottom: 16px;
+        }
+        textarea.data-box {
+            width: 100%;
+            height: 180px;
+            background-color: #090c10;
+            color: #4ed1a1;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 12px;
+            font-family: monospace;
+            font-size: 13px;
+            resize: vertical;
+            margin-bottom: 16px;
+        }
+        .action-btn {
+            background-color: #2176ff;
+            color: #ffffff;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .action-btn:hover {
+            background-color: #1a5cc4;
+            transform: translateY(-1px);
+        }
+        .action-btn.success {
+            background-color: #2ecc71;
+        }
+        .action-btn.success:hover {
+            background-color: #27ae60;
+        }
+        .status-msg {
+            margin-top: 12px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .status-msg.info { color: #2176ff; }
+        .status-msg.ok { color: #2ecc71; }
+        .status-msg.err { color: #e74c3c; }
+        .log-box {
+            max-height: 200px;
+            overflow-y: auto;
+            background-color: #090c10;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 8px;
+            padding: 12px;
+            font-family: monospace;
+            font-size: 12px;
+            color: #a0aec0;
+            margin-top: 12px;
+            display: none;
+        }
+    </style>
+</head>
+<body style="display: none;">
+
+    <nav id="menu-placeholder" class="top-menu"></nav>
+
+    <div class="content">
+        <h1><i class="fa-solid fa-sync"></i> Copiar & Sincronizar Equipas (FootyStats)</h1>
+
+        <!-- PASSO 1 -->
+        <div class="step-card">
+            <div class="step-title">
+                <i class="fa-solid fa-download"></i> Passo 1: Exportar Equipas do Firebase
+            </div>
+            <div class="step-desc">
+                Clica no botão para ler todas as equipas do teu Firebase e copiar a lista para a Área de Transferência. Depois cola o texto aqui no chat.
+            </div>
+            <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                <button id="btn-copiar" class="action-btn">
+                    <i class="fa-solid fa-copy"></i> Copiar JSON Completo
+                </button>
+                <button id="btn-copiar-nomes" class="action-btn" style="background-color: #e67e22;">
+                    <i class="fa-solid fa-list-ul"></i> Copiar Apenas Nomes das Equipas
+                </button>
+            </div>
+            <div id="status-copiar" class="status-msg"></div>
+            <textarea id="txt-export" class="data-box" placeholder="A lista exportada vai aparecer aqui..." readonly style="margin-top: 16px;"></textarea>
+        </div>
+
+        <!-- PASSO 2 -->
+        <div class="step-card">
+            <div class="step-title">
+                <i class="fa-solid fa-upload"></i> Passo 2: Importar e Atualizar Embeds no Firebase
+            </div>
+            <div class="step-desc">
+                Clica no botão roxo para carregar os dados das 424 equipas processadas automaticamente (ou cola o JSON manualmente) e depois clica em <b>"Atualizar Equipas no Firebase"</b>.
+            </div>
+            <button id="btn-carregar-auto" class="action-btn" style="background-color: #8e44ad; margin-bottom: 16px;">
+                <i class="fa-solid fa-wand-magic-sparkles"></i> Carregar 424 Equipas Processadas Automáticas
+            </button>
+            <textarea id="txt-import" class="data-box" placeholder='Cole aqui a lista/JSON com os dados atualizados...'></textarea>
+            <button id="btn-atualizar" class="action-btn success">
+                <i class="fa-solid fa-bolt"></i> Atualizar Equipas no Firebase
+            </button>
+            <div id="status-atualizar" class="status-msg"></div>
+            <div id="log-atualizar" class="log-box"></div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { db } from './js/auth-guard.js';
+        import { collection, getDocs, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        let listaEquipasLocais = [];
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const btnCopiar = document.getElementById('btn-copiar');
+            const btnAtualizar = document.getElementById('btn-atualizar');
+            const btnCarregarAuto = document.getElementById('btn-carregar-auto');
+            const txtExport = document.getElementById('txt-export');
+            const txtImport = document.getElementById('txt-import');
+            const statusCopiar = document.getElementById('status-copiar');
+            const statusAtualizar = document.getElementById('status-atualizar');
+            const logBox = document.getElementById('log-atualizar');
+
+            // 0. CARREGAR JSON GERADO AUTOMATICAMENTE
+            btnCarregarAuto.addEventListener('click', async () => {
+                try {
+                    statusAtualizar.className = 'status-msg info';
+                    statusAtualizar.textContent = 'A carregar ficheiro de equipas atualizadas...';
+                    const resp = await fetch('equipas_atualizadas.json');
+                    if (!resp.ok) throw new Error('Não foi possível encontrar equipas_atualizadas.json');
+                    const data = await resp.json();
+                    txtImport.value = JSON.stringify(data, null, 2);
+                    statusAtualizar.className = 'status-msg ok';
+                    statusAtualizar.textContent = `✨ ${data.length} equipas com o embed do FootyStats prontas! Clica no botão verde "Atualizar Equipas no Firebase" para gravar tudo.`;
+                } catch (e) {
+                    console.error(e);
+                    statusAtualizar.className = 'status-msg err';
+                    statusAtualizar.textContent = '❌ Erro ao carregar o ficheiro automático: ' + e.message;
+                }
+            });
+
+            const btnCopiarNomes = document.getElementById('btn-copiar-nomes');
+
+            // 1. COPIAR EQUIPAS (JSON COMPLETO)
+            btnCopiar.addEventListener('click', async () => {
+                try {
+                    statusCopiar.className = 'status-msg info';
+                    statusCopiar.textContent = 'A carregar equipas do Firebase...';
+
+                    const querySnapshot = await getDocs(collection(db, 'clubes'));
+                    listaEquipasLocais = [];
+
+                    querySnapshot.forEach(docSnap => {
+                        const data = docSnap.data();
+                        listaEquipasLocais.push({
+                            id: docSnap.id,
+                            nome: data.nome || data.nomeClube || '',
+                            nomeEn: data.nomeEn || data['nome-clube-en'] || '',
+                            pais: data.pais || '',
+                            codigoUrl: data.codigoUrl || data['codigo-url-clube'] || '',
+                            investimentosEmbed: data['investimentos-embed'] || data.investimentosEmbed || ''
+                        });
+                    });
+
+                    const jsonStr = JSON.stringify(listaEquipasLocais, null, 2);
+                    txtExport.value = jsonStr;
+
+                    await navigator.clipboard.writeText(jsonStr);
+                    statusCopiar.className = 'status-msg ok';
+                    statusCopiar.textContent = `✅ ${listaEquipasLocais.length} equipas carregadas e copiadas para a Área de Transferência! Cola a lista no chat.`;
+                } catch (err) {
+                    console.error('Erro ao carregar equipas:', err);
+                    statusCopiar.className = 'status-msg err';
+                    statusCopiar.textContent = '❌ Erro ao carregar equipas: ' + err.message;
+                }
+            });
+
+            // 1B. COPIAR APENAS NOMES DAS EQUIPAS
+            btnCopiarNomes.addEventListener('click', async () => {
+                try {
+                    statusCopiar.className = 'status-msg info';
+                    statusCopiar.textContent = 'A carregar equipas do Firebase...';
+
+                    const querySnapshot = await getDocs(collection(db, 'clubes'));
+                    const nomes = [];
+
+                    querySnapshot.forEach(docSnap => {
+                        const data = docSnap.data();
+                        const nome = (data.nome || data.nomeClube || '').trim();
+                        if (nome) nomes.push(nome);
+                    });
+
+                    nomes.sort((a, b) => a.localeCompare(b, 'pt', { sensitivity: 'base' }));
+
+                    const nomesTexto = nomes.join('\n');
+                    txtExport.value = nomesTexto;
+
+                    await navigator.clipboard.writeText(nomesTexto);
+                    statusCopiar.className = 'status-msg ok';
+                    statusCopiar.textContent = `✅ Lista com ${nomes.length} nomes de equipas copiada para a Área de Transferência!`;
+                } catch (err) {
+                    console.error('Erro ao carregar nomes das equipas:', err);
+                    statusCopiar.className = 'status-msg err';
+                    statusCopiar.textContent = '❌ Erro ao carregar nomes: ' + err.message;
+                }
+            });
+
+            // 2. ATUALIZAR EQUIPAS NO FIREBASE
+            btnAtualizar.addEventListener('click', async () => {
+                const inputData = txtImport.value.trim();
+                if (!inputData) {
+                    statusAtualizar.className = 'status-msg err';
+                    statusAtualizar.textContent = '⚠️ Por favor cole o JSON com as equipas atualizadas antes de clicar.';
+                    return;
+                }
+
+                try {
+                    let equipasParaAtualizar = JSON.parse(inputData);
+                    if (!Array.isArray(equipasParaAtualizar)) {
+                        equipasParaAtualizar = [equipasParaAtualizar];
+                    }
+
+                    statusAtualizar.className = 'status-msg info';
+                    statusAtualizar.textContent = `A processar ${equipasParaAtualizar.length} equipas...`;
+                    logBox.style.display = 'block';
+                    logBox.innerHTML = '';
+
+                    let sucessos = 0;
+                    let erros = 0;
+
+                    for (const item of equipasParaAtualizar) {
+                        const docId = item.id;
+                        const embedVal = item.investimentosEmbed || item['investimentos-embed'] || item.embed || '';
+
+                        if (!docId) {
+                            logBox.innerHTML += `<div style="color: #e74c3c;">❌ Item sem ID ignorado: ${item.nome || 'Desconhecido'}</div>`;
+                            erros++;
+                            continue;
+                        }
+
+                        if (!embedVal) {
+                            logBox.innerHTML += `<div style="color: #f1c40f;">⚠️ Sem embed para ${item.nome || docId} - ignorado.</div>`;
+                            continue;
+                        }
+
+                        try {
+                            const clubeRef = doc(db, 'clubes', docId);
+
+                            // Extrai só o ID numérico se for um iframe completo
+                            let idOnly = embedVal;
+                            const matchId = embedVal.match(/id=(\d+)/);
+                            if (matchId) {
+                                idOnly = matchId[1];
+                            }
+
+                            await updateDoc(clubeRef, {
+                                'investimentos-embed': embedVal,
+                                'investimentoembed': embedVal,
+                                'footystats_embed': embedVal,
+                                'footystats_id': idOnly
+                            });
+                            logBox.innerHTML += `<div style="color: #2ecc71;">✅ Atualizado [${item.nome || docId}]: ${embedVal}</div>`;
+                            sucessos++;
+                        } catch (e) {
+                            console.error(`Erro ao atualizar ${docId}:`, e);
+                            logBox.innerHTML += `<div style="color: #e74c3c;">❌ Erro em [${item.nome || docId}]: ${e.message}</div>`;
+                            erros++;
+                        }
+                        logBox.scrollTop = logBox.scrollHeight;
+                    }
+
+                    statusAtualizar.className = 'status-msg ok';
+                    statusAtualizar.textContent = `🎉 Concluído! ${sucessos} equipas atualizadas com sucesso no Firebase (${erros} erros).`;
+
+                } catch (err) {
+                    console.error('Erro no JSON de importação:', err);
+                    statusAtualizar.className = 'status-msg err';
+                    statusAtualizar.textContent = '❌ Erro no formato do JSON: ' + err.message;
+                }
+            });
+        });
+    </script>
+    <script src="js/menuadmin-loader.js"></script>
+</body>
+</html>
