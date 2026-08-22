@@ -627,6 +627,8 @@ async function loadTransactions() {
                 itemName = transaction.managerTipo + " " + itemManagerValue;
             } else if (transaction.nomeJogo) {
                 itemName = transaction.nomeJogo;
+            } else if (transaction.jogo) {
+                itemName = transaction.jogo;
             } else if (transaction.jogadorId) {
                 try {
                     const playerDoc = await getDoc(doc(db, 'jogadores', transaction.jogadorId));
@@ -641,16 +643,28 @@ async function loadTransactions() {
                 itemName = 'N/A';
             }
 
-            const date = transaction.movimentoData ? transaction.movimentoData.toDate().toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: '2-digit' }) : 'Data Indisponível';
+            let date = 'Data Indisponível';
+            if (transaction.movimentoData && typeof transaction.movimentoData.toDate === 'function') {
+                date = transaction.movimentoData.toDate().toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: '2-digit' });
+            } else if (transaction.data) {
+                date = transaction.data;
+            } else if (transaction.timestamp) {
+                date = new Date(transaction.timestamp).toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: '2-digit' });
+            }
+
             let valorReal = transaction.valorreal !== undefined ? transaction.valorreal : 0;
-            let valorRealColor = 'black';
-            if (valorReal > 0) valorRealColor = 'green';
-            else if (valorReal < 0) valorRealColor = 'red';
+            let valorRealColor = '#94a3b8';
+            if (valorReal > 0) valorRealColor = '#10b981';
+            else if (valorReal < 0) valorRealColor = '#ef4444';
+
+            const isInvestimento = transaction.tipo === 'Investimento' || transaction.estado === 'Investimentos Paid';
+            const coinSuffix = isInvestimento ? ' ɱ-₲₵' : ' ₲₵';
+            const formattedVal = (valorReal > 0 ? '+' : '') + valorReal + coinSuffix;
 
             listItem.innerHTML = `
-                <p>${transaction.estado}</p>
+                <p>${transaction.estado || 'Transação'}</p>
                 <p>${itemName}</p>
-                <p><span style="color: ${valorRealColor}">${valorReal}</span></p>
+                <p><span style="color: ${valorRealColor}; font-weight: 600;">${formattedVal}</span></p>
                 <p>${date}</p>
             `;
             transactionsHTML.appendChild(listItem);
