@@ -1,6 +1,6 @@
 import { doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 import { fetchFootyStatsHtmlWithCloudflareCheck } from './investimentos-service.js';
-import { extractMatchesFromEmbedHtml } from './investimentos-charts.js';
+import { extractMatchesFromEmbedHtml, getClubFootystatsId } from './investimentos-charts.js';
 
 export async function renderMarketTicker(db, allClubs, userArenaName, userArenaNum, userChosenIds, userId, limitPorPessoa, openModalCallback, onAddCallback) {
     const trackEl = document.getElementById('ticker-track');
@@ -60,6 +60,8 @@ export async function renderMarketTicker(db, allClubs, userArenaName, userArenaN
             `;
         }
 
+        const footystatsId = getClubFootystatsId(clube);
+
         cardsHtml += `
             <div class="ticker-card">
                 ${addBtnHtml}
@@ -71,12 +73,10 @@ export async function renderMarketTicker(db, allClubs, userArenaName, userArenaN
                     </div>
                 </div>
                 <div class="ticker-card-stats">
-                    <div id="ticker-chart-${idx}" style="flex: 1; height: 18px; margin-right: 6px;">
-                        <svg viewBox="0 0 100 20" style="width: 100%; height: 18px; overflow: visible;">
-                            <path d="M 0 15 L 25 12 L 50 14 L 75 8 L 100 5" fill="none" stroke="#38bdf8" stroke-width="1.5" stroke-linecap="round"/>
-                        </svg>
+                    <div id="ticker-chart-${idx}" style="flex: 1; height: 18px; margin-right: 6px; display: flex; align-items: center;">
+                        <span style="font-size: 9.5px; color: #64748b;">${footystatsId ? 'A carregar...' : 'Sem cotação'}</span>
                     </div>
-                    <span id="ticker-val-${idx}" style="font-size: 10px; font-weight: 700; color: #10b981; background: rgba(16, 185, 129, 0.15); padding: 1px 5px; border-radius: 4px;">+0.0%</span>
+                    <span id="ticker-val-${idx}" style="font-size: 10px; font-weight: 700; color: #94a3b8; background: rgba(148, 163, 184, 0.15); padding: 1px 5px; border-radius: 4px;">${footystatsId ? '...' : 'N/D'}</span>
                 </div>
             </div>
         `;
@@ -107,17 +107,19 @@ export async function renderMarketTicker(db, allClubs, userArenaName, userArenaN
     });
 
     const tickerPromises = selectedClubs.map(async (clube, idx) => {
-        const rawEmbed = clube.investimentoembed;
-        let footystatsId = '';
-        if (rawEmbed) {
-            const idMatch = String(rawEmbed).match(/id=(\d+)/i);
-            if (idMatch && idMatch[1]) {
-                footystatsId = idMatch[1];
-            } else if (/^\d+$/.test(String(rawEmbed).trim())) {
-                footystatsId = String(rawEmbed).trim();
-            }
+        const footystatsId = getClubFootystatsId(clube);
+
+        if (!footystatsId) {
+            trackEl.querySelectorAll(`#ticker-val-${idx}`).forEach(valEl => {
+                valEl.textContent = 'N/D';
+                valEl.style.color = '#94a3b8';
+                valEl.style.background = 'rgba(148, 163, 184, 0.15)';
+            });
+            trackEl.querySelectorAll(`#ticker-chart-${idx}`).forEach(chartEl => {
+                chartEl.innerHTML = `<span style="font-size: 9.5px; color: #64748b;">Sem cotação</span>`;
+            });
+            return;
         }
-        if (!footystatsId) return;
 
         let html = await fetchFootyStatsHtmlWithCloudflareCheck(footystatsId);
 

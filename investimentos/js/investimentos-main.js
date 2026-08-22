@@ -11,7 +11,8 @@ import {
     getClubCountry, 
     addInvestment, 
     removeInvestment,
-    isCloudflareDetected
+    isCloudflareDetected,
+    isClubActive
 } from './investimentos-service.js';
 import { 
     renderMyClubsSection, 
@@ -204,7 +205,9 @@ async function loadAndSyncInvestments(userArenaNameArg, userArenaNumArg, userIdA
             }
         });
 
-        const allClubs = clubsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const allClubs = clubsSnap.docs
+            .map(d => ({ id: d.id, ...d.data() }))
+            .filter(clube => isClubActive(clube));
 
         allClubs.forEach(clube => {
             const resolvedArena = getClubArena(clube, compMapById, compMapByName, compMapByClubId);

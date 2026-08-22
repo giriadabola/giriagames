@@ -3,7 +3,8 @@ import {
     fetchFootyStatsHtmlWithCloudflareCheck 
 } from './investimentos-service.js';
 import { 
-    extractMatchesFromEmbedHtml 
+    extractMatchesFromEmbedHtml,
+    getClubFootystatsId
 } from './investimentos-charts.js';
 import { 
     displayExtractedMatchesInCard 
@@ -88,16 +89,7 @@ export async function openTeamDetailModal(clube, userArenaNum, userId, limitPorP
         if (e.target === modal) modal.style.display = 'none';
     };
 
-    const rawEmbed = clube.investimentoembed;
-    let footystatsId = '';
-    if (rawEmbed) {
-        const idMatch = String(rawEmbed).match(/id=(\d+)/i);
-        if (idMatch && idMatch[1]) {
-            footystatsId = idMatch[1];
-        } else if (/^\d+$/.test(String(rawEmbed).trim())) {
-            footystatsId = String(rawEmbed).trim();
-        }
-    }
+    const footystatsId = getClubFootystatsId(clube);
 
     if (footystatsId) {
         const html = await fetchFootyStatsHtmlWithCloudflareCheck(footystatsId);

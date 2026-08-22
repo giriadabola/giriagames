@@ -1,7 +1,49 @@
 import { doc, getDoc, collection, setDoc, updateDoc, arrayUnion, addDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
-let cloudflareDetectedGlobal = false;
-const footyStatsHtmlCache = new Map();
+export function isClubActive(clube) {
+    if (!clube) return false;
+
+    if (clube.ativo !== undefined && clube.ativo !== null) {
+        if (clube.ativo === false || 
+            clube.ativo === 0 || 
+            String(clube.ativo).trim().toLowerCase() === 'false' || 
+            String(clube.ativo).trim().toLowerCase() === 'no' || 
+            String(clube.ativo).trim().toLowerCase() === 'off' || 
+            String(clube.ativo).trim().toLowerCase() === 'nao' || 
+            String(clube.ativo).trim().toLowerCase() === 'não') {
+            return false;
+        }
+    }
+
+    if (clube.status !== undefined && clube.status !== null) {
+        if (clube.status === false || 
+            clube.status === 0 || 
+            String(clube.status).trim().toLowerCase() === 'false' || 
+            String(clube.status).trim().toLowerCase() === 'no' || 
+            String(clube.status).trim().toLowerCase() === 'off' || 
+            String(clube.status).trim().toLowerCase() === 'nao' || 
+            String(clube.status).trim().toLowerCase() === 'não') {
+            return false;
+        }
+    }
+
+    if (clube.investimentos && Array.isArray(clube.investimentos) && clube.investimentos.length > 0) {
+        const invStatus = clube.investimentos[0].status;
+        if (invStatus !== undefined && invStatus !== null) {
+            if (invStatus === false || 
+                invStatus === 0 || 
+                String(invStatus).trim().toLowerCase() === 'false' || 
+                String(invStatus).trim().toLowerCase() === 'no' || 
+                String(invStatus).trim().toLowerCase() === 'off' || 
+                String(invStatus).trim().toLowerCase() === 'nao' || 
+                String(invStatus).trim().toLowerCase() === 'não') {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
 
 export function isCloudflareDetected() {
     return cloudflareDetectedGlobal;

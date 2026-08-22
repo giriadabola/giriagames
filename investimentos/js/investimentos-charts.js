@@ -89,12 +89,45 @@ export function getResultStatus(clubeNome, jogo) {
     }
 }
 
+export function getClubFootystatsId(clube) {
+    if (!clube) return '';
+    const rawEmbed = clube.investimentoembed || 
+                     clube.footystats_embed || 
+                     clube.footystats_id || 
+                     clube.footystatsId || 
+                     clube.embed || 
+                     (clube.investimentos && clube.investimentos[0] && (clube.investimentos[0].embed || clube.investimentos[0].investimentoembed || clube.investimentos[0].footystatsId)) ||
+                     '';
+    if (!rawEmbed) return '';
+    const idMatch = String(rawEmbed).match(/id=(\d+)/i);
+    if (idMatch && idMatch[1]) {
+        return idMatch[1];
+    } else if (/^\d+$/.test(String(rawEmbed).trim())) {
+        return String(rawEmbed).trim();
+    }
+    return '';
+}
+
 export function renderFinancialWidgetForClub(matches, index, isAvailable = true) {
     const formContainer = document.getElementById(isAvailable ? `avail-form-${index}` : `my-form-${index}`);
     const chartContainer = document.getElementById(isAvailable ? `avail-chart-container-${index}` : `my-chart-container-${index}`);
     const trendValEl = document.getElementById(isAvailable ? `avail-trend-val-${index}` : `my-trend-val-${index}`);
 
-    if (!matches || matches.length === 0) return;
+    if (!matches || matches.length === 0) {
+        if (formContainer) {
+            formContainer.innerHTML = `<span style="color: #64748b; font-size: 11px;">N/D</span>`;
+        }
+        if (trendValEl) {
+            trendValEl.textContent = 'N/D';
+            trendValEl.style.color = '#94a3b8';
+            trendValEl.style.background = 'rgba(148, 163, 184, 0.15)';
+            trendValEl.style.borderColor = 'rgba(148, 163, 184, 0.3)';
+        }
+        if (chartContainer) {
+            chartContainer.innerHTML = `<div style="color: #64748b; font-size: 11px; text-align: center; padding: 10px 0;">Sem dados de cotação</div>`;
+        }
+        return;
+    }
 
     const recentMatches = matches.slice(0, 5);
     const chronoMatches = [...recentMatches].reverse();

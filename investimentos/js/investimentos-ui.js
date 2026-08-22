@@ -1,12 +1,12 @@
-import { doc, getDoc, collection, query, where, getDocs } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 import { 
     extractMatchesFromEmbedHtml, 
-    renderFinancialWidgetForClub 
+    renderFinancialWidgetForClub,
+    parseMatchDateStringToTimestamp,
+    getClubFootystatsId
 } from './investimentos-charts.js';
 import { 
     fetchFootyStatsHtmlWithCloudflareCheck, 
-    syncMatchesToFirestoreInvestmentHistory,
-    parseMatchDateStringToTimestamp
+    syncMatchesToFirestoreInvestmentHistory
 } from './investimentos-service.js';
 
 export const PAGE_SIZE = 25;
@@ -339,16 +339,7 @@ export async function renderMyClubsSection(db, myClubs, grid, paginationContaine
             `;
         }
 
-        const rawEmbed = clube.investimentoembed;
-        let footystatsId = '';
-        if (rawEmbed) {
-            const idMatch = String(rawEmbed).match(/id=(\d+)/i);
-            if (idMatch && idMatch[1]) {
-                footystatsId = idMatch[1];
-            } else if (/^\d+$/.test(String(rawEmbed).trim())) {
-                footystatsId = String(rawEmbed).trim();
-            }
-        }
+        const footystatsId = getClubFootystatsId(clube);
         
         const card = document.createElement('div');
         const gradClass = `card-grad-${i % 6}`;
@@ -395,21 +386,12 @@ export async function renderMyClubsSection(db, myClubs, grid, paginationContaine
                     <span style="font-size: 11px; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 5px;">
                         <i class="fas fa-chart-line" style="color: #10b981;"></i> Rendimento Estimado
                     </span>
-                    <span id="${trendValId}" style="font-size: 11px; font-weight: 700; color: #10b981; background: rgba(16, 185, 129, 0.15); padding: 2px 7px; border-radius: 10px; border: 1px solid rgba(16, 185, 129, 0.3);">
-                        +0.0%
+                    <span id="${trendValId}" style="font-size: 11px; font-weight: 700; color: #94a3b8; background: rgba(148, 163, 184, 0.15); padding: 2px 7px; border-radius: 10px; border: 1px solid rgba(148, 163, 184, 0.3);">
+                        ${footystatsId ? '...' : 'N/D'}
                     </span>
                 </div>
                 <div id="${chartId}">
-                    <svg viewBox="0 0 200 45" style="width: 100%; height: 42px; overflow: visible;">
-                        <defs>
-                            <linearGradient id="chartGrad-my-${i}" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.25"/>
-                                <stop offset="100%" stop-color="#38bdf8" stop-opacity="0.0"/>
-                            </linearGradient>
-                        </defs>
-                        <path d="M 0 35 L 50 30 L 100 28 L 150 20 L 200 15 L 200 45 L 0 45 Z" fill="url(#chartGrad-my-${i})"/>
-                        <path d="M 0 35 L 50 30 L 100 28 L 150 20 L 200 15" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round"/>
-                    </svg>
+                    <div style="color: #64748b; font-size: 11px; text-align: center; padding: 10px 0;">${footystatsId ? 'A carregar cotação...' : 'Sem dados de cotação'}</div>
                 </div>
             </div>
 
@@ -535,16 +517,7 @@ export async function renderAvailableClubsSection(availableClubs, availableGrid,
     const availablePromises = [];
     for (let i = 0; i < pagedClubs.length; i++) {
         const clube = pagedClubs[i];
-        const rawEmbed = clube.investimentoembed;
-        let footystatsId = '';
-        if (rawEmbed) {
-            const idMatch = String(rawEmbed).match(/id=(\d+)/i);
-            if (idMatch && idMatch[1]) {
-                footystatsId = idMatch[1];
-            } else if (/^\d+$/.test(String(rawEmbed).trim())) {
-                footystatsId = String(rawEmbed).trim();
-            }
-        }
+        const footystatsId = getClubFootystatsId(clube);
 
         const card = document.createElement('div');
         card.className = `investment-card card-grad-${(i + 2) % 6}`;
@@ -584,21 +557,12 @@ export async function renderAvailableClubsSection(availableClubs, availableGrid,
                     <span style="font-size: 11px; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 5px;">
                         <i class="fas fa-chart-line" style="color: #10b981;"></i> Rendimento Estimado
                     </span>
-                    <span id="${availTrendValId}" style="font-size: 11px; font-weight: 700; color: #10b981; background: rgba(16, 185, 129, 0.15); padding: 2px 7px; border-radius: 10px; border: 1px solid rgba(16, 185, 129, 0.3);">
-                        +0.0%
+                    <span id="${availTrendValId}" style="font-size: 11px; font-weight: 700; color: #94a3b8; background: rgba(148, 163, 184, 0.15); padding: 2px 7px; border-radius: 10px; border: 1px solid rgba(148, 163, 184, 0.3);">
+                        ${footystatsId ? '...' : 'N/D'}
                     </span>
                 </div>
                 <div id="${availChartId}">
-                    <svg viewBox="0 0 200 45" style="width: 100%; height: 42px; overflow: visible;">
-                        <defs>
-                            <linearGradient id="chartGrad-avail-${i}" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.25"/>
-                                <stop offset="100%" stop-color="#38bdf8" stop-opacity="0.0"/>
-                            </linearGradient>
-                        </defs>
-                        <path d="M 0 35 L 50 30 L 100 28 L 150 20 L 200 15 L 200 45 L 0 45 Z" fill="url(#chartGrad-avail-${i})"/>
-                        <path d="M 0 35 L 50 30 L 100 28 L 150 20 L 200 15" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round"/>
-                    </svg>
+                    <div style="color: #64748b; font-size: 11px; text-align: center; padding: 10px 0;">${footystatsId ? 'A carregar cotação...' : 'Sem dados de cotação'}</div>
                 </div>
             </div>
 
@@ -612,16 +576,15 @@ export async function renderAvailableClubsSection(availableClubs, availableGrid,
             openModalCallback(clube);
         });
 
-        const containerEl = document.getElementById(availEmbedContainerId);
-        if (containerEl && footystatsId) {
+        if (footystatsId) {
             availablePromises.push(
                 fetchFootyStatsHtmlWithCloudflareCheck(footystatsId).then(html => {
-                    if (html) {
-                        const matches = extractMatchesFromEmbedHtml(html);
-                        renderFinancialWidgetForClub(matches, i, true);
-                    }
+                    const matches = html ? extractMatchesFromEmbedHtml(html) : [];
+                    renderFinancialWidgetForClub(matches, i, true);
                 })
             );
+        } else {
+            renderFinancialWidgetForClub([], i, true);
         }
     }
     await Promise.all(availablePromises);
