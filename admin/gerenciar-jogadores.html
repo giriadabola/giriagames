@@ -217,7 +217,6 @@
         <div style="display: flex; justify-content: flex-end; margin-bottom: 20px;">
             <button id="multiChangeButton" class="market-time-button">Mudar Vários</button>
             <button id="agendaMercadoButton" class="market-time-button" style="background-color: #8e44ad;"><i class="fas fa-calendar-alt" style="margin-right: 6px;"></i> Agenda Mercado</button>
-            <button id="saveChanges" class="save-button">Salvar</button>
         </div>
 
         <div class="filters-container" style="display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: center; margin-bottom: 24px; background: #111622; padding: 16px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.06); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);">
@@ -359,7 +358,6 @@
     import { fetchUniqueSeasons, getPlayerSeasonData, isPlayerMigrated } from './js/player-season-helper.js';
 
     // --- VARIÁVEIS GLOBAIS ---
-    let changedPlayers = new Map();
     let rawPlayersDocs = [];
     let allPlayers = [];
     let seasonsList = [];
@@ -429,19 +427,14 @@
             </div>
         `;
 
-        const updateChanges = (playerId, field, value) => {
-            const currentChanges = changedPlayers.get(playerId) || {};
-            currentChanges[field] = value;
-            changedPlayers.set(playerId, currentChanges);
-        };
-
-        card.querySelector('input[type="checkbox"]').addEventListener('change', (e) => {
-            updateChanges(docId, 'noMercado', e.target.checked);
+        card.querySelector('input[type="checkbox"]').addEventListener('change', async (e) => {
+            const isChecked = e.target.checked;
+            await updateSinglePlayerField(docId, 'noMercado', isChecked);
         });
 
-        card.querySelector('.price-input').addEventListener('input', (e) => {
+        card.querySelector('.price-input').addEventListener('change', async (e) => {
             const priceValue = parseFloat(e.target.value) || 0;
-            updateChanges(docId, 'preco', priceValue);
+            await updateSinglePlayerField(docId, 'preco', priceValue);
         });
         
         return card;
@@ -636,60 +629,39 @@
         displayPlayers(playersToDisplay);
     }
 
-    async function saveChanges() {
+    async function updateSinglePlayerField(docId, field, value) {
         try {
-            if (changedPlayers.size === 0) {
-                alert('Nenhuma alteração para salvar.');
-                return;
-            }
-            const batch = [];
+            const playerRef = doc(db, 'jogadores', docId);
+            const rawItem = rawPlayersDocs.find(r => r.id === docId);
             const now = new Date().toISOString();
-            
-            for (const [playerId, updates] of changedPlayers) {
-                const playerRef = doc(db, 'jogadores', playerId);
-                const rawItem = rawPlayersDocs.find(r => r.id === playerId);
-                const isMigrated = isPlayerMigrated(rawItem?.rawData);
+            const isMigrated = isPlayerMigrated(rawItem?.rawData);
 
-                if (isMigrated || currentSeason !== '2025/2026') {
-                    const fieldsAndValues = [];
-                    for (const [key, value] of Object.entries(updates)) {
-                        fieldsAndValues.push(new FieldPath(currentSeason, key), value);
-                    }
-                    fieldsAndValues.push(new FieldPath(currentSeason, 'ultimaAtualizacao'), now);
-                    batch.push(updateDoc(playerRef, ...fieldsAndValues));
-                } else {
-                    const payload = {};
-                    for (const [key, value] of Object.entries(updates)) {
-                        payload[key] = value;
-                    }
-                    payload.ultimaAtualizacao = now;
-                    batch.push(updateDoc(playerRef, payload));
-                }
-            }
-
-            await Promise.all(batch);
-            alert('Alterações salvas com sucesso!');
-
-            for (const [playerId, updates] of changedPlayers) {
-                const rawItem = rawPlayersDocs.find(r => r.id === playerId);
+            if (isMigrated || currentSeason !== '2025/2026') {
+                await updateDoc(playerRef, new FieldPath(currentSeason, field), value, new FieldPath(currentSeason, 'ultimaAtualizacao'), now);
                 if (rawItem && rawItem.rawData) {
-                    const isMigrated = isPlayerMigrated(rawItem.rawData);
-                    if (isMigrated || currentSeason !== '2025/2026') {
-                        if (!rawItem.rawData[currentSeason]) rawItem.rawData[currentSeason] = {};
-                        Object.assign(rawItem.rawData[currentSeason], updates);
-                    } else {
-                        Object.assign(rawItem.rawData, updates);
-                    }
+                    if (!rawItem.rawData[currentSeason]) rawItem.rawData[currentSeason] = {};
+                    rawItem.rawData[currentSeason][field] = value;
+                    rawItem.rawData[currentSeason].ultimaAtualizacao = now;
+                }
+            } else {
+                await updateDoc(playerRef, { [field]: value, ultimaAtualizacao: now });
+                if (rawItem && rawItem.rawData) {
+                    rawItem.rawData[field] = value;
+                    rawItem.rawData.ultimaAtualizacao = now;
                 }
             }
-            
-            changedPlayers.clear(); 
-            allPlayers = processPlayersForCurrentSeason();
-            updateFiltersAndDisplay();
 
+            const playerObj = allPlayers.find(p => p.id === docId);
+            if (playerObj) {
+                playerObj[field] = value;
+            }
+
+            if (field === 'noMercado' && document.getElementById('filterNoMercado')?.value) {
+                updateFiltersAndDisplay(false);
+            }
         } catch (error) {
-            console.error('Error saving changes:', error);
-            alert('Erro ao salvar alterações. Por favor, tente novamente.');
+            console.error(`Erro ao atualizar ${field} do jogador:`, error);
+            alert('Erro ao atualizar alteração automaticamente. Por favor, tente novamente.');
         }
     }
 
@@ -1470,7 +1442,6 @@
 
     document.getElementById('filterTemporada').addEventListener('change', (e) => {
         currentSeason = e.target.value;
-        changedPlayers.clear();
         allPlayers = processPlayersForCurrentSeason();
         populateMarketTimeSelectors(allPlayers);
         updateFiltersAndDisplay();
@@ -1484,7 +1455,6 @@
     document.getElementById('filterSearch').addEventListener('input', updateFiltersAndDisplay);
 
     initializeApp();
-    document.getElementById('saveChanges').addEventListener('click', saveChanges);
 
 </script>
     
