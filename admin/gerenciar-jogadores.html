@@ -202,6 +202,8 @@
             background-color: rgba(142, 68, 173, 0.4);
             border-color: rgba(142, 68, 173, 0.7);
         }
+        .search-wrapper { position: relative; width: 100%; }
+        .search-wrapper i { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); color: #8892b0; pointer-events: none; }
     </style>
     <link rel="stylesheet" href="css/admin-global.css">
 </head>
@@ -219,6 +221,21 @@
         </div>
 
         <div class="filters-container" style="display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: center; margin-bottom: 24px; background: #111622; padding: 16px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.06); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);">
+            <div style="flex: 1.5; min-width: 220px;">
+                <label for="filterSearch" style="display: block; margin-bottom: 8px; color: #8892b0; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;">Pesquisar</label>
+                <div class="search-wrapper">
+                    <input type="text" id="filterSearch" placeholder="Pesquisar valores, nome, clube..." style="width: 100%; padding: 10px 36px 10px 14px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.08); background-color: #161c28; color: #ffffff; outline: none; font-size: 14px;">
+                    <i class="fas fa-search"></i>
+                </div>
+            </div>
+            <div style="flex: 1; min-width: 150px;">
+                <label for="filterNoMercado" style="display: block; margin-bottom: 8px; color: #8892b0; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;">No Mercado</label>
+                <select id="filterNoMercado" style="width: 100%; padding: 10px 14px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.08); background-color: #161c28; color: #ffffff; outline: none;">
+                    <option value="">Todos</option>
+                    <option value="on">On</option>
+                    <option value="off">Off</option>
+                </select>
+            </div>
             <div style="flex: 1; min-width: 180px;">
                 <label for="filterTemporada" style="display: block; margin-bottom: 8px; color: #8892b0; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;">Temporada</label>
                 <select id="filterTemporada" style="width: 100%; padding: 10px 14px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.08); background-color: #161c28; color: #ffffff; outline: none; font-weight: 700; color: #2176ff; border-color: rgba(33, 118, 255, 0.4);">
@@ -545,6 +562,24 @@
             pais: document.getElementById('filterPais').value
         };
 
+        const searchVal = (document.getElementById('filterSearch')?.value || '').trim().toLowerCase();
+        const noMercadoVal = document.getElementById('filterNoMercado')?.value || '';
+
+        const filterBySearchAndMarket = (player) => {
+            if (noMercadoVal === 'on' && !player.noMercado) return false;
+            if (noMercadoVal === 'off' && player.noMercado) return false;
+
+            if (searchVal) {
+                const matchName = player.nome && player.nome.toLowerCase().includes(searchVal);
+                const matchClube = player.clube && player.clube.toLowerCase().includes(searchVal);
+                const matchPreco = player.preco !== undefined && player.preco !== null && String(player.preco).toLowerCase().includes(searchVal);
+                const matchCasta = player.casta && player.casta.toLowerCase().includes(searchVal);
+                const matchPosicao = player.posicao && player.posicao.toLowerCase().includes(searchVal);
+                if (!matchName && !matchClube && !matchPreco && !matchCasta && !matchPosicao) return false;
+            }
+            return true;
+        };
+
         const selects = {
             posicao: document.getElementById('filterPosicao'),
             casta: document.getElementById('filterCasta'),
@@ -562,6 +597,7 @@
         Object.keys(selects).forEach(filterKey => {
             const counts = {};
             const relevantPlayers = allPlayers.filter(player => {
+                if (!filterBySearchAndMarket(player)) return false;
                 return Object.keys(selectedValues).every(key => {
                     if (key === filterKey) return true;
                     return !selectedValues[key] || player[fieldNames[key]] === selectedValues[key];
@@ -590,6 +626,7 @@
         });
 
         const playersToDisplay = allPlayers.filter(player => {
+            if (!filterBySearchAndMarket(player)) return false;
             return (!selectedValues.posicao || player.posicao === selectedValues.posicao) &&
                    (!selectedValues.casta || player.casta === selectedValues.casta) &&
                    (!selectedValues.competicao || player.competicaoNome === selectedValues.competicao) &&
@@ -1443,6 +1480,8 @@
     document.getElementById('filterCasta').addEventListener('change', updateFiltersAndDisplay);
     document.getElementById('filterCompeticao').addEventListener('change', updateFiltersAndDisplay);
     document.getElementById('filterPais').addEventListener('change', updateFiltersAndDisplay);
+    document.getElementById('filterNoMercado').addEventListener('change', updateFiltersAndDisplay);
+    document.getElementById('filterSearch').addEventListener('input', updateFiltersAndDisplay);
 
     initializeApp();
     document.getElementById('saveChanges').addEventListener('click', saveChanges);
