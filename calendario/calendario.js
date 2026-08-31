@@ -227,24 +227,29 @@ onAuthStateChanged(auth, async (user) => {
             console.error("Erro ao atualizar o campo ultimoacesso: ", error);
         }
 
-        const userInfo = await getUserStatus(user.uid);
-        if (userInfo && userInfo.aceite === "Yes") {
-            const menuSettings = await loadMenuSettings();
-            if (checkPageAccess(userInfo.estatuto, menuSettings)) {
-                const hasContentAccess = await checkPageContentAccess('calendario', userInfo.estatuto, db);
-                if (!hasContentAccess) {
-                    loadingScreen.style.display = 'none';
-                    return;
+        try {
+            const userInfo = await getUserStatus(user.uid);
+            if (userInfo && userInfo.aceite === "Yes") {
+                const menuSettings = await loadMenuSettings();
+                if (checkPageAccess(userInfo.estatuto, menuSettings)) {
+                    const hasContentAccess = await checkPageContentAccess('calendario', userInfo.estatuto, db);
+                    if (!hasContentAccess) {
+                        loadingScreen.style.display = 'none';
+                        return;
+                    }
+                    await logUserAction(`Entrou em ${document.title}`);
+                    mainContentWrapper.style.display = 'block';
+                    window.updateMenuVisibility(menuSettings);
+                    await loadCalendar();
+                } else {
+                    window.location.href = '404.html';
                 }
-                await logUserAction(`Entrou em ${document.title}`);
-                mainContentWrapper.style.display = 'block';
-                window.updateMenuVisibility(menuSettings);
-                await loadCalendar();
             } else {
-                window.location.href = '404.html';
+                window.location.href = 'index.html';
             }
-        } else {
-            window.location.href = 'index.html';
+        } catch (error) {
+            console.warn("Sem ligação ao backend do Firestore ou cliente offline:", error);
+            loadingScreen.style.display = 'none';
         }
     } else {
         window.location.href = 'index.html';
