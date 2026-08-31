@@ -151,6 +151,9 @@ export function getPlayerSeasonData(playerDocData, targetSeason) {
         if (seasonData.overall === undefined || seasonData.overall === null) {
             seasonData.overall = 0;
         }
+        if (seasonData.noMercado === undefined) {
+            seasonData.noMercado = playerDocData.noMercado !== undefined ? Boolean(playerDocData.noMercado) : false;
+        }
     } else if (isMigratedStructure) {
         // Estrutura com épocas, mas ainda sem dados criados especificamente para esta época.
         // Usa os dados da época mais recente como fallback para evitar campos vazios, mas mantém o overall a 0.
