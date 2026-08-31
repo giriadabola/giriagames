@@ -2149,11 +2149,13 @@ function renderProfileAgendaView() {
 
 function renderProfileAgendaList() {
     const calendarGrid = document.getElementById('profileCalendarGrid');
+    const gridWrapper = document.getElementById('profileCalendarGridWrapper');
     const calendarList = document.getElementById('profileCalendarList');
     const calendarMonthYear = document.getElementById('profileCalendarMonthYear');
     if (!calendarGrid || !calendarList || !calendarMonthYear) return;
 
-    calendarGrid.style.display = 'none';
+    if (gridWrapper) gridWrapper.style.display = 'none';
+    else calendarGrid.style.display = 'none';
     calendarList.style.display = 'flex';
     calendarList.innerHTML = '';
 
@@ -2298,11 +2300,13 @@ function renderProfileAgendaList() {
 
 function renderProfileAgendaCalendar() {
     const calendarGrid = document.getElementById('profileCalendarGrid');
+    const gridWrapper = document.getElementById('profileCalendarGridWrapper');
     const calendarList = document.getElementById('profileCalendarList');
     const calendarMonthYear = document.getElementById('profileCalendarMonthYear');
     if (!calendarGrid || !calendarMonthYear) return;
 
     if (calendarList) calendarList.style.display = 'none';
+    if (gridWrapper) gridWrapper.style.display = 'block';
     calendarGrid.style.display = 'grid';
 
     calendarGrid.innerHTML = '';
@@ -2372,7 +2376,7 @@ function renderProfileAgendaCalendar() {
             const tag = document.createElement('div');
             tag.className = 'calendar-event-tag';
             tag.title = `Mercado ${label} (${timeAbText} - ${timeFeText}): ${schedule.observacoes}`;
-            tag.innerHTML = `<i class="fas fa-shopping-bag" style="color: #bb86fc;"></i> Mercado ${label}`;
+            tag.innerHTML = `<i class="fas fa-shopping-bag" style="color: #bb86fc;"></i> <span class="tag-text-full">Mercado ${label}</span><span class="tag-text-short">${label}</span>`;
             
             tag.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -2388,7 +2392,7 @@ function renderProfileAgendaCalendar() {
             const tagGames = document.createElement('div');
             tagGames.className = 'calendar-event-tag tag-games';
             tagGames.style.cssText = 'background-color: rgba(52, 152, 219, 0.25); color: #90caf9; border: 1px solid rgba(52, 152, 219, 0.4);';
-            tagGames.innerHTML = `<i class="fas fa-futbol" style="color: #3498db;"></i> Jogos (${dayGames.length})`;
+            tagGames.innerHTML = `<i class="fas fa-futbol" style="color: #3498db;"></i> <span class="tag-text-full">Jogos (${dayGames.length})</span><span class="tag-text-short">${dayGames.length}</span>`;
             tagGames.title = `Clique para ver os ${dayGames.length} jogos deste dia`;
             tagGames.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -2402,7 +2406,7 @@ function renderProfileAgendaCalendar() {
             const tagOpen = document.createElement('div');
             tagOpen.className = 'calendar-event-tag tag-palpites-open';
             tagOpen.style.cssText = 'background-color: rgba(46, 204, 113, 0.25); color: #a3e635; border: 1px solid rgba(46, 204, 113, 0.4);';
-            tagOpen.innerHTML = `<i class="fas fa-unlock" style="color: #2ecc71;"></i> Palpites Open`;
+            tagOpen.innerHTML = `<i class="fas fa-unlock" style="color: #2ecc71;"></i> <span class="tag-text-full">Palpites Open</span><span class="tag-text-short">Open</span>`;
             tagOpen.title = `Palpites Abertos na Terça-feira`;
             tagOpen.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -2416,7 +2420,7 @@ function renderProfileAgendaCalendar() {
             const tagClosed = document.createElement('div');
             tagClosed.className = 'calendar-event-tag tag-palpites-closed';
             tagClosed.style.cssText = 'background-color: rgba(231, 76, 60, 0.25); color: #fca5a5; border: 1px solid rgba(231, 76, 60, 0.4);';
-            tagClosed.innerHTML = `<i class="fas fa-lock" style="color: #e74c3c;"></i> Palpites Closed`;
+            tagClosed.innerHTML = `<i class="fas fa-lock" style="color: #e74c3c;"></i> <span class="tag-text-full">Palpites Closed</span><span class="tag-text-short">Closed</span>`;
             tagClosed.title = `Palpites Fechados na Sexta-feira`;
             tagClosed.addEventListener('click', (e) => {
                 e.stopPropagation();
