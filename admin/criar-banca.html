@@ -476,7 +476,7 @@
 
     <link rel="stylesheet" href="css/menu-admin.css">
 </head>
-<body>
+<body data-admin-roles="ruler">
     <nav class="top-menu">
         <a href="engrenagem.html" class="menu-item"><i class="fas fa-home"></i>Home</a>
         <a href="fusiveis.html" class="menu-item"><i class="fas fa-bolt"></i>Fusíveis</a>
@@ -700,13 +700,9 @@
                     </div>
 
     <script type="module">
-        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-        import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
-        import { getFirestore, doc, getDoc, setDoc, collection, query, where, getDocs, addDoc, Timestamp, writeBatch, orderBy } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        import { adminAuthReady, db } from './js/auth-guard.js';
+        import { doc, getDoc, setDoc, collection, query, where, getDocs, addDoc, Timestamp, writeBatch, orderBy } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
         import { compactSeason, getLatestSeason, getSeasonData } from '../core/user-season.js';
-
-        const firebaseConfig = { apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0", authDomain: "g-games-8a8fc.firebaseapp.com", projectId: "g-games-8a8fc", storageBucket: "g-games-8a8fc.appspot.com", messagingSenderId: "689897349449", appId: "1:689897349449:web:536599794579901beb7a98", measurementId: "G-GTTPJ6G5MD" };
-        const app = initializeApp(firebaseConfig); const auth = getAuth(app); const db = getFirestore(app);
 
         // Elements
         const statusMessage = document.getElementById('status-message');
@@ -782,6 +778,10 @@
 
         async function calculateMovimentosSum(season) {
             const q = query(collection(db, "movimentos"), where("tipo", "==", "Banca"), where("temporada", "==", season));
+        }
+
+        async function calculateMovimentosSum(season) {
+            const q = query(collection(db, "movimentos"), where("tipo", "==", "Banca"), where("temporada", "==", season));
             const querySnapshot = await getDocs(q);
             let sum = 0; querySnapshot.forEach((doc) => { const p = parseFloat(doc.data().preco); if (!isNaN(p)) sum += p; });
             return sum;
@@ -794,7 +794,12 @@
             try {
                 await addDoc(collection(db, 'movimentos'), { preco: parseFloat(baseValueInput.value) || 0, movimentoData: Timestamp.now(), tipo: "Banca", temporada: currentSeason, descricao: "Ajuste manual" });
                 movimentosSum = await calculateMovimentosSum(currentSeason);
-                await setDoc(doc(db, "paineis", "Banca"), { valor: movimentosSum }, { merge: true });
+                const sKey = currentSeasonLabel || currentSeason;
+                const bancaSnap = await getDoc(doc(db, "paineis", "Banca"));
+                const existingSData = bancaSnap.exists() && typeof bancaSnap.data()[sKey] === 'object' ? bancaSnap.data()[sKey] : {};
+                await setDoc(doc(db, "paineis", "Banca"), { 
+                    [sKey]: { ...existingSData, valor: movimentosSum }
+                }, { merge: true });
                 baseValueInput.value = 0; updateCalculatedTotal(); feedbackMessage.textContent = 'Sucesso!'; feedbackMessage.className = 'feedback-message success';
             } catch (error) { console.error(error); feedbackMessage.textContent = 'Erro.'; feedbackMessage.className = 'feedback-message error'; }
         }
@@ -824,24 +829,6 @@
                 const seasonData = getSeasonData(uSnap.data(), currentSeasonLabel);
                 const newBal = (seasonData.GCoins || 0) + amt;
                 batch.update(uRef, { [currentSeasonLabel]: { ...seasonData, GCoins: newBal } });
-                batch.set(doc(db, "paineis", "Banca"), { valor: movimentosSum - amt }, { merge: true });
-                await batch.commit();
-                movimentosSum -= amt; updateCalculatedTotal(); loanPopup.style.display = 'none';
-            } catch (e) { console.error(e); loanFeedback.textContent = 'Erro.'; }
-        }
-
-        async function handleTaxaSubmit(e) {
-            e.preventDefault(); const r = parseFloat(taxaInput.value); const f = parseFloat(taxaBancaInput.value);
-            if (isNaN(r) || r <= 0 || isNaN(f) || f < 0) return;
-            taxaFeedback.textContent = 'A guardar...';
-            try {
-                await setDoc(doc(db, "paineis", "Banca"), { taxaWhoWins: r, taxaBanca: f }, { merge: true });
-                taxaFeedback.textContent = 'Guardado!'; setTimeout(() => taxaPopup.style.display = 'none', 1000);
-            } catch (e) { taxaFeedback.textContent = 'Erro.'; }
-        }
-
-       async function initializePage() {
-            try {
                 currentSeason = await fetchCurrentSeason();
                 movimentosSum = await calculateMovimentosSum(currentSeason);
                 updateCalculatedTotal(); 
@@ -1421,7 +1408,7 @@
             }
         }
 
-        onAuthStateChanged(auth, async (u) => { if(u && (await getDoc(doc(db,"users",u.uid))).data().estatuto==='ruler') { document.body.style.display='flex'; initializePage(); } else window.location.href='/'; });
+        adminAuthReady.then(initializePage);
     </script>
 </body>
 </html>

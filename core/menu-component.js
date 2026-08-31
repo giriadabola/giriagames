@@ -267,29 +267,42 @@ function setActiveMenuItem() {
     }
 }
 
-// Função de visibilidade global (sem alterações)
+// Função de visibilidade global melhorada para tratar booleanos, strings 'off' e aliases (ex: empire, manager, estadio)
 window.updateMenuVisibility = function(menuSettings) {
     const bottomMenu = document.querySelector('.bottom-menu');
-    if (!bottomMenu) return;
+    if (!bottomMenu || !menuSettings) return;
     
     const menuItems = bottomMenu.querySelectorAll('.menu-item');
     const settingToKeyMap = { 
-        '1x': '1x', 
-        'bank': 'bank', 
-        'empire': 'empire', 
-        'market': 'market', 
-        'profile': 'profile', 
-        'rankings': 'rankings', 
-        'team': 'team' 
+        '1x': ['1x', 'home'], 
+        'bank': ['bank', 'banca'], 
+        'empire': ['empire', 'manager', 'estadio'], 
+        'market': ['market'], 
+        'profile': ['profile'], 
+        'rankings': ['rankings'], 
+        'team': ['team', 'myteam'] 
     };
     
     menuItems.forEach(item => {
         const menuKey = item.dataset.menuKey;
         if (menuKey) {
-            const settingName = settingToKeyMap[menuKey];
-            const settingValue = menuSettings[settingName];
-            // Esconde o item se a configuração correspondente for 'off'
-            item.classList.toggle('hidden', settingValue === 'off');
+            const keysToCheck = Array.isArray(settingToKeyMap[menuKey]) 
+                ? settingToKeyMap[menuKey] 
+                : [settingToKeyMap[menuKey]];
+            
+            let isOff = false;
+            for (const key of keysToCheck) {
+                if (key in menuSettings) {
+                    const val = menuSettings[key];
+                    if (val === 'off' || val === false || val === 'false' || val === 'disabled' || val === 0) {
+                        isOff = true;
+                        break;
+                    }
+                }
+            }
+            
+            // Esconde o item se a configuração correspondente for 'off' ou false
+            item.classList.toggle('hidden', isOff);
         }
     });
-}
+};

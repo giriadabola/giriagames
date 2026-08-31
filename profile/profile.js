@@ -592,18 +592,52 @@ async function loadTransactions() {
     }
 
     try {
-        const seasonsQuery = query(collection(db, 'palpites'), orderBy('temporada', 'desc'), limit(1));
-        const seasonsSnapshot = await getDocs(seasonsQuery);
-        let latestSeason = seasonsSnapshot.docs[0]?.data()?.temporada || '';
-        latestSeason = latestSeason.replace('/', '');
+        let latestSeasonStr = '';
+        try {
+            const settingsSnap = await getDoc(doc(db, 'settings', 'temporadas'));
+            if (settingsSnap.exists() && Array.isArray(settingsSnap.data()?.temporadas) && settingsSnap.data().temporadas.length > 0) {
+                const temps = settingsSnap.data().temporadas;
+                latestSeasonStr = String(temps[temps.length - 1] || '').trim();
+            }
+        } catch (e) {
+            console.warn("Erro ao obter temporada de settings/temporadas:", e);
+        }
 
-        const movementsQuery = query(
-            collection(db, 'movimentos'),
-            where('userId', '==', user.uid),
-            where('temporada', '==', latestSeason),
-            where('estado', '!=', 'Dívida'),
-            orderBy('movimentoData', 'desc')
-        );
+        if (!latestSeasonStr) {
+            try {
+                const configSnap = await getDoc(doc(db, 'paineis', 'configuracoes_gerais'));
+                if (configSnap.exists() && configSnap.data()?.temporadaAtual) {
+                    latestSeasonStr = String(configSnap.data().temporadaAtual).trim();
+                }
+            } catch (e) {}
+        }
+
+        if (!latestSeasonStr) {
+            try {
+                const seasonsQuery = query(collection(db, 'palpites'), orderBy('temporada', 'desc'), limit(1));
+                const seasonsSnapshot = await getDocs(seasonsQuery);
+                latestSeasonStr = String(seasonsSnapshot.docs[0]?.data()?.temporada || '').trim();
+            } catch (e) {}
+        }
+
+        const seasonWithSlash = latestSeasonStr;
+        const seasonWithoutSlash = latestSeasonStr.replace('/', '');
+        const seasonList = Array.from(new Set([seasonWithSlash, seasonWithoutSlash].filter(Boolean)));
+
+        let movementsQuery;
+        if (seasonList.length > 0) {
+            movementsQuery = query(
+                collection(db, 'movimentos'),
+                where('userId', '==', user.uid),
+                where('temporada', 'in', seasonList)
+            );
+        } else {
+            movementsQuery = query(
+                collection(db, 'movimentos'),
+                where('userId', '==', user.uid)
+            );
+        }
+
         const movementsSnapshot = await getDocs(movementsQuery);
 
         if (movementsSnapshot.empty) {
@@ -611,13 +645,25 @@ async function loadTransactions() {
             return;
         }
 
+        const docs = movementsSnapshot.docs.map(d => ({ id: d.id, data: d.data() }));
+        docs.sort((a, b) => {
+            const getTimestamp = (d) => {
+                if (d.movimentoData && typeof d.movimentoData.toDate === 'function') return d.movimentoData.toDate().getTime();
+                if (d.movimentoData) return new Date(d.movimentoData).getTime();
+                if (d.data) return new Date(d.data).getTime();
+                if (d.timestamp) return new Date(d.timestamp).getTime();
+                return 0;
+            };
+            return getTimestamp(b.data) - getTimestamp(a.data);
+        });
+
         const transactionsHTML = document.createElement('ul');
         transactionsHTML.style.listStyleType = 'none';
         transactionsHTML.style.padding = '0';
 
-        for (const docSnapshot of movementsSnapshot.docs) {
-            const transaction = docSnapshot.data();
-            if (transaction.estado === 'WhoWins Paid') {
+        for (const itemDoc of docs) {
+            const transaction = itemDoc.data;
+            if (transaction.estado === 'WhoWins Paid' || transaction.estado === 'Dívida') {
                 continue; 
             }
             const listItem = document.createElement('li');
@@ -627,6 +673,8 @@ async function loadTransactions() {
                 itemName = transaction.managerTipo + " " + itemManagerValue;
             } else if (transaction.nomeJogo) {
                 itemName = transaction.nomeJogo;
+            } else if (transaction.jogo) {
+                itemName = transaction.jogo;
             } else if (transaction.jogadorId) {
                 try {
                     const playerDoc = await getDoc(doc(db, 'jogadores', transaction.jogadorId));
@@ -641,16 +689,28 @@ async function loadTransactions() {
                 itemName = 'N/A';
             }
 
-            const date = transaction.movimentoData ? transaction.movimentoData.toDate().toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: '2-digit' }) : 'Data Indisponível';
+            let date = 'Data Indisponível';
+            if (transaction.movimentoData && typeof transaction.movimentoData.toDate === 'function') {
+                date = transaction.movimentoData.toDate().toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: '2-digit' });
+            } else if (transaction.data) {
+                date = transaction.data;
+            } else if (transaction.timestamp) {
+                date = new Date(transaction.timestamp).toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: '2-digit' });
+            }
+
             let valorReal = transaction.valorreal !== undefined ? transaction.valorreal : 0;
-            let valorRealColor = 'black';
-            if (valorReal > 0) valorRealColor = 'green';
-            else if (valorReal < 0) valorRealColor = 'red';
+            let valorRealColor = '#94a3b8';
+            if (valorReal > 0) valorRealColor = '#10b981';
+            else if (valorReal < 0) valorRealColor = '#ef4444';
+
+            const isInvestimento = transaction.tipo === 'Investimento' || transaction.estado === 'Investimentos Paid';
+            const coinSuffix = isInvestimento ? ' ɱ-₲₵' : ' ₲₵';
+            const formattedVal = (valorReal > 0 ? '+' : '') + valorReal + coinSuffix;
 
             listItem.innerHTML = `
-                <p>${transaction.estado}</p>
+                <p>${transaction.estado || 'Transação'}</p>
                 <p>${itemName}</p>
-                <p><span style="color: ${valorRealColor}">${valorReal}</span></p>
+                <p><span style="color: ${valorRealColor}; font-weight: 600;">${formattedVal}</span></p>
                 <p>${date}</p>
             `;
             transactionsHTML.appendChild(listItem);
@@ -732,7 +792,7 @@ onAuthStateChanged(auth, async (user) => {
                 if (docSnap.exists()) {
                     const currentSettings = docSnap.data();
                     // Compara as configurações atuais com as iniciais para detetar mudanças
-                    const fieldsToCheck = ['GCoin', 'dividas', 'devolver', 'myteam', 'minigames', 'world26', 'quemganha', 'myths', 'manual', 'trofeus', 'banca', 'estatisticas', 'palpites', 'inbox'];
+                    const fieldsToCheck = ['GCoin', 'dividas', 'devolver', 'myteam', 'minigames', 'world26', 'quemganha', 'myths', 'manual', 'trofeus', 'banca', 'estatisticas', 'palpites', 'inbox', 'agenda'];
                     let changed = false;
                     for (const field of fieldsToCheck) {
                         if (initialPanelSettings && currentSettings && currentSettings[field] !== initialPanelSettings[field]) {
@@ -839,6 +899,16 @@ onAuthStateChanged(auth, async (user) => {
             } else {
                 const inboxSection = document.getElementById('inboxSection');
                 if (inboxSection) inboxSection.style.display = 'none';
+            }
+
+            // --- CARREGAR MINHA AGENDA (FUSÍVEL PERFIL) ---
+            const agendaSection = document.getElementById('profileAgendaSection');
+            if (agendaSection) {
+                if (panelSettings && panelSettings.agenda === 'off') {
+                    agendaSection.style.display = 'none';
+                } else {
+                    agendaSection.style.display = 'block';
+                }
             }
 
             // Preenche o nome de utilizador e mostra o conteúdo da página
@@ -1816,4 +1886,650 @@ async function loadInbox(userId) {
 document.addEventListener('DOMContentLoaded', () => {
     loadingScreen.style.display = 'flex';
     content.style.display = 'none';
+    initProfileAgenda();
 });
+
+// ==========================================
+// AGENDA DO MERCADO (VISUALIZAÇÃO APENAS - READ-ONLY)
+// ==========================================
+let profileCalendarDate = new Date();
+let profileMarketSchedules = [];
+
+const PROFILE_MONTH_NAMES_PT = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+const PROFILE_WEEKDAYS_SHORT_PT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+
+function getProfileShortTargetLabel(data) {
+    if (data.tipoAplicacao === 'position') return data.valorAplicacao || 'Posição';
+    if (data.tipoAplicacao === 'caste') return (data.valorAplicacao || '').replace('Jogador ', '') || 'Casta';
+    if (data.tipoAplicacao === 'all') return 'Todos';
+    if (data.tipoAplicacao === 'specific') {
+        if (Array.isArray(data.valorAplicacao)) return `${data.valorAplicacao.length} Jogadores`;
+        return 'Específicos';
+    }
+    return data.observacoes || 'Mercado';
+}
+
+async function loadProfileMarketSchedules() {
+    try {
+        const logCollectionRef = collection(db, 'paineis', 'Banca', 'horarioMercado');
+        const q = query(logCollectionRef, orderBy("dataCriacao", "desc"));
+        const querySnapshot = await getDocs(q);
+        profileMarketSchedules = querySnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+    } catch (err) {
+        console.error("Erro ao carregar agendamentos de mercado no perfil:", err);
+    }
+}
+
+let profileGames = [];
+let profileGamesByDate = {};
+let profilePalpitesOpenDates = new Set();
+let profilePalpitesClosedDates = new Set();
+
+async function loadProfileGames() {
+    try {
+        const gamesQuery = query(collection(db, 'jogos'), orderBy("dataJogo", "asc"));
+        const querySnapshot = await getDocs(gamesQuery);
+        profileGames = querySnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+
+        profileGamesByDate = {};
+        profilePalpitesOpenDates = new Set();
+        profilePalpitesClosedDates = new Set();
+
+        profileGames.forEach(game => {
+            let dt = null;
+            if (game.dataJogo?.toDate) dt = game.dataJogo.toDate();
+            else if (game.dataJogo?.seconds) dt = new Date(game.dataJogo.seconds * 1000);
+            else if (game.dataJogo) dt = new Date(game.dataJogo);
+
+            if (!dt || isNaN(dt.getTime())) return;
+
+            const dateStr = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+            if (!profileGamesByDate[dateStr]) profileGamesByDate[dateStr] = [];
+            profileGamesByDate[dateStr].push(game);
+
+            // Calcular Terça (Palpites Open) e Sexta (Palpites Closed) da jornada do jogo
+            const dayOfWeek = dt.getDay(); // 0:Sun, 1:Mon, ..., 5:Fri, 6:Sat
+            let monday = new Date(dt);
+            const diffToMon = dt.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+            monday.setDate(diffToMon);
+            monday.setHours(0, 0, 0, 0);
+
+            if (dayOfWeek === 1) {
+                monday.setDate(monday.getDate() - 7);
+            }
+
+            const tuesday = new Date(monday);
+            tuesday.setDate(monday.getDate() + 1); // Terça (Palpites Open)
+
+            const friday = new Date(monday);
+            friday.setDate(monday.getDate() + 4); // Sexta (Palpites Closed)
+
+            const tueStr = `${tuesday.getFullYear()}-${String(tuesday.getMonth() + 1).padStart(2, '0')}-${String(tuesday.getDate()).padStart(2, '0')}`;
+            const friStr = `${friday.getFullYear()}-${String(friday.getMonth() + 1).padStart(2, '0')}-${String(friday.getDate()).padStart(2, '0')}`;
+
+            profilePalpitesOpenDates.add(tueStr);
+            profilePalpitesClosedDates.add(friStr);
+        });
+    } catch (err) {
+        console.error("Erro ao carregar jogos no perfil:", err);
+    }
+}
+
+function openProfileMarketDetailPopup(schedule) {
+    const popup = document.getElementById('profileMarketDetailPopup');
+    const targetEl = document.getElementById('profilePopupTarget');
+    const openEl = document.getElementById('profilePopupOpen');
+    const closeEl = document.getElementById('profilePopupClose');
+    if (!popup) return;
+
+    const dtAb = schedule.abertura?.toDate ? schedule.abertura.toDate() : null;
+    const dtFe = schedule.fechamento?.toDate ? schedule.fechamento.toDate() : null;
+    const timeAbText = dtAb ? dtAb.toLocaleString('pt-PT') : 'Não definido';
+    const timeFeText = dtFe ? dtFe.toLocaleString('pt-PT') : 'Não definido';
+
+    if (targetEl) targetEl.textContent = schedule.observacoes || getProfileShortTargetLabel(schedule);
+    if (openEl) openEl.textContent = timeAbText;
+    if (closeEl) closeEl.textContent = timeFeText;
+
+    popup.style.display = 'flex';
+}
+
+function closeProfileMarketDetailPopup() {
+    const popup = document.getElementById('profileMarketDetailPopup');
+    if (popup) popup.style.display = 'none';
+}
+
+const profileClubLogosCache = new Map();
+
+async function fetchClubLogo(clubId) {
+    if (!clubId) return '';
+    if (profileClubLogosCache.has(clubId)) return profileClubLogosCache.get(clubId);
+    try {
+        const clubSnap = await getDoc(doc(db, 'clubes', clubId));
+        if (clubSnap.exists()) {
+            const data = clubSnap.data();
+            const logoUrl = data.imagem || data.logo || data.emblema || '';
+            profileClubLogosCache.set(clubId, logoUrl);
+            return logoUrl;
+        }
+    } catch (e) {
+        console.warn("Erro ao carregar logo do clube:", clubId, e);
+    }
+    profileClubLogosCache.set(clubId, '');
+    return '';
+}
+
+async function openProfileGamesDetailPopup(cellDateStr, games) {
+    const popup = document.getElementById('profileGamesDetailPopup');
+    const container = document.getElementById('profileGamesListContainer');
+    if (!popup || !container) return;
+
+    const parts = cellDateStr.split('-');
+    const formattedDate = `${parts[2]}/${parts[1]}/${parts[0]}`;
+
+    container.innerHTML = '<div style="text-align: center; color: #8892b0; padding: 20px; font-size: 13px;"><i class="fas fa-spinner fa-spin" style="margin-right: 8px;"></i> A carregar jogos e emblemas...</div>';
+    
+    const headerTitle = document.querySelector('#profileGamesDetailPopup h3');
+    if (headerTitle) {
+        headerTitle.innerHTML = `<i class="fas fa-futbol" style="color: #3498db;"></i> Jogos do Dia - ${formattedDate}`;
+    }
+
+    popup.style.display = 'flex';
+
+    // Resolver emblemas dos clubes de forma assíncrona
+    const processedGames = await Promise.all(games.map(async (g) => {
+        let homeLogo = g.equipaCasaLogo || g.imagemCasa || '';
+        let awayLogo = g.equipaForaLogo || g.imagemFora || '';
+
+        if (!homeLogo && g.equipaCasaId) {
+            homeLogo = await fetchClubLogo(g.equipaCasaId);
+        }
+        if (!awayLogo && g.equipaForaId) {
+            awayLogo = await fetchClubLogo(g.equipaForaId);
+        }
+
+        return { ...g, homeLogo, awayLogo };
+    }));
+
+    container.innerHTML = '';
+
+    processedGames.forEach(g => {
+        let dt = null;
+        if (g.dataJogo?.toDate) dt = g.dataJogo.toDate();
+        else if (g.dataJogo?.seconds) dt = new Date(g.dataJogo.seconds * 1000);
+        else if (g.dataJogo) dt = new Date(g.dataJogo);
+
+        const timeText = dt ? dt.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' }) : 'N/A';
+        const homeName = g.equipaCasa || 'Equipa Casa';
+        const awayName = g.equipaFora || 'Equipa Fora';
+        const compName = g.competicao || 'Competição';
+        const roundText = g.ronda ? ` • Ronda ${g.ronda}` : '';
+
+        const homeLogoHtml = g.homeLogo 
+            ? `<img src="${g.homeLogo}" alt="${homeName}" style="width: 22px; height: 22px; object-fit: contain; flex-shrink: 0;" onerror="this.onerror=null; this.src='https://via.placeholder.com/22?text=FC';">` 
+            : `<i class="fas fa-shield-alt" style="color: #8892b0; font-size: 15px; flex-shrink: 0;"></i>`;
+
+        const awayLogoHtml = g.awayLogo 
+            ? `<img src="${g.awayLogo}" alt="${awayName}" style="width: 22px; height: 22px; object-fit: contain; flex-shrink: 0;" onerror="this.onerror=null; this.src='https://via.placeholder.com/22?text=FC';">` 
+            : `<i class="fas fa-shield-alt" style="color: #8892b0; font-size: 15px; flex-shrink: 0;"></i>`;
+
+        const gameCard = document.createElement('div');
+        gameCard.style.cssText = 'background: #161c28; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 12px 14px; display: flex; justify-content: space-between; align-items: center; gap: 12px;';
+        gameCard.innerHTML = `
+            <div style="display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 0;">
+                <div style="font-size: 11px; color: #3498db; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${compName}${roundText}</div>
+                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 14px; font-weight: 700; color: #ffffff;">
+                    <span style="display: flex; align-items: center; gap: 6px; max-width: 45%;">
+                        ${homeLogoHtml}
+                        <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${homeName}</span>
+                    </span>
+                    <span style="color: #8892b0; font-size: 12px; font-weight: 400; margin: 0 2px;">vs</span>
+                    <span style="display: flex; align-items: center; gap: 6px; max-width: 45%;">
+                        ${awayLogoHtml}
+                        <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${awayName}</span>
+                    </span>
+                </div>
+            </div>
+            <div style="background: rgba(52, 152, 219, 0.15); color: #3498db; font-weight: 700; font-size: 13px; padding: 6px 12px; border-radius: 8px; white-space: nowrap; flex-shrink: 0;">
+                <i class="far fa-clock"></i> ${timeText}
+            </div>
+        `;
+        container.appendChild(gameCard);
+    });
+}
+
+function closeProfileGamesDetailPopup() {
+    const popup = document.getElementById('profileGamesDetailPopup');
+    if (popup) popup.style.display = 'none';
+}
+
+function openProfilePalpitesDetailPopup(type, cellDateStr) {
+    const popup = document.getElementById('profilePalpitesDetailPopup');
+    const titleEl = document.getElementById('profilePalpitesPopupTitle');
+    const textEl = document.getElementById('profilePalpitesPopupText');
+    const okBtn = document.getElementById('okProfilePalpitesDetailBtn');
+    if (!popup || !titleEl || !textEl) return;
+
+    const parts = cellDateStr.split('-');
+    const formattedDate = `${parts[2]}/${parts[1]}/${parts[0]}`;
+
+    if (type === 'open') {
+        titleEl.innerHTML = `<i class="fas fa-unlock" style="color: #2ecc71;"></i> Palpites Open`;
+        textEl.innerHTML = `🔓 <strong>Palpites Abertos (${formattedDate})</strong><br><br>Os palpites para esta semana abriram oficialmente na Terça-feira. Podes submeter os teus palpites até à próxima Sexta-feira!`;
+        if (okBtn) {
+            okBtn.style.background = '#2ecc71';
+            okBtn.style.color = '#090c10';
+        }
+    } else {
+        titleEl.innerHTML = `<i class="fas fa-lock" style="color: #e74c3c;"></i> Palpites Closed`;
+        textEl.innerHTML = `🔒 <strong>Palpites Fechados (${formattedDate})</strong><br><br>Os palpites para esta semana encerraram oficialmente nesta Sexta-feira antes do início das partidas!`;
+        if (okBtn) {
+            okBtn.style.background = '#e74c3c';
+            okBtn.style.color = '#ffffff';
+        }
+    }
+
+    popup.style.display = 'flex';
+}
+
+function closeProfilePalpitesDetailPopup() {
+    const popup = document.getElementById('profilePalpitesDetailPopup');
+    if (popup) popup.style.display = 'none';
+}
+
+let profileAgendaViewMode = 'grid'; // 'grid' ou 'list'
+
+function renderProfileAgendaView() {
+    if (profileAgendaViewMode === 'list') {
+        renderProfileAgendaList();
+    } else {
+        renderProfileAgendaCalendar();
+    }
+}
+
+function renderProfileAgendaList() {
+    const calendarGrid = document.getElementById('profileCalendarGrid');
+    const calendarList = document.getElementById('profileCalendarList');
+    const calendarMonthYear = document.getElementById('profileCalendarMonthYear');
+    if (!calendarGrid || !calendarList || !calendarMonthYear) return;
+
+    calendarGrid.style.display = 'none';
+    calendarList.style.display = 'flex';
+    calendarList.innerHTML = '';
+
+    const year = profileCalendarDate.getFullYear();
+    const month = profileCalendarDate.getMonth();
+
+    calendarMonthYear.textContent = `${PROFILE_MONTH_NAMES_PT[month]} ${year}`;
+
+    // Construir lista unificada do mês: Mercados, Jogos e Avisos de Palpites
+    const listItems = [];
+
+    // 1. Mercados
+    profileMarketSchedules.forEach(schedule => {
+        const dtAb = schedule.abertura?.toDate ? schedule.abertura.toDate() : null;
+        const dtFe = schedule.fechamento?.toDate ? schedule.fechamento.toDate() : null;
+        const inAb = dtAb && dtAb.getFullYear() === year && dtAb.getMonth() === month;
+        const inFe = dtFe && dtFe.getFullYear() === year && dtFe.getMonth() === month;
+        if (inAb || inFe) {
+            const label = getProfileShortTargetLabel(schedule);
+            listItems.push({
+                type: 'market',
+                sortTime: dtAb ? dtAb.getTime() : 0,
+                title: `Mercado ${label}`,
+                desc: schedule.observacoes || 'Mercado agendado',
+                timeInfo: `Ab: ${dtAb ? dtAb.toLocaleTimeString('pt-PT', {hour:'2-digit', minute:'2-digit'}) : 'N/A'} • Fecho: ${dtFe ? dtFe.toLocaleTimeString('pt-PT', {hour:'2-digit', minute:'2-digit'}) : 'N/A'}`,
+                onClick: () => openProfileMarketDetailPopup(schedule)
+            });
+        }
+    });
+
+    // 2. Jogos
+    Object.keys(profileGamesByDate).forEach(dateStr => {
+        const parts = dateStr.split('-');
+        const y = parseInt(parts[0]);
+        const m = parseInt(parts[1]) - 1;
+        if (y === year && m === month) {
+            const games = profileGamesByDate[dateStr];
+            const dStr = `${parts[2]}/${parts[1]}/${parts[0]}`;
+            listItems.push({
+                type: 'games',
+                sortTime: new Date(y, m, parseInt(parts[2])).getTime(),
+                title: `Jogos do Dia (${games.length})`,
+                desc: `${dStr} • ${games.map(g => `${g.equipaCasa || ''} vs ${g.equipaFora || ''}`).join(', ')}`,
+                timeInfo: `${games.length} ${games.length === 1 ? 'partida' : 'partidas'}`,
+                onClick: () => openProfileGamesDetailPopup(dateStr, games)
+            });
+        }
+    });
+
+    // 3. Palpites Open / Closed
+    profilePalpitesOpenDates.forEach(dateStr => {
+        const parts = dateStr.split('-');
+        const y = parseInt(parts[0]);
+        const m = parseInt(parts[1]) - 1;
+        if (y === year && m === month) {
+            listItems.push({
+                type: 'palpites-open',
+                sortTime: new Date(y, m, parseInt(parts[2])).getTime(),
+                title: `Palpites Open`,
+                desc: `Abertura oficial dos palpites para os jogos da semana (${parts[2]}/${parts[1]}/${parts[0]})`,
+                timeInfo: `Terça-feira`,
+                onClick: () => openProfilePalpitesDetailPopup('open', dateStr)
+            });
+        }
+    });
+
+    profilePalpitesClosedDates.forEach(dateStr => {
+        const parts = dateStr.split('-');
+        const y = parseInt(parts[0]);
+        const m = parseInt(parts[1]) - 1;
+        if (y === year && m === month) {
+            listItems.push({
+                type: 'palpites-closed',
+                sortTime: new Date(y, m, parseInt(parts[2])).getTime(),
+                title: `Palpites Closed`,
+                desc: `Encerramento oficial dos palpites para os jogos da semana (${parts[2]}/${parts[1]}/${parts[0]})`,
+                timeInfo: `Sexta-feira`,
+                onClick: () => openProfilePalpitesDetailPopup('closed', dateStr)
+            });
+        }
+    });
+
+    if (listItems.length === 0) {
+        calendarList.innerHTML = `<div style="text-align: center; color: #8892b0; font-size: 13px; padding: 20px; background: rgba(22, 28, 40, 0.5); border-radius: 12px; border: 1px dashed rgba(255,255,255,0.1);"><i class="fas fa-calendar-times" style="font-size: 20px; margin-bottom: 8px; display: block; color: #556080;"></i>Nenhum evento agendado para ${PROFILE_MONTH_NAMES_PT[month]} ${year}.</div>`;
+        return;
+    }
+
+    listItems.sort((a, b) => a.sortTime - b.sortTime);
+
+    listItems.forEach(item => {
+        const listItem = document.createElement('div');
+        let iconHtml = `<i class="fas fa-shopping-bag"></i>`;
+        let iconBg = `rgba(142, 68, 173, 0.2)`;
+        let iconColor = `#bb86fc`;
+        let borderColor = `rgba(142, 68, 173, 0.3)`;
+
+        if (item.type === 'games') {
+            iconHtml = `<i class="fas fa-futbol"></i>`;
+            iconBg = `rgba(52, 152, 219, 0.2)`;
+            iconColor = `#3498db`;
+            borderColor = `rgba(52, 152, 219, 0.3)`;
+        } else if (item.type === 'palpites-open') {
+            iconHtml = `<i class="fas fa-unlock"></i>`;
+            iconBg = `rgba(46, 204, 113, 0.2)`;
+            iconColor = `#2ecc71`;
+            borderColor = `rgba(46, 204, 113, 0.3)`;
+        } else if (item.type === 'palpites-closed') {
+            iconHtml = `<i class="fas fa-lock"></i>`;
+            iconBg = `rgba(231, 76, 60, 0.2)`;
+            iconColor = `#e74c3c`;
+            borderColor = `rgba(231, 76, 60, 0.3)`;
+        }
+
+        listItem.style.cssText = `background: #161c28; border: 1px solid ${borderColor}; border-radius: 12px; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: background 0.2s, border-color 0.2s; gap: 12px;`;
+        
+        listItem.addEventListener('mouseenter', () => {
+            listItem.style.background = '#1c2434';
+        });
+        listItem.addEventListener('mouseleave', () => {
+            listItem.style.background = '#161c28';
+        });
+
+        listItem.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 14px; min-width: 0;">
+                <div style="width: 38px; height: 38px; background: ${iconBg}; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: ${iconColor}; font-size: 16px; flex-shrink: 0;">
+                    ${iconHtml}
+                </div>
+                <div style="min-width: 0;">
+                    <div style="font-weight: 700; color: #ffffff; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${item.title}</div>
+                    <div style="font-size: 12px; color: #8892b0; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${item.desc}</div>
+                </div>
+            </div>
+            <div style="text-align: right; flex-shrink: 0;">
+                <div style="font-size: 11px; color: ${iconColor}; font-weight: 600;">${item.timeInfo}</div>
+            </div>
+        `;
+
+        listItem.addEventListener('click', item.onClick);
+        calendarList.appendChild(listItem);
+    });
+}
+
+function renderProfileAgendaCalendar() {
+    const calendarGrid = document.getElementById('profileCalendarGrid');
+    const calendarList = document.getElementById('profileCalendarList');
+    const calendarMonthYear = document.getElementById('profileCalendarMonthYear');
+    if (!calendarGrid || !calendarMonthYear) return;
+
+    if (calendarList) calendarList.style.display = 'none';
+    calendarGrid.style.display = 'grid';
+
+    calendarGrid.innerHTML = '';
+
+    const year = profileCalendarDate.getFullYear();
+    const month = profileCalendarDate.getMonth();
+
+    calendarMonthYear.textContent = `${PROFILE_MONTH_NAMES_PT[month]} ${year}`;
+
+    PROFILE_WEEKDAYS_SHORT_PT.forEach(dayName => {
+        const headerCell = document.createElement('div');
+        headerCell.className = 'calendar-day-header';
+        headerCell.textContent = dayName;
+        calendarGrid.appendChild(headerCell);
+    });
+
+    const firstDayIndex = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const daysInPrevMonth = new Date(year, month, 0).getDate();
+
+    const today = new Date();
+    const isCurrentMonthYear = today.getFullYear() === year && today.getMonth() === month;
+
+    // Dias do mês anterior
+    for (let i = firstDayIndex - 1; i >= 0; i--) {
+        const dayNum = daysInPrevMonth - i;
+        const cell = document.createElement('div');
+        cell.className = 'calendar-day-cell other-month';
+        cell.innerHTML = `<span class="calendar-day-number">${dayNum}</span>`;
+        calendarGrid.appendChild(cell);
+    }
+
+    // Dias do mês atual
+    for (let day = 1; day <= daysInMonth; day++) {
+        const cell = document.createElement('div');
+        cell.className = 'calendar-day-cell';
+        if (isCurrentMonthYear && today.getDate() === day) {
+            cell.classList.add('today');
+        }
+
+        const dayNumSpan = document.createElement('span');
+        dayNumSpan.className = 'calendar-day-number';
+        dayNumSpan.textContent = day;
+        cell.appendChild(dayNumSpan);
+
+        const eventsContainer = document.createElement('div');
+        eventsContainer.className = 'calendar-events-container';
+
+        const cellDateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
+        // 1. Tag Mercado
+        const daySchedules = profileMarketSchedules.filter(schedule => {
+            const dtAb = schedule.abertura?.toDate ? schedule.abertura.toDate() : null;
+            const dtFe = schedule.fechamento?.toDate ? schedule.fechamento.toDate() : null;
+            const dtAbStr = dtAb ? `${dtAb.getFullYear()}-${String(dtAb.getMonth() + 1).padStart(2, '0')}-${String(dtAb.getDate()).padStart(2, '0')}` : '';
+            const dtFeStr = dtFe ? `${dtFe.getFullYear()}-${String(dtFe.getMonth() + 1).padStart(2, '0')}-${String(dtFe.getDate()).padStart(2, '0')}` : '';
+            return dtAbStr === cellDateStr || dtFeStr === cellDateStr;
+        });
+
+        daySchedules.forEach(schedule => {
+            const label = getProfileShortTargetLabel(schedule);
+            const dtAb = schedule.abertura?.toDate ? schedule.abertura.toDate() : null;
+            const dtFe = schedule.fechamento?.toDate ? schedule.fechamento.toDate() : null;
+            const timeAbText = dtAb ? dtAb.toLocaleString('pt-PT') : 'N/A';
+            const timeFeText = dtFe ? dtFe.toLocaleString('pt-PT') : 'N/A';
+
+            const tag = document.createElement('div');
+            tag.className = 'calendar-event-tag';
+            tag.title = `Mercado ${label} (${timeAbText} - ${timeFeText}): ${schedule.observacoes}`;
+            tag.innerHTML = `<i class="fas fa-shopping-bag" style="color: #bb86fc;"></i> Mercado ${label}`;
+            
+            tag.addEventListener('click', (e) => {
+                e.stopPropagation();
+                openProfileMarketDetailPopup(schedule);
+            });
+            
+            eventsContainer.appendChild(tag);
+        });
+
+        // 2. Tag Jogos
+        const dayGames = profileGamesByDate[cellDateStr] || [];
+        if (dayGames.length > 0) {
+            const tagGames = document.createElement('div');
+            tagGames.className = 'calendar-event-tag tag-games';
+            tagGames.style.cssText = 'background-color: rgba(52, 152, 219, 0.25); color: #90caf9; border: 1px solid rgba(52, 152, 219, 0.4);';
+            tagGames.innerHTML = `<i class="fas fa-futbol" style="color: #3498db;"></i> Jogos (${dayGames.length})`;
+            tagGames.title = `Clique para ver os ${dayGames.length} jogos deste dia`;
+            tagGames.addEventListener('click', (e) => {
+                e.stopPropagation();
+                openProfileGamesDetailPopup(cellDateStr, dayGames);
+            });
+            eventsContainer.appendChild(tagGames);
+        }
+
+        // 3. Tag Palpites Open (Terça-feira)
+        if (profilePalpitesOpenDates.has(cellDateStr)) {
+            const tagOpen = document.createElement('div');
+            tagOpen.className = 'calendar-event-tag tag-palpites-open';
+            tagOpen.style.cssText = 'background-color: rgba(46, 204, 113, 0.25); color: #a3e635; border: 1px solid rgba(46, 204, 113, 0.4);';
+            tagOpen.innerHTML = `<i class="fas fa-unlock" style="color: #2ecc71;"></i> Palpites Open`;
+            tagOpen.title = `Palpites Abertos na Terça-feira`;
+            tagOpen.addEventListener('click', (e) => {
+                e.stopPropagation();
+                openProfilePalpitesDetailPopup('open', cellDateStr);
+            });
+            eventsContainer.appendChild(tagOpen);
+        }
+
+        // 4. Tag Palpites Closed (Sexta-feira)
+        if (profilePalpitesClosedDates.has(cellDateStr)) {
+            const tagClosed = document.createElement('div');
+            tagClosed.className = 'calendar-event-tag tag-palpites-closed';
+            tagClosed.style.cssText = 'background-color: rgba(231, 76, 60, 0.25); color: #fca5a5; border: 1px solid rgba(231, 76, 60, 0.4);';
+            tagClosed.innerHTML = `<i class="fas fa-lock" style="color: #e74c3c;"></i> Palpites Closed`;
+            tagClosed.title = `Palpites Fechados na Sexta-feira`;
+            tagClosed.addEventListener('click', (e) => {
+                e.stopPropagation();
+                openProfilePalpitesDetailPopup('closed', cellDateStr);
+            });
+            eventsContainer.appendChild(tagClosed);
+        }
+
+        cell.appendChild(eventsContainer);
+
+        if (daySchedules.length > 0 || dayGames.length > 0) {
+            cell.addEventListener('click', () => {
+                if (dayGames.length > 0) {
+                    openProfileGamesDetailPopup(cellDateStr, dayGames);
+                } else if (daySchedules.length > 0) {
+                    openProfileMarketDetailPopup(daySchedules[0]);
+                }
+            });
+        }
+
+        calendarGrid.appendChild(cell);
+    }
+
+    // Preenchimento do restante da grelha
+    const totalCellsSoFar = firstDayIndex + daysInMonth;
+    const nextDaysPadding = (totalCellsSoFar <= 35 ? 35 : 42) - totalCellsSoFar;
+    for (let day = 1; day <= nextDaysPadding; day++) {
+        const cell = document.createElement('div');
+        cell.className = 'calendar-day-cell other-month';
+        cell.innerHTML = `<span class="calendar-day-number">${day}</span>`;
+        calendarGrid.appendChild(cell);
+    }
+}
+
+async function initProfileAgenda() {
+    const prevMonthBtn = document.getElementById('profilePrevMonthBtn');
+    const nextMonthBtn = document.getElementById('profileNextMonthBtn');
+    const gridBtn = document.getElementById('profileViewGridBtn');
+    const listBtn = document.getElementById('profileViewListBtn');
+
+    const closeMarketBtn = document.getElementById('closeProfileMarketDetailBtn');
+    const okMarketBtn = document.getElementById('okProfileMarketDetailBtn');
+    const marketPopupOverlay = document.getElementById('profileMarketDetailPopup');
+
+    const closeGamesBtn = document.getElementById('closeProfileGamesDetailBtn');
+    const okGamesBtn = document.getElementById('okProfileGamesDetailBtn');
+    const gamesPopupOverlay = document.getElementById('profileGamesDetailPopup');
+
+    const closePalpitesBtn = document.getElementById('closeProfilePalpitesDetailBtn');
+    const okPalpitesBtn = document.getElementById('okProfilePalpitesDetailBtn');
+    const palpitesPopupOverlay = document.getElementById('profilePalpitesDetailPopup');
+
+    if (gridBtn && listBtn) {
+        gridBtn.addEventListener('click', () => {
+            profileAgendaViewMode = 'grid';
+            gridBtn.style.background = '#8e44ad';
+            gridBtn.style.color = '#ffffff';
+            listBtn.style.background = 'transparent';
+            listBtn.style.color = '#8892b0';
+            renderProfileAgendaView();
+        });
+
+        listBtn.addEventListener('click', () => {
+            profileAgendaViewMode = 'list';
+            listBtn.style.background = '#8e44ad';
+            listBtn.style.color = '#ffffff';
+            gridBtn.style.background = 'transparent';
+            gridBtn.style.color = '#8892b0';
+            renderProfileAgendaView();
+        });
+    }
+
+    if (prevMonthBtn) {
+        prevMonthBtn.addEventListener('click', () => {
+            profileCalendarDate.setDate(1);
+            profileCalendarDate.setMonth(profileCalendarDate.getMonth() - 1);
+            renderProfileAgendaView();
+        });
+    }
+
+    if (nextMonthBtn) {
+        nextMonthBtn.addEventListener('click', () => {
+            profileCalendarDate.setDate(1);
+            profileCalendarDate.setMonth(profileCalendarDate.getMonth() + 1);
+            renderProfileAgendaView();
+        });
+    }
+
+    if (closeMarketBtn) closeMarketBtn.addEventListener('click', closeProfileMarketDetailPopup);
+    if (okMarketBtn) okMarketBtn.addEventListener('click', closeProfileMarketDetailPopup);
+    if (marketPopupOverlay) {
+        marketPopupOverlay.addEventListener('click', (e) => {
+            if (e.target === marketPopupOverlay) closeProfileMarketDetailPopup();
+        });
+    }
+
+    if (closeGamesBtn) closeGamesBtn.addEventListener('click', closeProfileGamesDetailPopup);
+    if (okGamesBtn) okGamesBtn.addEventListener('click', closeProfileGamesDetailPopup);
+    if (gamesPopupOverlay) {
+        gamesPopupOverlay.addEventListener('click', (e) => {
+            if (e.target === gamesPopupOverlay) closeProfileGamesDetailPopup();
+        });
+    }
+
+    if (closePalpitesBtn) closePalpitesBtn.addEventListener('click', closeProfilePalpitesDetailPopup);
+    if (okPalpitesBtn) okPalpitesBtn.addEventListener('click', closeProfilePalpitesDetailPopup);
+    if (palpitesPopupOverlay) {
+        palpitesPopupOverlay.addEventListener('click', (e) => {
+            if (e.target === palpitesPopupOverlay) closeProfilePalpitesDetailPopup();
+        });
+    }
+
+    await loadProfileMarketSchedules();
+    await loadProfileGames();
+    renderProfileAgendaView();
+}

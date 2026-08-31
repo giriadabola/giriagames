@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>G Empire - Enviar Email</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <script type="module" src="js/auth-guard.js"></script>
     <style>
         /* Estilos base e do menu */
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -196,7 +197,7 @@
         }
     </style>
 </head>
-<body>
+<body data-admin-roles="ruler">
     <nav class="top-menu">
         <a href="engrenagem.html" class="menu-item"><i class="fas fa-home"></i>Home</a>
         <a href="fusiveis.html" class="menu-item"><i class="fas fa-bolt"></i>Fusíveis</a>
@@ -301,24 +302,9 @@
     <div id="toast" class="notification"></div>
 
     <script type="module">
-        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-        import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
-        import { getFirestore, doc, getDoc, getDocs, collection, addDoc, query, where, serverTimestamp, Timestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        import { adminAuthReady, app, db } from './js/auth-guard.js';
+        import { doc, getDoc, getDocs, collection, addDoc, query, where, serverTimestamp, Timestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
         import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
-
-        const firebaseConfig = {
-            apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0",
-            authDomain: "g-games-8a8fc.firebaseapp.com",
-            projectId: "g-games-8a8fc",
-            storageBucket: "g-games-8a8fc.appspot.com",
-            messagingSenderId: "689897349449",
-            appId: "1:689897349449:web:536599794579901beb7a98",
-            measurementId: "G-GTTPJ6G5MD"
-        };
-
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
         const functions = getFunctions(app, 'us-central1');
         const sendManualNotificationCallable = httpsCallable(functions, 'sendManualMarketNotification');
 
@@ -932,26 +918,7 @@
             });
         }
 
-        // Verificação de autenticação e permissão
-        onAuthStateChanged(auth, async (user) => {
-            document.body.style.display = 'flex';
-            if (user) {
-                try {
-                    const userDocRef = doc(db, "users", user.uid);
-                    const userDocSnap = await getDoc(userDocRef);
-                    if (userDocSnap.exists() && userDocSnap.data().estatuto === 'ruler') {
-                        initializePage();
-                    } else {
-                        window.location.replace('../acesso-negado.html');
-                    }
-                } catch (e) {
-                    console.error("Erro na verificação de permissões:", e);
-                    statusMessage.textContent = 'Erro ao verificar permissões de acesso.';
-                }
-            } else {
-                 statusMessage.textContent = 'É necessário fazer login para aceder a esta página.';
-            }
-        });
+        adminAuthReady.then(initializePage);
     </script>
 </body>
 </html>

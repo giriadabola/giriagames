@@ -547,25 +547,10 @@ function setupTabSwitching() {
 
 // --- LÓGICA DO AVATAR ---
 function updateAvatarDisplays(url) {
-  const previewImg = document.getElementById('avatarPreviewImg');
-  const previewDefault = document.getElementById('avatarPreviewDefault');
+  updateAvatarPreview(url);
+
   const headerImg = document.getElementById('profileHeaderAvatarImg');
   const headerIcon = document.getElementById('profileHeaderAvatarIcon');
-
-  // Atualiza preview no popup
-  if (url) {
-    if (previewImg) {
-      previewImg.src = url;
-      previewImg.style.display = 'block';
-    }
-    if (previewDefault) previewDefault.style.display = 'none';
-  } else {
-    if (previewImg) {
-      previewImg.src = '';
-      previewImg.style.display = 'none';
-    }
-    if (previewDefault) previewDefault.style.display = 'block';
-  }
 
   // Atualiza avatar no cabeçalho da página
   if (url) {
@@ -586,6 +571,14 @@ function updateAvatarDisplays(url) {
 function updateAvatarPreview(url) {
   const previewImg = document.getElementById('avatarPreviewImg');
   const previewDefault = document.getElementById('avatarPreviewDefault');
+  const previewHint = document.getElementById('avatarPreviewHint');
+
+  const preset = PRESET_AVATARS.find((p) => p.url === url);
+  const avatarName = preset ? preset.name : (url ? 'Personalizado' : 'Nenhum');
+
+  if (previewHint) {
+    previewHint.textContent = `Avatar: ${avatarName}`;
+  }
 
   if (url) {
     if (previewImg) {

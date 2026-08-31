@@ -6,6 +6,7 @@
     <title>Editar Odds - G EMPIRE</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <script type="module" src="js/auth-loading-panel.js"></script>
     <style>
         * {
             margin: 0;
@@ -677,18 +678,37 @@
 
         const ROLES_PERMITIDAS = ["ruler", "estafeta"];
 
+        function updateAuthLoading(action, ...args) {
+            if (window.AdminAuthLoading) {
+                window.AdminAuthLoading[action]?.(...args);
+                return;
+            }
+
+            document.addEventListener('admin-auth-loading-ready', () => {
+                window.AdminAuthLoading?.[action]?.(...args);
+            }, { once: true });
+        }
+
         auth.onAuthStateChanged(async (user) => {
-            if (user) {
+            if (!user) {
+                updateAuthLoading('show', 'Sessão não iniciada. A redirecionar para o login...');
+                window.location.replace('/');
+                return;
+            }
+
+            try {
                 const userDocRef = db.collection("users").doc(user.uid);
                 const userDoc = await userDocRef.get();
                 if (userDoc.exists && ROLES_PERMITIDAS.includes(userDoc.data().estatuto)) {
-                    document.body.style.display = 'block';
+                    updateAuthLoading('complete', 'block');
                     initializePage();
                 } else {
+                    updateAuthLoading('show', 'A conta não tem permissão para aceder a esta página...');
                     window.location.replace('/acesso-negado.html');
                 }
-            } else {
-                window.location.replace('/login.html');
+            } catch (error) {
+                console.error('Erro ao verificar as permissões administrativas:', error);
+                updateAuthLoading('showError', 'Ocorreu um erro ao verificar a sessão. Atualiza a página e tenta novamente.');
             }
         });
 

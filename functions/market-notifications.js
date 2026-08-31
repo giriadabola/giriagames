@@ -379,17 +379,22 @@ function isWeeklyOffsetNotificationDue(now, weekday, timeString, hoursBefore, la
     lastWeekKey !== currentWeekKey;
 }
 
-function buildWeeklyPredictionPayload(type, weekday, timeString) {
-  const whenLabel = `${timeString} de ${["domingo", "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado"][weekday]}`;
+function buildWeeklyPredictionPayload(type, weekday, timeString, closeWeekday, closeTimeString) {
+  const weekdays = ["domingo", "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado"];
 
   if (type === "predictionsOpen") {
+    const closeTimeFormatted = (closeTimeString || timeString || "").replace(":", "h");
+    const closeDayLabel = weekdays[closeWeekday !== undefined && closeWeekday !== null ? closeWeekday : weekday] || "sexta-feira";
     return {
-      title: "Jogos para Prognóstico disponíveis",
-      body: `Os jogos para prognóstico já estão disponíveis para palpitar. Regra semanal: ${whenLabel}.`,
+      title: "Jogos para palpitar aptos!",
+      body: `Os jogos desta semana já estão disponíveis para palpitar. Irá fechar: ${closeDayLabel}, ${closeTimeFormatted}.`,
       tag: `predictions-open-${weekday}-${timeString}`,
       url: "./1x.html",
     };
   }
+
+  const formattedTime = (timeString || "").replace(":", "h");
+  const whenLabel = `${formattedTime} de ${weekdays[weekday] || "sexta-feira"}`;
 
   return {
     title: "Prognósticos fechados",
@@ -400,10 +405,11 @@ function buildWeeklyPredictionPayload(type, weekday, timeString) {
 }
 
 function buildPredictionsClosingSoonPayload(weekday, timeString, hoursBefore) {
-  const whenLabel = `${timeString} de ${["domingo", "segunda-feira", "terÃ§a-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sÃ¡bado"][weekday]}`;
+  const formattedTime = (timeString || "").replace(":", "h");
+  const whenLabel = `${formattedTime} de ${["domingo", "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado"][weekday]}`;
 
   return {
-    title: "PrognÃ³sticos a fechar em breve",
+    title: "Prognósticos a fechar...",
     body: `Os jogos para prognóstico vão fechar daqui a ${hoursBefore}h. Fecho semanal: ${whenLabel}.`,
     tag: `predictions-closing-soon-${weekday}-${timeString}-${hoursBefore}`,
     url: "./1x.html",
@@ -541,7 +547,9 @@ exports.processMarketNotifications = onSchedule({
       : buildWeeklyPredictionPayload(
         weeklyEvent.type,
         weeklyEvent.weekday,
-        weeklyEvent.timeString
+        weeklyEvent.timeString,
+        config.predictionsCloseWeekday,
+        config.predictionsCloseTime
       );
 
     const delivery = await sendPayloadToUsers(interestedUsers, payload);
@@ -567,7 +575,7 @@ exports.sendInboxNotification = onCall({
   invoker: "public",
   cors: [
     "https://g-games-8a8fc.web.app",
-    "https://giriagames.com",
+    "https://giriagames.win",
     "http://127.0.0.1:5502",
     "http://localhost:5502",
     "http://127.0.0.1:5503",
@@ -623,7 +631,7 @@ exports.sendInboxNotification = onCall({
 exports.sendManualMarketNotification = onCall({
   cors: [
     "https://g-games-8a8fc.web.app",
-    "https://giriagames.com",
+    "https://giriagames.win",
     "http://127.0.0.1:5502",
     "http://localhost:5502",
     "http://127.0.0.1:5503",

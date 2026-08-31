@@ -1,6 +1,6 @@
 // core/top-bar-component.js
 import { db, auth } from './firebase.js';
-import { doc, onSnapshot, addDoc, collection, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { doc, onSnapshot, addDoc, collection, serverTimestamp, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { getLatestSeason, getSeasonData } from './user-season.js';
 
@@ -223,6 +223,96 @@ document.addEventListener("DOMContentLoaded", () => {
             transform: translateY(-1px);
         }
 
+        /* Pop-up de Opções do Manual (quando há múltiplos anexos) */
+        .manual-options-popup-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(5px);
+            z-index: 9999;
+            justify-content: center; align-items: center;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        .manual-options-popup-overlay.active {
+            display: flex;
+            opacity: 1;
+        }
+        .manual-options-popup-content {
+            background: #111622;
+            padding: 24px;
+            border-radius: 16px;
+            width: 90%; max-width: 440px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.5);
+            transform: translateY(-20px);
+            transition: transform 0.3s ease;
+            color: #ffffff;
+        }
+        .manual-options-popup-overlay.active .manual-options-popup-content {
+            transform: translateY(0);
+        }
+        .manual-options-popup-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            padding-bottom: 10px;
+        }
+        .manual-options-popup-header h3 {
+            font-size: 18px;
+            font-weight: 700;
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .manual-options-close-btn {
+            background: none;
+            border: none;
+            color: #8892b0;
+            font-size: 22px;
+            cursor: pointer;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+        .manual-options-close-btn:hover { color: #ffffff; }
+        .manual-options-popup-subtitle {
+            font-size: 13px;
+            color: #8892b0;
+            margin-bottom: 16px;
+        }
+        .manual-options-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-height: 280px;
+            overflow-y: auto;
+        }
+        .manual-option-card {
+            background: #161c28;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 12px 16px;
+            border-radius: 10px;
+            color: #ffffff;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+        .manual-option-card:hover {
+            background: rgba(46, 204, 113, 0.15);
+            border-color: #2ecc71;
+            color: #2ecc71;
+            transform: translateX(4px);
+        }
+
         @keyframes pulse-coin {
             0% { transform: scale(1); filter: drop-shadow(0 0 1px rgba(241, 196, 15, 0.2)); }
             100% { transform: scale(1.15); filter: drop-shadow(0 0 6px rgba(241, 196, 15, 0.6)); }
@@ -305,6 +395,18 @@ document.addEventListener("DOMContentLoaded", () => {
                     <button class="logout-popup-btn confirm" id="confirmLogoutBtn">Sair</button>
                     <button class="logout-popup-btn cancel" id="cancelLogoutBtn">Cancelar</button>
                 </div>
+            </div>
+        </div>
+
+        <!-- Pop-up de Opções do Manual (quando há múltiplos anexos) -->
+        <div class="manual-options-popup-overlay" id="manualOptionsPopup">
+            <div class="manual-options-popup-content">
+                <div class="manual-options-popup-header">
+                    <h3><i class="fas fa-book-open" style="color: #2ecc71;"></i> Manual desta Página</h3>
+                    <button type="button" class="manual-options-close-btn" id="manualOptionsCloseBtn">&times;</button>
+                </div>
+                <p class="manual-options-popup-subtitle">Existem vários conteúdos anexados a esta página. Selecione o que pretende consultar:</p>
+                <div class="manual-options-list" id="manualOptionsList"></div>
             </div>
         </div>
     `;
@@ -404,9 +506,107 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
+    const manualOptionsPopup = document.getElementById('manualOptionsPopup');
+    const manualOptionsCloseBtn = document.getElementById('manualOptionsCloseBtn');
+    const manualOptionsList = document.getElementById('manualOptionsList');
+
+    if (manualOptionsCloseBtn && manualOptionsPopup) {
+        manualOptionsCloseBtn.addEventListener('click', () => {
+            manualOptionsPopup.classList.remove('active');
+        });
+        manualOptionsPopup.addEventListener('click', (e) => {
+            if (e.target === manualOptionsPopup) {
+                manualOptionsPopup.classList.remove('active');
+            }
+        });
+    }
+
+    function openManualOptionsPopup(matchedItems) {
+        if (!manualOptionsPopup || !manualOptionsList) return;
+        manualOptionsList.innerHTML = '';
+
+        matchedItems.forEach(item => {
+            const card = document.createElement('a');
+            card.className = 'manual-option-card';
+            card.href = `manual.html?item=${item.id}`;
+            card.innerHTML = `
+                <span>${item.title}</span>
+                <i class="fas fa-chevron-right" style="font-size: 12px;"></i>
+            `;
+            manualOptionsList.appendChild(card);
+        });
+
+        manualOptionsPopup.classList.add('active');
+    }
+
+    async function syncManualLinksForCurrentPage() {
+        try {
+            const rawPage = window.location.pathname.split('/').pop().toLowerCase() || 'index.html';
+            if (rawPage === 'manual.html' || rawPage === 'manual') return;
+
+            const pagesToMatch = new Set([rawPage]);
+            if (rawPage.endsWith('.html')) {
+                pagesToMatch.add(rawPage.replace(/\.html$/, ''));
+            } else {
+                pagesToMatch.add(rawPage + '.html');
+            }
+
+            const q = query(collection(db, "manual"), where("visible", "==", true));
+            const snapshot = await getDocs(q);
+
+            const matchedItems = [];
+            snapshot.forEach(docSnap => {
+                const data = docSnap.data();
+                const attached = data.paginasAnexadas;
+                if (Array.isArray(attached) && attached.length > 0) {
+                    const hasMatch = attached.some(p => {
+                        if (!p) return false;
+                        const pLower = p.toLowerCase().trim();
+                        const pNoExt = pLower.replace(/\.html$/, '');
+                        return pagesToMatch.has(pLower) || pagesToMatch.has(pNoExt);
+                    });
+                    if (hasMatch) {
+                        matchedItems.push({
+                            id: docSnap.id,
+                            title: (data.title || 'Sem título').replace(/<[^>]*>?/gm, '').trim(),
+                            type: data.type || 'Tópico'
+                        });
+                    }
+                }
+            });
+
+            const manualBtns = document.querySelectorAll('a[href^="manual.html"], a[title="Manual"]');
+
+            if (matchedItems.length === 1) {
+                const newUrl = `manual.html?item=${matchedItems[0].id}`;
+                manualBtns.forEach(link => {
+                    link.setAttribute('href', newUrl);
+                    link.onclick = null;
+                });
+            } else if (matchedItems.length > 1) {
+                manualBtns.forEach(link => {
+                    link.setAttribute('href', '#');
+                    link.onclick = (e) => {
+                        e.preventDefault();
+                        openManualOptionsPopup(matchedItems);
+                    };
+                });
+            } else {
+                manualBtns.forEach(link => {
+                    link.setAttribute('href', 'manual.html');
+                    link.onclick = null;
+                });
+            }
+        } catch (err) {
+            console.error("Erro ao sincronizar links do manual para a página atual:", err);
+        }
+    }
+
     // 4. User gCoins Real-time updating logic
     onAuthStateChanged(auth, (user) => {
         if (user) {
+            syncManualLinksForCurrentPage();
+
             const userDocRef = doc(db, 'users', user.uid);
             onSnapshot(userDocRef, async (docSnap) => {
                 try {
@@ -433,7 +633,7 @@ document.addEventListener("DOMContentLoaded", () => {
             onSnapshot(menuMenuRef, (docSnap) => {
                 if (docSnap.exists()) {
                     const menuSettings = docSnap.data();
-                    const manualBtn = document.querySelector('a[href="manual.html"]');
+                    const manualBtn = document.querySelector('a[href^="manual.html"]');
                     if (menuSettings.manual === 'off') {
                         if (manualBtn) manualBtn.style.display = 'none';
                         if (currentPage === 'manual.html' || currentPage === 'manual') {

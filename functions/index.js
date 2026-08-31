@@ -12,6 +12,9 @@ const {
     sendManualMarketNotification,
     sendInboxNotification,
 } = require("./market-notifications");
+const {
+    buildAccountInvitationFunctions,
+} = require("./account-invitations");
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -39,6 +42,114 @@ async function getLatestSeason() {
 
     throw new Error('Época mais recente não configurada.');
 }
+
+const accountInvitationFunctions = buildAccountInvitationFunctions({
+    admin,
+    db,
+    getLatestSeason,
+});
+exports.createAccountInvite = accountInvitationFunctions.createAccountInvite;
+exports.acceptAccountInvite = accountInvitationFunctions.acceptAccountInvite;
+
+exports.createGPlayer = onCall({
+    cors: [
+        "https://giriagames.win",
+        "http://127.0.0.1:5174",
+        "http://127.0.0.1:5502",
+        "http://localhost:5174",
+        "http://localhost:5502",
+    ],
+}, async (request) => {
+    if (!request.auth) {
+        throw new HttpsError("unauthenticated", "Login necessário.");
+    }
+
+    const callerSnapshot = await db.collection("users")
+        .doc(request.auth.uid)
+        .get();
+    if (!callerSnapshot.exists || callerSnapshot.data().estatuto !== "ruler") {
+        throw new HttpsError(
+            "permission-denied",
+            "Apenas um ruler pode criar GPlayers.",
+        );
+    }
+
+    const data = request.data || {};
+    const email = String(data.email || "").trim().toLowerCase();
+    const password = String(data.password || "");
+    const nomeDeUsuario = String(data.nomeDeUsuario || "").trim();
+    const nomeTabela = String(data.nomeTabela || "").trim();
+    const naTabela = String(data.naTabela || "").trim();
+    const arena = String(data.arena || "").trim();
+    const estatuto = String(data.estatuto || "gplayer").trim();
+    const aceite = String(data.aceite || "No").trim();
+    const allowedRoles = ["gplayer", "ruler", "estafeta"];
+    const allowedAcceptance = ["Yes", "No"];
+
+    if (!email || !password || !nomeDeUsuario) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Email, password e nome de utilizador são obrigatórios.",
+        );
+    }
+    if (password.length < 6) {
+        throw new HttpsError(
+            "invalid-argument",
+            "A password deve ter pelo menos 6 caracteres.",
+        );
+    }
+    if (!allowedRoles.includes(estatuto) ||
+        !allowedAcceptance.includes(aceite)) {
+        throw new HttpsError(
+            "invalid-argument",
+            "As permissões indicadas não são válidas.",
+        );
+    }
+
+    let createdUser = null;
+    try {
+        createdUser = await admin.auth().createUser({email, password});
+        const seasonLabel = await getLatestSeason();
+        await db.collection("users").doc(createdUser.uid).set({
+            email,
+            nomeDeUsuario,
+            nometabela: nomeTabela,
+            estatuto,
+            aceite,
+            [seasonLabel]: {
+                uid: createdUser.uid,
+                natabela: naTabela,
+                arena,
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            },
+        });
+
+        return {success: true, uid: createdUser.uid};
+    } catch (error) {
+        if (createdUser) {
+            await admin.auth().deleteUser(createdUser.uid).catch((rollbackError) => {
+                console.error(
+                    "Erro ao reverter a criação do utilizador:",
+                    rollbackError,
+                );
+            });
+        }
+
+        if (error.code === "auth/email-already-exists") {
+            throw new HttpsError(
+                "already-exists",
+                "Este email já está a ser utilizado.",
+            );
+        }
+        if (error instanceof HttpsError) throw error;
+
+        console.error("Erro ao criar GPlayer:", error);
+        throw new HttpsError(
+            "internal",
+            "Não foi possível criar o GPlayer.",
+        );
+    }
+});
 
 function getSeasonData(userData, season) {
     const data = userData?.[season];
@@ -167,8 +278,8 @@ exports.footballProxy = onRequest({
 // =================================================================
 //          FUNÇÃO ATUALIZADA: payDebt (v2 com CORS)
 // =================================================================
-// Adicionada a opção { cors: ["https://giriagames.com"] }
-exports.payDebt = onCall({ cors: ["https://giriagames.com", "http://127.0.0.1:5502"] }, async (request) => {
+// Adicionada a opção { cors: ["https://giriagames.win"] }
+exports.payDebt = onCall({ cors: ["https://giriagames.win", "http://127.0.0.1:5502"] }, async (request) => {
     if (!request.auth) {
         throw new HttpsError("unauthenticated", "O utilizador deve estar autenticado.");
     }
@@ -258,8 +369,8 @@ exports.payDebt = onCall({ cors: ["https://giriagames.com", "http://127.0.0.1:55
 // =====================================================================
 //          FUNÇÃO ATUALIZADA: convertCoins (v2 com CORS)
 // =====================================================================
-// Adicionada a opção { cors: ["https://giriagames.com"] }
-exports.convertCoins = onCall({ cors: ["https://giriagames.com", "http://127.0.0.1:5502"] }, async (request) => {
+// Adicionada a opção { cors: ["https://giriagames.win"] }
+exports.convertCoins = onCall({ cors: ["https://giriagames.win", "http://127.0.0.1:5502"] }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Login necessário.");
     
     const userId = request.auth.uid;
@@ -524,8 +635,8 @@ exports.simulateWeeklyMatches = onSchedule({
 // =====================================================================
 //          FUNÇÃO ATUALIZADA: claimEndlessSeasonWinnings (v2 com CORS)
 // =====================================================================
-// Adicionada a opção { cors: ["https://giriagames.com"] }
-exports.claimEndlessSeasonWinnings = onCall({ cors: ["https://giriagames.com", "http://127.0.0.1:5502"] }, async (request) => {
+// Adicionada a opção { cors: ["https://giriagames.win"] }
+exports.claimEndlessSeasonWinnings = onCall({ cors: ["https://giriagames.win", "http://127.0.0.1:5502"] }, async (request) => {
     if (!request.auth) {
         throw new HttpsError("unauthenticated", "O utilizador deve estar autenticado.");
     }
@@ -580,7 +691,7 @@ exports.claimEndlessSeasonWinnings = onCall({ cors: ["https://giriagames.com", "
 // =====================================================================
 //          NOVA FUNÇÃO: corsProxy (Proxy CORS seguro)
 // =====================================================================
-exports.corsProxy = onCall({ cors: ["https://giriagames.com", "http://127.0.0.1:5502", "http://localhost:5502"] }, async (request) => {
+exports.corsProxy = onCall({ cors: ["https://giriagames.win", "http://127.0.0.1:5502", "http://localhost:5502"] }, async (request) => {
     if (!request.auth) {
         throw new HttpsError("unauthenticated", "O utilizador deve estar autenticado.");
     }

@@ -91,6 +91,9 @@
         .pos-badge.medio { background-color: rgba(241, 196, 15, 0.15); color: #f1c40f; border: 1px solid rgba(241, 196, 15, 0.2); }
         .pos-badge.avancado { background-color: rgba(231, 76, 60, 0.15); color: #e74c3c; border: 1px solid rgba(231, 76, 60, 0.2); }
 
+        .gear-icon { font-size: 24px; color: #8892b0; cursor: pointer; transition: color 0.3s ease; vertical-align: middle; }
+        .gear-icon:hover { color: #2176ff; }
+
         /* Main Modal Overlay */
         .overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.75); z-index: 1000; backdrop-filter: blur(4px); justify-content: center; align-items: center; }
         .overlay.active { display: flex; }
@@ -219,7 +222,7 @@
 
     <div class="content">
         <a href="gerenciar-jogadores.html" class="menu-item"><i class="fas fa-users"></i> JOGADORES LIVE</a>
-        <h1>Editar Jogadores</h1>
+        <h1>Editar Jogadores <i class="fas fa-chart-line gear-icon" id="quality-curve-icon" style="margin-left: 10px; cursor: pointer; color: #2176ff;" title="Calcular Curva da Qualidade"></i></h1>
         
         <div class="controls-row">
             <div class="search-wrapper">
@@ -308,7 +311,41 @@
             <div class="modal-footer">
                 <button class="btn secondary" id="cancelModalBtn">Cancelar</button>
                 <button type="submit" form="editPlayerForm" class="btn primary" style="background: #2ecc71; color: white; border: none; padding: 10px 24px; font-weight: bold; border-radius: 6px; cursor: pointer;">Editar Jogador</button>
-               <script type="module">
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL CURVA DA QUALIDADE -->
+    <div class="overlay" id="quality-curve-popup">
+        <div class="modal-content" style="max-width: 850px; width: 92%;">
+            <div class="modal-header">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <i class="fas fa-chart-line" style="font-size: 20px; color: #2176ff;"></i>
+                    <h3 style="color: #ffffff; margin: 0;">Curva da Qualidade (Cálculo de Castas)</h3>
+                </div>
+                <button class="btn secondary" id="closeQualityCurveModalBtn" style="padding: 5px 10px; min-width: auto;"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body" style="padding: 24px;">
+                <div style="display: flex; gap: 16px; align-items: center; margin-bottom: 24px; flex-wrap: wrap; background-color: #161c28; padding: 16px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.06);">
+                    <div>
+                        <label style="display: block; font-size: 12px; text-transform: uppercase; color: #8892b0; font-weight: 600; margin-bottom: 6px;">Época / Temporada</label>
+                        <select id="qualityCurveSeasonSelect" class="filter-select" style="min-width: 160px; font-weight: bold; color: #2176ff; background-color: #111622;">
+                        </select>
+                    </div>
+                    <div style="margin-top: 18px;">
+                        <button id="calcQualityCurveBtn" class="btn primary" style="background: linear-gradient(135deg, #2176ff, #1a5cc4); color: #ffffff; padding: 10px 20px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 15px rgba(33, 118, 255, 0.3);">
+                            <i class="fas fa-calculator"></i> Calcular a curva da qualidade
+                        </button>
+                    </div>
+                </div>
+
+                <div id="qualityCurveResultsContainer" style="display: none;">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
         import { db } from './js/auth-guard.js';
         import { collection, getDocs, query, where, doc, getDoc, updateDoc, deleteDoc, setDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
         import { fetchUniqueSeasons, getPlayerSeasonData, buildPlayerSeasonUpdatePayload, hasPlayerDataForSeason } from './js/player-season-helper.js';
@@ -542,7 +579,7 @@
                     paisNome: countriesMap.get(sData.paisId) || sData.pais || 'N/A',
                     clube: sData.clube || 'N/A',
                     posicao: sData.posicao || 'N/A',
-                    overall: sData.overall || 0,
+                    overall: typeof sData.overall === 'number' ? sData.overall : (parseFloat(sData.overall) || 0),
                     casta: sData.casta || '',
                     imagem: sData.imagem || '',
                     codigoUrl: sData.codigoUrl || '',
@@ -806,7 +843,6 @@
         }
 
         async function selectPlayerForSeason(playerId, rawData, season) {
-            console.log('[EDITAR-JOGADOR] selectPlayerForSeason -> Atribuindo selectedPlayerId =', playerId, '(época:', season, ')');
             selectedPlayerId = playerId;
             if (!playerId) {
                 console.warn('[EDITAR-JOGADOR] ATENÇÃO: playerId é nulo ou indefinido ao selecionar jogador!');
@@ -1024,7 +1060,9 @@
                 const coefficientValueForCalculation = parseFloat(coeficienteCastaValue.replace(',', '.'));
                 if (!isNaN(coefficientValueForCalculation) && !isNaN(totalStatistic)) {
                     coeficienteStatisticValue = Math.round(coefficientValueForCalculation * totalStatistic);
-                    document.getElementById('playerOverall').value = coeficienteStatisticValue;
+                    if (estatisticasText && estatisticasText.trim() !== '') {
+                        document.getElementById('playerOverall').value = coeficienteStatisticValue;
+                    }
                 }
                 tbody.innerHTML += `<tr style="font-weight: bold;"><td>Total</td><td>-</td><td>${totalSum.toFixed(2)}</td></tr><tr style="font-weight: bold;"><td>Coeficiente</td><td>${coeficienteCastaValue}</td><td>${coeficienteStatisticValue}</td></tr>`;
                 table.appendChild(tbody);
@@ -1365,6 +1403,177 @@
                     document.getElementById('clubResults').style.display = 'none';
                 }
             });
+
+            // --- CURVA DA QUALIDADE ---
+            const qualityCurveIcon = document.getElementById('quality-curve-icon');
+            const qualityCurvePopup = document.getElementById('quality-curve-popup');
+            const closeQualityCurveModalBtn = document.getElementById('closeQualityCurveModalBtn');
+            const qualityCurveSeasonSelect = document.getElementById('qualityCurveSeasonSelect');
+            const calcQualityCurveBtn = document.getElementById('calcQualityCurveBtn');
+
+            if (qualityCurveIcon) {
+                qualityCurveIcon.addEventListener('click', () => {
+                    if (qualityCurveSeasonSelect && seasons.length > 0) {
+                        qualityCurveSeasonSelect.innerHTML = seasons.map(s => `<option value="${s}">${s}</option>`).join('');
+                        qualityCurveSeasonSelect.value = currentSeason;
+                    }
+                    qualityCurvePopup.classList.add('active');
+                });
+            }
+
+            if (closeQualityCurveModalBtn) {
+                closeQualityCurveModalBtn.addEventListener('click', () => {
+                    qualityCurvePopup.classList.remove('active');
+                });
+            }
+
+            if (qualityCurvePopup) {
+                qualityCurvePopup.addEventListener('click', (e) => {
+                    if (e.target === qualityCurvePopup) {
+                        qualityCurvePopup.classList.remove('active');
+                    }
+                });
+            }
+
+            async function calculateQualityCurve() {
+                const selectedSeason = qualityCurveSeasonSelect.value;
+                const container = document.getElementById('qualityCurveResultsContainer');
+                if (!container) return;
+
+                container.style.display = 'block';
+                container.innerHTML = '<div style="text-align: center; color: #8892b0; padding: 20px;"><i class="fas fa-spinner fa-spin fa-2x"></i><p style="margin-top: 10px;">A calcular curva da qualidade para a época ' + selectedSeason + '...</p></div>';
+
+                const defaultBaseSeason = seasons[seasons.length - 1] || '2025/2026';
+                
+                const seasonPlayers = allRawPlayers
+                    .filter(item => hasPlayerDataForSeason(item.rawData, selectedSeason, defaultBaseSeason))
+                    .map(item => {
+                        const sData = getPlayerSeasonData(item.rawData, selectedSeason) || {};
+                        return {
+                            id: item.id,
+                            nome: sData.nome || 'Sem Nome',
+                            posicao: sData.posicao || 'N/A',
+                            overall: parseFloat(sData.overall) || 0,
+                            casta: sData.casta || ''
+                        };
+                    })
+                    .filter(p => p.overall > 0 && p.posicao !== 'N/A');
+
+                if (seasonPlayers.length === 0) {
+                    container.innerHTML = '<div style="background: rgba(231, 76, 60, 0.1); border: 1px solid rgba(231, 76, 60, 0.3); color: #e74c3c; padding: 16px; border-radius: 8px; text-align: center;">Nenhum jogador com overall válido encontrado para a época ' + selectedSeason + '.</div>';
+                    return;
+                }
+
+                const positions = ["Guarda-Redes", "Defesa", "Médio", "Avançado"];
+                const calculatedLimits = {};
+                let html = '<h4 style="color: #ffffff; margin-bottom: 16px; font-size: 16px;">Resultados da Curva da Qualidade (' + seasonPlayers.length + ' Jogadores Analisados)</h4>';
+                html += '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px;">';
+
+                positions.forEach(pos => {
+                    const posPlayers = seasonPlayers.filter(p => p.posicao === pos).map(p => p.overall).sort((a, b) => a - b);
+                    const count = posPlayers.length;
+
+                    if (count === 0) {
+                        html += `
+                            <div style="background-color: #161c28; border-radius: 10px; padding: 16px; border: 1px solid rgba(255, 255, 255, 0.06);">
+                                <h5 style="color: #2176ff; font-size: 15px; margin-bottom: 8px;">${pos}</h5>
+                                <p style="color: #8892b0; font-size: 13px;">Sem jogadores nesta posição.</p>
+                            </div>
+                        `;
+                        return;
+                    }
+
+                    const min = posPlayers[0];
+                    const max = posPlayers[count - 1];
+                    const sum = posPlayers.reduce((acc, v) => acc + v, 0);
+                    const avg = (sum / count).toFixed(1);
+
+                    const getPercentile = (p) => {
+                        const index = Math.floor((count - 1) * p);
+                        return posPlayers[index];
+                    };
+
+                    let bronzeVal = Number(getPercentile(0.25).toFixed(1));
+                    let prataMaxVal = Number(getPercentile(0.60).toFixed(1));
+                    let ouroMaxVal = Number(getPercentile(0.90).toFixed(1));
+
+                    if (prataMaxVal <= bronzeVal) prataMaxVal = Number((bronzeVal + 10).toFixed(1));
+                    if (ouroMaxVal <= prataMaxVal) ouroMaxVal = Number((prataMaxVal + 10).toFixed(1));
+
+                    const prataMinVal = Number((bronzeVal + 0.1).toFixed(1));
+                    const ouroMinVal = Number((prataMaxVal + 0.1).toFixed(1));
+                    const platinaMinVal = Number((ouroMaxVal + 0.1).toFixed(1));
+
+                    calculatedLimits[pos] = {
+                        "Bronze": [bronzeVal],
+                        "Prata": [prataMinVal, prataMaxVal],
+                        "Ouro": [ouroMinVal, ouroMaxVal],
+                        "Platina": [platinaMinVal]
+                    };
+
+                    html += `
+                        <div style="background-color: #161c28; border-radius: 10px; padding: 18px; border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.06); padding-bottom: 8px;">
+                                <h5 style="color: #2176ff; font-size: 16px; font-weight: bold; margin: 0;">${pos}</h5>
+                                <span style="background-color: rgba(33, 118, 255, 0.15); color: #60a5fa; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 600;">${count} jogadores</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-around; background: #111622; padding: 8px; border-radius: 6px; margin-bottom: 14px; text-align: center;">
+                                <div><span style="font-size: 11px; color: #8892b0; display: block;">MÍN</span><strong style="color: #fff; font-size: 14px;">${min}</strong></div>
+                                <div><span style="font-size: 11px; color: #8892b0; display: block;">MÉDIA</span><strong style="color: #f1c40f; font-size: 14px;">${avg}</strong></div>
+                                <div><span style="font-size: 11px; color: #8892b0; display: block;">MÁX</span><strong style="color: #2ecc71; font-size: 14px;">${max}</strong></div>
+                            </div>
+                            <table style="width: 100%; font-size: 13px; border-collapse: collapse;">
+                                <thead>
+                                    <tr style="color: #8892b0; text-transform: uppercase; font-size: 11px; text-align: left;">
+                                        <th style="padding: 4px 0;">Casta</th>
+                                        <th style="padding: 4px 0; text-align: right;">Corte Sugerido</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr><td style="color: #e5e7eb; padding: 4px 0;">🔴 Bronze</td><td style="text-align: right; color: #cd7f32; font-weight: bold;">&le; ${bronzeVal}</td></tr>
+                                    <tr><td style="color: #e5e7eb; padding: 4px 0;">⚪ Prata</td><td style="text-align: right; color: #c0c0c0; font-weight: bold;">${prataMinVal} a ${prataMaxVal}</td></tr>
+                                    <tr><td style="color: #e5e7eb; padding: 4px 0;">🟡 Ouro</td><td style="text-align: right; color: #ffd700; font-weight: bold;">${ouroMinVal} a ${ouroMaxVal}</td></tr>
+                                    <tr><td style="color: #e5e7eb; padding: 4px 0;">💎 Platina</td><td style="text-align: right; color: #e5e4e2; font-weight: bold;">&ge; ${platinaMinVal}</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    `;
+                });
+
+                html += '</div>';
+
+                html += `
+                    <div style="margin-top: 24px; text-align: right; border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 16px;">
+                        <button id="saveCalculatedLimitsBtn" class="btn primary" style="background: linear-gradient(135deg, #2ecc71, #27ae60); color: #fff; padding: 10px 20px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer;">
+                            <i class="fas fa-save" style="margin-right: 6px;"></i> Guardar estes limites no Firestore (paineis overall)
+                        </button>
+                    </div>
+                `;
+
+                container.innerHTML = html;
+
+                const saveBtn = document.getElementById('saveCalculatedLimitsBtn');
+                if (saveBtn) {
+                    saveBtn.addEventListener('click', async () => {
+                        saveBtn.disabled = true;
+                        saveBtn.textContent = 'A guardar no Firestore...';
+                        try {
+                            await setDoc(doc(db, 'paineis', 'paineis overall'), calculatedLimits);
+                            alert('Limites da curva da qualidade guardados com sucesso em paineis overall!');
+                        } catch (err) {
+                            console.error('Erro ao guardar limites:', err);
+                            alert('Erro ao guardar os limites: ' + err.message);
+                        } finally {
+                            saveBtn.disabled = false;
+                            saveBtn.innerHTML = '<i class="fas fa-save" style="margin-right: 6px;"></i> Guardar estes limites no Firestore (paineis overall)';
+                        }
+                    });
+                }
+            }
+
+            if (calcQualityCurveBtn) {
+                calcQualityCurveBtn.addEventListener('click', calculateQualityCurve);
+            }
         });
     </script>
     

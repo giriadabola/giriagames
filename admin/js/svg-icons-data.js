@@ -462,21 +462,21 @@ export const svgIconsList = [
     name: "Ouro / Medalha 1º",
     category: "Gaming",
     color: "#FFD700",
-    svg: `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#FFD700" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="14" r="6"></circle><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"></path><path d="M6 2h12l-2 6H8L6 2z"></path><text x="12" y="16" font-size="6" font-weight="bold" text-anchor="middle" fill="#FFD700" stroke="none">1</text></svg>`
+    svg: `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#FFD700" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12l-2 6H8L6 3z"></path><circle cx="12" cy="15" r="6" fill="#FFD700"></circle><text x="12" y="17.2" font-size="6.5" font-weight="900" font-family="Arial, sans-serif" text-anchor="middle" fill="#000000" stroke="none" stroke-width="0" style="fill:#000000!important;stroke:none!important;stroke-width:0!important;">1</text></svg>`
   },
   {
     id: "prata",
     name: "Prata / Medalha 2º",
     category: "Gaming",
     color: "#C0C0C0",
-    svg: `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#C0C0C0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="14" r="6"></circle><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"></path><path d="M6 2h12l-2 6H8L6 2z"></path><text x="12" y="16" font-size="6" font-weight="bold" text-anchor="middle" fill="#C0C0C0" stroke="none">2</text></svg>`
+    svg: `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#C0C0C0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12l-2 6H8L6 3z"></path><circle cx="12" cy="15" r="6" fill="#C0C0C0"></circle><text x="12" y="17.2" font-size="6.5" font-weight="900" font-family="Arial, sans-serif" text-anchor="middle" fill="#000000" stroke="none" stroke-width="0" style="fill:#000000!important;stroke:none!important;stroke-width:0!important;">2</text></svg>`
   },
   {
     id: "bronze",
     name: "Bronze / Medalha 3º",
     category: "Gaming",
     color: "#CD7F32",
-    svg: `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#CD7F32" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="14" r="6"></circle><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"></path><path d="M6 2h12l-2 6H8L6 2z"></path><text x="12" y="16" font-size="6" font-weight="bold" text-anchor="middle" fill="#CD7F32" stroke="none">3</text></svg>`
+    svg: `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#CD7F32" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12l-2 6H8L6 3z"></path><circle cx="12" cy="15" r="6" fill="#CD7F32"></circle><text x="12" y="17.2" font-size="6.5" font-weight="900" font-family="Arial, sans-serif" text-anchor="middle" fill="#000000" stroke="none" stroke-width="0" style="fill:#000000!important;stroke:none!important;stroke-width:0!important;">3</text></svg>`
   },
   {
     id: "platina",
@@ -1548,5 +1548,12 @@ export const svgIconsList = [
     category: "Gaming",
     color: "#ff5722",
     svg: `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#ff5722" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 17c1.38 0 2.5-1.12 2.5-2.5 0-2.5-3-3-3-5 0 1.5-2 2.5-2 5z"></path><path d="M12 2c1.42 2.6 4.2 3.6 5.5 6.2C19 10.5 19 13.7 17.5 16.5A7.5 7.5 0 1 1 5.4 7C7.2 4.6 9.8 2.8 12 2z"></path></svg>`
+  },
+  {
+    id: "investimento-crescimento",
+    name: "Investimento / Crescimento",
+    category: "Finanças",
+    color: "#2ecc71",
+    svg: `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#2ecc71" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18"></path><path d="M3 16l5-5 4 4 9-9"></path><polyline points="15 6 21 6 21 12"></polyline></svg>`
   }
 ];

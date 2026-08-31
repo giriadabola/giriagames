@@ -223,6 +223,23 @@ import { checkPageContentAccess } from "./js/page-content-guard.js";
         return li;
     }
 
+    function updateUrl(docId, push = true) {
+        const url = new URL(window.location.href);
+        if (docId) {
+            url.searchParams.set('item', docId);
+        } else {
+            url.searchParams.delete('item');
+        }
+        const newUrl = url.pathname + url.search + url.hash;
+        if (window.location.search !== url.search) {
+            if (push) {
+                window.history.pushState({ docId }, '', newUrl);
+            } else {
+                window.history.replaceState({ docId }, '', newUrl);
+            }
+        }
+    }
+
     function displayTopicContent(docId) {
         if (scrollObserver) scrollObserver.disconnect();
         if (!manualDataCache.has(docId)) return;
@@ -240,7 +257,7 @@ import { checkPageContentAccess } from "./js/page-content-guard.js";
             return;
         }
         let pickcardsHTML = '<div class="topic-pickcards-container"><h4>Tópicos:</h4>';
-        childTopics.forEach(topic => pickcardsHTML += `<a href="#topic-${topic.id}" class="topic-pickcard">${topic.title}</a>`);
+        childTopics.forEach(topic => pickcardsHTML += `<a href="#topic-${topic.id}" class="topic-pickcard" data-id="${topic.id}">${topic.title}</a>`);
         pickcardsHTML += '</div>';
         let contentHTML = themeData.content ? `<div class="theme-intro">${themeData.content}</div>` : '';
         childTopics.forEach(topic => {
@@ -271,6 +288,7 @@ import { checkPageContentAccess } from "./js/page-content-guard.js";
                         }
                         activeNavItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     }
+                    updateUrl(id, false);
                 }
             });
         };
@@ -288,7 +306,7 @@ import { checkPageContentAccess } from "./js/page-content-guard.js";
         }
         let faqsHTML = `<h3>Perguntas Frequentes</h3>`;
         faqsHTML += faqs.map(faq => `
-            <div class="faq-item">
+            <div class="faq-item" data-id="${faq.id}">
                 <button class="faq-question">
                     <span>${faq.title}</span>
                     <i class="fas fa-plus faq-icon"></i>
@@ -301,7 +319,7 @@ import { checkPageContentAccess } from "./js/page-content-guard.js";
         faqContainer.innerHTML = faqsHTML;
     }
 
-    function createAndShowModal(docId) {
+    function createAndShowModal(docId, pushHistory = true) {
         if (!manualDataCache.has(docId)) return;
         const data = manualDataCache.get(docId);
         const existingModals = document.querySelectorAll('.modal-backdrop:not(#modal-template)');
@@ -313,6 +331,7 @@ import { checkPageContentAccess } from "./js/page-content-guard.js";
         const template = document.getElementById('modal-template');
         const newModal = template.cloneNode(true);
         newModal.removeAttribute('id');
+        newModal.dataset.id = docId;
         newModal.style.zIndex = modalZIndex++;
         newModal.classList.add('has-opaque-background');
         newModal.querySelector('.modal-title').innerHTML = data.title;
@@ -320,6 +339,7 @@ import { checkPageContentAccess } from "./js/page-content-guard.js";
         document.body.appendChild(newModal);
         newModal.style.display = 'flex';
         if (window.innerWidth <= 768) document.body.classList.add('modal-open');
+        if (pushHistory) updateUrl(docId, true);
     }
     
     function closeTopmostModal() {
@@ -328,14 +348,23 @@ import { checkPageContentAccess } from "./js/page-content-guard.js";
         const topModal = Array.from(allModals).reduce((a, b) => parseInt(a.style.zIndex) > parseInt(b.style.zIndex) ? a : b);
         if (topModal) { topModal.remove(); modalZIndex--; }
         const remainingModals = document.querySelectorAll('.modal-backdrop:not(#modal-template)');
-        if (remainingModals.length === 0 && window.innerWidth <= 768) {
-            document.body.classList.remove('modal-open');
-        } else if (remainingModals.length > 0) {
+        if (remainingModals.length === 0) {
+            if (window.innerWidth <= 768) document.body.classList.remove('modal-open');
+            const activeNav = navContainer.querySelector('.nav-item.active');
+            if (activeNav && activeNav.dataset.id) {
+                updateUrl(activeNav.dataset.id, true);
+            } else {
+                updateUrl(null, true);
+            }
+        } else {
             const newTopModal = Array.from(remainingModals).reduce((a, b) => parseInt(a.style.zIndex) > parseInt(b.style.zIndex) ? a : b);
             if (newTopModal) {
                 newTopModal.classList.remove('is-underneath');
                 newTopModal.classList.remove('has-translucent-background');
                 newTopModal.classList.add('has-opaque-background');
+                if (newTopModal.dataset.id) {
+                    updateUrl(newTopModal.dataset.id, true);
+                }
             }
         }
     }
@@ -349,13 +378,28 @@ import { checkPageContentAccess } from "./js/page-content-guard.js";
     function navigateToManualItem(docId) {
         const navItem = navContainer.querySelector(`.nav-item[data-id="${docId}"]`);
         if (!navItem) return;
-        navItem.click();
         let parentLi = navItem.closest('li.list-item');
         while(parentLi) {
             parentLi.classList.remove('collapsed');
-            parentLi = parentLi.parentElement.closest('li.list-item');
+            const parentUl = parentLi.parentElement;
+            parentLi = parentUl ? parentUl.closest('li.list-item') : null;
         }
+        navItem.click();
         navItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    function openItemById(docId, pushHistory = true) {
+        if (!manualDataCache.has(docId)) return;
+        const itemData = manualDataCache.get(docId);
+        if (itemData.type === 'Tema' || itemData.type === 'Tópico' || itemData.type === 'Elemento') {
+            closeAllModals();
+            navigateToManualItem(docId);
+        } else {
+            createAndShowModal(docId, pushHistory);
+        }
+        if (pushHistory) {
+            updateUrl(docId, true);
+        }
     }
 
     function createSnippet(content, query) {
@@ -400,13 +444,7 @@ import { checkPageContentAccess } from "./js/page-content-guard.js";
             e.preventDefault();
             const docId = manualLink.dataset.id;
             if (manualDataCache.has(docId)) {
-                const docType = manualDataCache.get(docId).type;
-                if (docType === 'Tema' || docType === 'Tópico') {
-                    navigateToManualItem(docId);
-                    closeAllModals();
-                } else {
-                    createAndShowModal(docId);
-                }
+                openItemById(docId, true);
             }
             return; 
         }
@@ -455,12 +493,7 @@ import { checkPageContentAccess } from "./js/page-content-guard.js";
                 const resultItem = e.target.closest('.search-result-item');
                 if (resultItem) {
                     const docId = resultItem.dataset.id;
-                    const docType = resultItem.dataset.type;
-                    if (docType === 'Tema' || docType === 'Tópico' || docType === 'Elemento') {
-                        navigateToManualItem(docId);
-                    } else {
-                        createAndShowModal(docId);
-                    }
+                    openItemById(docId, true);
                     searchInput.value = '';
                     resultsContainer.innerHTML = '';
                 }
@@ -468,7 +501,7 @@ import { checkPageContentAccess } from "./js/page-content-guard.js";
         }
     }
 
-   function displayHomePage(manualData) {
+   function displayHomePage(manualData, pushHistory = true) {
         if (scrollObserver) scrollObserver.disconnect();
         
         manualContent.innerHTML = `
@@ -488,6 +521,7 @@ import { checkPageContentAccess } from "./js/page-content-guard.js";
         initializeSearch(manualData);
 
         navContainer.querySelectorAll('.nav-item.active').forEach(el => el.classList.remove('active'));
+        if (pushHistory) updateUrl(null, true);
     }
 
    function initializeAppManual(manualData) {
@@ -495,11 +529,14 @@ import { checkPageContentAccess } from "./js/page-content-guard.js";
         
         buildSidebar();
 
-        displayHomePage(manualData);
+        displayHomePage(manualData, false);
         
         const headerTitle = document.querySelector('.main-header h1');
         if (headerTitle) {
-            headerTitle.addEventListener('click', () => displayHomePage(manualData));
+            headerTitle.addEventListener('click', () => {
+                closeAllModals();
+                displayHomePage(manualData, true);
+            });
         }
 
         navContainer.addEventListener('click', e => {
@@ -537,16 +574,24 @@ import { checkPageContentAccess } from "./js/page-content-guard.js";
                 case 'Elemento': displayTopicContent(id); break;
             }
 
+            updateUrl(id, true);
+
             if (window.innerWidth <= 768) {
                 document.body.classList.remove('nav-open');
             }
         });
 
         manualContent.addEventListener('click', e => {
+            const pickcard = e.target.closest('.topic-pickcard');
+            if (pickcard && pickcard.dataset.id) {
+                updateUrl(pickcard.dataset.id, true);
+            }
+
             const question = e.target.closest('.faq-question');
             if (!question) return;
 
-            const faqItem = question.parentElement;
+            const faqItem = question.closest('.faq-item');
+            const docId = faqItem ? faqItem.dataset.id : null;
             const answer = faqItem.querySelector('.faq-answer');
             const icon = question.querySelector('.faq-icon');
 
@@ -555,6 +600,7 @@ import { checkPageContentAccess } from "./js/page-content-guard.js";
             if (isActive) {
                 answer.style.maxHeight = answer.scrollHeight + "px";
                 icon.classList.replace('fa-plus', 'fa-minus');
+                if (docId) updateUrl(docId, true);
             } else {
                 answer.style.maxHeight = null;
                 icon.classList.replace('fa-minus', 'fa-plus');
@@ -563,6 +609,17 @@ import { checkPageContentAccess } from "./js/page-content-guard.js";
 
         menuToggleBtn.addEventListener('click', () => document.body.classList.toggle('nav-open'));
         mobileOverlay.addEventListener('click', () => document.body.classList.remove('nav-open'));
+
+        window.addEventListener('popstate', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const targetItemId = urlParams.get('item');
+            if (targetItemId && manualDataCache.has(targetItemId)) {
+                openItemById(targetItemId, false);
+            } else {
+                closeAllModals();
+                displayHomePage(manualDataCache, false);
+            }
+        });
     }
 
  onAuthStateChanged(auth, async (user) => {
@@ -623,12 +680,7 @@ import { checkPageContentAccess } from "./js/page-content-guard.js";
                 const urlParams = new URLSearchParams(window.location.search);
                 const targetItemId = urlParams.get('item');
                 if (targetItemId && finalFilteredCache.has(targetItemId)) {
-                    const itemData = finalFilteredCache.get(targetItemId);
-                    if (itemData.type === 'Tema' || itemData.type === 'Tópico' || itemData.type === 'Elemento') {
-                        navigateToManualItem(targetItemId);
-                    } else {
-                        createAndShowModal(targetItemId);
-                    }
+                    openItemById(targetItemId, false);
                 }
 
             } else { window.location.href = '404.html'; }

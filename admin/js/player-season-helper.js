@@ -148,18 +148,21 @@ export function getPlayerSeasonData(playerDocData, targetSeason) {
         const rawTarget = { ...playerDocData[targetSeason] };
         ATEMPORAL_FIELDS.forEach(field => delete rawTarget[field]);
         seasonData = rawTarget;
+        if (seasonData.overall === undefined || seasonData.overall === null) {
+            seasonData.overall = 0;
+        }
     } else if (isMigratedStructure) {
         // Estrutura com épocas, mas ainda sem dados criados especificamente para esta época.
-        // Usa os dados da época mais recente como fallback para evitar campos vazios ou N/A.
+        // Usa os dados da época mais recente como fallback para evitar campos vazios, mas mantém o overall a 0.
         const fallbackCopy = { ...fallbackSeasonObj };
         ATEMPORAL_FIELDS.forEach(field => delete fallbackCopy[field]);
         delete fallbackCopy.id;
 
         seasonData = {
+            ...fallbackCopy,
             clube: '',
             clubeId: '',
             posicao: '',
-            overall: 0,
             casta: 'Jogador Bronze',
             noMercado: false,
             ativo: true,
@@ -167,13 +170,17 @@ export function getPlayerSeasonData(playerDocData, targetSeason) {
             compradopor: '',
             estatisticas: '',
             miniGames: {},
-            ...fallbackCopy
+            overall: 0
         };
     } else {
         // Formato Legado (plano)
         const legacyCopy = { ...playerDocData };
         ATEMPORAL_FIELDS.forEach(field => delete legacyCopy[field]);
         delete legacyCopy.id;
+        const defaultSeason = '2025/2026';
+        if (targetSeason !== defaultSeason) {
+            legacyCopy.overall = 0;
+        }
         seasonData = legacyCopy;
     }
 

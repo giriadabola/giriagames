@@ -51,7 +51,7 @@ async function sendMessageWithInjection(tabId, message, scriptFile) {
 async function extractSofascorePlayer(sofascoreTabId) {
   const extracted = await sendMessageWithInjection(sofascoreTabId, { type: 'EXTRACT_SOFASCORE_PLAYER' }, 'content-sofascore.js');
   if (!extracted?.ok) throw new Error(extracted?.error || 'Não foi possível ler o jogador no Sofascore.');
-  await debugLog('Dados Sofascore lidos', extracted.name);
+  await debugLog('Dados Sofascore lidos', `Nome: ${extracted.name}; Clube: ${extracted.club || 'N/D'}`);
   return extracted;
 }
 
@@ -75,7 +75,8 @@ async function fillAdminWithExtracted(adminTabId, extracted, faceId) {
     text: extracted.text,
     statsText: extracted.statsText,
     faceId: faceId || '',
-    playerName: extracted.name
+    playerName: extracted.name,
+    playerClub: extracted.club || ''
   }, 'content-admin.js');
   if (!filled?.ok) throw new Error(filled?.error || 'Não foi possível preencher o formulário.');
   await debugLog('Resposta do admin', 'nome=' + (filled.name || 'vazio') + '; imagem=' + (filled.imageCode || 'vazia'));

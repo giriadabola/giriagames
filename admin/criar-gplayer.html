@@ -101,7 +101,7 @@
 
     <link rel="stylesheet" href="css/admin-global.css">
 </head>
-<body style="display: none;">
+<body style="display: none;" data-admin-roles="ruler">
 
     <!-- O menu é carregado aqui. Os seus estilos vêm do ficheiro css/menu-admin.css -->
     <nav id="menu-placeholder" class="top-menu"></nav>
@@ -180,10 +180,11 @@
 
     <!-- Script da página para criar o utilizador -->
     <script type="module">
-        import { db, auth } from './js/auth-guard.js'; 
-        import { createUserWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
-        import { doc, setDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
-        import { getLatestSeason } from '../core/user-season.js';
+        import { app } from './js/auth-guard.js';
+        import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
+
+        const functions = getFunctions(app, 'us-central1');
+        const createGPlayer = httpsCallable(functions, 'createGPlayer');
 
         const createGPlayerForm = document.getElementById('createGPlayerForm');
         const errorMessageDiv = document.getElementById('error-message');
@@ -212,23 +213,15 @@
             }
 
             try {
-                const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-                const user = userCredential.user;
-
-                const userDocRef = doc(db, 'users', user.uid);
-                const seasonLabel = await getLatestSeason(db);
-                await setDoc(userDocRef, {
+                await createGPlayer({
                     email,
+                    password,
                     nomeDeUsuario,
-                    nometabela: nomeTabela,
+                    nomeTabela,
+                    naTabela,
+                    arena,
                     estatuto,
-                    aceite,
-                    [seasonLabel]: {
-                        uid: user.uid,
-                        natabela: naTabela,
-                        arena,
-                        createdAt: new Date()
-                    }
+                    aceite
                 });
 
                 showMessage(successMessageDiv, "GPlayer criado com sucesso!");
@@ -237,9 +230,9 @@
             } catch (error) {
                 console.error("Erro ao criar utilizador:", error);
                 let userMessage = "Ocorreu um erro ao criar o GPlayer.";
-                if (error.code === 'auth/email-already-in-use') {
+                if (error.code === 'functions/already-exists') {
                     userMessage = "Este email já está a ser utilizado por outra conta.";
-                } else if (error.code === 'auth/weak-password') {
+                } else if (error.code === 'functions/invalid-argument') {
                     userMessage = "A password deve ter pelo menos 6 caracteres.";
                 }
                 showMessage(errorMessageDiv, userMessage);

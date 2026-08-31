@@ -38,6 +38,55 @@ function getPlayerName() {
   return '';
 }
 
+function getPlayerClubFromJSONLD() {
+  const scripts = document.querySelectorAll('script[type="application/ld+json"]');
+  for (const script of scripts) {
+    try {
+      const data = JSON.parse(script.textContent);
+      const items = Array.isArray(data) ? data : [data];
+      for (const item of items) {
+        if (item.memberOf && item.memberOf.name) return item.memberOf.name;
+        if (item.worksFor && item.worksFor.name) return item.worksFor.name;
+        if (item.affiliation && item.affiliation.name) return item.affiliation.name;
+      }
+    } catch (e) {}
+  }
+  return null;
+}
+
+function getPlayerClub() {
+  // 1. Tentar obter do JSON-LD da página
+  const jsonLdClub = getPlayerClubFromJSONLD();
+  if (jsonLdClub) return jsonLdClub.trim();
+
+  // 2. Procurar elemento com "Contrato até" ou "Contract until" e apanhar o nó anterior/pai
+  const contractEls = [...document.querySelectorAll('*')].filter(el => {
+    return el.children.length === 0 && /contrato até|contract until/i.test(el.textContent);
+  });
+  for (const contractEl of contractEls) {
+    let parent = contractEl.parentElement;
+    if (parent) {
+      const candidates = [...parent.querySelectorAll('a, span, div, h2, h3')]
+        .map(e => e.textContent.trim())
+        .filter(t => t && t.length > 1 && !/contrato|contract|sofascore|estatísticas/i.test(t));
+      if (candidates.length > 0) {
+        return candidates[0];
+      }
+    }
+  }
+
+  // 3. Procurar links de equipa/clube no cabeçalho
+  const teamLinks = [...document.querySelectorAll('a[href*="/team/"], a[href*="/equipa/"]')];
+  const headerTeamLink = teamLinks.find(link => {
+    const href = link.getAttribute('href') || '';
+    const text = link.textContent.trim();
+    return text && text.length > 1 && !/futebol|football|série a|liga|premier|la liga|champions/i.test(text) && /\/(team|equipa)\//i.test(href);
+  });
+  if (headerTeamLink) return headerTeamLink.textContent.trim();
+
+  return '';
+}
+
 function extractStatsText(bodyText, playerName) {
   if (!bodyText) return '';
   const startRegex = /Média de [Pp]ontuações Sofascore/i;
@@ -123,6 +172,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     await selectEpocaSeason2526();
 
     const name = getPlayerName();
+    const club = getPlayerClub();
     const bodyText = document.body?.innerText?.trim() || '';
     if (!name || bodyText.length < 20) {
       sendResponse({ ok: false, error: 'Não foi possível detectar a página de um jogador no Sofascore.' });
@@ -130,7 +180,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     }
 
     const statsText = extractStatsText(bodyText, name);
-    sendResponse({ ok: true, name, text: `${name}\n${bodyText}`, statsText });
+    const textPayload = club ? `${name}\n${club}\n${bodyText}` : `${name}\n${bodyText}`;
+    sendResponse({ ok: true, name, club, text: textPayload, statsText });
   })().catch(err => {
     sendResponse({ ok: false, error: err.message });
   });

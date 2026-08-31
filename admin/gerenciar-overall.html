@@ -127,6 +127,17 @@
         .btn.primary { background-color: #2176ff; color: #ffffff; box-shadow: 0 4px 15px rgba(33, 118, 255, 0.25); }
         .btn.primary:hover { background-color: #1a5cc4; transform: translateY(-1px); box-shadow: 0 6px 20px rgba(33, 118, 255, 0.4); }
 
+        /* Pagination Styles */
+        .pagination-wrapper { display: flex; justify-content: space-between; align-items: center; margin-top: 20px; flex-wrap: wrap; gap: 15px; background-color: #111622; padding: 12px 20px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.06); }
+        .pagination-info { font-size: 14px; color: #8892b0; }
+        .pagination-info strong { color: #ffffff; }
+        .pagination-controls { display: flex; gap: 6px; align-items: center; }
+        .pagination-btn { background-color: #161c28; border: 1px solid rgba(255, 255, 255, 0.08); color: #8892b0; padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s ease; display: flex; align-items: center; gap: 6px; }
+        .pagination-btn:hover:not(:disabled) { background-color: #1d2639; color: #2176ff; border-color: rgba(33, 118, 255, 0.3); }
+        .pagination-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .pagination-btn.active { background-color: #2176ff; color: #ffffff; border-color: #2176ff; }
+        .pagination-ellipsis { color: #8892b0; padding: 0 4px; }
+
         /* Sub-modal Overlay */
         .sub-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.8); z-index: 1100; backdrop-filter: blur(4px); justify-content: center; align-items: center; }
         .sub-overlay.active { display: flex; }
@@ -541,7 +552,7 @@
     <link rel="stylesheet" href="css/admin-global.css">
     <script src="../core/pwa/loading-watchdog.js" defer></script>
 </head>
-<body style="display: none;">
+<body style="display: none;" data-admin-roles="ruler">
 
     <div class="loading-screen-global" id="global-loading">
         <div class="loading-spinner"></div>
@@ -550,7 +561,7 @@
     <nav id="menu-placeholder" class="top-menu"></nav>
 
     <main class="content">
-        <h1>Gerenciar Overall <i class="fas fa-cog gear-icon" id="params-settings-icon"></i></h1>
+        <h1>Gerenciar Overall <i class="fas fa-cog gear-icon" id="params-settings-icon"></i> <i class="fas fa-chart-line gear-icon" id="quality-curve-icon" style="margin-left: 10px; cursor: pointer; color: #2176ff;" title="Calcular Curva da Qualidade"></i></h1>
         
         <div class="controls-row">
             <div class="search-wrapper">
@@ -575,6 +586,10 @@
                     <!-- Loaded dynamically -->
                 </tbody>
             </table>
+        </div>
+
+        <div class="pagination-wrapper" id="pagination-controls">
+            <!-- Dinâmico -->
         </div>
     </main>
 
@@ -699,11 +714,59 @@
         <button class="save-params-btn" id="save-params-btn"><i class="fas fa-save"></i> Salvar Configurações</button>
     </div>
 
+    <!-- MODAL CURVA DA QUALIDADE -->
+    <div class="overlay" id="quality-curve-popup">
+        <div class="modal-content" style="max-width: 850px; width: 92%;">
+            <div class="modal-header">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <i class="fas fa-chart-line" style="font-size: 20px; color: #2176ff;"></i>
+                    <h3 style="color: #ffffff; margin: 0;">Curva da Qualidade (Cálculo de Castas)</h3>
+                </div>
+                <button class="btn secondary" id="closeQualityCurveModalBtn" style="padding: 5px 10px; min-width: auto;"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body" style="padding: 24px;">
+                <!-- TABS HEADER (Sticky no Topo) -->
+                <div style="position: sticky; top: -24px; z-index: 20; background-color: #111622; display: flex; gap: 10px; padding: 16px 24px; margin: -24px -24px 20px -24px; border-bottom: 1px solid rgba(255, 255, 255, 0.08);">
+                    <button id="tabQualityCurveBtn" style="padding: 10px 18px; border-radius: 8px; font-weight: 600; font-size: 14px; cursor: pointer; background-color: #2176ff; color: #ffffff; border: none; transition: all 0.2s; display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-calculator"></i> Curva da Qualidade (Cálculo)
+                    </button>
+                    <button id="tabManualLimitsBtn" style="padding: 10px 18px; border-radius: 8px; font-weight: 600; font-size: 14px; cursor: pointer; background-color: #161c28; color: #8892b0; border: 1px solid rgba(255, 255, 255, 0.08); transition: all 0.2s; display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-edit"></i> Edição Manual de Limites
+                    </button>
+                </div>
+
+                <!-- TAB 1: CURVA DA QUALIDADE -->
+                <div id="tabQualityCurveContent">
+                    <div style="display: flex; gap: 16px; align-items: center; margin-bottom: 24px; flex-wrap: wrap; background-color: #161c28; padding: 16px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.06);">
+                        <div>
+                            <label style="display: block; font-size: 12px; text-transform: uppercase; color: #8892b0; font-weight: 600; margin-bottom: 6px;">Época / Temporada</label>
+                            <select id="qualityCurveSeasonSelect" class="table-filter-select" style="min-width: 160px; font-weight: bold; color: #2176ff; background-color: #111622;">
+                            </select>
+                        </div>
+                        <div style="margin-top: 18px;">
+                            <button id="calcQualityCurveBtn" class="btn primary" style="background: linear-gradient(135deg, #2176ff, #1a5cc4); color: #ffffff; padding: 10px 20px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 15px rgba(33, 118, 255, 0.3);">
+                                <i class="fas fa-calculator"></i> Calcular a curva da qualidade
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="qualityCurveResultsContainer" style="display: none;">
+                    </div>
+                </div>
+
+                <!-- TAB 2: EDIÇÃO MANUAL -->
+                <div id="tabManualLimitsContent" style="display: none;">
+                    <div id="manualLimitsFormContainer">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script type="module">
-        import { db, auth } from './js/auth-guard.js';
-        import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { adminAuthReady, db } from './js/auth-guard.js';
         import { collection, getDocs, doc, getDoc, updateDoc, setDoc, query, where, Timestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-        import { fetchUniqueSeasons, getPlayerSeasonData, buildPlayerSeasonUpdatePayload } from './js/player-season-helper.js';
+        import { fetchUniqueSeasons, getPlayerSeasonData, buildPlayerSeasonUpdatePayload, hasPlayerDataForSeason } from './js/player-season-helper.js';
 
         let allRawPlayers = [];
         let allPlayers = [];
@@ -719,21 +782,10 @@
         let currentSortColumn = 'nome';
         let currentSortDirection = 'asc';
 
-        onAuthStateChanged(auth, async (user) => {
-            if (user) {
-                try {
-                    const userDoc = await getDoc(doc(db, "users", user.uid));
-                    if (!userDoc.exists() || userDoc.data().estatuto !== "ruler") {
-                        window.location.replace("engrenagem.html");
-                    } else {
-                        await initPage();
-                    }
-                } catch (e) {
-                    console.error("Erro ao validar permissões:", e);
-                    window.location.replace("engrenagem.html");
-                }
-            }
-        });
+        let currentPage = 1;
+        const ITEMS_PER_PAGE = 50;
+
+        adminAuthReady.then(initPage);
 
         async function initPage() {
             try {
@@ -768,7 +820,10 @@
                 
                 document.getElementById('global-loading').style.display = 'none';
 
-                document.getElementById('tableSearch').addEventListener('input', renderPlayersTable);
+                document.getElementById('tableSearch').addEventListener('input', () => {
+                    currentPage = 1;
+                    renderPlayersTable();
+                });
                 document.getElementById('modalSeasonSelect').addEventListener('change', handleSeasonChange);
                 document.getElementById('tableSeasonFilter').addEventListener('change', handleTableSeasonFilterChange);
 
@@ -802,6 +857,7 @@
 
         function updatePlayersForSeason(season) {
             currentSeason = season;
+            currentPage = 1;
             allPlayers = allRawPlayers.map(item => {
                 const sData = getPlayerSeasonData(item.rawData, season) || {};
                 const paisId = sData.paisId || item.rawData.paisId || '';
@@ -855,11 +911,6 @@
                        p.paisNome.toLowerCase().includes(queryText);
             });
 
-            if (filtered.length === 0) {
-                tableBody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: #8892b0; padding: 20px;">Nenhum jogador encontrado.</td></tr>`;
-                return;
-            }
-
             filtered.sort((a, b) => {
                 let valA = a[currentSortColumn];
                 let valB = b[currentSortColumn];
@@ -875,29 +926,93 @@
                 }
 
                 return currentSortDirection === 'asc' ? comparison : -comparison;
-            }).forEach(p => {
-                const tr = document.createElement('tr');
-                const posClassMap = {'Guarda-Redes': 'guarda-redes', 'Defesa': 'defesa', 'Médio': 'medio', 'Avançado': 'avancado'};
-                const badgeClass = posClassMap[p.posicao] || '';
-                const overallVal = p.overall !== undefined ? p.overall : '-';
-                const localImg = p.imagem ? (p.imagem.startsWith('http') || p.imagem.startsWith('data:') ? p.imagem : '../' + p.imagem) : fallbackImg;
-                const codeMatch = p.imagem ? p.imagem.match(/face_(.+)\.(webp|png|jpe?g|svg)/i) : null;
-                const playerCode = codeMatch ? codeMatch[1] : (p.codigoUrl || '');
-
-                tr.innerHTML = `
-                    <td>
-                        <img src="${localImg}" class="player-row-img" onerror="window.resolvePlayerImage(this, '${playerCode}')">
-                        <span class="player-row-name">${p.nome}</span>
-                    </td>
-                    <td>${p.paisNome}</td>
-                    <td>${p.clube}</td>
-                    <td><span class="pos-badge ${badgeClass}">${p.posicao}</span></td>
-                    <td style="text-align: center; font-weight: bold; color: #2ecc71;">${overallVal}</td>
-                `;
-                tr.addEventListener('click', () => openPlayerModal(p));
-                tableBody.appendChild(tr);
             });
+
+            const totalItems = filtered.length;
+            const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE) || 1;
+
+            if (currentPage > totalPages) currentPage = totalPages;
+            if (currentPage < 1) currentPage = 1;
+
+            const startIndex = totalItems > 0 ? (currentPage - 1) * ITEMS_PER_PAGE : 0;
+            const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, totalItems);
+            const pageItems = filtered.slice(startIndex, endIndex);
+
+            if (totalItems === 0) {
+                tableBody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: #8892b0; padding: 20px;">Nenhum jogador encontrado.</td></tr>`;
+            } else {
+                pageItems.forEach(p => {
+                    const tr = document.createElement('tr');
+                    const posClassMap = {'Guarda-Redes': 'guarda-redes', 'Defesa': 'defesa', 'Médio': 'medio', 'Avançado': 'avancado'};
+                    const badgeClass = posClassMap[p.posicao] || '';
+                    const overallVal = p.overall !== undefined ? p.overall : '-';
+                    const localImg = p.imagem ? (p.imagem.startsWith('http') || p.imagem.startsWith('data:') ? p.imagem : '../' + p.imagem) : fallbackImg;
+                    const codeMatch = p.imagem ? p.imagem.match(/face_(.+)\.(webp|png|jpe?g|svg)/i) : null;
+                    const playerCode = codeMatch ? codeMatch[1] : (p.codigoUrl || '');
+
+                    tr.innerHTML = `
+                        <td>
+                            <img src="${localImg}" class="player-row-img" onerror="window.resolvePlayerImage(this, '${playerCode}')">
+                            <span class="player-row-name">${p.nome}</span>
+                        </td>
+                        <td>${p.paisNome}</td>
+                        <td>${p.clube}</td>
+                        <td><span class="pos-badge ${badgeClass}">${p.posicao}</span></td>
+                        <td style="text-align: center; font-weight: bold; color: #2ecc71;">${overallVal}</td>
+                    `;
+                    tr.addEventListener('click', () => openPlayerModal(p));
+                    tableBody.appendChild(tr);
+                });
+            }
+
+            renderPagination(totalItems, totalPages);
         }
+
+        function renderPagination(totalItems, totalPages) {
+            const container = document.getElementById('pagination-controls');
+            if (!container) return;
+
+            if (totalItems === 0) {
+                container.innerHTML = `<div class="pagination-info">Sem resultados</div>`;
+                return;
+            }
+
+            const startIndex = (currentPage - 1) * ITEMS_PER_PAGE + 1;
+            const endIndex = Math.min(currentPage * ITEMS_PER_PAGE, totalItems);
+
+            let buttonsHtml = '';
+            
+            buttonsHtml += `<button class="pagination-btn" ${currentPage === 1 ? 'disabled' : ''} onclick="window.changeOverallPage(${currentPage - 1})"><i class="fas fa-chevron-left"></i> Anterior</button>`;
+
+            let pagesToDisplay = [];
+            for (let i = 1; i <= totalPages; i++) {
+                if (i === 1 || i === totalPages || (i >= currentPage - 1 && i <= currentPage + 1)) {
+                    pagesToDisplay.push(i);
+                }
+            }
+
+            let lastPage = 0;
+            pagesToDisplay.forEach(p => {
+                if (lastPage > 0 && p - lastPage > 1) {
+                    buttonsHtml += `<span class="pagination-ellipsis">...</span>`;
+                }
+                buttonsHtml += `<button class="pagination-btn ${p === currentPage ? 'active' : ''}" onclick="window.changeOverallPage(${p})">${p}</button>`;
+                lastPage = p;
+            });
+
+            buttonsHtml += `<button class="pagination-btn" ${currentPage === totalPages ? 'disabled' : ''} onclick="window.changeOverallPage(${currentPage + 1})">Próxima <i class="fas fa-chevron-right"></i></button>`;
+
+            container.innerHTML = `
+                <div class="pagination-info">Mostrando <strong>${startIndex}</strong> a <strong>${endIndex}</strong> de <strong>${totalItems}</strong> jogadores</div>
+                <div class="pagination-controls">${buttonsHtml}</div>
+            `;
+        }
+
+        window.changeOverallPage = function(page) {
+            currentPage = page;
+            renderPlayersTable();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        };
 
         async function openPlayerModal(player) {
             currentPlayer = player;
@@ -1608,6 +1723,487 @@
                 }
             });
         });
+
+        // --- CURVA DA QUALIDADE & EDIÇÃO MANUAL ---
+        const qualityCurveIcon = document.getElementById('quality-curve-icon');
+        const qualityCurvePopup = document.getElementById('quality-curve-popup');
+        const closeQualityCurveModalBtn = document.getElementById('closeQualityCurveModalBtn');
+        const qualityCurveSeasonSelect = document.getElementById('qualityCurveSeasonSelect');
+        const calcQualityCurveBtn = document.getElementById('calcQualityCurveBtn');
+
+        const tabQualityCurveBtn = document.getElementById('tabQualityCurveBtn');
+        const tabManualLimitsBtn = document.getElementById('tabManualLimitsBtn');
+        const tabQualityCurveContent = document.getElementById('tabQualityCurveContent');
+        const tabManualLimitsContent = document.getElementById('tabManualLimitsContent');
+
+        if (tabQualityCurveBtn && tabManualLimitsBtn) {
+            tabQualityCurveBtn.addEventListener('click', () => {
+                tabQualityCurveBtn.style.backgroundColor = '#2176ff';
+                tabQualityCurveBtn.style.color = '#ffffff';
+                tabQualityCurveBtn.style.border = 'none';
+
+                tabManualLimitsBtn.style.backgroundColor = '#161c28';
+                tabManualLimitsBtn.style.color = '#8892b0';
+                tabManualLimitsBtn.style.border = '1px solid rgba(255, 255, 255, 0.08)';
+
+                tabQualityCurveContent.style.display = 'block';
+                tabManualLimitsContent.style.display = 'none';
+            });
+
+            tabManualLimitsBtn.addEventListener('click', () => {
+                tabManualLimitsBtn.style.backgroundColor = '#2176ff';
+                tabManualLimitsBtn.style.color = '#ffffff';
+                tabManualLimitsBtn.style.border = 'none';
+
+                tabQualityCurveBtn.style.backgroundColor = '#161c28';
+                tabQualityCurveBtn.style.color = '#8892b0';
+                tabQualityCurveBtn.style.border = '1px solid rgba(255, 255, 255, 0.08)';
+
+                tabManualLimitsContent.style.display = 'block';
+                tabQualityCurveContent.style.display = 'none';
+
+                loadManualLimitsForm();
+            });
+        }
+
+        if (qualityCurveIcon) {
+            qualityCurveIcon.addEventListener('click', () => {
+                if (qualityCurveSeasonSelect && seasons.length > 0) {
+                    qualityCurveSeasonSelect.innerHTML = seasons.map(s => `<option value="${s}">${s}</option>`).join('');
+                    qualityCurveSeasonSelect.value = currentSeason;
+                }
+                qualityCurvePopup.classList.add('active');
+            });
+        }
+
+        if (closeQualityCurveModalBtn) {
+            closeQualityCurveModalBtn.addEventListener('click', () => {
+                qualityCurvePopup.classList.remove('active');
+            });
+        }
+
+        if (qualityCurvePopup) {
+            qualityCurvePopup.addEventListener('click', (e) => {
+                if (e.target === qualityCurvePopup) {
+                    qualityCurvePopup.classList.remove('active');
+                }
+            });
+        }
+
+        async function loadManualLimitsForm() {
+            const container = document.getElementById('manualLimitsFormContainer');
+            if (!container) return;
+
+            container.innerHTML = '<div style="text-align: center; color: #8892b0; padding: 20px;"><i class="fas fa-spinner fa-spin fa-2x"></i><p style="margin-top: 10px;">A carregar limites do Firestore...</p></div>';
+
+            try {
+                const limitsSnap = await getDoc(doc(db, 'paineis', 'paineis overall'));
+                const limits = limitsSnap.exists() ? limitsSnap.data() : (overallLimitsData || {});
+
+                const seasonOptionsHtml = (seasons || []).map(s => `<option value="${s}">${s}</option>`).join('');
+
+                const positions = ["Guarda-Redes", "Defesa", "Médio", "Avançado"];
+                let html = `
+                    <div style="background-color: #161c28; border-radius: 10px; padding: 16px; margin-bottom: 20px; border: 1px solid rgba(255, 255, 255, 0.06); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                        <div>
+                            <h4 style="color: #ffffff; font-size: 15px; margin-bottom: 4px; font-weight: bold;"><i class="fas fa-sync-alt" style="color: #e67e22; margin-right: 6px;"></i> Recalcular Overalls em Lote</h4>
+                            <p style="color: #8892b0; font-size: 12px; margin: 0;">Aplica os limites atuais aos overalls e castas de todos os jogadores da época selecionada.</p>
+                        </div>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <select id="recalcSeasonSelect" class="table-filter-select" style="min-width: 140px; font-weight: bold; color: #2176ff; background-color: #111622;">
+                                ${seasonOptionsHtml}
+                            </select>
+                            <button id="recalcAllPlayersSeasonBtn" class="btn primary" style="background: linear-gradient(135deg, #e67e22, #d35400); color: #fff; padding: 10px 18px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 15px rgba(230, 126, 34, 0.3);">
+                                <i class="fas fa-sync-alt"></i> Recalcular Overalls
+                            </button>
+                        </div>
+                    </div>
+                    <h4 style="color: #ffffff; margin-bottom: 16px; font-size: 16px;">Edição Manual dos Limites de Casta (paineis overall)</h4>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px;">
+                `;
+
+                positions.forEach(pos => {
+                    const posId = pos.replace(/\s+/g, '');
+                    const posLimits = limits[pos] || {};
+                    const platina = posLimits.Platina ? (posLimits.Platina[0] ?? '') : '';
+                    const ouro0 = posLimits.Ouro ? (posLimits.Ouro[0] ?? '') : '';
+                    const ouro1 = posLimits.Ouro ? (posLimits.Ouro[1] ?? '') : '';
+                    const prata0 = posLimits.Prata ? (posLimits.Prata[0] ?? '') : '';
+                    const prata1 = posLimits.Prata ? (posLimits.Prata[1] ?? '') : '';
+                    const bronze = posLimits.Bronze ? (posLimits.Bronze[0] ?? '') : '';
+
+                    html += `
+                        <div style="background-color: #161c28; border-radius: 10px; padding: 18px; border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
+                            <h5 style="color: #2176ff; font-size: 16px; font-weight: bold; margin-bottom: 14px; border-bottom: 1px solid rgba(255, 255, 255, 0.06); padding-bottom: 6px;">${pos}</h5>
+                            
+                            <div style="margin-bottom: 12px;">
+                                <label style="display: block; font-size: 12px; color: #e5e4e2; font-weight: 600; margin-bottom: 4px;">💎 Jogador Platina (Acima de)</label>
+                                <input type="number" step="0.1" id="manual-platina-${posId}" value="${platina}" placeholder="Ex: 164.0" style="width: 100%; padding: 8px 12px; background-color: #111622; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 6px; color: #fff; font-weight: bold; outline: none;">
+                            </div>
+
+                            <div style="margin-bottom: 12px;">
+                                <label style="display: block; font-size: 12px; color: #ffd700; font-weight: 600; margin-bottom: 4px;">🟡 Jogador Ouro (Entre ... e ...)</label>
+                                <div style="display: flex; gap: 8px;">
+                                    <input type="number" step="0.1" id="manual-ouro-min-${posId}" value="${ouro0}" placeholder="Mín (Ex: 138.8)" style="width: 50%; padding: 8px 12px; background-color: #111622; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 6px; color: #fff; font-weight: bold; outline: none;">
+                                    <input type="number" step="0.1" id="manual-ouro-max-${posId}" value="${ouro1}" placeholder="Máx (Ex: 163.9)" style="width: 50%; padding: 8px 12px; background-color: #111622; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 6px; color: #fff; font-weight: bold; outline: none;">
+                                </div>
+                            </div>
+
+                            <div style="margin-bottom: 12px;">
+                                <label style="display: block; font-size: 12px; color: #c0c0c0; font-weight: 600; margin-bottom: 4px;">⚪ Jogador Prata (Entre ... e ...)</label>
+                                <div style="display: flex; gap: 8px;">
+                                    <input type="number" step="0.1" id="manual-prata-min-${posId}" value="${prata0}" placeholder="Mín (Ex: 114.4)" style="width: 50%; padding: 8px 12px; background-color: #111622; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 6px; color: #fff; font-weight: bold; outline: none;">
+                                    <input type="number" step="0.1" id="manual-prata-max-${posId}" value="${prata1}" placeholder="Máx (Ex: 138.7)" style="width: 50%; padding: 8px 12px; background-color: #111622; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 6px; color: #fff; font-weight: bold; outline: none;">
+                                </div>
+                            </div>
+
+                            <div style="margin-bottom: 12px;">
+                                <label style="display: block; font-size: 12px; color: #cd7f32; font-weight: 600; margin-bottom: 4px;">🔴 Jogador Bronze (Abaixo de)</label>
+                                <input type="number" step="0.1" id="manual-bronze-${posId}" value="${bronze}" placeholder="Ex: 114.3" style="width: 100%; padding: 8px 12px; background-color: #111622; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 6px; color: #fff; font-weight: bold; outline: none;">
+                            </div>
+                        </div>
+                    `;
+                });
+
+                html += '</div>';
+
+                html += `
+                    <div style="margin-top: 24px; text-align: right; border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 16px;">
+                        <button id="saveManualFormBtn" class="btn primary" style="background: linear-gradient(135deg, #2ecc71, #27ae60); color: #fff; padding: 10px 24px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer;">
+                            <i class="fas fa-save" style="margin-right: 6px;"></i> Salvar Alterações no Firestore (paineis overall)
+                        </button>
+                    </div>
+                `;
+
+                container.innerHTML = html;
+
+                const recalcSeasonSelect = document.getElementById('recalcSeasonSelect');
+                if (recalcSeasonSelect) {
+                    recalcSeasonSelect.value = currentSeason;
+                }
+
+                const recalcBtn = document.getElementById('recalcAllPlayersSeasonBtn');
+                if (recalcBtn) {
+                    recalcBtn.addEventListener('click', async () => {
+                        const targetSeason = document.getElementById('recalcSeasonSelect').value;
+                        if (!confirm(`Tem certeza que deseja recalcular o Overall e a Casta de TODOS os jogadores para a época ${targetSeason} com base nos limites configurados?`)) {
+                            return;
+                        }
+
+                        recalcBtn.disabled = true;
+                        recalcBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> A recalcular...';
+
+                        try {
+                            const limitsSnap = await getDoc(doc(db, 'paineis', 'paineis overall'));
+                            const limitsData = limitsSnap.exists() ? limitsSnap.data() : (overallLimitsData || {});
+                            const defaultBaseSeason = seasons[seasons.length - 1] || '2025/2026';
+
+                            let updatedCount = 0;
+
+                            for (const item of allRawPlayers) {
+                                if (!hasPlayerDataForSeason(item.rawData, targetSeason, defaultBaseSeason)) continue;
+
+                                const sData = getPlayerSeasonData(item.rawData, targetSeason) || {};
+                                const pos = sData.posicao || item.rawData.posicao || 'N/A';
+                                if (pos === 'N/A') continue;
+
+                                const rawScore = computePlayerRawScore({ ...sData, posicao: pos });
+                                if (rawScore <= 0) continue;
+
+                                const posLimits = limitsData[pos] || null;
+                                const newCasta = determineCastaFromOverall(rawScore, posLimits) || sData.casta || 'Jogador Bronze';
+
+                                let castaMultiplier = 1.0;
+                                if (paineisCoeficienteData?.['Coeficiente']?.['Coeficiente']?.casta) {
+                                    const list = paineisCoeficienteData['Coeficiente']['Coeficiente'].casta;
+                                    const matchCasta = list.find(c => c.name === newCasta);
+                                    if (matchCasta) {
+                                        castaMultiplier = parseFloat((matchCasta.text || '1').replace(',', '.')) || 1.0;
+                                    }
+                                }
+
+                                const newOverall = Math.round(rawScore * castaMultiplier);
+
+                                const updatedSeasonObj = {
+                                    ...sData,
+                                    overall: newOverall,
+                                    casta: newCasta
+                                };
+
+                                const payload = buildPlayerSeasonUpdatePayload(targetSeason, updatedSeasonObj);
+                                const playerRef = doc(db, 'jogadores', item.id);
+                                await updateDoc(playerRef, payload);
+
+                                item.rawData = {
+                                    ...item.rawData,
+                                    ...payload
+                                };
+                                updatedCount++;
+                            }
+
+                            updatePlayersForSeason(currentSeason);
+                            alert(`Recálculo concluído com sucesso!\n\n${updatedCount} jogadores foram recalculados e atualizados para a época ${targetSeason}.`);
+
+                        } catch (err) {
+                            console.error('Erro ao recalcular overalls dos jogadores:', err);
+                            alert('Ocorreu um erro ao recalcular: ' + err.message);
+                        } finally {
+                            recalcBtn.disabled = false;
+                            recalcBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Recalcular Overalls';
+                        }
+                    });
+                }
+
+                document.getElementById('saveManualFormBtn').addEventListener('click', async () => {
+                    const btn = document.getElementById('saveManualFormBtn');
+                    btn.disabled = true;
+                    btn.textContent = 'A guardar...';
+
+                    const payload = {};
+                    positions.forEach(pos => {
+                        const posId = pos.replace(/\s+/g, '');
+                        const platinaVal = parseFloat(document.getElementById(`manual-platina-${posId}`).value);
+                        const ouroMin = parseFloat(document.getElementById(`manual-ouro-min-${posId}`).value);
+                        const ouroMax = parseFloat(document.getElementById(`manual-ouro-max-${posId}`).value);
+                        const prataMin = parseFloat(document.getElementById(`manual-prata-min-${posId}`).value);
+                        const prataMax = parseFloat(document.getElementById(`manual-prata-max-${posId}`).value);
+                        const bronzeVal = parseFloat(document.getElementById(`manual-bronze-${posId}`).value);
+
+                        payload[pos] = {
+                            "Platina": [isNaN(platinaVal) ? null : platinaVal],
+                            "Ouro": [isNaN(ouroMin) ? null : ouroMin, isNaN(ouroMax) ? null : ouroMax],
+                            "Prata": [isNaN(prataMin) ? null : prataMin, isNaN(prataMax) ? null : prataMax],
+                            "Bronze": [isNaN(bronzeVal) ? null : bronzeVal]
+                        };
+                    });
+
+                    try {
+                        await setDoc(doc(db, 'paineis', 'paineis overall'), payload);
+                        alert('Limites de overall salvos manualmente com sucesso!');
+                        overallLimitsData = payload;
+                    } catch (err) {
+                        console.error('Erro ao salvar limites manuais:', err);
+                        alert('Erro ao salvar no Firestore: ' + err.message);
+                    } finally {
+                        btn.disabled = false;
+                        btn.innerHTML = '<i class="fas fa-save" style="margin-right: 6px;"></i> Salvar Alterações no Firestore (paineis overall)';
+                    }
+                });
+
+            } catch (err) {
+                console.error("Erro ao carregar limites manuais:", err);
+                container.innerHTML = '<p style="color: #e74c3c;">Erro ao carregar formulário de limites manuais: ' + err.message + '</p>';
+            }
+        }
+
+        function computePlayerRawScore(pData) {
+            const pos = pData.posicao;
+            const statsText = pData.estatisticas;
+
+            // 1. Tenta calcular diretamente pela soma ponderada das estatísticas (se disponível)
+            if (statsText && typeof statsText === 'string' && statsText.trim() !== '' && paineisCoeficienteData) {
+                let totalSum = 0;
+                let statsFoundCount = 0;
+
+                for (const categoria in paineisCoeficienteData) {
+                    if (categoria === 'Coeficiente') continue;
+                    const subcategorias = paineisCoeficienteData[categoria];
+
+                    for (const subcatName in subcategorias) {
+                        const subcat = subcategorias[subcatName];
+                        if (subcat.tipo) {
+                            for (const item of subcat.tipo) {
+                                if (item.name === pos) {
+                                    const coefVal = parseFloat((item.text || '0').replace(',', '.')) || 0;
+                                    
+                                    const lines = statsText.split('\n');
+                                    for (let i = 0; i < lines.length; i++) {
+                                        if (lines[i].trim().toLowerCase().startsWith(subcatName.toLowerCase())) {
+                                            const valLine = lines[i + 1] ? lines[i + 1].trim() : '';
+                                            const match = valLine.match(/^(\d+(\.\d+)?)/);
+                                            if (match) {
+                                                const statNum = parseFloat(match[1].replace(',', '.')) || 0;
+                                                totalSum += coefVal * statNum;
+                                                statsFoundCount++;
+                                            }
+                                            break;
+                                        }
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (statsFoundCount > 0) {
+                    return totalSum;
+                }
+            }
+
+            // 2. Se não houver estatísticas individuais (ou falhar), remove o multiplicador da Casta do overall guardado
+            let overallVal = parseFloat(pData.overall) || 0;
+            if (overallVal <= 0) return 0;
+
+            let castaMultiplier = 1.0;
+            if (pData.casta && paineisCoeficienteData?.['Coeficiente']?.['Coeficiente']?.casta) {
+                const list = paineisCoeficienteData['Coeficiente']['Coeficiente'].casta;
+                const matchCasta = list.find(c => c.name === pData.casta);
+                if (matchCasta) {
+                    castaMultiplier = parseFloat((matchCasta.text || '1').replace(',', '.')) || 1.0;
+                }
+            }
+
+            return overallVal / castaMultiplier;
+        }
+
+        async function calculateQualityCurve() {
+            const selectedSeason = qualityCurveSeasonSelect.value;
+            const container = document.getElementById('qualityCurveResultsContainer');
+            if (!container) return;
+
+            container.style.display = 'block';
+            container.innerHTML = '<div style="text-align: center; color: #8892b0; padding: 20px;"><i class="fas fa-spinner fa-spin fa-2x"></i><p style="margin-top: 10px;">A calcular curva da qualidade para a época ' + selectedSeason + '...</p></div>';
+
+            const defaultBaseSeason = seasons[seasons.length - 1] || '2025/2026';
+            
+            const seasonPlayers = allRawPlayers
+                .filter(item => hasPlayerDataForSeason(item.rawData, selectedSeason, defaultBaseSeason))
+                .map(item => {
+                    const sData = getPlayerSeasonData(item.rawData, selectedSeason) || {};
+                    return {
+                        id: item.id,
+                        nome: sData.nome || 'Sem Nome',
+                        posicao: sData.posicao || 'N/A',
+                        overall: parseFloat(sData.overall) || 0,
+                        casta: sData.casta || '',
+                        estatisticas: sData.estatisticas || ''
+                    };
+                })
+                .map(p => {
+                    return {
+                        ...p,
+                        rawOverall: computePlayerRawScore(p)
+                    };
+                })
+                .filter(p => p.rawOverall > 0 && p.posicao !== 'N/A');
+
+            if (seasonPlayers.length === 0) {
+                container.innerHTML = '<div style="background: rgba(231, 76, 60, 0.1); border: 1px solid rgba(231, 76, 60, 0.3); color: #e74c3c; padding: 16px; border-radius: 8px; text-align: center;">Nenhum jogador com dados válidos encontrado para a época ' + selectedSeason + '.</div>';
+                return;
+            }
+
+            const positions = ["Guarda-Redes", "Defesa", "Médio", "Avançado"];
+            const calculatedLimits = {};
+            let html = '<h4 style="color: #ffffff; margin-bottom: 16px; font-size: 16px;">Resultados da Curva da Qualidade (' + seasonPlayers.length + ' Jogadores Analisados - Pontuação Bruta sem Casta)</h4>';
+            html += '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px;">';
+
+            positions.forEach(pos => {
+                const posPlayers = seasonPlayers.filter(p => p.posicao === pos).map(p => p.rawOverall).sort((a, b) => a - b);
+                const count = posPlayers.length;
+
+                if (count === 0) {
+                    html += `
+                        <div style="background-color: #161c28; border-radius: 10px; padding: 16px; border: 1px solid rgba(255, 255, 255, 0.06);">
+                            <h5 style="color: #2176ff; font-size: 15px; margin-bottom: 8px;">${pos}</h5>
+                            <p style="color: #8892b0; font-size: 13px;">Sem jogadores nesta posição.</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                const min = posPlayers[0];
+                const max = posPlayers[count - 1];
+                const sum = posPlayers.reduce((acc, v) => acc + v, 0);
+                const avg = (sum / count).toFixed(1);
+
+                const getPercentile = (p) => {
+                    const index = Math.floor((count - 1) * p);
+                    return posPlayers[index];
+                };
+
+                let bronzeVal = Number(getPercentile(0.25).toFixed(1));
+                let prataMaxVal = Number(getPercentile(0.60).toFixed(1));
+                let ouroMaxVal = Number(getPercentile(0.90).toFixed(1));
+
+                if (prataMaxVal <= bronzeVal) prataMaxVal = Number((bronzeVal + 10).toFixed(1));
+                if (ouroMaxVal <= prataMaxVal) ouroMaxVal = Number((prataMaxVal + 10).toFixed(1));
+
+                const prataMinVal = Number((bronzeVal + 0.1).toFixed(1));
+                const ouroMinVal = Number((prataMaxVal + 0.1).toFixed(1));
+                const platinaMinVal = Number((ouroMaxVal + 0.1).toFixed(1));
+
+                calculatedLimits[pos] = {
+                    "Bronze": [bronzeVal],
+                    "Prata": [prataMinVal, prataMaxVal],
+                    "Ouro": [ouroMinVal, ouroMaxVal],
+                    "Platina": [platinaMinVal]
+                };
+
+                html += `
+                    <div style="background-color: #161c28; border-radius: 10px; padding: 18px; border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.06); padding-bottom: 8px;">
+                            <h5 style="color: #2176ff; font-size: 16px; font-weight: bold; margin: 0;">${pos}</h5>
+                            <span style="background-color: rgba(33, 118, 255, 0.15); color: #60a5fa; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 600;">${count} jogadores</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-around; background: #111622; padding: 8px; border-radius: 6px; margin-bottom: 14px; text-align: center;">
+                            <div><span style="font-size: 11px; color: #8892b0; display: block;">MÍN</span><strong style="color: #fff; font-size: 14px;">${min}</strong></div>
+                            <div><span style="font-size: 11px; color: #8892b0; display: block;">MÉDIA</span><strong style="color: #f1c40f; font-size: 14px;">${avg}</strong></div>
+                            <div><span style="font-size: 11px; color: #8892b0; display: block;">MÁX</span><strong style="color: #2ecc71; font-size: 14px;">${max}</strong></div>
+                        </div>
+                        <table style="width: 100%; font-size: 13px; border-collapse: collapse;">
+                            <thead>
+                                <tr style="color: #8892b0; text-transform: uppercase; font-size: 11px; text-align: left;">
+                                    <th style="padding: 4px 0;">Casta</th>
+                                    <th style="padding: 4px 0; text-align: right;">Corte Sugerido</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td style="color: #e5e7eb; padding: 4px 0;">🔴 Bronze</td><td style="text-align: right; color: #cd7f32; font-weight: bold;">&le; ${bronzeVal}</td></tr>
+                                <tr><td style="color: #e5e7eb; padding: 4px 0;">⚪ Prata</td><td style="text-align: right; color: #c0c0c0; font-weight: bold;">${prataMinVal} a ${prataMaxVal}</td></tr>
+                                <tr><td style="color: #e5e7eb; padding: 4px 0;">🟡 Ouro</td><td style="text-align: right; color: #ffd700; font-weight: bold;">${ouroMinVal} a ${ouroMaxVal}</td></tr>
+                                <tr><td style="color: #e5e7eb; padding: 4px 0;">💎 Platina</td><td style="text-align: right; color: #e5e4e2; font-weight: bold;">&ge; ${platinaMinVal}</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            });
+
+            html += '</div>';
+
+            html += `
+                <div style="margin-top: 24px; text-align: right; border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 16px;">
+                    <button id="saveCalculatedLimitsBtn" class="btn primary" style="background: linear-gradient(135deg, #2ecc71, #27ae60); color: #fff; padding: 10px 20px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer;">
+                        <i class="fas fa-save" style="margin-right: 6px;"></i> Guardar estes limites no Firestore (paineis overall)
+                    </button>
+                </div>
+            `;
+
+            container.innerHTML = html;
+
+            const saveBtn = document.getElementById('saveCalculatedLimitsBtn');
+            if (saveBtn) {
+                saveBtn.addEventListener('click', async () => {
+                    saveBtn.disabled = true;
+                    saveBtn.textContent = 'A guardar no Firestore...';
+                    try {
+                        await setDoc(doc(db, 'paineis', 'paineis overall'), calculatedLimits);
+                        alert('Limites da curva da qualidade guardados com sucesso em paineis overall!');
+                        overallLimitsData = calculatedLimits;
+                    } catch (err) {
+                        console.error('Erro ao guardar limites:', err);
+                        alert('Erro ao guardar os limites: ' + err.message);
+                    } finally {
+                        saveBtn.disabled = false;
+                        saveBtn.innerHTML = '<i class="fas fa-save" style="margin-right: 6px;"></i> Guardar estes limites no Firestore (paineis overall)';
+                    }
+                });
+            }
+        }
+
+        if (calcQualityCurveBtn) {
+            calcQualityCurveBtn.addEventListener('click', calculateQualityCurve);
+        }
 
     </script>
 
