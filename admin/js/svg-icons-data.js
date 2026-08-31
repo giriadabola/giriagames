@@ -216,6 +216,41 @@ export const svgIconsList = [
     svg: `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#a855f7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="4"></rect><line x1="6" y1="12" x2="10" y2="12"></line><line x1="8" y1="10" x2="8" y2="14"></line><circle cx="15" cy="13" r="1.5" fill="#a855f7"></circle><circle cx="18" cy="11" r="1.5" fill="#a855f7"></circle></svg>`
   },
   {
+    id: "caderneta-cromos",
+    name: "Caderneta de Cromos (Álbum)",
+    category: "Coleção & Caderneta",
+    color: "#2176ff",
+    svg: `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#2176ff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path><rect x="9" y="6" width="7" height="8" rx="1"></rect><polygon points="12.5 8 13.3 9.6 15 9.8 13.8 11 14.1 12.7 12.5 11.8 10.9 12.7 11.2 11 10 9.8 11.7 9.6"></polygon></svg>`
+  },
+  {
+    id: "cromo-figurinha",
+    name: "Cromo / Figurinha",
+    category: "Coleção & Caderneta",
+    color: "#ffd166",
+    svg: `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#ffd166" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="2"></rect><circle cx="12" cy="9.5" r="2.5"></circle><path d="M8 16c0-2.2 1.8-4 4-4s4 1.8 4 4"></path><path d="M16 5l1.5-1.5M16.5 3.5l1 1"></path></svg>`
+  },
+  {
+    id: "saqueta-cromos",
+    name: "Saqueta de Cromos (Pack)",
+    category: "Coleção & Caderneta",
+    color: "#a855f7",
+    svg: `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#a855f7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 5l1.5-2L9 5l1.5-2L12 5l1.5-2L15 5l1.5-2L18 5v14l-1.5 2L15 19l-1.5 2L12 19l-1.5 2L9 19l-1.5 2L6 19V5z"></path><rect x="8.5" y="7.5" width="7" height="9" rx="1"></rect><polygon points="12 9 10.5 12 12.5 12 12 15 13.5 12 11.5 12"></polygon></svg>`
+  },
+  {
+    id: "troca-cromos",
+    name: "Troca de Cromos",
+    category: "Coleção & Caderneta",
+    color: "#06d6a0",
+    svg: `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#06d6a0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="9" height="12" rx="1.5"></rect><rect x="12" y="8" width="9" height="12" rx="1.5"></rect><path d="M7 19l2 2 2-2M9 21v-3"></path><path d="M17 5l-2-2-2 2M15 3v3"></path></svg>`
+  },
+  {
+    id: "album-completo",
+    name: "Álbum Completo (100%)",
+    category: "Coleção & Caderneta",
+    color: "#f1c40f",
+    svg: `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#f1c40f" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"></path><path d="M9 3v18"></path><polygon points="14 8 15.3 10.5 18 10.9 16 12.8 16.5 15.5 14 14.2 11.5 15.5 12 12.8 10 10.9 12.7 10.5"></polygon></svg>`
+  },
+  {
     id: "whowins",
     name: "WhoWins (Duelo)",
     category: "Gaming",
