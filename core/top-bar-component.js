@@ -249,6 +249,7 @@ document.addEventListener("DOMContentLoaded", () => {
             transform: translateY(-20px);
             transition: transform 0.3s ease;
             color: #ffffff;
+            overflow: hidden;
         }
         .manual-options-popup-overlay.active .manual-options-popup-content {
             transform: translateY(0);
@@ -290,6 +291,23 @@ document.addEventListener("DOMContentLoaded", () => {
             gap: 10px;
             max-height: 280px;
             overflow-y: auto;
+            overflow-x: hidden;
+            box-sizing: border-box;
+            padding-right: 4px;
+        }
+        .manual-options-list::-webkit-scrollbar {
+            width: 6px;
+        }
+        .manual-options-list::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+        }
+        .manual-options-list::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+        }
+        .manual-options-list::-webkit-scrollbar-thumb:hover {
+            background: rgba(46, 204, 113, 0.5);
         }
         .manual-option-card {
             background: #161c28;
@@ -311,6 +329,39 @@ document.addEventListener("DOMContentLoaded", () => {
             border-color: #2ecc71;
             color: #2ecc71;
             transform: translateX(4px);
+        }
+        .manual-explanation-content {
+            max-width: 540px;
+            width: 90%;
+        }
+        .manual-explanation-body {
+            max-height: 65vh;
+            overflow-y: auto;
+            overflow-x: hidden;
+            box-sizing: border-box;
+            padding-right: 6px;
+            font-size: 14px;
+            line-height: 1.6;
+            color: #d1d5db;
+            word-break: break-word;
+            margin-top: 12px;
+        }
+        .manual-explanation-body::-webkit-scrollbar {
+            width: 6px;
+        }
+        .manual-explanation-body::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+        }
+        .manual-explanation-body::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+        }
+        .manual-explanation-body img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            margin: 8px 0;
         }
 
         @keyframes pulse-coin {
@@ -407,6 +458,17 @@ document.addEventListener("DOMContentLoaded", () => {
                 </div>
                 <p class="manual-options-popup-subtitle">Existem vários conteúdos anexados a esta página. Selecione o que pretende consultar:</p>
                 <div class="manual-options-list" id="manualOptionsList"></div>
+            </div>
+        </div>
+
+        <!-- Pop-up de Explicação (quando o tipo é 'Explicação') -->
+        <div class="manual-options-popup-overlay" id="manualExplanationPopup">
+            <div class="manual-options-popup-content manual-explanation-content">
+                <div class="manual-options-popup-header">
+                    <h3 id="manualExplanationTitle"><i class="fas fa-lightbulb" style="color: #2ecc71;"></i> Explicação</h3>
+                    <button type="button" class="manual-options-close-btn" id="manualExplanationCloseBtn">&times;</button>
+                </div>
+                <div class="manual-explanation-body" id="manualExplanationBody"></div>
             </div>
         </div>
     `;
@@ -510,6 +572,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const manualOptionsCloseBtn = document.getElementById('manualOptionsCloseBtn');
     const manualOptionsList = document.getElementById('manualOptionsList');
 
+    const manualExplanationPopup = document.getElementById('manualExplanationPopup');
+    const manualExplanationCloseBtn = document.getElementById('manualExplanationCloseBtn');
+    const manualExplanationTitle = document.getElementById('manualExplanationTitle');
+    const manualExplanationBody = document.getElementById('manualExplanationBody');
+
     if (manualOptionsCloseBtn && manualOptionsPopup) {
         manualOptionsCloseBtn.addEventListener('click', () => {
             manualOptionsPopup.classList.remove('active');
@@ -521,6 +588,24 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
+    if (manualExplanationCloseBtn && manualExplanationPopup) {
+        manualExplanationCloseBtn.addEventListener('click', () => {
+            manualExplanationPopup.classList.remove('active');
+        });
+        manualExplanationPopup.addEventListener('click', (e) => {
+            if (e.target === manualExplanationPopup) {
+                manualExplanationPopup.classList.remove('active');
+            }
+        });
+    }
+
+    function openManualExplanationPopup(item) {
+        if (!manualExplanationPopup || !manualExplanationTitle || !manualExplanationBody) return;
+        manualExplanationTitle.innerHTML = `<i class="fas fa-lightbulb" style="color: #2ecc71;"></i> ${item.title}`;
+        manualExplanationBody.innerHTML = item.content || '<p style="color: #8892b0;">Sem conteúdo explicativo disponível.</p>';
+        manualExplanationPopup.classList.add('active');
+    }
+
     function openManualOptionsPopup(matchedItems) {
         if (!manualOptionsPopup || !manualOptionsList) return;
         manualOptionsList.innerHTML = '';
@@ -528,7 +613,16 @@ document.addEventListener("DOMContentLoaded", () => {
         matchedItems.forEach(item => {
             const card = document.createElement('a');
             card.className = 'manual-option-card';
-            card.href = `manual.html?item=${item.id}`;
+            if (item.type === 'Explicação') {
+                card.href = '#';
+                card.onclick = (e) => {
+                    e.preventDefault();
+                    manualOptionsPopup.classList.remove('active');
+                    openManualExplanationPopup(item);
+                };
+            } else {
+                card.href = `manual.html?item=${item.id}`;
+            }
             card.innerHTML = `
                 <span>${item.title}</span>
                 <i class="fas fa-chevron-right" style="font-size: 12px;"></i>
@@ -569,6 +663,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         matchedItems.push({
                             id: docSnap.id,
                             title: (data.title || 'Sem título').replace(/<[^>]*>?/gm, '').trim(),
+                            content: data.content || '',
                             type: data.type || 'Tópico'
                         });
                     }
@@ -578,11 +673,21 @@ document.addEventListener("DOMContentLoaded", () => {
             const manualBtns = document.querySelectorAll('a[href^="manual.html"], a[title="Manual"]');
 
             if (matchedItems.length === 1) {
-                const newUrl = `manual.html?item=${matchedItems[0].id}`;
-                manualBtns.forEach(link => {
-                    link.setAttribute('href', newUrl);
-                    link.onclick = null;
-                });
+                if (matchedItems[0].type === 'Explicação') {
+                    manualBtns.forEach(link => {
+                        link.setAttribute('href', '#');
+                        link.onclick = (e) => {
+                            e.preventDefault();
+                            openManualExplanationPopup(matchedItems[0]);
+                        };
+                    });
+                } else {
+                    const newUrl = `manual.html?item=${matchedItems[0].id}`;
+                    manualBtns.forEach(link => {
+                        link.setAttribute('href', newUrl);
+                        link.onclick = null;
+                    });
+                }
             } else if (matchedItems.length > 1) {
                 manualBtns.forEach(link => {
                     link.setAttribute('href', '#');
