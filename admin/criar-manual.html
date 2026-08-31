@@ -260,8 +260,18 @@
             background-color: #111622; 
             border: 1px solid rgba(255, 255, 255, 0.04); 
             transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        #modal-items-list li svg, #reorder-topic-list li svg {
+            width: 20px;
+            height: 20px;
+            flex-shrink: 0;
+            vertical-align: middle;
         }
         #modal-items-list li:hover { background-color: rgba(33, 118, 255, 0.2); border-color: rgba(33, 118, 255, 0.3); }
+        #modal-items-list li.selected { background-color: rgba(33, 118, 255, 0.35); border-color: rgba(33, 118, 255, 0.6); }
         
         #reorder-btn { 
             position: fixed; 
@@ -922,13 +932,13 @@ async function loadExplicacoesParaAutoLink() {
             }
             snapshot.forEach(docSnap => {
                 const li = document.createElement("li");
-                li.textContent = docSnap.data().title;
+                li.innerHTML = docSnap.data().title;
                 li.dataset.id = docSnap.id;
                 li.dataset.title = docSnap.data().title;
                 li.onclick = () => {
                     selectedModalItem = { id: docSnap.id, title: li.dataset.title };
-                    Array.from(modalItemsList.children).forEach(child => child.style.backgroundColor = "");
-                    li.style.backgroundColor = "#e0eafc";
+                    Array.from(modalItemsList.children).forEach(child => child.classList.remove("selected"));
+                    li.classList.add("selected");
                 };
                 modalItemsList.appendChild(li);
             });
@@ -942,10 +952,14 @@ async function loadExplicacoesParaAutoLink() {
             noteContentInput.focus();
             restoreSelection();
             if (savedSelection) {
-                const selectedText = savedSelection.toString().trim() || selectedModalItem.title;
+                const hasSelectedText = savedSelection.toString().trim().length > 0;
                 const linkElement = document.createElement('manual-link');
                 linkElement.dataset.id = selectedModalItem.id;
-                linkElement.textContent = selectedText;
+                if (hasSelectedText) {
+                    linkElement.textContent = savedSelection.toString().trim();
+                } else {
+                    linkElement.innerHTML = selectedModalItem.title;
+                }
                 savedSelection.deleteContents();
                 savedSelection.insertNode(linkElement);
                 const sel = window.getSelection();
