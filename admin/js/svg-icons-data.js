@@ -1555,5 +1555,96 @@ export const svgIconsList = [
     category: "Finanças",
     color: "#2ecc71",
     svg: `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#2ecc71" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18"></path><path d="M3 16l5-5 4 4 9-9"></path><polyline points="15 6 21 6 21 12"></polyline></svg>`
+  },
+  {
+    id: "lista-menu",
+    name: "Vista em Lista (Menu / Agenda)",
+    category: "UI & Navegação",
+    color: "#00c6ff",
+    svg: `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#00c6ff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>`
+  },
+  {
+    id: "lista-cartoes",
+    name: "Lista de Cartões / Propostas",
+    category: "UI & Navegação",
+    color: "#a855f7",
+    svg: `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#a855f7" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="4" rx="1.5"></rect><rect x="3" y="10" width="18" height="4" rx="1.5"></rect><rect x="3" y="16" width="18" height="4" rx="1.5"></rect></svg>`
+  },
+  {
+    id: "tabela-classificativa",
+    name: "Tabela Classificativa",
+    category: "UI & Navegação",
+    color: "#ffd166",
+    svg: `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#ffd166" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="3" y1="15" x2="21" y2="15"></line><line x1="9" y1="3" x2="9" y2="21"></line></svg>`
+  },
+  {
+    id: "tabela-podio-ranking",
+    name: "Tabela de Pódio / Rankings",
+    category: "Gaming",
+    color: "#2ecc71",
+    svg: `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#2ecc71" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 20V10"></path><path d="M12 20V4"></path><path d="M6 20v-6"></path><path d="M4 20h16"></path><polygon points="12,2 10.5,4.5 13.5,4.5" fill="#2ecc71"></polygon></svg>`
+  },
+  {
+    id: "moeda-mgc-dourada",
+    name: "Moeda ɱ-₲₵ (Dourada)",
+    category: "Finanças",
+    color: "#ffd166",
+    svg: `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="10" stroke="#ffd166" stroke-width="1.6" fill="rgba(255, 209, 102, 0.12)"/><circle cx="12" cy="12" r="8.4" stroke="#ffd166" stroke-width="0.6" stroke-dasharray="1 1"/><text x="12" y="14.2" fill="#ffd166" font-size="5.5" font-weight="900" font-family="'Segoe UI', Roboto, Helvetica, sans-serif" text-anchor="middle" textLength="14" lengthAdjust="spacingAndGlyphs">ɱ-₲₵</text></svg>`
+  },
+  {
+    id: "moeda-mgc-prateada",
+    name: "Moeda ɱ-₲₵ (Prateada)",
+    category: "Finanças",
+    color: "#e2e8f0",
+    svg: `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="10" stroke="#e2e8f0" stroke-width="1.6" fill="rgba(226, 232, 240, 0.12)"/><circle cx="12" cy="12" r="8.4" stroke="#e2e8f0" stroke-width="0.6" stroke-dasharray="1 1"/><text x="12" y="14.2" fill="#e2e8f0" font-size="5.5" font-weight="900" font-family="'Segoe UI', Roboto, Helvetica, sans-serif" text-anchor="middle" textLength="14" lengthAdjust="spacingAndGlyphs">ɱ-₲₵</text></svg>`
+  },
+  {
+    id: "moeda-mgc-bronze",
+    name: "Moeda ɱ-₲₵ (Bronze)",
+    category: "Finanças",
+    color: "#cd7f32",
+    svg: `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="10" stroke="#cd7f32" stroke-width="1.6" fill="rgba(205, 127, 50, 0.12)"/><circle cx="12" cy="12" r="8.4" stroke="#cd7f32" stroke-width="0.6" stroke-dasharray="1 1"/><text x="12" y="14.2" fill="#cd7f32" font-size="5.5" font-weight="900" font-family="'Segoe UI', Roboto, Helvetica, sans-serif" text-anchor="middle" textLength="14" lengthAdjust="spacingAndGlyphs">ɱ-₲₵</text></svg>`
+  },
+  {
+    id: "moeda-mgc-verde",
+    name: "Moeda ɱ-₲₵ (Verde)",
+    category: "Finanças",
+    color: "#2ecc71",
+    svg: `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="10" stroke="#2ecc71" stroke-width="1.6" fill="rgba(46, 204, 113, 0.12)"/><circle cx="12" cy="12" r="8.4" stroke="#2ecc71" stroke-width="0.6" stroke-dasharray="1 1"/><text x="12" y="14.2" fill="#2ecc71" font-size="5.5" font-weight="900" font-family="'Segoe UI', Roboto, Helvetica, sans-serif" text-anchor="middle" textLength="14" lengthAdjust="spacingAndGlyphs">ɱ-₲₵</text></svg>`
+  },
+  {
+    id: "token-mgc-emblema",
+    name: "Emblema / Token ɱ-₲₵ (Largo)",
+    category: "Finanças",
+    color: "#ffd166",
+    svg: `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="5.5" width="20" height="13" rx="6.5" stroke="#ffd166" stroke-width="1.5" fill="rgba(255, 209, 102, 0.15)"/><rect x="3.5" y="7" width="17" height="10" rx="5" stroke="#ffd166" stroke-width="0.6" stroke-dasharray="1 1"/><text x="12" y="14.5" fill="#ffd166" font-size="6" font-weight="900" font-family="'Segoe UI', Roboto, Helvetica, sans-serif" text-anchor="middle">ɱ-₲₵</text></svg>`
+  },
+  {
+    id: "moeda-gc-dourada",
+    name: "Moeda ₲₵ (Dourada)",
+    category: "Finanças",
+    color: "#ffd166",
+    svg: `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="10" stroke="#ffd166" stroke-width="1.6" fill="rgba(255, 209, 102, 0.12)"/><circle cx="12" cy="12" r="8.4" stroke="#ffd166" stroke-width="0.6" stroke-dasharray="1 1"/><text x="12" y="15" fill="#ffd166" font-size="8" font-weight="900" font-family="'Segoe UI', Roboto, Helvetica, sans-serif" text-anchor="middle">₲₵</text></svg>`
+  },
+  {
+    id: "moeda-gc-prateada",
+    name: "Moeda ₲₵ (Prateada)",
+    category: "Finanças",
+    color: "#e2e8f0",
+    svg: `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="10" stroke="#e2e8f0" stroke-width="1.6" fill="rgba(226, 232, 240, 0.12)"/><circle cx="12" cy="12" r="8.4" stroke="#e2e8f0" stroke-width="0.6" stroke-dasharray="1 1"/><text x="12" y="15" fill="#e2e8f0" font-size="8" font-weight="900" font-family="'Segoe UI', Roboto, Helvetica, sans-serif" text-anchor="middle">₲₵</text></svg>`
+  },
+  {
+    id: "moeda-gc-bronze",
+    name: "Moeda ₲₵ (Bronze)",
+    category: "Finanças",
+    color: "#cd7f32",
+    svg: `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="10" stroke="#cd7f32" stroke-width="1.6" fill="rgba(205, 127, 50, 0.12)"/><circle cx="12" cy="12" r="8.4" stroke="#cd7f32" stroke-width="0.6" stroke-dasharray="1 1"/><text x="12" y="15" fill="#cd7f32" font-size="8" font-weight="900" font-family="'Segoe UI', Roboto, Helvetica, sans-serif" text-anchor="middle">₲₵</text></svg>`
+  },
+  {
+    id: "moeda-gc-verde",
+    name: "Moeda ₲₵ (Verde)",
+    category: "Finanças",
+    color: "#2ecc71",
+    svg: `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="10" stroke="#2ecc71" stroke-width="1.6" fill="rgba(46, 204, 113, 0.12)"/><circle cx="12" cy="12" r="8.4" stroke="#2ecc71" stroke-width="0.6" stroke-dasharray="1 1"/><text x="12" y="15" fill="#2ecc71" font-size="8" font-weight="900" font-family="'Segoe UI', Roboto, Helvetica, sans-serif" text-anchor="middle">₲₵</text></svg>`
   }
 ];
