@@ -385,6 +385,29 @@
         }
     }
 
+    const DEFAULT_SVG_PLACEHOLDER = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="100%" height="100%" fill="%23161c28"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%238892b0" font-size="11">Sem Imagem</text></svg>';
+
+    window.resolvePlayerImage = function(img, code) {
+        if (!code || code === 'undefined' || code === 'null' || code.trim() === '') {
+            img.onerror = null;
+            img.src = DEFAULT_SVG_PLACEHOLDER;
+            return;
+        }
+        if (!img.dataset.tryIndex) {
+            img.dataset.tryIndex = "0";
+        }
+        const extensions = ['webp', 'png', 'jpg', 'jpeg', 'svg'];
+        const currentIndex = parseInt(img.dataset.tryIndex);
+        
+        if (currentIndex < extensions.length) {
+            img.dataset.tryIndex = (currentIndex + 1).toString();
+            img.src = `../assets/faces/face_${code}.${extensions[currentIndex]}`;
+        } else {
+            img.onerror = null;
+            img.src = DEFAULT_SVG_PLACEHOLDER;
+        }
+    };
+
     function createPlayerCard(player, docId) {
         const card = document.createElement('div');
         card.className = 'player-card';
@@ -402,12 +425,14 @@
             ? `<div class="player-position">${player.posicao}</div>` 
             : '';
 
-        const displayImg = player.imagem ? (player.imagem.startsWith('http') || player.imagem.startsWith('data:') ? player.imagem : '../' + player.imagem) : 'https://via.placeholder.com/200';
+        const displayImg = player.imagem 
+            ? (player.imagem.startsWith('http') || player.imagem.startsWith('data:') ? player.imagem : '../' + player.imagem) 
+            : (player.codigoUrl ? `../assets/faces/face_${player.codigoUrl}.webp` : DEFAULT_SVG_PLACEHOLDER);
 
         card.innerHTML = `
             ${flagHtml}
             <div class="player-visuals">
-                <img src="${displayImg}" alt="${player.nome}" class="player-image" onerror="this.onerror=null; this.src='https://via.placeholder.com/200?text=Sem+Foto';">
+                <img src="${displayImg}" alt="${player.nome}" class="player-image" onerror="window.resolvePlayerImage(this, '${player.codigoUrl || ''}')">
                 ${positionHtml}
             </div>
             <div class="player-info-container">
