@@ -65,7 +65,7 @@ export function drawPackPlayers(eligiblePlayers, packType, cardsPerPack = 6) {
 }
 
 export function createStickerPayload(draw, userId, timestampValue, seasonValue = '') {
-    const payload = {
+    return {
         userId,
         idplayer: draw.player.id,
         clube: draw.player.clube || '',
@@ -75,12 +75,7 @@ export function createStickerPayload(draw, userId, timestampValue, seasonValue =
         historico: null,
         Nacaderneta: false,
         emTroca: false,
-        tradeProposalId: null
+        tradeProposalId: null,
+        temporada: seasonValue || ''
     };
-
-    if (seasonValue) {
-        payload.temporada = seasonValue;
-    }
-
-    return payload;
 }

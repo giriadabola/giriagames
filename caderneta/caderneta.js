@@ -313,9 +313,9 @@ async function claimGiftPackOffer(offer) {
             claimedFrom: 'caderneta'
         });
 
+        const seasonToSave = currentSeasonLabel || offerData.temporadaKey || (await getLatestSeason(db));
         drawnPlayers.forEach((draw) => {
             const stickerRef = doc(collection(db, 'caderneta'));
-            const seasonToSave = currentSeasonLabel || offerData.temporadaKey || currentSeason;
             transaction.set(stickerRef, createStickerPayload(draw, currentUser.uid, serverTimestamp(), seasonToSave));
         });
 
@@ -510,7 +510,9 @@ function getStickerPlayer(sticker) {
 }
 
 function getTradableUserStickers() {
-    return userStickers.filter((sticker) => sticker.Nacaderneta !== true);
+    return userStickers
+        .filter((sticker) => sticker.Nacaderneta !== true)
+        .filter((sticker) => normalizeSeasonValue(sticker.temporada || sticker.temporadaKey || '') === currentSeason);
 }
 
 function getStickerDisplayName(sticker) {
@@ -2006,9 +2008,13 @@ function renderInventory() {
     const context = getInventoryFilterContext();
     updateInventoryToggle(context);
 
-    // Filter stickers that are NOT pasted in the album
+    // Filter stickers that are NOT pasted in the album and match the current season
     const availableStickers = userStickers
         .filter((sticker) => sticker.Nacaderneta !== true)
+        .filter((sticker) => {
+            const stickerSeason = normalizeSeasonValue(sticker.temporada || sticker.temporadaKey || '');
+            return stickerSeason === currentSeason;
+        })
         .filter((sticker) => {
             if (!inventoryContextFilterEnabled || !context) return true;
 
@@ -2182,9 +2188,9 @@ async function handlePackPurchase(packType) {
         });
 
         // 3. Create stickers
+        const seasonToSave = currentSeasonLabel || (await getLatestSeason(db));
         drawnPlayers.forEach(draw => {
             const stickerRef = doc(collection(db, 'caderneta'));
-            const seasonToSave = currentSeasonLabel || currentSeason;
             batch.set(stickerRef, createStickerPayload(draw, currentUser.uid, serverTimestamp(), seasonToSave));
         });
 
