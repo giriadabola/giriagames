@@ -24,6 +24,9 @@ const DEFAULT_CONFIG = {
   predictionsClosingSoonHours: 2,
 };
 const DISPATCH_WINDOW_MS = 15 * 60 * 1000;
+const WEEKLY_DISPATCH_WINDOW_MS = 2 * 60 * 60 * 1000;
+// Um aviso semanal pode ser recuperado até duas horas depois do horário
+// configurado. Depois dessa janela, a ocorrência dessa semana é perdida.
 const MARKET_NOTIFICATION_FIELD = "notificacoesMercado";
 const ADMIN_ROLES = new Set(["ruler", "estafeta"]);
 
@@ -183,7 +186,19 @@ async function sendPayloadToUser(userEntry, payload) {
 
 async function sendPayloadToUsers(userEntries, payload) {
   const results = await Promise.all(
-    userEntries.map((userEntry) => sendPayloadToUser(userEntry, payload))
+    userEntries.map(async (userEntry) => {
+      try {
+        return await sendPayloadToUser(userEntry, payload);
+      } catch (error) {
+        // Um utilizador com uma subscrição problemática não deve impedir o
+        // envio para os restantes utilizadores.
+        console.error(`Erro ao enviar push para o utilizador ${userEntry.id}:`, error.message || error);
+        return {
+          delivered: 0,
+          attempted: userEntry.settings.pushSubscriptions.length,
+        };
+      }
+    })
   );
 
   return results.reduce((summary, result) => ({
@@ -251,11 +266,72 @@ function isValidWeekday(value) {
 }
 
 function isValidTime(value) {
-  return typeof value === "string" && /^\d{2}:\d{2}$/.test(value);
+  if (typeof value !== "string" || !/^\d{2}:\d{2}$/.test(value)) {
+    return false;
+  }
+
+  const [hours, minutes] = value.split(":").map((part) => Number.parseInt(part, 10));
+  return hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59;
 }
 
 function isValidHoursBefore(value) {
   return Number.isInteger(value) && value > 0 && value <= 48;
+}
+
+function normalizeBoolean(value, fallback) {
+  if (value === true || value === "true" || value === 1) {
+    return true;
+  }
+
+  if (value === false || value === "false" || value === 0) {
+    return false;
+  }
+
+  return fallback;
+}
+
+function normalizeInteger(value, fallback) {
+  const parsed = typeof value === "number" ? value : Number.parseInt(value, 10);
+  return Number.isInteger(parsed) ? parsed : fallback;
+}
+
+function normalizeTime(value, fallback) {
+  return isValidTime(value) ? value : fallback;
+}
+
+function normalizeNotificationConfig(rawConfig) {
+  const raw = rawConfig || {};
+
+  return {
+    ...DEFAULT_CONFIG,
+    ...raw,
+    beforeOpenEnabled: normalizeBoolean(raw.beforeOpenEnabled, DEFAULT_CONFIG.beforeOpenEnabled),
+    beforeOpenHours: normalizeInteger(raw.beforeOpenHours, DEFAULT_CONFIG.beforeOpenHours),
+    onOpenEnabled: normalizeBoolean(raw.onOpenEnabled, DEFAULT_CONFIG.onOpenEnabled),
+    onCloseEnabled: normalizeBoolean(raw.onCloseEnabled, DEFAULT_CONFIG.onCloseEnabled),
+    predictionsOpenEnabled: normalizeBoolean(raw.predictionsOpenEnabled, DEFAULT_CONFIG.predictionsOpenEnabled),
+    predictionsOpenWeekday: normalizeInteger(raw.predictionsOpenWeekday, DEFAULT_CONFIG.predictionsOpenWeekday),
+    predictionsOpenTime: normalizeTime(raw.predictionsOpenTime, DEFAULT_CONFIG.predictionsOpenTime),
+    predictionsCloseEnabled: normalizeBoolean(raw.predictionsCloseEnabled, DEFAULT_CONFIG.predictionsCloseEnabled),
+    predictionsCloseWeekday: normalizeInteger(raw.predictionsCloseWeekday, DEFAULT_CONFIG.predictionsCloseWeekday),
+    predictionsCloseTime: normalizeTime(raw.predictionsCloseTime, DEFAULT_CONFIG.predictionsCloseTime),
+    predictionsClosingSoonEnabled: normalizeBoolean(
+      raw.predictionsClosingSoonEnabled,
+      DEFAULT_CONFIG.predictionsClosingSoonEnabled
+    ),
+    predictionsClosingSoonWeekday: normalizeInteger(
+      raw.predictionsClosingSoonWeekday,
+      DEFAULT_CONFIG.predictionsClosingSoonWeekday
+    ),
+    predictionsClosingSoonTime: normalizeTime(
+      raw.predictionsClosingSoonTime,
+      DEFAULT_CONFIG.predictionsClosingSoonTime
+    ),
+    predictionsClosingSoonHours: normalizeInteger(
+      raw.predictionsClosingSoonHours,
+      DEFAULT_CONFIG.predictionsClosingSoonHours
+    ),
+  };
 }
 
 function getZonedParts(date) {
@@ -358,7 +434,7 @@ function isWeeklyNotificationDue(now, weekday, timeString, lastWeekKey) {
   const currentWeekKey = getWeekKey(targetDate);
 
   return nowMs >= targetMs &&
-    nowMs <= targetMs + DISPATCH_WINDOW_MS &&
+    nowMs <= targetMs + WEEKLY_DISPATCH_WINDOW_MS &&
     lastWeekKey !== currentWeekKey;
 }
 
@@ -375,7 +451,7 @@ function isWeeklyOffsetNotificationDue(now, weekday, timeString, hoursBefore, la
   const currentWeekKey = getWeekKey(closingTarget || targetDate);
 
   return nowMs >= targetMs &&
-    nowMs <= targetMs + DISPATCH_WINDOW_MS &&
+    nowMs <= targetMs + WEEKLY_DISPATCH_WINDOW_MS &&
     lastWeekKey !== currentWeekKey;
 }
 
@@ -423,7 +499,7 @@ exports.processMarketNotifications = onSchedule({
   const db = admin.firestore();
   const configRef = db.doc("paineis/notificacoesMercado");
   const configSnapshot = await configRef.get();
-  const config = configSnapshot.exists ? { ...DEFAULT_CONFIG, ...configSnapshot.data() } : DEFAULT_CONFIG;
+  const config = normalizeNotificationConfig(configSnapshot.exists ? configSnapshot.data() : DEFAULT_CONFIG);
   const schedulesSnapshot = await db.collection("paineis").doc("Banca").collection("horarioMercado").get();
   const now = new Date();
   const nowMs = now.getTime();
@@ -509,6 +585,12 @@ exports.processMarketNotifications = onSchedule({
     return null;
   }
 
+  console.log("[processMarketNotifications] Eventos devidos:", {
+    at: now.toISOString(),
+    marketEvents: dueEvents.map((eventEntry) => `${eventEntry.type}:${eventEntry.id}`),
+    weeklyEvents: dueWeeklyEvents.map((eventEntry) => eventEntry.type),
+  });
+
   const users = await loadEligibleUsers();
 
   for (const eventEntry of dueEvents) {
@@ -535,6 +617,7 @@ exports.processMarketNotifications = onSchedule({
     const interestedUsers = getInterestedUsers(users);
 
     if (interestedUsers.length === 0) {
+      console.warn(`[processMarketNotifications] ${weeklyEvent.type}: não existem dispositivos elegíveis.`);
       continue;
     }
 
@@ -554,7 +637,10 @@ exports.processMarketNotifications = onSchedule({
 
     const delivery = await sendPayloadToUsers(interestedUsers, payload);
 
+    console.log(`[processMarketNotifications] ${weeklyEvent.type}: ${delivery.delivered}/${delivery.attempted} dispositivos entregues.`);
+
     if (delivery.delivered === 0) {
+      console.warn(`[processMarketNotifications] ${weeklyEvent.type}: nenhuma entrega confirmada; será tentado novamente.`);
       continue;
     }
 
