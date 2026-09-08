@@ -2,9 +2,9 @@
 import { db } from './auth-guard.js';
 
 // Importa as outras funções do Firestore que esta página específica precisa.
-import { collection, getDocs, doc, getDoc, updateDoc, where, addDoc, serverTimestamp, getCountFromServer, query, limit, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { collection, getDocs, doc, getDoc, updateDoc, where, addDoc, serverTimestamp, getCountFromServer, query, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { CADERNETA_FREE_PACK_TYPE, CADERNETA_GIFT_OFFERS_COLLECTION, CADERNETA_GIFT_SOURCE_NAME, buildCadernetaGiftOfferId, isEligibleFreePackRound, normalizeSeasonKey } from "../../caderneta/pack-offers.js";
-import { compactSeason, getLatestSeason, getSeasonData, mergeUserSeasonData } from "../../core/user-season.js";
+import { compactSeason, getConfiguredSeasons, getLatestSeason, getSeasonData, mergeUserSeasonData } from "../../core/user-season.js";
 
 // ========================================================================
 // === INTERAÇÃO DO POPUP & DRAGGING (Movido de arbitro.html) ===
@@ -158,9 +158,15 @@ if (popup) {
 let currentRound = null;
 let currentGame = null;
 let currentGPlayer = null;
+let currentSeason = null;
+let hasInitializedSeasonFilter = false;
 let allPredictions = [];
 let isProcessingLaunch = false;
 let totalEligibleVoters = 0;
+
+function isSameSeason(firstSeason, secondSeason) {
+    return normalizeSeasonKey(firstSeason) === normalizeSeasonKey(secondSeason);
+}
 
 async function getEligibleUsersForSeason(seasonLabel = null) {
     const targetSeason = seasonLabel || await getLatestSeason(db);
@@ -173,19 +179,13 @@ async function getEligibleUsersForSeason(seasonLabel = null) {
 
 async function loadPredictions() {
     let qualifiedGPlayers = [];
-    try {
-        qualifiedGPlayers = await getEligibleUsersForSeason();
-        qualifiedGPlayers.sort((a, b) => a.nometabela.localeCompare(b.nometabela));
-    } catch (error) {
-        console.error("Erro ao buscar GPlayers qualificados:", error);
-    }
 
     try {
         const predictionsContainer = document.getElementById('predictions-container');
+        const seasonFilter = document.getElementById('season-filter');
         const roundFilter = document.getElementById('round-filter');
         const palpitesSnapshot = await getDocs(collection(db, 'palpites'));
         allPredictions = [];
-        const rounds = new Set();
         if (palpitesSnapshot.empty) {
             predictionsContainer.innerHTML = '<div class="prediction-card">Nenhum palpite encontrado.</div>';
             return;
@@ -201,23 +201,60 @@ async function loadPredictions() {
             const palpite = palpiteDoc.data();
             const jogoData = palpite.jogoId ? jogosDataMap[palpite.jogoId] : null;
             const numeroPalpites = jogoData && typeof jogoData.numeroPalpites === 'number' ? jogoData.numeroPalpites : 0;
-            if (palpite.ronda) {
-                rounds.add(palpite.ronda);
-            }
             allPredictions.push({
                 id: palpiteDoc.id,
                 ...palpite,
                 numeroPalpites: numeroPalpites
             });
         }
-        const sortedRounds = Array.from(rounds).sort((a, b) => b - a);
-        roundFilter.innerHTML = '<option value="">Todas as Rondas</option>';
-        sortedRounds.forEach(round => {
-            roundFilter.innerHTML += `<option value="${round}">Ronda ${round}</option>`;
+
+        const configuredSeasons = await getConfiguredSeasons(db);
+        if (!hasInitializedSeasonFilter || (currentSeason && !configuredSeasons.includes(currentSeason))) {
+            currentSeason = configuredSeasons[0] || null;
+            hasInitializedSeasonFilter = true;
+        }
+        seasonFilter.innerHTML = '<option value="">Todas as Temporadas</option>';
+        configuredSeasons.forEach((season) => {
+            seasonFilter.innerHTML += `<option value="${season}">${season}</option>`;
         });
+        seasonFilter.value = currentSeason || '';
+
+        try {
+            qualifiedGPlayers = await getEligibleUsersForSeason(currentSeason);
+            qualifiedGPlayers.sort((a, b) => a.nometabela.localeCompare(b.nometabela));
+        } catch (error) {
+            console.error("Erro ao buscar GPlayers qualificados:", error);
+        }
+
+        function getPredictionsForCurrentSeason() {
+            return currentSeason
+                ? allPredictions.filter((prediction) => isSameSeason(prediction.temporada, currentSeason))
+                : allPredictions;
+        }
+
+        function updateRoundFilter() {
+            const rounds = new Set(getPredictionsForCurrentSeason().map((prediction) => prediction.ronda).filter(Boolean));
+            const sortedRounds = Array.from(rounds).sort((a, b) => b - a);
+            if (currentRound !== null && !sortedRounds.includes(currentRound)) {
+                currentRound = null;
+                currentGame = null;
+            }
+            roundFilter.innerHTML = '<option value="">Todas as Rondas</option>';
+            sortedRounds.forEach(round => {
+                roundFilter.innerHTML += `<option value="${round}">Ronda ${round}</option>`;
+            });
+            if (sortedRounds.length > 0 && currentRound === null) {
+                currentRound = sortedRounds[0];
+            }
+            roundFilter.value = currentRound || '';
+        }
+
+        updateRoundFilter();
+
         function updateGameFilter() {
             const gameFilter = document.getElementById('game-filter');
-            const filteredByRound = currentRound ? allPredictions.filter(p => p.ronda === currentRound) : allPredictions;
+            const seasonPredictions = getPredictionsForCurrentSeason();
+            const filteredByRound = currentRound ? seasonPredictions.filter(p => p.ronda === currentRound) : seasonPredictions;
             const games = new Set(filteredByRound.map(p => p.nomeJogo).filter(Boolean));
             const sortedGames = Array.from(games).sort();
             gameFilter.innerHTML = '<option value="">Todos os Jogos</option>';
@@ -228,11 +265,19 @@ async function loadPredictions() {
             });
             gameFilter.value = currentGame || '';
         }
+        const seasonFilterElement = document.getElementById('season-filter');
         const gameFilter = document.getElementById('game-filter');
         const gplayerFilter = document.getElementById('gplayer-filter');
+        seasonFilterElement.replaceWith(seasonFilterElement.cloneNode(true));
         roundFilter.replaceWith(roundFilter.cloneNode(true));
         gameFilter.replaceWith(gameFilter.cloneNode(true));
         gplayerFilter.replaceWith(gplayerFilter.cloneNode(true));
+        document.getElementById('season-filter').addEventListener('change', (e) => {
+            currentSeason = e.target.value || null;
+            currentRound = null;
+            currentGame = null;
+            loadPredictions();
+        });
         document.getElementById('round-filter').addEventListener('change', (e) => {
             currentRound = e.target.value === "" ? null : Number(e.target.value);
             currentGame = null;
@@ -247,12 +292,8 @@ async function loadPredictions() {
             currentGPlayer = e.target.value || null;
             loadPredictions();
         });
-        if (sortedRounds.length > 0 && currentRound === null) {
-            currentRound = sortedRounds[0];
-            document.getElementById('round-filter').value = currentRound;
-        } else {
-           document.getElementById('round-filter').value = currentRound || '';
-        }
+        document.getElementById('season-filter').value = currentSeason || '';
+        document.getElementById('round-filter').value = currentRound || '';
         updateGameFilter();
 
         const gplayerFilterElement = document.getElementById('gplayer-filter');
@@ -263,6 +304,9 @@ async function loadPredictions() {
         gplayerFilterElement.value = currentGPlayer || '';
         
         let filteredPredictions = allPredictions;
+        if (currentSeason) {
+            filteredPredictions = filteredPredictions.filter(p => isSameSeason(p.temporada, currentSeason));
+        }
         if (currentRound) {
             filteredPredictions = filteredPredictions.filter(p => p.ronda === currentRound);
         }
@@ -417,8 +461,15 @@ async function loadPredictions() {
 
 async function unifiedLaunchHandler() {
     const launchButton = document.getElementById('launch-button');
+    const seasonFilter = document.getElementById('season-filter');
     const roundFilter = document.getElementById('round-filter');
+    const temporada = seasonFilter.value;
     const ronda = Number(roundFilter.value);
+
+    if (!temporada) {
+        alert("Por favor, selecione uma temporada antes de lançar.");
+        return;
+    }
 
     if (!ronda) {
         alert("Por favor, selecione uma ronda para lançar.");
@@ -430,27 +481,29 @@ async function unifiedLaunchHandler() {
     launchButton.classList.add('button--loading');
     launchButton.innerHTML = `A Lançar... <i class="fas fa-spinner fa-spin spinner"></i>`;
     
-    console.log(`--- INICIANDO LANÇAMENTO UNIFICADO PARA A RONDA ${ronda} ---`);
+    console.log(`--- INICIANDO LANÇAMENTO UNIFICADO PARA A TEMPORADA ${temporada}, RONDA ${ronda} ---`);
 
     try {
         const allAffectedUserIds = new Set();
 
         console.log("==> Etapa 1: Processando Palpites Normais...");
-        const palpitesAffectedUsers = await processNormalPalpites(ronda);
+        const palpitesAffectedUsers = await processNormalPalpites(ronda, temporada);
         palpitesAffectedUsers.forEach(id => allAffectedUserIds.add(id));
         console.log("==> Etapa 1: Concluída.");
 
         console.log("==> Etapa 2: Processando Mods de Jogo...");
-        const modsAffectedUsers = await processGameMods(ronda);
+        const modsAffectedUsers = await processGameMods(ronda, temporada);
         modsAffectedUsers.forEach(id => allAffectedUserIds.add(id));
         console.log("==> Etapa 2: Concluída.");
         
         if (allAffectedUserIds.size > 0) {
             console.log(`==> Etapa Final: Recalculando totais para ${allAffectedUserIds.size} utilizadores...`);
-            const q = query(collection(db, "palpites"), where("ronda", "==", ronda), limit(1));
+            const q = query(collection(db, "palpites"), where("ronda", "==", ronda));
             const querySnapshot = await getDocs(q);
-            if (!querySnapshot.empty) {
-                const temporada = querySnapshot.docs[0].data().temporada;
+            const seasonPrediction = querySnapshot.docs
+                .map((predictionDoc) => predictionDoc.data())
+                .find((prediction) => isSameSeason(prediction.temporada, temporada));
+            if (seasonPrediction) {
                 await recalculateUserTotals(Array.from(allAffectedUserIds), temporada);
                 await grantSeasonStarterCadernetaPacks({
                     round: ronda,
@@ -460,7 +513,7 @@ async function unifiedLaunchHandler() {
             console.log("==> Etapa Final: Concluída.");
         }
 
-        alert(`Lançamento da ronda ${ronda} concluído com sucesso!`);
+        alert(`Lançamento da ronda ${ronda} da temporada ${temporada} concluído com sucesso!`);
 
     } catch (error) {
         console.error("ERRO GERAL no lançamento unificado:", error);
@@ -519,7 +572,7 @@ async function grantSeasonStarterCadernetaPacks({ round, seasonLabel }) {
     return createdOffers;
 }
 
-async function processNormalPalpites(ronda) {
+async function processNormalPalpites(ronda, temporada) {
     const affectedUserIds = new Set();
     
     const palpitesQuery = query(collection(db, 'palpites'), where("ronda", "==", ronda));
@@ -529,7 +582,9 @@ async function processNormalPalpites(ronda) {
         console.log("Nenhum palpite normal encontrado para a ronda.");
         return affectedUserIds;
     }
-    const allPalpitesDaRonda = palpitesSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+    const allPalpitesDaRonda = palpitesSnapshot.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter((palpite) => isSameSeason(palpite.temporada, temporada));
 
     for (const palpite of allPalpitesDaRonda) {
         if (!palpite.userId || !palpite.jogoId || !palpite.temporada) {
@@ -573,7 +628,7 @@ async function processNormalPalpites(ronda) {
             
             await updateDoc(doc(db, 'palpites', palpite.id), palpiteUpdateData);
 
-            const temporadaKey = palpite.temporada.replace('/', '');
+            const temporadaKey = normalizeSeasonKey(palpite.temporada);
             const transacaoId = `palpite-${palpite.userId}-${palpite.jogoId}`;
             const movQuery = query(collection(db, 'movimentos'), where("detalhes.transacaoId", "==", transacaoId));
             const movSnapshot = await getDocs(movQuery);
@@ -607,12 +662,14 @@ async function processNormalPalpites(ronda) {
     return affectedUserIds;
 }
 
-async function processGameMods(ronda) {
+async function processGameMods(ronda, temporada) {
     const affectedUserIds = new Set();
     
     const pModsQuery = query(collection(db, 'palpitesmods'), where("ronda", "==", ronda));
     const pModsSnapshot = await getDocs(pModsQuery);
-    const allPalpitesMods = pModsSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+    const allPalpitesMods = pModsSnapshot.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter((palpite) => isSameSeason(palpite.temporada, temporada));
 
     if (allPalpitesMods.length === 0) {
         return affectedUserIds;
@@ -620,7 +677,9 @@ async function processGameMods(ronda) {
 
     const pOriginaisQuery = query(collection(db, 'palpites'), where("ronda", "==", ronda));
     const pOriginaisSnapshot = await getDocs(pOriginaisQuery);
-    const allPalpitesDaRonda = pOriginaisSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+    const allPalpitesDaRonda = pOriginaisSnapshot.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter((palpite) => isSameSeason(palpite.temporada, temporada));
     
     const modsRules = {};
 
@@ -690,7 +749,7 @@ async function processGameMods(ronda) {
                     const movQuery = query(collection(db, 'movimentos'), where("detalhes.transacaoModId", "==", transacaoModId));
                     const movSnapshot = await getDocs(movQuery);
                     
-                    const temporadaKey = pMod.temporada.replace('/', '');
+                    const temporadaKey = normalizeSeasonKey(pMod.temporada);
                     const commonDetails = {
                         modId: modId, nomeMod: modData.nomeMod, jogoId: jogoId,
                         transacaoModId: transacaoModId, autorUserId: jogadorId,
