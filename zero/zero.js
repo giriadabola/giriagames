@@ -114,6 +114,9 @@ async function renderGameDetailsFromDoc(gameSnap) {
 
     currentGame.equipaCasa = equipaCasaDoc.exists() ? equipaCasaDoc.data().nome : 'Equipa A';
     currentGame.equipaFora = equipaForaDoc.exists() ? equipaForaDoc.data().nome : 'Equipa B';
+    if (!currentGame.competicao && competicaoDoc.exists()) {
+        currentGame.competicao = competicaoDoc.data().nome || '';
+    }
 
     maxPredictions = currentGame.numeroPalpites || 1;
     if (competicaoDoc.exists() && competicaoDoc.data().imagemBackground) {
@@ -234,8 +237,19 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function replaceTeamPlaceholders(text) { if (!text || !currentGame) return text; return text.replace(/Equipa da Casa|Equipa A/gi, currentGame.equipaCasa).replace(/Equipa Visitante|Equipa de Fora|Equipa B/gi, currentGame.equipaFora); }
+
+function normalizeCompetitionName(value) {
+    return String(value || '').trim().toLocaleLowerCase('pt-PT');
+}
+
 function isOddVisibleInPalpite(item) {
-    return item?.ativado !== false;
+    if (item?.ativado === false) return false;
+
+    const currentCompetition = normalizeCompetitionName(currentGame?.competicao);
+    if (!currentCompetition) return true;
+
+    return Array.isArray(item?.competicoes)
+        && item.competicoes.some((competition) => normalizeCompetitionName(competition) === currentCompetition);
 }
 
 function buildOddsIndex(allOddsData) {
