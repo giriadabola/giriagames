@@ -28,13 +28,28 @@ const manualStatusText = document.getElementById('manualNotificationStatus');
 const searchInput = document.getElementById('usersNotificationsSearch');
 const tableBody = document.getElementById('usersNotificationsBody');
 
+const beforeOpenScheduleContainer = document.getElementById('beforeOpenScheduleContainer');
+const beforeOpenScheduleText = document.getElementById('beforeOpenScheduleText');
+const onOpenScheduleContainer = document.getElementById('onOpenScheduleContainer');
+const onOpenScheduleText = document.getElementById('onOpenScheduleText');
+const onCloseScheduleContainer = document.getElementById('onCloseScheduleContainer');
+const onCloseScheduleText = document.getElementById('onCloseScheduleText');
+const predictionsOpenScheduleContainer = document.getElementById('predictionsOpenScheduleContainer');
+const predictionsOpenScheduleText = document.getElementById('predictionsOpenScheduleText');
+const predictionsCloseScheduleContainer = document.getElementById('predictionsCloseScheduleContainer');
+const predictionsCloseScheduleText = document.getElementById('predictionsCloseScheduleText');
+const predictionsClosingSoonScheduleContainer = document.getElementById('predictionsClosingSoonScheduleContainer');
+const predictionsClosingSoonScheduleText = document.getElementById('predictionsClosingSoonScheduleText');
+
 const totalUsersValue = document.getElementById('summaryTotalUsers');
 const pushReadyValue = document.getElementById('summaryPushReady');
 const beforeOpenValue = document.getElementById('summaryBeforeOpen');
 const onOpenValue = document.getElementById('summaryOnOpen');
 const onCloseValue = document.getElementById('summaryOnClose');
 
+const WEEKDAYS_PT = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
 let latestUsers = [];
+let activeMarketSchedule = null;
 
 function getDefaultConfig() {
   return {
@@ -84,6 +99,105 @@ function setManualStatus(message, tone = '') {
   }
 }
 
+function parseFirestoreDate(value) {
+  if (!value) return null;
+  if (typeof value.toDate === 'function') return value.toDate();
+  if (value instanceof Date) return value;
+  if (typeof value === 'number') return new Date(value);
+  if (typeof value === 'string') {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  if (typeof value.seconds === 'number') {
+    return new Date(value.seconds * 1000);
+  }
+  return null;
+}
+
+function getClosingSoonSchedule(weekdayVal, timeStr, hoursBeforeVal) {
+  const weekday = Number.parseInt(weekdayVal, 10);
+  const hoursBefore = Number.parseInt(hoursBeforeVal, 10);
+
+  if (!isValidWeekday(weekday) || !isValidTime(timeStr) || !isValidHoursBefore(hoursBefore)) {
+    return '--';
+  }
+
+  const [hours, minutes] = timeStr.split(':').map((v) => Number.parseInt(v, 10));
+  const anchor = new Date(2026, 0, 4 + weekday, hours, minutes, 0, 0);
+  anchor.setHours(anchor.getHours() - hoursBefore);
+
+  const dayName = WEEKDAYS_PT[anchor.getDay()];
+  const formattedHours = String(anchor.getHours()).padStart(2, '0');
+  const formattedMinutes = String(anchor.getMinutes()).padStart(2, '0');
+
+  return `${dayName} às ${formattedHours}:${formattedMinutes}`;
+}
+
+function renderScheduleDisplays() {
+  const updateCardContainer = (container, textEl, textValue, isEnabled) => {
+    if (!container || !textEl) return;
+    textEl.textContent = isEnabled ? textValue : `${textValue} (Desativado)`;
+    container.classList.toggle('is-disabled', !isEnabled);
+  };
+
+  const beforeHours = Number.parseInt(beforeOpenHoursInput.value, 10) || 0;
+  let beforeText = '';
+  if (activeMarketSchedule && activeMarketSchedule.aberturaDate) {
+    const launchDate = new Date(activeMarketSchedule.aberturaDate.getTime() - (beforeHours * 3600000));
+    const dayName = WEEKDAYS_PT[launchDate.getDay()];
+    const dateStr = launchDate.toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' });
+    const timeStr = launchDate.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
+    beforeText = `${dayName} (${dateStr}) às ${timeStr}`;
+  } else {
+    beforeText = `Sem mercado agendado (${beforeHours}h antes da abertura)`;
+  }
+  updateCardContainer(beforeOpenScheduleContainer, beforeOpenScheduleText, beforeText, beforeOpenEnabledInput.checked);
+
+  let onOpenText = '';
+  if (activeMarketSchedule && activeMarketSchedule.aberturaDate) {
+    const launchDate = activeMarketSchedule.aberturaDate;
+    const dayName = WEEKDAYS_PT[launchDate.getDay()];
+    const dateStr = launchDate.toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' });
+    const timeStr = launchDate.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
+    onOpenText = `${dayName} (${dateStr}) às ${timeStr}`;
+  } else {
+    onOpenText = 'Sem mercado agendado (na abertura)';
+  }
+  updateCardContainer(onOpenScheduleContainer, onOpenScheduleText, onOpenText, onOpenEnabledInput.checked);
+
+  let onCloseText = '';
+  if (activeMarketSchedule && activeMarketSchedule.fechamentoDate) {
+    const launchDate = activeMarketSchedule.fechamentoDate;
+    const dayName = WEEKDAYS_PT[launchDate.getDay()];
+    const dateStr = launchDate.toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' });
+    const timeStr = launchDate.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
+    onCloseText = `${dayName} (${dateStr}) às ${timeStr}`;
+  } else {
+    onCloseText = 'Sem mercado agendado (no fecho)';
+  }
+  updateCardContainer(onCloseScheduleContainer, onCloseScheduleText, onCloseText, onCloseEnabledInput.checked);
+
+  const openWk = Number.parseInt(predictionsOpenWeekdayInput.value, 10);
+  const openTime = predictionsOpenTimeInput.value;
+  const openText = (isValidWeekday(openWk) && isValidTime(openTime))
+    ? `${WEEKDAYS_PT[openWk]} às ${openTime}`
+    : '--';
+  updateCardContainer(predictionsOpenScheduleContainer, predictionsOpenScheduleText, openText, predictionsOpenEnabledInput.checked);
+
+  const closeWk = Number.parseInt(predictionsCloseWeekdayInput.value, 10);
+  const closeTime = predictionsCloseTimeInput.value;
+  const closeText = (isValidWeekday(closeWk) && isValidTime(closeTime))
+    ? `${WEEKDAYS_PT[closeWk]} às ${closeTime}`
+    : '--';
+  updateCardContainer(predictionsCloseScheduleContainer, predictionsCloseScheduleText, closeText, predictionsCloseEnabledInput.checked);
+
+  const soonWk = predictionsClosingSoonWeekdayInput.value;
+  const soonTime = predictionsClosingSoonTimeInput.value;
+  const soonHrs = predictionsClosingSoonHoursInput.value;
+  const soonText = getClosingSoonSchedule(soonWk, soonTime, soonHrs);
+  updateCardContainer(predictionsClosingSoonScheduleContainer, predictionsClosingSoonScheduleText, soonText, predictionsClosingSoonEnabledInput.checked);
+}
+
 function fillConfigForm(config) {
   beforeOpenEnabledInput.checked = config.beforeOpenEnabled;
   beforeOpenHoursInput.value = String(config.beforeOpenHours);
@@ -99,6 +213,8 @@ function fillConfigForm(config) {
   predictionsClosingSoonWeekdayInput.value = String(config.predictionsClosingSoonWeekday);
   predictionsClosingSoonTimeInput.value = config.predictionsClosingSoonTime;
   predictionsClosingSoonHoursInput.value = String(config.predictionsClosingSoonHours);
+
+  renderScheduleDisplays();
 }
 
 function renderSummary(users) {
@@ -345,6 +461,28 @@ function startRealtimeListeners() {
     renderSummary(latestUsers);
   });
 
+  onSnapshot(collection(db, 'paineis', 'Banca', 'horarioMercado'), (snapshot) => {
+    const now = new Date();
+    const schedules = snapshot.docs.map((docSnap) => {
+      const data = docSnap.data();
+      return {
+        id: docSnap.id,
+        ...data,
+        aberturaDate: parseFirestoreDate(data.abertura),
+        fechamentoDate: parseFirestoreDate(data.fechamento)
+      };
+    });
+
+    const upcoming = schedules
+      .filter((s) => s.fechamentoDate && s.fechamentoDate.getTime() > now.getTime())
+      .sort((a, b) => (a.aberturaDate?.getTime() || 0) - (b.aberturaDate?.getTime() || 0));
+
+    activeMarketSchedule = upcoming[0] || null;
+    renderScheduleDisplays();
+  }, (error) => {
+    console.error('Erro ao ler horário de mercado:', error);
+  });
+
   onSnapshot(collection(db, 'users'), (snapshot) => {
     latestUsers = snapshot.docs.map((userDoc) => ({
       id: userDoc.id,
@@ -363,6 +501,21 @@ saveButton.addEventListener('click', saveSettings);
 manualMessageInput.addEventListener('input', updateManualCounter);
 manualSendButton.addEventListener('click', handleManualNotificationSend);
 searchInput.addEventListener('input', renderUsersTable);
+
+beforeOpenEnabledInput.addEventListener('change', renderScheduleDisplays);
+beforeOpenHoursInput.addEventListener('change', renderScheduleDisplays);
+onOpenEnabledInput.addEventListener('change', renderScheduleDisplays);
+onCloseEnabledInput.addEventListener('change', renderScheduleDisplays);
+predictionsOpenEnabledInput.addEventListener('change', renderScheduleDisplays);
+predictionsOpenWeekdayInput.addEventListener('change', renderScheduleDisplays);
+predictionsOpenTimeInput.addEventListener('input', renderScheduleDisplays);
+predictionsCloseEnabledInput.addEventListener('change', renderScheduleDisplays);
+predictionsCloseWeekdayInput.addEventListener('change', renderScheduleDisplays);
+predictionsCloseTimeInput.addEventListener('input', renderScheduleDisplays);
+predictionsClosingSoonEnabledInput.addEventListener('change', renderScheduleDisplays);
+predictionsClosingSoonWeekdayInput.addEventListener('change', renderScheduleDisplays);
+predictionsClosingSoonTimeInput.addEventListener('input', renderScheduleDisplays);
+predictionsClosingSoonHoursInput.addEventListener('change', renderScheduleDisplays);
 
 updateManualCounter();
 startRealtimeListeners();
