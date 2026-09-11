@@ -242,14 +242,18 @@ function normalizeCompetitionName(value) {
     return String(value || '').trim().toLocaleLowerCase('pt-PT');
 }
 
+function isCompetitionAssociated(item, competitionName) {
+    return Array.isArray(item?.competicoes)
+        && item.competicoes.some((competition) => normalizeCompetitionName(competition) === competitionName);
+}
+
 function isOddVisibleInPalpite(item) {
     if (item?.ativado === false) return false;
 
     const currentCompetition = normalizeCompetitionName(currentGame?.competicao);
     if (!currentCompetition) return true;
 
-    return Array.isArray(item?.competicoes)
-        && item.competicoes.some((competition) => normalizeCompetitionName(competition) === currentCompetition);
+    return isCompetitionAssociated(item, currentCompetition);
 }
 
 function buildOddsIndex(allOddsData) {
@@ -257,23 +261,33 @@ function buildOddsIndex(allOddsData) {
 }
 
 function isCategoryBranchVisible(item, oddsIndex) {
-    if (!item || !isOddVisibleInPalpite(item)) {
+    if (!item || item.ativado === false) {
         return false;
     }
 
     if (item.categoria_subcategoria_3cat === 'categoria') {
-        return true;
+        if (!isOddVisibleInPalpite(item)) return false;
+
+        return Array.from(oddsIndex.values())
+            .filter((child) => child.categoriapai === item.id)
+            .some((child) => isCategoryBranchVisible(child, oddsIndex));
     }
 
     if (item.categoria_subcategoria_3cat === 'subcategoria') {
         const parentCategory = oddsIndex.get(item.categoriapai);
-        return isOddVisibleInPalpite(parentCategory);
+        if (!isOddVisibleInPalpite(parentCategory) || !isOddVisibleInPalpite(item)) return false;
+
+        return Array.from(oddsIndex.values())
+            .filter((child) => child.categoria_subcategoria_3cat === '3cat' && child.subcategoriapai === item.id)
+            .some((child) => isCategoryBranchVisible(child, oddsIndex));
     }
 
     if (item.categoria_subcategoria_3cat === '3cat') {
         const parentSubcategory = oddsIndex.get(item.subcategoriapai);
         const parentCategory = oddsIndex.get(item.categoriapai);
-        return isOddVisibleInPalpite(parentSubcategory) && isOddVisibleInPalpite(parentCategory);
+        return isOddVisibleInPalpite(parentSubcategory)
+            && isOddVisibleInPalpite(parentCategory)
+            && isOddVisibleInPalpite(item);
     }
 
     return false;
