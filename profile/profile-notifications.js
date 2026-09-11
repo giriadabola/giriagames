@@ -1,6 +1,13 @@
 import { auth, db } from "../core/firebase.js";
 import { collection, doc, getDoc, onSnapshot, serverTimestamp, setDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 import { MARKET_NOTIFICATIONS_DEFAULTS, MARKET_NOTIFICATIONS_VAPID_PUBLIC_KEY } from "../core/pwa/push-config.js";
+import {
+  DEFAULT_WEEKLY_PREDICTION_WARNINGS,
+  DEFAULT_WEEKLY_PREDICTION_WARNING_PREFERENCES,
+  formatWeeklyPredictionWarningSchedule,
+  normalizeWeeklyPredictionWarnings,
+  normalizeWeeklyPredictionWarningPreferences
+} from "../core/weekly-prediction-warnings.js";
 
 const USER_SETTINGS_FIELD = 'notificacoesMercado';
 const NOTIFICATION_OPEN_EVENT = 'profile-notifications:open';
@@ -10,13 +17,26 @@ const closePopupButton = document.getElementById('closeNotificationsPopupIcon');
 const deviceStatus = document.getElementById('notificationsDeviceStatus');
 const enableDeviceButton = document.getElementById('enableDeviceNotificationsBtn');
 const disableDeviceButton = document.getElementById('disableDeviceNotificationsBtn');
+const weeklyWarningPreferenceInputs = [1, 2, 3].map((slot) => (
+  document.getElementById(`weeklyPredictionWarningPreference${slot}`)
+));
+const weeklyWarningScheduleLabels = [1, 2, 3].map((slot) => (
+  document.getElementById(`weeklyPredictionWarningPreference${slot}Schedule`)
+));
+const preferencesStatus = document.getElementById('notificationsPreferencesStatus');
+const weeklyWarningsPreferencesSection = document.getElementById('weeklyPredictionWarningsPreferencesSection');
 
 let activeUserId = null;
-let currentSettings = { ...MARKET_NOTIFICATIONS_DEFAULTS };
+let currentSettings = {
+  ...MARKET_NOTIFICATIONS_DEFAULTS,
+  weeklyPredictionWarningPreferences: [...DEFAULT_WEEKLY_PREDICTION_WARNING_PREFERENCES]
+};
 let currentDeviceSubscription = null;
 let userSettingsUnsubscribe = null;
+let notificationConfigUnsubscribe = null;
 let allUsersAvatarsUnsubscribe = null;
 let profilePanelUnsubscribe = null;
+let weeklyPredictionWarnings = DEFAULT_WEEKLY_PREDICTION_WARNINGS.map((warning) => ({ ...warning }));
 let occupiedAvatars = {};
 let avatarFuseEnabled = true;
 let areEventsBound = false;
@@ -291,7 +311,10 @@ function isStandaloneDisplayMode() {
 function normalizeUserSettings(rawSettings) {
   return {
     pushEnabled: rawSettings?.pushEnabled === true,
-    pushSubscriptions: Array.isArray(rawSettings?.pushSubscriptions) ? rawSettings.pushSubscriptions : []
+    pushSubscriptions: Array.isArray(rawSettings?.pushSubscriptions) ? rawSettings.pushSubscriptions : [],
+    weeklyPredictionWarningPreferences: normalizeWeeklyPredictionWarningPreferences(
+      rawSettings?.weeklyPredictionWarningPreferences
+    )
   };
 }
 
@@ -517,6 +540,90 @@ async function disableNotificationsForDevice() {
   } finally {
     await syncDeviceState();
   }
+}
+
+function setPreferencesStatus(message, tone = '') {
+  if (!preferencesStatus) return;
+
+  preferencesStatus.textContent = message;
+  preferencesStatus.style.color = tone === 'is-error' ? '#e74c3c' : '#2ecc71';
+}
+
+function renderWeeklyWarningPreferences() {
+  const preferences = normalizeWeeklyPredictionWarningPreferences(
+    currentSettings.weeklyPredictionWarningPreferences
+  );
+
+  weeklyWarningPreferenceInputs.forEach((input, index) => {
+    if (input) input.checked = preferences[index];
+  });
+}
+
+function renderWeeklyWarningSchedules() {
+  const warnings = normalizeWeeklyPredictionWarnings(weeklyPredictionWarnings);
+
+  weeklyWarningScheduleLabels.forEach((label, index) => {
+    if (!label) return;
+
+    const warning = warnings[index];
+    const card = weeklyWarningPreferenceInputs[index]?.closest('.notifications-option-card');
+    const schedule = formatWeeklyPredictionWarningSchedule(warning);
+
+    if (card) card.hidden = !warning.enabled;
+    label.textContent = warning.enabled ? schedule : '';
+  });
+
+  if (weeklyWarningsPreferencesSection) {
+    weeklyWarningsPreferencesSection.hidden = !warnings.some((warning) => warning.enabled);
+  }
+}
+
+async function saveWeeklyWarningPreference(index, input) {
+  if (!activeUserId || !input) return;
+
+  const previousPreferences = normalizeWeeklyPredictionWarningPreferences(
+    currentSettings.weeklyPredictionWarningPreferences
+  );
+  const preferences = [...previousPreferences];
+  preferences[index] = input.checked;
+  currentSettings = {
+    ...currentSettings,
+    weeklyPredictionWarningPreferences: preferences
+  };
+
+  weeklyWarningPreferenceInputs.forEach((preferenceInput) => {
+    if (preferenceInput) preferenceInput.disabled = true;
+  });
+  setPreferencesStatus('A guardar preferências...');
+
+  try {
+    await setDoc(doc(db, 'users', activeUserId), {
+      [USER_SETTINGS_FIELD]: {
+        ...currentSettings,
+        weeklyPredictionWarningPreferences: preferences,
+        updatedAt: serverTimestamp()
+      }
+    }, { merge: true });
+    setPreferencesStatus('Preferências guardadas.');
+  } catch (error) {
+    console.error('Erro ao guardar preferências dos avisos semanais:', error);
+    setPreferencesStatus('Não foi possível guardar esta preferência.', 'is-error');
+    currentSettings = {
+      ...currentSettings,
+      weeklyPredictionWarningPreferences: previousPreferences
+    };
+    renderWeeklyWarningPreferences();
+  } finally {
+    weeklyWarningPreferenceInputs.forEach((preferenceInput) => {
+      if (preferenceInput) preferenceInput.disabled = false;
+    });
+  }
+}
+
+function setupWeeklyWarningPreferenceListeners() {
+  weeklyWarningPreferenceInputs.forEach((input, index) => {
+    input?.addEventListener('change', () => saveWeeklyWarningPreference(index, input));
+  });
 }
 
 // --- CONTROLO DE ABAS (NOTIFICAÇÕES & AVATAR) ---
@@ -787,6 +894,7 @@ function bindEvents() {
 
   setupTabSwitching();
   setupAvatarListeners();
+  setupWeeklyWarningPreferenceListeners();
 
   window.addEventListener(NOTIFICATION_OPEN_EVENT, openNotificationsPopup);
   areEventsBound = true;
@@ -796,6 +904,10 @@ function cleanupListeners() {
   if (typeof userSettingsUnsubscribe === 'function') {
     userSettingsUnsubscribe();
     userSettingsUnsubscribe = null;
+  }
+  if (typeof notificationConfigUnsubscribe === 'function') {
+    notificationConfigUnsubscribe();
+    notificationConfigUnsubscribe = null;
   }
   if (typeof allUsersAvatarsUnsubscribe === 'function') {
     allUsersAvatarsUnsubscribe();
@@ -814,9 +926,26 @@ export async function initProfileNotifications(user) {
   activeUserId = user?.uid || null;
 
   if (!activeUserId) {
-    currentSettings = { ...MARKET_NOTIFICATIONS_DEFAULTS };
+    currentSettings = {
+      ...MARKET_NOTIFICATIONS_DEFAULTS,
+      weeklyPredictionWarningPreferences: [...DEFAULT_WEEKLY_PREDICTION_WARNING_PREFERENCES]
+    };
+    weeklyPredictionWarnings = DEFAULT_WEEKLY_PREDICTION_WARNINGS.map((warning) => ({ ...warning }));
+    renderWeeklyWarningPreferences();
+    renderWeeklyWarningSchedules();
     return;
   }
+
+  const notificationConfigRef = doc(db, 'paineis', 'notificacoesMercado');
+  notificationConfigUnsubscribe = onSnapshot(notificationConfigRef, (snapshot) => {
+    weeklyPredictionWarnings = normalizeWeeklyPredictionWarnings(
+      snapshot.exists() ? snapshot.data()?.weeklyPredictionWarnings : null
+    );
+    renderWeeklyWarningSchedules();
+  }, (error) => {
+    console.error('Erro ao ler a agenda dos avisos semanais:', error);
+    renderWeeklyWarningSchedules();
+  });
 
   // Listener do fusível 'paineis perfil' (campo 'avatar')
   const profilePanelRef = doc(db, 'paineis', 'paineis perfil');
@@ -854,6 +983,7 @@ export async function initProfileNotifications(user) {
     pendingAvatarUrl = currentAvatarUrl;
 
     updateAvatarDisplays(currentAvatarUrl);
+    renderWeeklyWarningPreferences();
     renderPresetAvatars();
     await syncDeviceState();
   }, (error) => {
