@@ -42,10 +42,15 @@ const server = http.createServer((request, response) => {
   if (request.method === 'OPTIONS') {
     response.writeHead(204, {
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type'
     });
     response.end();
+    return;
+  }
+
+  if (request.method === 'GET' && (request.url === '/ping' || request.url === '/health' || request.url === '/')) {
+    sendJson(response, 200, { ok: true, status: 'online' });
     return;
   }
 

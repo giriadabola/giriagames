@@ -84,6 +84,25 @@ async function fillAdminWithExtracted(adminTabId, extracted, faceId) {
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === 'CHECK_SERVER_STATUS') {
+    (async () => {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 1500);
+        const res = await fetch('http://127.0.0.1:8765/ping', { method: 'GET', signal: controller.signal });
+        clearTimeout(timeoutId);
+        if (res.ok) {
+          sendResponse({ ok: true, online: true });
+        } else {
+          sendResponse({ ok: true, online: false });
+        }
+      } catch (err) {
+        sendResponse({ ok: true, online: false, error: err.message });
+      }
+    })();
+    return true;
+  }
+
   if (message.type === 'GET_DEBUG_LOGS') {
     chrome.storage.local.get(LOG_KEY).then(result => sendResponse({ ok: true, logs: result[LOG_KEY] || [] }));
     return true;
