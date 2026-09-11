@@ -33,6 +33,18 @@ export function isValidTime(value) {
   return hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59;
 }
 
+function normalizeEnabled(value, fallback) {
+  if (value === true || value === 'true' || value === 1) {
+    return true;
+  }
+
+  if (value === false || value === 'false' || value === 0) {
+    return false;
+  }
+
+  return fallback;
+}
+
 export function normalizeWeeklyPredictionWarnings(rawWarnings) {
   const source = Array.isArray(rawWarnings) ? rawWarnings : [];
 
@@ -41,7 +53,7 @@ export function normalizeWeeklyPredictionWarnings(rawWarnings) {
     const parsedWeekday = Number.parseInt(raw.weekday, 10);
 
     return {
-      enabled: raw.enabled === true,
+      enabled: normalizeEnabled(raw.enabled, fallback.enabled),
       weekday: isValidWeekday(parsedWeekday) ? parsedWeekday : fallback.weekday,
       time: isValidTime(raw.time) ? raw.time : fallback.time
     };
