@@ -7,6 +7,7 @@ const VAPID_PUBLIC_KEY = "BNQqYP8I9537wDNcLm5Bfzj1-dR7ynWXs064sLLbJ3T6RxaZqVbNvP
 const VAPID_PRIVATE_KEY = "6SGGrihGmcnwfF_Fipd_V5hNc2th1M8Ez0FFGd0E9YU";
 const VAPID_SUBJECT = "mailto:admin@giriagames.com";
 const NOTIFICATION_TIME_ZONE = "Europe/Lisbon";
+const WEEKLY_PREDICTION_WARNING_COUNT = 3;
 const DEFAULT_CONFIG = {
   beforeOpenEnabled: true,
   beforeOpenHours: 2,
@@ -22,6 +23,11 @@ const DEFAULT_CONFIG = {
   predictionsClosingSoonWeekday: 6,
   predictionsClosingSoonTime: "20:00",
   predictionsClosingSoonHours: 2,
+  weeklyPredictionWarnings: [
+    { enabled: false, weekday: 1, time: "09:00" },
+    { enabled: false, weekday: 3, time: "09:00" },
+    { enabled: false, weekday: 5, time: "09:00" },
+  ],
 };
 const DISPATCH_WINDOW_MS = 15 * 60 * 1000;
 const WEEKLY_DISPATCH_WINDOW_MS = 2 * 60 * 60 * 1000;
@@ -36,6 +42,12 @@ function normalizeUserSettings(rawSettings) {
   return {
     pushEnabled: rawSettings?.pushEnabled === true,
     pushSubscriptions: Array.isArray(rawSettings?.pushSubscriptions) ? rawSettings.pushSubscriptions : [],
+    weeklyPredictionWarningPreferences: Array.from(
+      { length: WEEKLY_PREDICTION_WARNING_COUNT },
+      (_, index) => typeof rawSettings?.weeklyPredictionWarningPreferences?.[index] === "boolean"
+        ? rawSettings.weeklyPredictionWarningPreferences[index]
+        : true
+    ),
   };
 }
 
@@ -132,11 +144,24 @@ function buildPayload(type, scheduleId, scheduleData, hoursBeforeOpen) {
   };
 }
 
-function getInterestedUsers(users, type) {
+function shouldReceiveNotification(settings, type) {
+  const match = /^weeklyPredictionWarning(\d+)$/.exec(type || "");
+
+  if (!match) {
+    return true;
+  }
+
+  const preferenceIndex = Number.parseInt(match[1], 10) - 1;
+  return settings.weeklyPredictionWarningPreferences[preferenceIndex] !== false;
+}
+
+function getInterestedUsers(users, type = null) {
   return users.filter((userEntry) => {
     const settings = userEntry.settings;
 
-    return settings.pushEnabled && settings.pushSubscriptions.length > 0;
+    return settings.pushEnabled &&
+      settings.pushSubscriptions.length > 0 &&
+      shouldReceiveNotification(settings, type);
   });
 }
 
@@ -299,6 +324,20 @@ function normalizeTime(value, fallback) {
   return isValidTime(value) ? value : fallback;
 }
 
+function normalizeWeeklyPredictionWarnings(rawWarnings) {
+  const source = Array.isArray(rawWarnings) ? rawWarnings : [];
+
+  return DEFAULT_CONFIG.weeklyPredictionWarnings.map((fallback, index) => {
+    const raw = source[index] || {};
+
+    return {
+      enabled: normalizeBoolean(raw.enabled, fallback.enabled),
+      weekday: normalizeInteger(raw.weekday, fallback.weekday),
+      time: normalizeTime(raw.time, fallback.time),
+    };
+  });
+}
+
 function normalizeNotificationConfig(rawConfig) {
   const raw = rawConfig || {};
 
@@ -331,6 +370,7 @@ function normalizeNotificationConfig(rawConfig) {
       raw.predictionsClosingSoonHours,
       DEFAULT_CONFIG.predictionsClosingSoonHours
     ),
+    weeklyPredictionWarnings: normalizeWeeklyPredictionWarnings(raw.weeklyPredictionWarnings),
   };
 }
 
@@ -492,6 +532,27 @@ function buildPredictionsClosingSoonPayload(weekday, timeString, hoursBefore) {
   };
 }
 
+function getPredictionsClosingSchedule(config) {
+  return {
+    weekday: config.predictionsCloseWeekday,
+    timeString: config.predictionsCloseTime,
+  };
+}
+
+function buildWeeklyPredictionWarningPayload(warningIndex, closeWeekday, closeTimeString) {
+  const weekdays = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
+  const closeDay = weekdays[closeWeekday] || "sexta";
+  const closeDayLabel = closeDay.charAt(0).toUpperCase() + closeDay.slice(1);
+  const closeTime = (closeTimeString || "").replace(":", "h");
+
+  return {
+    title: "Aviso de palpites",
+    body: `Aviso: Palpites desta semana já estão disponíveis. ${closeDayLabel} ${closeTime} fecha.`,
+    tag: `predictions-weekly-warning-${warningIndex + 1}-${closeWeekday}-${closeTimeString}`,
+    url: "./1x.html",
+  };
+}
+
 exports.processMarketNotifications = onSchedule({
   schedule: "every 1 minutes",
   timeZone: "Europe/Lisbon",
@@ -565,21 +626,39 @@ exports.processMarketNotifications = onSchedule({
     });
   }
 
+  const predictionsClosingSchedule = getPredictionsClosingSchedule(config);
+
   if (config.predictionsClosingSoonEnabled &&
     isWeeklyOffsetNotificationDue(
       now,
-      config.predictionsClosingSoonWeekday,
-      config.predictionsClosingSoonTime,
+      predictionsClosingSchedule.weekday,
+      predictionsClosingSchedule.timeString,
       config.predictionsClosingSoonHours,
       weeklyLog.predictionsClosingSoon?.weekKey || null
     )) {
     dueWeeklyEvents.push({
       type: "predictionsClosingSoon",
-      weekday: config.predictionsClosingSoonWeekday,
-      timeString: config.predictionsClosingSoonTime,
+      weekday: predictionsClosingSchedule.weekday,
+      timeString: predictionsClosingSchedule.timeString,
       hoursBefore: config.predictionsClosingSoonHours,
     });
   }
+
+  config.weeklyPredictionWarnings.forEach((warning, index) => {
+    const eventType = `weeklyPredictionWarning${index + 1}`;
+    const lastWeekKey = weeklyLog[eventType]?.weekKey || null;
+
+    if (!warning.enabled || !isWeeklyNotificationDue(now, warning.weekday, warning.time, lastWeekKey)) {
+      return;
+    }
+
+    dueWeeklyEvents.push({
+      type: eventType,
+      warningIndex: index,
+      weekday: warning.weekday,
+      timeString: warning.time,
+    });
+  });
 
   if (dueEvents.length === 0 && dueWeeklyEvents.length === 0) {
     return null;
@@ -614,14 +693,20 @@ exports.processMarketNotifications = onSchedule({
   }
 
   for (const weeklyEvent of dueWeeklyEvents) {
-    const interestedUsers = getInterestedUsers(users);
+    const interestedUsers = getInterestedUsers(users, weeklyEvent.type);
 
     if (interestedUsers.length === 0) {
       console.warn(`[processMarketNotifications] ${weeklyEvent.type}: não existem dispositivos elegíveis.`);
       continue;
     }
 
-    const payload = weeklyEvent.type === "predictionsClosingSoon"
+    const payload = weeklyEvent.type.startsWith("weeklyPredictionWarning")
+      ? buildWeeklyPredictionWarningPayload(
+        weeklyEvent.warningIndex,
+        config.predictionsCloseWeekday,
+        config.predictionsCloseTime
+      )
+      : weeklyEvent.type === "predictionsClosingSoon"
       ? buildPredictionsClosingSoonPayload(
         weeklyEvent.weekday,
         weeklyEvent.timeString,
