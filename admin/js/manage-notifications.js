@@ -1,6 +1,12 @@
 import { auth, db } from './auth-guard.js';
 import { collection, doc, onSnapshot, serverTimestamp, setDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 import { sendManualMarketNotification } from './manual-market-notification-service.js';
+import {
+  DEFAULT_WEEKLY_PREDICTION_WARNINGS,
+  WEEKDAYS_PT,
+  normalizeWeeklyPredictionWarnings,
+  formatWeeklyPredictionWarningSchedule
+} from '../../core/weekly-prediction-warnings.js';
 
 const CONFIG_DOC_PATH = ['paineis', 'notificacoesMercado'];
 const USER_SETTINGS_FIELD = 'notificacoesMercado';
@@ -19,6 +25,13 @@ const predictionsClosingSoonEnabledInput = document.getElementById('predictionsC
 const predictionsClosingSoonWeekdayInput = document.getElementById('predictionsClosingSoonWeekday');
 const predictionsClosingSoonTimeInput = document.getElementById('predictionsClosingSoonTime');
 const predictionsClosingSoonHoursInput = document.getElementById('predictionsClosingSoonHours');
+const weeklyPredictionWarningControls = [1, 2, 3].map((slot) => ({
+  enabled: document.getElementById(`weeklyPredictionWarning${slot}Enabled`),
+  weekday: document.getElementById(`weeklyPredictionWarning${slot}Weekday`),
+  time: document.getElementById(`weeklyPredictionWarning${slot}Time`),
+  scheduleContainer: document.getElementById(`weeklyPredictionWarning${slot}ScheduleContainer`),
+  scheduleText: document.getElementById(`weeklyPredictionWarning${slot}ScheduleText`)
+}));
 const saveButton = document.getElementById('saveNotificationSettingsBtn');
 const statusText = document.getElementById('notificationSettingsStatus');
 const manualMessageInput = document.getElementById('manualNotificationMessage');
@@ -47,7 +60,6 @@ const beforeOpenValue = document.getElementById('summaryBeforeOpen');
 const onOpenValue = document.getElementById('summaryOnOpen');
 const onCloseValue = document.getElementById('summaryOnClose');
 
-const WEEKDAYS_PT = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
 let latestUsers = [];
 let activeMarketSchedule = null;
 
@@ -66,7 +78,8 @@ function getDefaultConfig() {
     predictionsClosingSoonEnabled: false,
     predictionsClosingSoonWeekday: 6,
     predictionsClosingSoonTime: '20:00',
-    predictionsClosingSoonHours: 2
+    predictionsClosingSoonHours: 2,
+    weeklyPredictionWarnings: DEFAULT_WEEKLY_PREDICTION_WARNINGS.map((warning) => ({ ...warning }))
   };
 }
 
@@ -123,12 +136,16 @@ function getClosingSoonSchedule(weekdayVal, timeStr, hoursBeforeVal) {
   }
 
   const [hours, minutes] = timeStr.split(':').map((v) => Number.parseInt(v, 10));
-  const anchor = new Date(2026, 0, 4 + weekday, hours, minutes, 0, 0);
-  anchor.setHours(anchor.getHours() - hoursBefore);
+  const totalMinutes = (hours * 60) + minutes - (hoursBefore * 60);
+  const dayOffset = Math.floor(totalMinutes / (24 * 60));
+  const normalizedMinutes = ((totalMinutes % (24 * 60)) + (24 * 60)) % (24 * 60);
+  const displayWeekday = (weekday + dayOffset + 7) % 7;
+  const displayHours = Math.floor(normalizedMinutes / 60);
+  const displayMinutes = normalizedMinutes % 60;
 
-  const dayName = WEEKDAYS_PT[anchor.getDay()];
-  const formattedHours = String(anchor.getHours()).padStart(2, '0');
-  const formattedMinutes = String(anchor.getMinutes()).padStart(2, '0');
+  const dayName = WEEKDAYS_PT[displayWeekday];
+  const formattedHours = String(displayHours).padStart(2, '0');
+  const formattedMinutes = String(displayMinutes).padStart(2, '0');
 
   return `${dayName} às ${formattedHours}:${formattedMinutes}`;
 }
@@ -191,11 +208,20 @@ function renderScheduleDisplays() {
     : '--';
   updateCardContainer(predictionsCloseScheduleContainer, predictionsCloseScheduleText, closeText, predictionsCloseEnabledInput.checked);
 
-  const soonWk = predictionsClosingSoonWeekdayInput.value;
-  const soonTime = predictionsClosingSoonTimeInput.value;
+  const soonWk = predictionsCloseWeekdayInput.value;
+  const soonTime = predictionsCloseTimeInput.value;
   const soonHrs = predictionsClosingSoonHoursInput.value;
   const soonText = getClosingSoonSchedule(soonWk, soonTime, soonHrs);
   updateCardContainer(predictionsClosingSoonScheduleContainer, predictionsClosingSoonScheduleText, soonText, predictionsClosingSoonEnabledInput.checked);
+
+  weeklyPredictionWarningControls.forEach((control) => {
+    const warning = {
+      weekday: Number.parseInt(control.weekday.value, 10),
+      time: control.time.value
+    };
+    const scheduleText = formatWeeklyPredictionWarningSchedule(warning);
+    updateCardContainer(control.scheduleContainer, control.scheduleText, scheduleText, control.enabled.checked);
+  });
 }
 
 function fillConfigForm(config) {
@@ -210,9 +236,17 @@ function fillConfigForm(config) {
   predictionsCloseWeekdayInput.value = String(config.predictionsCloseWeekday);
   predictionsCloseTimeInput.value = config.predictionsCloseTime;
   predictionsClosingSoonEnabledInput.checked = config.predictionsClosingSoonEnabled;
-  predictionsClosingSoonWeekdayInput.value = String(config.predictionsClosingSoonWeekday);
-  predictionsClosingSoonTimeInput.value = config.predictionsClosingSoonTime;
+  // O aviso antecipado deve usar sempre a mesma data limite do fecho.
+  predictionsClosingSoonWeekdayInput.value = String(config.predictionsCloseWeekday);
+  predictionsClosingSoonTimeInput.value = config.predictionsCloseTime;
   predictionsClosingSoonHoursInput.value = String(config.predictionsClosingSoonHours);
+
+  normalizeWeeklyPredictionWarnings(config.weeklyPredictionWarnings).forEach((warning, index) => {
+    const control = weeklyPredictionWarningControls[index];
+    control.enabled.checked = warning.enabled;
+    control.weekday.value = String(warning.weekday);
+    control.time.value = warning.time;
+  });
 
   renderScheduleDisplays();
 }
@@ -243,9 +277,10 @@ function renderSummary(users) {
     onCloseEnabledInput.checked,
     predictionsOpenEnabledInput.checked,
     predictionsCloseEnabledInput.checked,
-    predictionsClosingSoonEnabledInput.checked
+    predictionsClosingSoonEnabledInput.checked,
+    ...weeklyPredictionWarningControls.map((control) => control.enabled.checked)
   ].filter(Boolean).length;
-  onCloseValue.textContent = `${activeRules}/5 On`;
+  onCloseValue.textContent = `${activeRules}/8 On`;
 }
 
 function isValidWeekday(value) {
@@ -375,9 +410,15 @@ async function saveSettings() {
     predictionsCloseWeekday: Number.parseInt(predictionsCloseWeekdayInput.value, 10),
     predictionsCloseTime: predictionsCloseTimeInput.value,
     predictionsClosingSoonEnabled: predictionsClosingSoonEnabledInput.checked,
-    predictionsClosingSoonWeekday: Number.parseInt(predictionsClosingSoonWeekdayInput.value, 10),
-    predictionsClosingSoonTime: predictionsClosingSoonTimeInput.value,
+    // Mantém os campos antigos sincronizados para compatibilidade com configurações existentes.
+    predictionsClosingSoonWeekday: Number.parseInt(predictionsCloseWeekdayInput.value, 10),
+    predictionsClosingSoonTime: predictionsCloseTimeInput.value,
     predictionsClosingSoonHours: Number.parseInt(predictionsClosingSoonHoursInput.value, 10),
+    weeklyPredictionWarnings: weeklyPredictionWarningControls.map((control) => ({
+      enabled: control.enabled.checked,
+      weekday: Number.parseInt(control.weekday.value, 10),
+      time: control.time.value
+    })),
     updatedAt: serverTimestamp(),
     updatedBy: auth.currentUser?.uid || null
   };
@@ -387,18 +428,25 @@ async function saveSettings() {
     return;
   }
 
-  if (!isValidWeekday(nextConfig.predictionsOpenWeekday) || !isValidWeekday(nextConfig.predictionsCloseWeekday) || !isValidWeekday(nextConfig.predictionsClosingSoonWeekday)) {
+  if (!isValidWeekday(nextConfig.predictionsOpenWeekday) || !isValidWeekday(nextConfig.predictionsCloseWeekday)) {
     setStatus('Escolhe um dia da semana válido para os avisos de prognósticos.', 'is-error');
     return;
   }
 
-  if (!isValidTime(nextConfig.predictionsOpenTime) || !isValidTime(nextConfig.predictionsCloseTime) || !isValidTime(nextConfig.predictionsClosingSoonTime)) {
+  if (!isValidTime(nextConfig.predictionsOpenTime) || !isValidTime(nextConfig.predictionsCloseTime)) {
     setStatus('Escolhe uma hora válida no formato HH:MM.', 'is-error');
     return;
   }
 
   if (!isValidHoursBefore(nextConfig.predictionsClosingSoonHours)) {
     setStatus('Escolhe um valor vÃ¡lido de horas antes do fecho.', 'is-error');
+    return;
+  }
+
+  if (nextConfig.weeklyPredictionWarnings.some((warning) => (
+    !isValidWeekday(warning.weekday) || !isValidTime(warning.time)
+  ))) {
+    setStatus('Escolhe um dia da semana e uma hora válidos para os avisos semanais.', 'is-error');
     return;
   }
 
@@ -513,9 +561,13 @@ predictionsCloseEnabledInput.addEventListener('change', renderScheduleDisplays);
 predictionsCloseWeekdayInput.addEventListener('change', renderScheduleDisplays);
 predictionsCloseTimeInput.addEventListener('input', renderScheduleDisplays);
 predictionsClosingSoonEnabledInput.addEventListener('change', renderScheduleDisplays);
-predictionsClosingSoonWeekdayInput.addEventListener('change', renderScheduleDisplays);
-predictionsClosingSoonTimeInput.addEventListener('input', renderScheduleDisplays);
 predictionsClosingSoonHoursInput.addEventListener('change', renderScheduleDisplays);
+
+weeklyPredictionWarningControls.forEach((control) => {
+  control.enabled.addEventListener('change', renderScheduleDisplays);
+  control.weekday.addEventListener('change', renderScheduleDisplays);
+  control.time.addEventListener('input', renderScheduleDisplays);
+});
 
 updateManualCounter();
 startRealtimeListeners();
