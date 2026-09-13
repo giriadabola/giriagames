@@ -65,11 +65,15 @@ export function drawPackPlayers(eligiblePlayers, packType, cardsPerPack = 6) {
 }
 
 export function createStickerPayload(draw, userId, timestampValue, seasonValue = '') {
+    const playerId = draw?.player?.id || draw?.player?.docId || '';
+    if (!playerId) {
+        throw new Error('ID do jogador inválido ao gerar cromo.');
+    }
     return {
         userId,
-        idplayer: draw.player.id,
+        idplayer: playerId,
         clube: draw.player.clube || '',
-        casta: draw.rarity,
+        casta: draw.rarity || 'comum',
         estado: true,
         timestamp: timestampValue,
         historico: null,

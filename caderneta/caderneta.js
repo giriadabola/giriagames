@@ -706,10 +706,10 @@ async function loadDatabaseData() {
     );
 
     allPlayersCatalog = seasonPlayersDocs.map(docSnap => {
-        const sData = getPlayerSeasonData(docSnap.data(), mostRecentSeason);
+        const sData = getPlayerSeasonData(docSnap.data(), mostRecentSeason) || {};
         return {
-            id: docSnap.id,
-            ...sData
+            ...sData,
+            id: docSnap.id
         };
     });
 
