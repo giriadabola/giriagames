@@ -614,13 +614,20 @@ onAuthStateChanged(auth, async (user) => {
             
             loadingScreen.style.display = 'none';
             content.style.display = 'block';
-            void Promise.all([
-                loadSeasons().then(() => mostRecentSeason ? checkForRankingUpdateAndShowAnimation() : undefined),
-                fetchPendingCadernetaGiftOffersCount(user.uid)
-            ]).then(([, giftCount]) => {
+
+            // Check Alfredo gift offers immediately (~100ms) without waiting for heavy seasons loading
+            fetchPendingCadernetaGiftOffersCount(user.uid).then((giftCount) => {
                 pendingGiftOfferCount = giftCount;
-                if (pendingGiftOfferCount > 0 && animationPopup.style.display !== 'block') showAlfredoGiftPopup();
-            }).catch((error) => console.error("Erro ao carregar dados secundários do ranking: ", error));
+                if (pendingGiftOfferCount > 0 && animationPopup.style.display !== 'block') {
+                    showAlfredoGiftPopup();
+                }
+            }).catch((error) => console.error("Erro ao verificar ofertas do Alfredo: ", error));
+
+            void loadSeasons().then(() => {
+                if (mostRecentSeason) {
+                    checkForRankingUpdateAndShowAnimation();
+                }
+            }).catch((error) => console.error("Erro ao carregar dados do ranking: ", error));
         } else {
             window.location.href = '404.html';
         }
