@@ -1453,7 +1453,7 @@ async function loadRoundHighlights(season) {
 
             return `
                 <div class="highlight-card">
-                    <div class="card-title"><span class="desktop-round">Ronda ${targetRound}</span><span class="mobile-round">R${targetRound}</span> - ${category} ${icon}</div>
+                    <div class="card-title">R${targetRound} - ${category} ${icon}</div>
                     <div class="card-user" title="${winnerName}">${winnerName}</div>
                 </div>
             `;
