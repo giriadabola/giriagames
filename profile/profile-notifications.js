@@ -811,11 +811,15 @@ function setupAvatarListeners() {
     setAvatarStatus('A guardar avatar...', '');
 
     try {
+      const preset = PRESET_AVATARS.find(p => p.url === pendingAvatarUrl || p.id === pendingAvatarUrl);
+      const avatarName = preset ? preset.name : (pendingAvatarUrl ? 'Personalizado' : '');
+
       const userRef = doc(db, 'users', activeUserId);
-      // Guarda tanto no campo 'avatar' como no 'avatarUrl' na coleção 'users'
+      // Guarda no campo 'avatar', 'avatarUrl' e 'avatarName' na coleção 'users'
       await setDoc(userRef, {
         avatar: pendingAvatarUrl,
-        avatarUrl: pendingAvatarUrl
+        avatarUrl: pendingAvatarUrl,
+        avatarName: avatarName
       }, { merge: true });
 
       currentAvatarUrl = pendingAvatarUrl;
@@ -844,7 +848,8 @@ function setupAvatarListeners() {
       const userRef = doc(db, 'users', activeUserId);
       await setDoc(userRef, {
         avatar: '',
-        avatarUrl: ''
+        avatarUrl: '',
+        avatarName: ''
       }, { merge: true });
 
       pendingAvatarUrl = '';

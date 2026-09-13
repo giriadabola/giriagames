@@ -103,10 +103,13 @@ function getAvatarName(userData) {
     }
 
     for (const item of PRESET_AVATARS_LIST) {
+        if (item.id && cleanedKey === cleanSvgStr(item.id)) {
+            return item.name;
+        }
         const cleanedUrl = cleanSvgStr(item.url);
-        if (cleanedUrl && cleanedUrl.length > 40 && cleanedKey.length > 40) {
-            const snippet = cleanedUrl.slice(30, 90);
-            if (cleanedKey.includes(snippet)) {
+        if (cleanedUrl && cleanedUrl.length > 120 && cleanedKey.length > 120) {
+            const snippet = cleanedUrl.slice(120, 220);
+            if (snippet.length >= 30 && cleanedKey.includes(snippet)) {
                 return item.name;
             }
         }
