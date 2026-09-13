@@ -278,10 +278,6 @@ async function fetchPendingCadernetaGiftOffersCount(userId) {
     return offersSnapshot.size;
 }
 
-const alfredoPackPopup = document.getElementById('alfredo-pack-popup');
-const alfredoPackMessage = document.getElementById('alfredo-pack-message');
-const openAlfredoPackButton = document.getElementById('open-alfredo-pack-btn');
-
 const alfredoRevealPopup = document.getElementById('alfredo-reveal-popup');
 const alfredoRevealTitle = document.getElementById('alfredo-reveal-title');
 const alfredoRevealSubtitle = document.getElementById('alfredo-reveal-subtitle');
