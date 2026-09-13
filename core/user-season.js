@@ -104,11 +104,22 @@ export function mergeUserSeasonData(userData, season) {
         if (userData[`${compactKey}PontosPossiveis`] !== undefined) legacySeasonData.PontosPossiveis = userData[`${compactKey}PontosPossiveis`];
     }
 
-    return {
+    const merged = {
         ...userData,
         ...legacySeasonData,
         ...nestedData
     };
+
+    if (merged.natabela === undefined) {
+        const fallbackSeasonKey = Object.keys(userData).find(
+            (k) => /^\d{4}\/\d{4}$/.test(k) && userData[k] && userData[k].natabela !== undefined
+        );
+        if (fallbackSeasonKey) {
+            merged.natabela = userData[fallbackSeasonKey].natabela;
+        }
+    }
+
+    return merged;
 }
 
 export function buildSeasonUpdate(season, fields) {
