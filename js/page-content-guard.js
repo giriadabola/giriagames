@@ -14,7 +14,6 @@ import { getFirestore, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10
 export async function checkPageContentAccess(pageKey, userStatus, db) {
     const isRuler = String(userStatus || '').trim().toLowerCase() === 'ruler';
     if (isRuler) {
-        console.log(`[PageGuard] Page '${pageKey}' check skipped for Ruler.`);
         return true; // Ruler always has full access
     }
 
@@ -24,7 +23,6 @@ export async function checkPageContentAccess(pageKey, userStatus, db) {
         
         if (pagesDocSnap.exists()) {
             const pagesData = pagesDocSnap.data();
-            console.log(`[PageGuard] Page '${pageKey}' state:`, pagesData[pageKey]);
             if (pagesData[pageKey] === 'off') {
                 showContentBlockedOverlay();
                 return false;
