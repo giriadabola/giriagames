@@ -557,12 +557,14 @@ async function grantSeasonStarterCadernetaPacks({ round, seasonLabel }) {
     }
 
     let createdOffers = 0;
+    const roundNumber = Number(round);
+    const cardsCount = (roundNumber === 4 || roundNumber === 5) ? 6 : 1;
 
     for (const user of eligibleUsers) {
         const userId = user.id;
         const offerId = buildCadernetaGiftOfferId({
             seasonKey,
-            round,
+            round: roundNumber,
             userId
         });
         const offerRef = doc(db, CADERNETA_GIFT_OFFERS_COLLECTION, offerId);
@@ -576,16 +578,17 @@ async function grantSeasonStarterCadernetaPacks({ round, seasonLabel }) {
             userId,
             temporada: seasonLabel,
             temporadaKey: seasonKey,
-            ronda: round,
+            ronda: roundNumber,
             sourceName: CADERNETA_GIFT_SOURCE_NAME,
             packType: CADERNETA_FREE_PACK_TYPE,
+            cardsCount,
             status: 'pending',
             offeredAt: serverTimestamp()
         });
         createdOffers++;
     }
 
-    console.log(`Ofertas de saquetas da caderneta criadas: ${createdOffers} para a ronda ${round}.`);
+    console.log(`Ofertas de saquetas da caderneta criadas: ${createdOffers} para a ronda ${round} (${cardsCount} cromo(s) cada).`);
     return createdOffers;
 }
 
