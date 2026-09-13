@@ -1,4 +1,4 @@
-const APP_SHELL_CACHE = 'gGames-shell-v20';
+const APP_SHELL_CACHE = 'gGames-shell-v21';
 const APP_SHELL_FILES = [
   './index.html',
   './1x.html',
@@ -66,6 +66,31 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+async function networkFirst(request) {
+  try {
+    const networkResponse = await fetch(request);
+    if (networkResponse && networkResponse.ok) {
+      const cache = await caches.open(APP_SHELL_CACHE);
+      cache.put(request, networkResponse.clone());
+      return networkResponse;
+    }
+  } catch (error) {
+    const cache = await caches.open(APP_SHELL_CACHE);
+    const cachedResponse = await cache.match(request);
+    if (cachedResponse) {
+      return cachedResponse;
+    }
+  }
+
+  const cache = await caches.open(APP_SHELL_CACHE);
+  const fallbackResponse = await cache.match(request);
+  if (fallbackResponse) {
+    return fallbackResponse;
+  }
+
+  return Response.error();
+}
+
 async function staleWhileRevalidate(request) {
   const cache = await caches.open(APP_SHELL_CACHE);
   const cachedResponse = await cache.match(request);
@@ -121,38 +146,6 @@ function refreshCacheInBackground(promise) {
   promise.catch(() => Promise.resolve());
 }
 
-async function serveNavigation(request) {
-  const cache = await caches.open(APP_SHELL_CACHE);
-  const cachedPage = await cache.match(request);
-
-  if (cachedPage) {
-    refreshCacheInBackground(
-      fetch(request).then((response) => {
-        if (response.ok) {
-          return cache.put(request, response.clone());
-        }
-
-        return Promise.resolve();
-      })
-    );
-
-    return cachedPage;
-  }
-
-  return fetch(request).catch(async () => {
-    const offlinePage = await cache.match(request);
-
-    if (offlinePage) {
-      return offlinePage;
-    }
-
-    return new Response('Página indisponível sem ligação à Internet.', {
-      status: 503,
-      headers: { 'Content-Type': 'text/plain; charset=utf-8' }
-    });
-  });
-}
-
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') {
     return;
@@ -166,24 +159,7 @@ self.addEventListener('fetch', (event) => {
   const isSameOrigin = requestUrl.origin === self.location.origin;
 
   if (event.request.mode === 'navigate') {
-    /*
-    event.respondWith(
-      fetch(event.request).catch(async () => {
-        const cache = await caches.open(APP_SHELL_CACHE);
-        const cachedPage = await cache.match(event.request);
-
-        if (cachedPage) {
-          return cachedPage;
-        }
-
-        return new Response('Página indisponível sem ligação à Internet.', {
-          status: 503,
-          headers: { 'Content-Type': 'text/plain; charset=utf-8' }
-        });
-      })
-    );
-    */
-    event.respondWith(serveNavigation(event.request));
+    event.respondWith(networkFirst(event.request));
     return;
   }
 
@@ -191,13 +167,13 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  if (event.request.destination === 'image') {
-    event.respondWith(cacheFirst(event.request));
+  if (['script', 'style'].includes(event.request.destination)) {
+    event.respondWith(networkFirst(event.request));
     return;
   }
 
-  if (['script', 'style'].includes(event.request.destination)) {
-    event.respondWith(staleWhileRevalidate(event.request));
+  if (event.request.destination === 'image') {
+    event.respondWith(cacheFirst(event.request));
     return;
   }
 
