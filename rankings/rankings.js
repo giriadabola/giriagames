@@ -278,11 +278,23 @@ async function fetchPendingCadernetaGiftOffersCount(userId) {
     return offersSnapshot.size;
 }
 
+const alfredoPackPopup = document.getElementById('alfredo-pack-popup');
+const alfredoPackMessage = document.getElementById('alfredo-pack-message');
+const openAlfredoPackButton = document.getElementById('open-alfredo-pack-btn');
+
+const alfredoRevealPopup = document.getElementById('alfredo-reveal-popup');
+const alfredoRevealTitle = document.getElementById('alfredo-reveal-title');
+const alfredoRevealSubtitle = document.getElementById('alfredo-reveal-subtitle');
+const alfredoRevealCardsContainer = document.getElementById('alfredo-reveal-cards-container');
+const alfredoRevealFooter = document.getElementById('alfredo-reveal-footer');
+const goToCadernetaButton = document.getElementById('go-to-caderneta-btn');
+
 function isAnyPopupVisible() {
     const popups = [
         document.getElementById('predictions-popup'),
         document.getElementById('ranking-animation-popup'),
-        document.getElementById('alfredo-pack-popup')
+        document.getElementById('alfredo-pack-popup'),
+        document.getElementById('alfredo-reveal-popup')
     ];
     return popups.some(p => p && p.style.display === 'block');
 }
@@ -301,6 +313,9 @@ function showAlfredoGiftPopup() {
     }
 
     alfredoPackMessage.textContent = buildAlfredoGiftMessage(pendingGiftOfferCount);
+    if (openAlfredoPackButton) {
+        openAlfredoPackButton.textContent = 'Receber cromo';
+    }
     alfredoPackPopup.style.display = 'block';
     updateBodyScrollState();
 }
@@ -312,8 +327,30 @@ function hideAlfredoGiftPopup() {
     }
 }
 
+function showAlfredoRevealPopup() {
+    if (alfredoRevealPopup) {
+        alfredoRevealPopup.style.display = 'block';
+        updateBodyScrollState();
+    }
+}
+
+function hideAlfredoRevealPopup() {
+    if (alfredoRevealPopup) {
+        alfredoRevealPopup.style.display = 'none';
+        updateBodyScrollState();
+    }
+}
+
 document.getElementById('close-alfredo-pack-popup')?.addEventListener('click', () => {
     hideAlfredoGiftPopup();
+});
+
+document.getElementById('close-alfredo-reveal-popup')?.addEventListener('click', () => {
+    hideAlfredoRevealPopup();
+});
+
+goToCadernetaButton?.addEventListener('click', () => {
+    window.location.href = 'caderneta.html';
 });
 
 const DEFAULT_FACE_IMAGE = 'https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhTl6Ljabwgx-VXdZz8FcAoygQprujSsCoXc32Y_iU0FjYVPu1B6MffWwp8gcCVuV8TWn39FRk9OIe1nc-esubVJYmdLsTptAoR9GyqNuw4R5MBaeaoWXTc3JaqH2YVNtEmfReQqohvQKvHiI0XwE5na2ty2B9Bt4oELxYv2BaZ7R3UmeylpiVEiIbiLnCB/s320/soccer-ball-png.webp';
@@ -374,19 +411,17 @@ async function fetchEligiblePlayersForRankings() {
     });
 }
 
-function renderInPopupRevealScreen(drawnPlayers) {
-    const popupHeader = document.getElementById('alfredo-popup-header');
-    const revealArea = document.getElementById('alfredo-reveal-area');
-    const popupFooter = document.getElementById('alfredo-popup-footer');
+function renderDrawnCardsInRevealPopup(drawnPlayers) {
+    if (!alfredoRevealCardsContainer) return;
 
-    if (popupHeader) {
-        popupHeader.innerHTML = `
-            <div style="font-size: 2.5rem; margin-top: 5px; margin-bottom: 5px; filter: drop-shadow(0 0 10px rgba(46, 204, 113, 0.5));">✨</div>
-            <h2 style="margin-bottom: 6px; color: #2ecc71; text-shadow: 0 0 10px rgba(46, 204, 113, 0.3);">O teu Presente!</h2>
-            <p id="alfredo-reveal-subtitle" style="margin-bottom: 10px; color: #e2e8f0; font-size: 0.95rem; font-weight: 600;">
-                ${drawnPlayers.length === 1 ? 'Toca no cromo para revelar!' : 'Toca nos cromos para revelar!'}
-            </p>
-        `;
+    if (alfredoRevealSubtitle) {
+        alfredoRevealSubtitle.textContent = drawnPlayers.length === 1
+            ? 'Toca no cromo para revelar!'
+            : 'Toca nos cromos para revelar!';
+    }
+
+    if (goToCadernetaButton) {
+        goToCadernetaButton.style.display = 'none';
     }
 
     let cardsHtml = '';
@@ -432,46 +467,45 @@ function renderInPopupRevealScreen(drawnPlayers) {
         `;
     });
 
-    if (revealArea) {
-        revealArea.style.display = 'block';
-        revealArea.innerHTML = `<div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 12px;">${cardsHtml}</div>`;
+    alfredoRevealCardsContainer.innerHTML = cardsHtml;
 
-        let revealedCount = 0;
-        const wrappers = revealArea.querySelectorAll('.reveal-card-wrapper');
-        wrappers.forEach((wrapper) => {
-            wrapper.addEventListener('click', () => {
-                if (!wrapper.classList.contains('revealed')) {
-                    wrapper.classList.add('revealed');
-                    revealedCount++;
-                    if (revealedCount === drawnPlayers.length) {
-                        const subtitle = document.getElementById('alfredo-reveal-subtitle');
-                        if (subtitle) {
-                            subtitle.textContent = drawnPlayers.length === 1
-                                ? 'Cromo guardado no teu inventário!'
-                                : 'Todos os cromos guardados no teu inventário!';
-                        }
-                        if (popupFooter) {
-                            popupFooter.innerHTML = `
-                                <button id="go-to-caderneta-btn" style="padding: 12px 24px; border: 0; border-radius: 10px; background: linear-gradient(135deg, #3498db, #2980b9); color: white; font-weight: 700; font-size: 0.95rem; cursor: pointer; box-shadow: 0 4px 15px rgba(52, 152, 219, 0.4); transition: transform 0.2s ease;">
-                                    Ir para a Caderneta 📖
-                                </button>
-                            `;
-                            document.getElementById('go-to-caderneta-btn')?.addEventListener('click', () => {
-                                window.location.href = 'caderneta.html';
-                            });
-                        }
+    let revealedCount = 0;
+    const wrappers = alfredoRevealCardsContainer.querySelectorAll('.reveal-card-wrapper');
+    wrappers.forEach((wrapper) => {
+        wrapper.addEventListener('click', () => {
+            if (!wrapper.classList.contains('revealed')) {
+                wrapper.classList.add('revealed');
+                revealedCount++;
+                if (revealedCount === drawnPlayers.length) {
+                    if (alfredoRevealSubtitle) {
+                        alfredoRevealSubtitle.textContent = drawnPlayers.length === 1
+                            ? 'Cromo guardado no teu inventário!'
+                            : 'Todos os cromos guardados no teu inventário!';
+                    }
+                    if (goToCadernetaButton) {
+                        goToCadernetaButton.style.display = 'inline-block';
                     }
                 }
-            });
+            }
         });
-    }
+    });
 }
 
 async function claimAndRevealOfferInRankings() {
-    if (!openAlfredoPackButton) return;
+    // 1. Close Popup 1
+    hideAlfredoGiftPopup();
 
-    openAlfredoPackButton.disabled = true;
-    openAlfredoPackButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> A resgatar presente...';
+    // 2. Open Popup 2 with loading state
+    showAlfredoRevealPopup();
+    if (alfredoRevealSubtitle) {
+        alfredoRevealSubtitle.textContent = 'A preparar o teu presente...';
+    }
+    if (alfredoRevealCardsContainer) {
+        alfredoRevealCardsContainer.innerHTML = '<div class="loading-spinner" style="margin: 25px auto;"></div>';
+    }
+    if (goToCadernetaButton) {
+        goToCadernetaButton.style.display = 'none';
+    }
 
     try {
         const offersQuery = query(
@@ -484,7 +518,7 @@ async function claimAndRevealOfferInRankings() {
 
         if (offers.length === 0) {
             alert('Já não tens presentes pendentes.');
-            hideAlfredoGiftPopup();
+            hideAlfredoRevealPopup();
             return;
         }
 
@@ -532,16 +566,14 @@ async function claimAndRevealOfferInRankings() {
         });
 
         void logUserAction(`Resgatou cromo/saqueta do Sr Alfredo na pagina de rankings`);
-
         pendingGiftOfferCount = Math.max(0, pendingGiftOfferCount - 1);
 
-        renderInPopupRevealScreen(drawnPlayers);
+        renderDrawnCardsInRevealPopup(drawnPlayers);
 
     } catch (error) {
         console.error('Erro ao resgatar oferta nos rankings:', error);
         alert('Ocorreu um erro ao resgatar a oferta: ' + (error.message || error));
-        openAlfredoPackButton.disabled = false;
-        openAlfredoPackButton.innerHTML = 'Resgatar presente 🎉';
+        hideAlfredoRevealPopup();
     }
 }
 

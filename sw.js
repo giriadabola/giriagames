@@ -1,4 +1,4 @@
-const APP_SHELL_CACHE = 'gGames-shell-v15';
+const APP_SHELL_CACHE = 'gGames-shell-v16';
 const APP_SHELL_FILES = [
   './index.html',
   './1x.html',
@@ -8,6 +8,11 @@ const APP_SHELL_FILES = [
   './rankings.html',
   './rankings/rankings.js',
   './rankings/rankings.css',
+  './caderneta.html',
+  './caderneta/caderneta.js',
+  './caderneta/caderneta.css',
+  './caderneta/pack-offers.js',
+  './caderneta/pack-engine.js',
   './myteam.html',
   './myteam/myteam.js',
   './myteam/myteam.css',
