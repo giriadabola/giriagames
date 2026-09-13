@@ -1,9 +1,11 @@
 import { db, auth } from "../core/firebase.js";
-import { doc, getDoc, collection, getDocs, query, where, updateDoc, serverTimestamp, addDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { doc, getDoc, collection, getDocs, query, where, updateDoc, serverTimestamp, addDoc, runTransaction } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { checkPageContentAccess } from "../js/page-content-guard.js";
 import { buildAlfredoGiftMessage, CADERNETA_GIFT_OFFERS_COLLECTION, CADERNETA_GIFT_REDIRECT_PARAM } from "../caderneta/pack-offers.js";
 import { getLatestSeason, mergeUserSeasonData } from "../core/user-season.js";
+import { drawPackPlayers, createStickerPayload, VALID_CADERNETA_RARITIES } from "../caderneta/pack-engine.js";
+import { fetchUniqueSeasons, getPlayerSeasonData, hasPlayerDataForSeason } from "../admin/js/player-season-helper.js";
 
 function logUserAction(actionDescription) {
     if (!auth.currentUser) {
@@ -314,8 +316,237 @@ document.getElementById('close-alfredo-pack-popup')?.addEventListener('click', (
     hideAlfredoGiftPopup();
 });
 
+const DEFAULT_FACE_IMAGE = 'https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhTl6Ljabwgx-VXdZz8FcAoygQprujSsCoXc32Y_iU0FjYVPu1B6MffWwp8gcCVuV8TWn39FRk9OIe1nc-esubVJYmdLsTptAoR9GyqNuw4R5MBaeaoWXTc3JaqH2YVNtEmfReQqohvQKvHiI0XwE5na2ty2B9Bt4oELxYv2BaZ7R3UmeylpiVEiIbiLnCB/s320/soccer-ball-png.webp';
+
+function getPositionPriority(position = '') {
+    const normalized = (position || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+    if (normalized.includes('guarda') || normalized.includes('goleiro') || normalized.includes('redes') || normalized === 'gk' || normalized === 'gr') return 1;
+    if (normalized.includes('defesa') || normalized.includes('defender') || normalized.includes('lateral') || normalized.includes('zagueiro') || ['df','cb','lb','rb','dc','de','dd'].includes(normalized)) return 2;
+    if (normalized.includes('medio') || normalized.includes('meio') || normalized.includes('mid') || normalized.includes('volante') || ['mc','cm','cam','cdm','md','me'].includes(normalized)) return 3;
+    if (normalized.includes('avanc') || normalized.includes('atac') || normalized.includes('forward') || normalized.includes('ponta') || normalized.includes('extremo') || normalized.includes('striker') || ['st','cf','lw','rw','pl'].includes(normalized)) return 4;
+    return 5;
+}
+
+function getPositionIconClass(position = '') {
+    const priority = getPositionPriority(position);
+    switch (priority) {
+        case 1: return 'fas fa-hand-paper';
+        case 2: return 'fas fa-shield-alt';
+        case 3: return 'fas fa-puzzle-piece';
+        case 4: return 'fas fa-bullseye';
+        default: return 'fas fa-futbol';
+    }
+}
+
+function getPositionClass(position = '') {
+    const priority = getPositionPriority(position);
+    switch (priority) {
+        case 1: return 'pos-guarda-redes';
+        case 2: return 'pos-defesa';
+        case 3: return 'pos-medio';
+        case 4: return 'pos-avancado';
+        default: return 'pos-outro';
+    }
+}
+
+async function fetchEligiblePlayersForRankings() {
+    const seasonsList = await fetchUniqueSeasons(db);
+    const mostRecentSeason = seasonsList[0] || '2025/2026';
+    const defaultBaseSeason = seasonsList[seasonsList.length - 1] || '2025/2026';
+
+    const playersSnap = await getDocs(collection(db, 'jogadores'));
+    const seasonPlayersDocs = playersSnap.docs.filter(docSnap => 
+        hasPlayerDataForSeason(docSnap.data(), mostRecentSeason, defaultBaseSeason)
+    );
+
+    const catalog = seasonPlayersDocs.map(docSnap => {
+        const sData = getPlayerSeasonData(docSnap.data(), mostRecentSeason) || {};
+        return {
+            ...sData,
+            id: docSnap.id
+        };
+    });
+
+    return catalog.filter((player) => {
+        if (player.miniGames?.caderneta?.estado !== true) return false;
+        const rarity = player.miniGames?.caderneta?.casta || 'comum';
+        return VALID_CADERNETA_RARITIES.has(rarity);
+    });
+}
+
+function renderInPopupRevealScreen(drawnPlayers) {
+    const popupHeader = document.getElementById('alfredo-popup-header');
+    const revealArea = document.getElementById('alfredo-reveal-area');
+    const popupFooter = document.getElementById('alfredo-popup-footer');
+
+    if (popupHeader) {
+        popupHeader.innerHTML = `
+            <div style="font-size: 2.5rem; margin-top: 5px; margin-bottom: 5px; filter: drop-shadow(0 0 10px rgba(46, 204, 113, 0.5));">✨</div>
+            <h2 style="margin-bottom: 6px; color: #2ecc71; text-shadow: 0 0 10px rgba(46, 204, 113, 0.3);">O teu Presente!</h2>
+            <p id="alfredo-reveal-subtitle" style="margin-bottom: 10px; color: #e2e8f0; font-size: 0.95rem; font-weight: 600;">
+                ${drawnPlayers.length === 1 ? 'Toca no cromo para revelar!' : 'Toca nos cromos para revelar!'}
+            </p>
+        `;
+    }
+
+    let cardsHtml = '';
+    drawnPlayers.forEach((draw) => {
+        const cardClass = (draw.rarity || 'comum').toLowerCase();
+        const player = draw.player;
+        const playerNameParts = (player.nome || '').trim().split(/\s+/).filter(Boolean);
+        const playerFirstName = playerNameParts.shift() || player.nome || '';
+        const playerLastName = playerNameParts.join(' ') || playerFirstName;
+        const faceImage = player.imagem || DEFAULT_FACE_IMAGE;
+        const positionIconClass = getPositionIconClass(player.posicao);
+        const positionClass = getPositionClass(player.posicao);
+
+        cardsHtml += `
+            <div class="reveal-card-wrapper rarity-${cardClass} is-visible" style="margin: 10px auto; cursor: pointer;">
+                <div class="flip-card-inner">
+                    <div class="flip-card-front">
+                        <i class="fas fa-futbol"></i>
+                        <span class="reveal-card-front-label">Toca para revelar</span>
+                    </div>
+                    <div class="flip-card-back">
+                        <div class="cromo-card ${cardClass} cromo-card--inventory cromo-card--showcase">
+                            <span class="cromo-rarity-badge ${cardClass}">${draw.rarity}</span>
+                            <div class="cromo-photo-stage">
+                                <img src="${faceImage}" alt="${player.nome}" class="cromo-photo-image" onerror="this.onerror=null; this.src='${DEFAULT_FACE_IMAGE}';">
+                                <div class="cromo-photo-stripes"></div>
+                                <div class="cromo-photo-overlay"></div>
+                            </div>
+                            <div class="cromo-name-block">
+                                <div class="cromo-name-first">${playerFirstName}</div>
+                                <div class="cromo-name-last">${playerLastName}</div>
+                            </div>
+                            <div class="cromo-details cromo-details--icons-only">
+                                <div class="cromo-details-accent"></div>
+                                <div class="cromo-details-icons-row">
+                                    <span class="cromo-detail-icon ${positionClass}" title="${player.posicao || 'Jogador'}"><i class="${positionIconClass}" aria-hidden="true"></i></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+
+    if (revealArea) {
+        revealArea.style.display = 'block';
+        revealArea.innerHTML = `<div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 12px;">${cardsHtml}</div>`;
+
+        let revealedCount = 0;
+        const wrappers = revealArea.querySelectorAll('.reveal-card-wrapper');
+        wrappers.forEach((wrapper) => {
+            wrapper.addEventListener('click', () => {
+                if (!wrapper.classList.contains('revealed')) {
+                    wrapper.classList.add('revealed');
+                    revealedCount++;
+                    if (revealedCount === drawnPlayers.length) {
+                        const subtitle = document.getElementById('alfredo-reveal-subtitle');
+                        if (subtitle) {
+                            subtitle.textContent = drawnPlayers.length === 1
+                                ? 'Cromo guardado no teu inventário!'
+                                : 'Todos os cromos guardados no teu inventário!';
+                        }
+                        if (popupFooter) {
+                            popupFooter.innerHTML = `
+                                <button id="go-to-caderneta-btn" style="padding: 12px 24px; border: 0; border-radius: 10px; background: linear-gradient(135deg, #3498db, #2980b9); color: white; font-weight: 700; font-size: 0.95rem; cursor: pointer; box-shadow: 0 4px 15px rgba(52, 152, 219, 0.4); transition: transform 0.2s ease;">
+                                    Ir para a Caderneta 📖
+                                </button>
+                            `;
+                            document.getElementById('go-to-caderneta-btn')?.addEventListener('click', () => {
+                                window.location.href = 'caderneta.html';
+                            });
+                        }
+                    }
+                }
+            });
+        });
+    }
+}
+
+async function claimAndRevealOfferInRankings() {
+    if (!openAlfredoPackButton) return;
+
+    openAlfredoPackButton.disabled = true;
+    openAlfredoPackButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> A resgatar presente...';
+
+    try {
+        const offersQuery = query(
+            collection(db, CADERNETA_GIFT_OFFERS_COLLECTION),
+            where('userId', '==', auth.currentUser.uid),
+            where('status', '==', 'pending')
+        );
+        const offersSnap = await getDocs(offersQuery);
+        const offers = offersSnap.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+
+        if (offers.length === 0) {
+            alert('Já não tens presentes pendentes.');
+            hideAlfredoGiftPopup();
+            return;
+        }
+
+        const offer = offers[0];
+        const roundNumber = Number(offer.ronda || 0);
+        const defaultCardsCount = (roundNumber === 4 || roundNumber === 5) ? 6 : 1;
+        const cardsCount = Number.isInteger(offer.cardsCount) ? offer.cardsCount : defaultCardsCount;
+
+        const eligiblePlayers = await fetchEligiblePlayersForRankings();
+        const drawnPlayers = drawPackPlayers(eligiblePlayers, offer.packType || 'normal', cardsCount);
+
+        await runTransaction(db, async (transaction) => {
+            const offerRef = doc(db, CADERNETA_GIFT_OFFERS_COLLECTION, offer.id);
+            const offerSnap = await transaction.get(offerRef);
+
+            if (!offerSnap.exists() || offerSnap.data().status !== 'pending') {
+                throw new Error('Esta oferta já não se encontra disponível.');
+            }
+
+            transaction.update(offerRef, {
+                status: 'claimed',
+                claimedAt: serverTimestamp(),
+                claimedFrom: 'rankings'
+            });
+
+            const seasonToSave = offer.temporadaKey || (await getLatestSeason(db));
+            drawnPlayers.forEach((draw) => {
+                const stickerRef = doc(collection(db, 'caderneta'));
+                transaction.set(stickerRef, createStickerPayload(draw, auth.currentUser.uid, serverTimestamp(), seasonToSave));
+            });
+
+            const movimentoRef = doc(collection(db, 'movimentos'));
+            transaction.set(movimentoRef, {
+                descricao: cardsCount === 1 ? 'Cromo Oferecido' : 'Saqueta Oferecida',
+                para: auth.currentUser.uid,
+                de: offer.sourceName || 'Sr Alfredo',
+                estado: 'CadernetaOffer',
+                movimentoData: serverTimestamp(),
+                taxa: null,
+                temporada: offer.temporadaKey || '',
+                userId: auth.currentUser.uid,
+                tipo: 'Caderneta',
+                valorreal: 0
+            });
+        });
+
+        void logUserAction(`Resgatou cromo/saqueta do Sr Alfredo na pagina de rankings`);
+
+        pendingGiftOfferCount = Math.max(0, pendingGiftOfferCount - 1);
+
+        renderInPopupRevealScreen(drawnPlayers);
+
+    } catch (error) {
+        console.error('Erro ao resgatar oferta nos rankings:', error);
+        alert('Ocorreu um erro ao resgatar a oferta: ' + (error.message || error));
+        openAlfredoPackButton.disabled = false;
+        openAlfredoPackButton.innerHTML = 'Resgatar presente 🎉';
+    }
+}
+
 openAlfredoPackButton?.addEventListener('click', () => {
-    window.location.href = `caderneta.html?${CADERNETA_GIFT_REDIRECT_PARAM}=1`;
+    claimAndRevealOfferInRankings();
 });
 
 // --- Consolidated Authentication and Initialization Logic ---

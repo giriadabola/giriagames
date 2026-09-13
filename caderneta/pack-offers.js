@@ -19,8 +19,8 @@ export function buildCadernetaGiftOfferId({ seasonKey, round, userId }) {
 
 export function buildAlfredoGiftMessage(count) {
     if (count === 1) {
-        return 'O Sr Alfredo ofereceu-te uma saqueta';
+        return 'O Sr Alfredo ofereceu-te 1 cromo grátis!';
     }
 
-    return `O Sr Alfredo ofereceu-te ${count} saquetas`;
+    return `O Sr Alfredo ofereceu-te ${count} cromos grátis!`;
 }

@@ -196,21 +196,30 @@ onAuthStateChanged(auth, async (user) => {
         currentUser = user;
         try {
             showLoader();
-            await loadSeasonAndUserGcoins();
-            await applyMenuVisibilitySettings();
-            await loadCadernetaPackPricing();
-            await loadUserSeasonPredictionCount();
-            await loadDatabaseData();
+            await Promise.all([
+                loadSeasonAndUserGcoins(),
+                applyMenuVisibilitySettings(),
+                loadCadernetaPackPricing()
+            ]);
+            await Promise.all([
+                loadUserSeasonPredictionCount(),
+                loadDatabaseData()
+            ]);
             checkUrlParametersForDirectNavigation();
             setupEventListeners();
             updateShopAvailability();
             updateNavigation();
+
+            if (shouldOpenGiftPacksFromRankings()) {
+                await maybeProcessGiftPackOffersFromRankings();
+            }
+
             hideLoader();
-            await logUserAction(`Entrou em ${document.title}`);
-            await maybeProcessGiftPackOffersFromRankings();
+            void logUserAction(`Entrou em ${document.title}`);
         } catch (error) {
             console.error("Erro durante a inicialização:", error);
             alert("Erro ao carregar a caderneta. Por favor, recarregue a página.");
+            hideLoader();
         }
     } else {
         window.location.href = "index.html";
@@ -289,14 +298,17 @@ async function fetchPendingGiftPackOffers() {
 }
 
 async function claimGiftPackOffer(offer) {
-    const drawnPlayers = drawPackPlayers(eligiblePlayers, offer.packType || CADERNETA_FREE_PACK_TYPE);
+    const roundNumber = Number(offer.ronda || 0);
+    const defaultCardsCount = (roundNumber === 4 || roundNumber === 5) ? 6 : 1;
+    const cardsCount = Number.isInteger(offer.cardsCount) ? offer.cardsCount : defaultCardsCount;
+    const drawnPlayers = drawPackPlayers(eligiblePlayers, offer.packType || CADERNETA_FREE_PACK_TYPE, cardsCount);
 
     await runTransaction(db, async (transaction) => {
         const offerRef = doc(db, CADERNETA_GIFT_OFFERS_COLLECTION, offer.id);
         const offerSnap = await transaction.get(offerRef);
 
         if (!offerSnap.exists()) {
-            throw new Error('A oferta da saqueta ja nao existe.');
+            throw new Error('A oferta do cromo ja nao existe.');
         }
 
         const offerData = offerSnap.data();
@@ -322,7 +334,7 @@ async function claimGiftPackOffer(offer) {
 
         const movimentoRef = doc(collection(db, 'movimentos'));
         transaction.set(movimentoRef, {
-            descricao: 'Saqueta Oferecida',
+            descricao: cardsCount === 1 ? 'Cromo Oferecido' : 'Saqueta Oferecida',
             para: currentUser.uid,
             de: offerData.sourceName || null,
             estado: 'CadernetaOffer',
@@ -359,7 +371,6 @@ async function maybeProcessGiftPackOffersFromRankings() {
     }
 
     isProcessingGiftQueue = true;
-    showLoader();
 
     try {
         pendingGiftRevealQueue = [];
@@ -372,15 +383,17 @@ async function maybeProcessGiftPackOffersFromRankings() {
             });
         }
 
-        await loadDatabaseData();
+        // Quickly refresh user's stickers list without re-fetching all players, clubs, & countries
+        const qStickers = query(collection(db, 'caderneta'), where('userId', '==', currentUser.uid));
+        const stickersSnap = await getDocs(qStickers);
+        userStickers = stickersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
         playNextGiftReveal();
     } catch (error) {
         console.error('Erro ao processar saquetas oferecidas:', error);
         alert('Nao foi possivel abrir as saquetas oferecidas. Tente novamente.');
         isProcessingGiftQueue = false;
         pendingGiftRevealQueue = [];
-    } finally {
-        hideLoader();
     }
 }
 
@@ -2274,10 +2287,12 @@ function setupRevealScreen(packType, draws) {
                 wrapper.classList.add('revealed');
                 triggerRevealCardEffect(wrapper, draw.rarity);
                 revealedCount++;
-                if (revealedCount === 6) {
+                if (revealedCount === draws.length) {
                     btnFinishReveal.classList.remove('hidden');
                     if (revealSubtitle) {
-                        revealSubtitle.textContent = 'Todos revelados. Guarda agora os cromos no teu inventario.';
+                        revealSubtitle.textContent = draws.length === 1
+                            ? 'Cromo revelado! Guarda agora o cromo no teu inventario.'
+                            : 'Todos revelados. Guarda agora os cromos no teu inventario.';
                     }
                 }
             }
