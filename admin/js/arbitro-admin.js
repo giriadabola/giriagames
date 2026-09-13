@@ -504,7 +504,6 @@ async function unifiedLaunchHandler() {
                 .map((predictionDoc) => predictionDoc.data())
                 .find((prediction) => isSameSeason(prediction.temporada, temporada));
             if (seasonPrediction) {
-                await recalculateUserTotals(Array.from(allAffectedUserIds), temporada);
                 await grantSeasonStarterCadernetaPacks({
                     round: ronda,
                     seasonLabel: temporada
@@ -525,6 +524,24 @@ async function unifiedLaunchHandler() {
         launchButton.classList.remove('button--loading');
         launchButton.innerHTML = 'Lançar';
     }
+}
+
+async function getEligibleUsersForSeason(seasonLabel) {
+    const usersCollection = collection(db, 'users');
+    const usersSnapshot = await getDocs(usersCollection);
+    const eligibleUsers = [];
+
+    usersSnapshot.forEach((userDoc) => {
+        const userData = mergeUserSeasonData(userDoc.data(), seasonLabel);
+        if (userData.aceite === "Yes" && userData.estatuto && userData.natabela === "Yes") {
+            eligibleUsers.push({
+                id: userDoc.id,
+                ...userData
+            });
+        }
+    });
+
+    return eligibleUsers;
 }
 
 async function grantSeasonStarterCadernetaPacks({ round, seasonLabel }) {
