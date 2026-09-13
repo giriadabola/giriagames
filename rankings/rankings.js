@@ -479,6 +479,7 @@ function renderDrawnCardsInRevealPopup(drawnPlayers) {
                             : 'Todos os cromos guardados no teu inventário!';
                     }
                     if (goToCadernetaButton) {
+                        goToCadernetaButton.textContent = 'Ver Caderneta 📖';
                         goToCadernetaButton.style.display = 'inline-block';
                     }
                 }
