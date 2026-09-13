@@ -819,7 +819,7 @@ async function recalculateUserTotals(userIds, temporada) {
         seasonUpdate.Pontos = totalPontos;
         
         if (Object.keys(seasonUpdate).length > 0) {
-            await updateDoc(userRef, { [temporada]: seasonUpdate });
+            await setDoc(userRef, { [temporada]: seasonUpdate }, { merge: true });
             console.log(`Utilizador ${userId} atualizado: Pontos=${totalPontos}, GCoins=${totalGCoins}`);
         }
     }

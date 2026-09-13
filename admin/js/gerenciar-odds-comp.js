@@ -118,12 +118,27 @@ function renderCompetitionHeading(competition) {
     </div>`;
 }
 
-function renderSwitch(odd, competition) {
+function renderSwitch(odd, competition, parent = null) {
     const checked = Array.isArray(odd.competicoes) && odd.competicoes.includes(competition.nome);
-    const label = `${checked ? 'Desativar' : 'Ativar'} ${getOddName(odd)} em ${competition.nome}`;
+    let isBlocked = false;
 
-    return `<label class="matrix-switch" title="${escapeHtml(label)}">
-        <input type="checkbox" class="association-toggle" data-odd-id="${escapeHtml(odd.id)}" data-competition-name="${escapeHtml(competition.nome)}" ${checked ? 'checked' : ''}>
+    if (parent) {
+        const isParentActiveInComp = Array.isArray(parent.competicoes) && parent.competicoes.includes(competition.nome);
+        if (!isParentActiveInComp) {
+            isBlocked = true;
+        }
+    }
+
+    let label = `${checked ? 'Desativar' : 'Ativar'} ${getOddName(odd)} em ${competition.nome}`;
+    if (isBlocked) {
+        label = `Impedido: A Odd Pai (${getOddName(parent)}) não está ativa em ${competition.nome}`;
+    }
+
+    const switchClass = isBlocked ? 'matrix-switch matrix-switch-blocked' : 'matrix-switch';
+    const disabledAttr = isBlocked ? 'disabled' : '';
+
+    return `<label class="${switchClass}" title="${escapeHtml(label)}">
+        <input type="checkbox" class="association-toggle" data-odd-id="${escapeHtml(odd.id)}" data-competition-name="${escapeHtml(competition.nome)}" ${checked ? 'checked' : ''} ${disabledAttr}>
         <span class="matrix-slider"></span>
     </label>`;
 }
@@ -150,8 +165,18 @@ function renderCompetitionRows(groups, competitions) {
     return groups.map(({ parent, children }) => {
         const parentRow = `<tr class="odd-parent">${competitions.map((competition) => `<td class="odd-cell">${renderSwitch(parent, competition)}</td>`).join('')}</tr>`;
         const childRows = children.map(({ odd, children: nested = [] }) => {
-            const row = `<tr class="odd-row">${competitions.map((competition) => `<td class="odd-cell">${renderSwitch(odd, competition)}</td>`).join('')}</tr>`;
-            const nestedRows = nested.map(({ odd: nestedOdd }) => `<tr class="odd-row">${competitions.map((competition) => `<td class="odd-cell">${renderSwitch(nestedOdd, competition)}</td>`).join('')}</tr>`).join('');
+            const row = `<tr class="odd-row">${competitions.map((competition) => {
+                const isParentActive = Array.isArray(parent.competicoes) && parent.competicoes.includes(competition.nome);
+                const cellClass = !isParentActive ? 'odd-cell cell-blocked' : 'odd-cell';
+                return `<td class="${cellClass}">${renderSwitch(odd, competition, parent)}</td>`;
+            }).join('')}</tr>`;
+            const nestedRows = nested.map(({ odd: nestedOdd }) => {
+                return `<tr class="odd-row">${competitions.map((competition) => {
+                    const isParentActive = Array.isArray(parent.competicoes) && parent.competicoes.includes(competition.nome);
+                    const cellClass = !isParentActive ? 'odd-cell cell-blocked' : 'odd-cell';
+                    return `<td class="${cellClass}">${renderSwitch(nestedOdd, competition, parent)}</td>`;
+                }).join('')}</tr>`;
+            }).join('');
             return row + nestedRows;
         }).join('');
         return parentRow + childRows;
@@ -251,12 +276,7 @@ async function handleAssociationChange(event) {
                 : currentCompetitions.filter((name) => name !== competitionName);
         });
 
-        affectedToggles.forEach((el) => {
-            const item = state.odds.find((o) => o.id === el.dataset.oddId);
-            if (item && el.parentElement) {
-                el.parentElement.title = `${shouldAssociate ? 'Desativar' : 'Ativar'} ${getOddName(item)} em ${competitionName}`;
-            }
-        });
+        renderMatrix();
     } catch (error) {
         console.error('Erro ao atualizar a associação das odds:', error);
         affectedToggles.forEach((el) => {
