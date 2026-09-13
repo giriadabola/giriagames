@@ -22,6 +22,7 @@ let userMiniGcoins = 0;
 let currentUserStatus = "";
 let userSeasonPredictedGames = 0;
 const REQUIRED_PREDICTED_GAMES_FOR_SHOP = 30;
+const DEFAULT_FACE_IMAGE = 'https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhTl6Ljabwgx-VXdZz8FcAoygQprujSsCoXc32Y_iU0FjYVPu1B6MffWwp8gcCVuV8TWn39FRk9OIe1nc-esubVJYmdLsTptAoR9GyqNuw4R5MBaeaoWXTc3JaqH2YVNtEmfReQqohvQKvHiI0XwE5na2ty2B9Bt4oELxYv2BaZ7R3UmeylpiVEiIbiLnCB/s320/soccer-ball-png.webp';
 let cadernetaPackPricing = {};
 let pendingGiftRevealQueue = [];
 let isProcessingGiftQueue = false;
@@ -1813,7 +1814,7 @@ function getStickerMeta(player) {
     return {
         club,
         country,
-        faceImage: player.imagem || 'https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhTl6Ljabwgx-VXdZz8FcAoygQprujSsCoXc32Y_iU0FjYVPu1B6MffWwp8gcCVuV8TWn39FRk9OIe1nc-esubVJYmdLsTptAoR9GyqNuw4R5MBaeaoWXTc3JaqH2YVNtEmfReQqohvQKvHiI0XwE5na2ty2B9Bt4oELxYv2BaZ7R3UmeylpiVEiIbiLnCB/s320/soccer-ball-png.webp',
+        faceImage: player.imagem || DEFAULT_FACE_IMAGE,
         flagImage: getFlagImageUrl(countryIso) || country?.imagem || '',
         countryName: country?.nome || '',
         clubName: player.clube || club?.nome || '',
@@ -1967,7 +1968,7 @@ function createStickerCardMarkup(player, casta, variant = 'inventory') {
         <div class="cromo-card ${cardClass} ${variantClass}">
             ${rarityBadgeMarkup}
             <div class="cromo-photo-stage">
-                <img src="${meta.faceImage}" alt="${player.nome}" class="cromo-photo-image">
+                <img src="${meta.faceImage}" alt="${player.nome}" class="cromo-photo-image" onerror="this.onerror=null; this.src='${DEFAULT_FACE_IMAGE}';">
                 <div class="cromo-photo-stripes"></div>
                 <div class="cromo-photo-overlay"></div>
             </div>
