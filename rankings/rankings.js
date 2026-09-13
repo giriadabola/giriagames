@@ -442,7 +442,7 @@ function renderDrawnCardsInRevealPopup(drawnPlayers) {
                         <div class="cromo-card ${cardClass} cromo-card--inventory cromo-card--showcase">
                             <span class="cromo-rarity-badge ${cardClass}">${draw.rarity}</span>
                             <div class="cromo-photo-stage">
-                                <img src="${faceImage}" alt="${player.nome}" class="cromo-photo-image" onerror="this.onerror=null; this.src='${DEFAULT_FACE_IMAGE}';">
+                                <img src="${faceImage}" alt="${player.nome}" class="cromo-photo-image" onerror="if (this.src.includes('.webp')) { this.src = this.src.replace(/\.webp$/i, '.png'); } else { this.onerror = null; this.src = '${DEFAULT_FACE_IMAGE}'; }">
                                 <div class="cromo-photo-stripes"></div>
                                 <div class="cromo-photo-overlay"></div>
                             </div>
@@ -1236,16 +1236,12 @@ window.addEventListener('click', (event) => {
     }
 });
 
-const closeAlfredoPackPopupButton = document.getElementById('close-alfredo-pack-popup');
-closeAlfredoPackPopupButton?.addEventListener('click', hideAlfredoGiftPopup);
-openAlfredoPackButton?.addEventListener('click', async () => {
-    hideAlfredoGiftPopup();
-    await logUserAction(`Seguiu para a caderneta para abrir ${pendingGiftOfferCount} saqueta(s) do Sr Alfredo`);
-    window.location.href = `caderneta.html?${CADERNETA_GIFT_REDIRECT_PARAM}=1`;
-});
 window.addEventListener('click', (event) => {
     if (event.target == alfredoPackPopup) {
         hideAlfredoGiftPopup();
+    }
+    if (event.target == alfredoRevealPopup) {
+        hideAlfredoRevealPopup();
     }
 });
 

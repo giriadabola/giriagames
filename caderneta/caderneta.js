@@ -1981,7 +1981,7 @@ function createStickerCardMarkup(player, casta, variant = 'inventory') {
         <div class="cromo-card ${cardClass} ${variantClass}">
             ${rarityBadgeMarkup}
             <div class="cromo-photo-stage">
-                <img src="${meta.faceImage}" alt="${player.nome}" class="cromo-photo-image" onerror="this.onerror=null; this.src='${DEFAULT_FACE_IMAGE}';">
+                <img src="${meta.faceImage}" alt="${player.nome}" class="cromo-photo-image" onerror="if (this.src.includes('.webp')) { this.src = this.src.replace(/\.webp$/i, '.png'); } else { this.onerror = null; this.src = '${DEFAULT_FACE_IMAGE}'; }">
                 <div class="cromo-photo-stripes"></div>
                 <div class="cromo-photo-overlay"></div>
             </div>
