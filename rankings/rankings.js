@@ -310,6 +310,14 @@ function hideAlfredoGiftPopup() {
     }
 }
 
+document.getElementById('close-alfredo-pack-popup')?.addEventListener('click', () => {
+    hideAlfredoGiftPopup();
+});
+
+openAlfredoPackButton?.addEventListener('click', () => {
+    window.location.href = `caderneta.html?${CADERNETA_GIFT_REDIRECT_PARAM}=1`;
+});
+
 // --- Consolidated Authentication and Initialization Logic ---
 onAuthStateChanged(auth, async (user) => {
     if (user) {
