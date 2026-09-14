@@ -172,9 +172,11 @@ async function getEligibleUsersForSeason(seasonLabel = null) {
     const targetSeason = seasonLabel || await getLatestSeason(db);
     const usersSnapshot = await getDocs(collection(db, 'users'));
     return usersSnapshot.docs
-        .map((userDoc) => ({ id: userDoc.id, data: mergeUserSeasonData(userDoc.data(), targetSeason) }))
-        .filter(({ data }) => data.aceite === 'Yes' && data.natabela === 'Yes')
-        .map(({ id, data }) => ({ id, nometabela: data.nometabela }));
+        .map((userDoc) => {
+            const userData = mergeUserSeasonData(userDoc.data(), targetSeason);
+            return { id: userDoc.id, ...userData };
+        })
+        .filter((user) => user.aceite === 'Yes' && user.natabela === 'Yes');
 }
 
 async function loadPredictions() {
@@ -526,24 +528,6 @@ async function unifiedLaunchHandler() {
     }
 }
 
-async function getEligibleUsersForSeason(seasonLabel) {
-    const usersCollection = collection(db, 'users');
-    const usersSnapshot = await getDocs(usersCollection);
-    const eligibleUsers = [];
-
-    usersSnapshot.forEach((userDoc) => {
-        const userData = mergeUserSeasonData(userDoc.data(), seasonLabel);
-        if (userData.aceite === "Yes" && userData.estatuto && userData.natabela === "Yes") {
-            eligibleUsers.push({
-                id: userDoc.id,
-                ...userData
-            });
-        }
-    });
-
-    return eligibleUsers;
-}
-
 async function grantSeasonStarterCadernetaPacks({ round, seasonLabel }) {
     if (!isEligibleFreePackRound(round) || !seasonLabel) {
         return 0;
@@ -850,6 +834,7 @@ async function fetchTotalEligibleVoters() {
     try {
         qualifiedGPlayers = await getEligibleUsersForSeason();
         qualifiedGPlayers.sort((a, b) => a.nometabela.localeCompare(b.nometabela));
+        totalEligibleVoters = qualifiedGPlayers.length;
     } catch (error) {
         console.error("Erro ao obter a contagem total de votantes:", error);
         totalEligibleVoters = 0; 
