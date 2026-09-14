@@ -825,6 +825,24 @@
                 const seasonData = getSeasonData(uSnap.data(), currentSeasonLabel);
                 const newBal = (seasonData.GCoins || 0) + amt;
                 batch.update(uRef, { [currentSeasonLabel]: { ...seasonData, GCoins: newBal } });
+                batch.set(doc(db, "paineis", "Banca"), { valor: movimentosSum - amt }, { merge: true });
+                await batch.commit();
+                movimentosSum -= amt; updateCalculatedTotal(); loanPopup.style.display = 'none';
+            } catch (e) { console.error(e); loanFeedback.textContent = 'Erro.'; }
+        }
+
+        async function handleTaxaSubmit(e) {
+            e.preventDefault(); const r = parseFloat(taxaInput.value); const f = parseFloat(taxaBancaInput.value);
+            if (isNaN(r) || r <= 0 || isNaN(f) || f < 0) return;
+            taxaFeedback.textContent = 'A guardar...';
+            try {
+                await setDoc(doc(db, "paineis", "Banca"), { taxaWhoWins: r, taxaBanca: f }, { merge: true });
+                taxaFeedback.textContent = 'Guardado!'; setTimeout(() => taxaPopup.style.display = 'none', 1000);
+            } catch (e) { taxaFeedback.textContent = 'Erro.'; }
+        }
+
+        async function initializePage() {
+            try {
                 currentSeason = await fetchCurrentSeason();
                 movimentosSum = await calculateMovimentosSum(currentSeason);
                 updateCalculatedTotal(); 
