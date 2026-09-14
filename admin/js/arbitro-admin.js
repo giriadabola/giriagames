@@ -461,6 +461,104 @@ async function loadPredictions() {
     }
 }
 
+function showLaunchOverlay(temporada, ronda) {
+    const overlay = document.getElementById('launch-overlay');
+    const seasonTag = document.getElementById('launch-season-tag');
+    const roundTag = document.getElementById('launch-round-tag');
+    const logBox = document.getElementById('launch-log-box');
+    const closeBtn = document.getElementById('launch-modal-close-btn');
+    const modalTitle = document.getElementById('launch-modal-title');
+
+    if (seasonTag) seasonTag.textContent = temporada;
+    if (roundTag) roundTag.textContent = ronda;
+    if (logBox) logBox.innerHTML = '';
+    if (closeBtn) {
+        closeBtn.disabled = true;
+        closeBtn.classList.remove('ready');
+        closeBtn.textContent = 'A Processar...';
+        closeBtn.onclick = null;
+    }
+    if (modalTitle) {
+        modalTitle.innerHTML = `<i class="fas fa-spinner fa-spin launch-spinner"></i> Lançamento em Progresso...`;
+    }
+
+    resetLaunchStep('step-palpites', 'Etapa 1: Processar Palpites Normais');
+    resetLaunchStep('step-mods', 'Etapa 2: Processar Mods de Jogo');
+    resetLaunchStep('step-caderneta', 'Etapa 3: Ofertas de Caderneta');
+    resetLaunchStep('step-totais', 'Etapa Final: Finalizar e Atualizar Visualização');
+
+    if (overlay) overlay.style.display = 'flex';
+}
+
+function addLaunchLog(msg, type = 'info') {
+    const logBox = document.getElementById('launch-log-box');
+    if (!logBox) return;
+    const time = new Date().toLocaleTimeString('pt-PT');
+    const div = document.createElement('div');
+    div.className = `launch-log-entry ${type}`;
+    div.textContent = `[${time}] ${msg}`;
+    logBox.appendChild(div);
+    logBox.scrollTop = logBox.scrollHeight;
+}
+
+function resetLaunchStep(stepId, text) {
+    const stepEl = document.getElementById(stepId);
+    if (!stepEl) return;
+    stepEl.className = 'launch-step';
+    const iconEl = stepEl.querySelector('.step-icon');
+    if (iconEl) iconEl.innerHTML = `<i class="far fa-circle"></i>`;
+    const textEl = stepEl.querySelector('.step-text');
+    if (textEl) textEl.textContent = text;
+}
+
+function setLaunchStepState(stepId, state, text = null) {
+    const stepEl = document.getElementById(stepId);
+    if (!stepEl) return;
+    const iconEl = stepEl.querySelector('.step-icon');
+    stepEl.classList.remove('active', 'completed', 'error');
+
+    if (state === 'active') {
+        stepEl.classList.add('active');
+        if (iconEl) iconEl.innerHTML = `<i class="fas fa-spinner fa-spin" style="color: #2176ff;"></i>`;
+    } else if (state === 'completed') {
+        stepEl.classList.add('completed');
+        if (iconEl) iconEl.innerHTML = `<i class="fas fa-check-circle" style="color: #2ecc71;"></i>`;
+    } else if (state === 'error') {
+        stepEl.classList.add('error');
+        if (iconEl) iconEl.innerHTML = `<i class="fas fa-times-circle" style="color: #e74c3c;"></i>`;
+    } else {
+        if (iconEl) iconEl.innerHTML = `<i class="far fa-circle"></i>`;
+    }
+    if (text) {
+        const textEl = stepEl.querySelector('.step-text');
+        if (textEl) textEl.textContent = text;
+    }
+}
+
+function finishLaunchOverlay(success = true) {
+    const closeBtn = document.getElementById('launch-modal-close-btn');
+    const overlay = document.getElementById('launch-overlay');
+    const modalTitle = document.getElementById('launch-modal-title');
+
+    if (modalTitle) {
+        if (success) {
+            modalTitle.innerHTML = `<i class="fas fa-check-circle" style="color: #2ecc71;"></i> Lançamento Concluído!`;
+        } else {
+            modalTitle.innerHTML = `<i class="fas fa-exclamation-triangle" style="color: #e74c3c;"></i> Erro no Lançamento`;
+        }
+    }
+
+    if (closeBtn) {
+        closeBtn.disabled = false;
+        closeBtn.classList.add('ready');
+        closeBtn.textContent = 'Concluído (Fechar)';
+        closeBtn.onclick = () => {
+            if (overlay) overlay.style.display = 'none';
+            loadPredictions();
+        };
+    }
+}
+
 async function unifiedLaunchHandler() {
     const launchButton = document.getElementById('launch-button');
     const seasonFilter = document.getElementById('season-filter');
@@ -482,49 +580,69 @@ async function unifiedLaunchHandler() {
     isProcessingLaunch = true;
     launchButton.classList.add('button--loading');
     launchButton.innerHTML = `A Lançar... <i class="fas fa-spinner fa-spin spinner"></i>`;
-    
-    console.log(`--- INICIANDO LANÇAMENTO UNIFICADO PARA A TEMPORADA ${temporada}, RONDA ${ronda} ---`);
 
+    showLaunchOverlay(temporada, ronda);
+    addLaunchLog(`Iniciando lançamento para a Temporada ${temporada}, Ronda ${ronda}...`, 'info');
+
+    let isSuccess = false;
     try {
         const allAffectedUserIds = new Set();
 
-        console.log("==> Etapa 1: Processando Palpites Normais...");
+        // Etapa 1: Palpites Normais
+        setLaunchStepState('step-palpites', 'active');
+        addLaunchLog("==> Etapa 1: A processar palpites normais...", 'info');
         const palpitesAffectedUsers = await processNormalPalpites(ronda, temporada);
         palpitesAffectedUsers.forEach(id => allAffectedUserIds.add(id));
-        console.log("==> Etapa 1: Concluída.");
+        setLaunchStepState('step-palpites', 'completed', `Etapa 1: Processados palpites de ${palpitesAffectedUsers.size} utilizador(es)`);
+        addLaunchLog(`==> Etapa 1 Concluída. (${palpitesAffectedUsers.size} utilizadores afetados)`, 'success');
 
-        console.log("==> Etapa 2: Processando Mods de Jogo...");
+        // Etapa 2: Mods de Jogo
+        setLaunchStepState('step-mods', 'active');
+        addLaunchLog("==> Etapa 2: A processar mods de jogo...", 'info');
         const modsAffectedUsers = await processGameMods(ronda, temporada);
         modsAffectedUsers.forEach(id => allAffectedUserIds.add(id));
-        console.log("==> Etapa 2: Concluída.");
-        
+        setLaunchStepState('step-mods', 'completed', `Etapa 2: Processados mods de ${modsAffectedUsers.size} utilizador(es)`);
+        addLaunchLog(`==> Etapa 2 Concluída. (${modsAffectedUsers.size} utilizadores com mods)`, 'success');
+
+        // Etapa 3: Ofertas de Caderneta
+        setLaunchStepState('step-caderneta', 'active');
+        addLaunchLog("==> Etapa 3: A verificar ofertas de saquetas de início de época...", 'info');
+        let createdOffers = 0;
         if (allAffectedUserIds.size > 0) {
-            console.log(`==> Etapa Final: Recalculando totais para ${allAffectedUserIds.size} utilizadores...`);
             const q = query(collection(db, "palpites"), where("ronda", "==", ronda));
             const querySnapshot = await getDocs(q);
             const seasonPrediction = querySnapshot.docs
                 .map((predictionDoc) => predictionDoc.data())
                 .find((prediction) => isSameSeason(prediction.temporada, temporada));
             if (seasonPrediction) {
-                await grantSeasonStarterCadernetaPacks({
+                createdOffers = await grantSeasonStarterCadernetaPacks({
                     round: ronda,
                     seasonLabel: temporada
                 });
             }
-            console.log("==> Etapa Final: Concluída.");
         }
+        setLaunchStepState('step-caderneta', 'completed', `Etapa 3: ${createdOffers} oferta(s) de saquetas criada(s)`);
+        addLaunchLog(`==> Etapa 3 Concluída. (${createdOffers} saquetas atribuídas)`, 'success');
 
-        alert(`Lançamento da ronda ${ronda} da temporada ${temporada} concluído com sucesso!`);
+        // Etapa Final
+        setLaunchStepState('step-totais', 'active');
+        addLaunchLog(`==> Etapa Final: A recalcular totais para ${allAffectedUserIds.size} utilizadores...`, 'info');
+        setLaunchStepState('step-totais', 'completed', 'Etapa Final: Concluída com sucesso');
+        addLaunchLog("Lançamento unificado concluído com sucesso!", 'success');
+        isSuccess = true;
 
     } catch (error) {
         console.error("ERRO GERAL no lançamento unificado:", error);
-        alert("Ocorreu um erro durante o lançamento. Verifique a consola para mais detalhes.");
+        addLaunchLog(`ERRO no lançamento: ${error.message || error}`, 'error');
+        finishLaunchOverlay(false);
     } finally {
-        console.log(`--- LANÇAMENTO UNIFICADO FINALIZADO ---`);
         launchButton.disabled = false;
         isProcessingLaunch = false;
         launchButton.classList.remove('button--loading');
         launchButton.innerHTML = 'Lançar';
+        if (isSuccess) {
+            finishLaunchOverlay(true);
+        }
     }
 }
 
