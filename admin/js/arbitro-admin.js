@@ -627,6 +627,9 @@ async function unifiedLaunchHandler() {
         // Etapa Final
         setLaunchStepState('step-totais', 'active');
         addLaunchLog(`==> Etapa Final: A recalcular totais para ${allAffectedUserIds.size} utilizadores...`, 'info');
+        if (allAffectedUserIds.size > 0) {
+            await recalculateUserTotals(allAffectedUserIds, temporada);
+        }
         setLaunchStepState('step-totais', 'completed', 'Etapa Final: Concluída com sucesso');
         addLaunchLog("Lançamento unificado concluído com sucesso!", 'success');
         isSuccess = true;
@@ -1246,5 +1249,5 @@ if (autoFillButton) {
     console.error("Botão de auto-preenchimento (foguetão) não encontrado!");
 }
 
-loadPredictions();
-fetchTotalEligibleVoters();
+loadPredictions().catch((err) => console.error("Erro ao carregar palpites iniciais:", err));
+fetchTotalEligibleVoters().catch((err) => console.error("Erro ao obter total de votantes:", err));
