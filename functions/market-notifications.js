@@ -2,7 +2,7 @@ const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 const webpush = require("web-push");
-const { isDueDuringScheduledDay } = require("./notification-schedule");
+const { isDueWithinRetryWindow } = require("./notification-schedule");
 
 const VAPID_PUBLIC_KEY = "BNQqYP8I9537wDNcLm5Bfzj1-dR7ynWXs064sLLbJ3T6RxaZqVbNvPXX-ryv7I6rgBYET5mZCuwxXpUn7Jsiv9I";
 const VAPID_PRIVATE_KEY = "6SGGrihGmcnwfF_Fipd_V5hNc2th1M8Ez0FFGd0E9YU";
@@ -31,7 +31,7 @@ const DEFAULT_CONFIG = {
   ],
 };
 const DISPATCH_WINDOW_MS = 15 * 60 * 1000;
-const WEEKLY_OFFSET_DISPATCH_WINDOW_MS = 2 * 60 * 60 * 1000;
+const WEEKLY_DISPATCH_WINDOW_MS = 15 * 60 * 1000;
 const MARKET_NOTIFICATION_FIELD = "notificacoesMercado";
 const ADMIN_ROLES = new Set(["ruler", "estafeta"]);
 
@@ -212,7 +212,8 @@ async function sendPayloadToUsers(userEntries, payload) {
   const results = await Promise.all(
     userEntries.map(async (userEntry) => {
       try {
-        return await sendPayloadToUser(userEntry, payload);
+        const result = await sendPayloadToUser(userEntry, payload);
+        return { ...result, userId: userEntry.id };
       } catch (error) {
         // Um utilizador com uma subscrição problemática não deve impedir o
         // envio para os restantes utilizadores.
@@ -220,15 +221,22 @@ async function sendPayloadToUsers(userEntries, payload) {
         return {
           delivered: 0,
           attempted: userEntry.settings.pushSubscriptions.length,
+          userId: userEntry.id,
         };
       }
     })
   );
 
-  return results.reduce((summary, result) => ({
-    delivered: summary.delivered + result.delivered,
-    attempted: summary.attempted + result.attempted,
-  }), { delivered: 0, attempted: 0 });
+  return results.reduce((summary, result) => {
+    summary.delivered += result.delivered;
+    summary.attempted += result.attempted;
+
+    if (result.delivered > 0) {
+      summary.deliveredUserIds.push(result.userId);
+    }
+
+    return summary;
+  }, { delivered: 0, attempted: 0, deliveredUserIds: [] });
 }
 
 async function dispatchForEvent(scheduleEntry, users, type, hoursBeforeOpen) {
@@ -470,15 +478,12 @@ function isWeeklyNotificationDue(now, weekday, timeString, lastWeekKey) {
 
   const currentWeekKey = getWeekKey(targetDate);
 
-  // Se a tentativa na hora exata falhar, continua a tentar durante o resto
-  // do mesmo dia. Assim, um atraso temporário do Scheduler não perde o aviso
-  // semanal nem obriga o administrador a alterar manualmente a hora.
-  return isDueDuringScheduledDay({
+  return isDueWithinRetryWindow({
     now,
     targetDate,
+    retryWindowMs: WEEKLY_DISPATCH_WINDOW_MS,
     lastOccurrenceKey: lastWeekKey,
     currentOccurrenceKey: currentWeekKey,
-    timeZone: NOTIFICATION_TIME_ZONE,
   });
 }
 
@@ -495,8 +500,31 @@ function isWeeklyOffsetNotificationDue(now, weekday, timeString, hoursBefore, la
   const currentWeekKey = getWeekKey(closingTarget || targetDate);
 
   return nowMs >= targetMs &&
-    nowMs <= targetMs + WEEKLY_OFFSET_DISPATCH_WINDOW_MS &&
+    nowMs <= targetMs + WEEKLY_DISPATCH_WINDOW_MS &&
     lastWeekKey !== currentWeekKey;
+}
+
+function getCompletedWeekKey(dispatchLog) {
+  if (!dispatchLog?.weekKey) {
+    return null;
+  }
+
+  // Um registo antigo não permite saber quem recebeu. Não o consideramos
+  // concluído para que a versão nova possa fazer uma tentativa controlada e
+  // passar a acompanhar cada utilizador separadamente.
+  if (!Array.isArray(dispatchLog.deliveredUserIds)) {
+    return null;
+  }
+
+  return dispatchLog.completed === true ? dispatchLog.weekKey : null;
+}
+
+function getDeliveredUserIds(dispatchLog, weekKey) {
+  if (dispatchLog?.weekKey !== weekKey || !Array.isArray(dispatchLog.deliveredUserIds)) {
+    return [];
+  }
+
+  return [...new Set(dispatchLog.deliveredUserIds.filter((userId) => typeof userId === "string"))];
 }
 
 function buildWeeklyPredictionPayload(type, weekday, timeString, closeWeekday, closeTimeString) {
@@ -611,26 +639,51 @@ exports.processMarketNotifications = onSchedule({
 
   const weeklyLog = config.weeklyDispatchLog || {};
   const dueWeeklyEvents = [];
+  const currentWeekKey = getWeekKey(now);
+  const predictionsOpenLog = weeklyLog.predictionsOpen || null;
 
   if (config.predictionsOpenEnabled &&
-    isWeeklyNotificationDue(now, config.predictionsOpenWeekday, config.predictionsOpenTime, weeklyLog.predictionsOpen?.weekKey || null)) {
+    isWeeklyNotificationDue(
+      now,
+      config.predictionsOpenWeekday,
+      config.predictionsOpenTime,
+      getCompletedWeekKey(predictionsOpenLog)
+    )) {
     dueWeeklyEvents.push({
       type: "predictionsOpen",
       weekday: config.predictionsOpenWeekday,
       timeString: config.predictionsOpenTime,
+      weekKey: currentWeekKey,
+      deliveredUserIds: getDeliveredUserIds(predictionsOpenLog, currentWeekKey),
     });
   }
 
+  const predictionsCloseLog = weeklyLog.predictionsClose || null;
+
   if (config.predictionsCloseEnabled &&
-    isWeeklyNotificationDue(now, config.predictionsCloseWeekday, config.predictionsCloseTime, weeklyLog.predictionsClose?.weekKey || null)) {
+    isWeeklyNotificationDue(
+      now,
+      config.predictionsCloseWeekday,
+      config.predictionsCloseTime,
+      getCompletedWeekKey(predictionsCloseLog)
+    )) {
     dueWeeklyEvents.push({
       type: "predictionsClose",
       weekday: config.predictionsCloseWeekday,
       timeString: config.predictionsCloseTime,
+      weekKey: currentWeekKey,
+      deliveredUserIds: getDeliveredUserIds(predictionsCloseLog, currentWeekKey),
     });
   }
 
   const predictionsClosingSchedule = getPredictionsClosingSchedule(config);
+  const predictionsClosingSoonLog = weeklyLog.predictionsClosingSoon || null;
+  const predictionsClosingTarget = getWeeklyTriggerDate(
+    now,
+    predictionsClosingSchedule.weekday,
+    predictionsClosingSchedule.timeString
+  );
+  const predictionsClosingWeekKey = getWeekKey(predictionsClosingTarget || now);
 
   if (config.predictionsClosingSoonEnabled &&
     isWeeklyOffsetNotificationDue(
@@ -638,21 +691,24 @@ exports.processMarketNotifications = onSchedule({
       predictionsClosingSchedule.weekday,
       predictionsClosingSchedule.timeString,
       config.predictionsClosingSoonHours,
-      weeklyLog.predictionsClosingSoon?.weekKey || null
+      getCompletedWeekKey(predictionsClosingSoonLog)
     )) {
     dueWeeklyEvents.push({
       type: "predictionsClosingSoon",
       weekday: predictionsClosingSchedule.weekday,
       timeString: predictionsClosingSchedule.timeString,
       hoursBefore: config.predictionsClosingSoonHours,
+      weekKey: predictionsClosingWeekKey,
+      deliveredUserIds: getDeliveredUserIds(predictionsClosingSoonLog, predictionsClosingWeekKey),
     });
   }
 
   config.weeklyPredictionWarnings.forEach((warning, index) => {
     const eventType = `weeklyPredictionWarning${index + 1}`;
-    const lastWeekKey = weeklyLog[eventType]?.weekKey || null;
+    const eventLog = weeklyLog[eventType] || null;
 
-    if (!warning.enabled || !isWeeklyNotificationDue(now, warning.weekday, warning.time, lastWeekKey)) {
+    if (!warning.enabled ||
+      !isWeeklyNotificationDue(now, warning.weekday, warning.time, getCompletedWeekKey(eventLog))) {
       return;
     }
 
@@ -661,6 +717,8 @@ exports.processMarketNotifications = onSchedule({
       warningIndex: index,
       weekday: warning.weekday,
       timeString: warning.time,
+      weekKey: currentWeekKey,
+      deliveredUserIds: getDeliveredUserIds(eventLog, currentWeekKey),
     });
   });
 
@@ -697,10 +755,16 @@ exports.processMarketNotifications = onSchedule({
   }
 
   for (const weeklyEvent of dueWeeklyEvents) {
-    const interestedUsers = getInterestedUsers(users, weeklyEvent.type);
+    const previouslyDelivered = new Set(weeklyEvent.deliveredUserIds || []);
+    const allInterestedUsers = getInterestedUsers(users, weeklyEvent.type);
+    const interestedUsers = allInterestedUsers.filter((userEntry) => !previouslyDelivered.has(userEntry.id));
+
+    if (allInterestedUsers.length === 0) {
+      console.warn(`[processMarketNotifications] ${weeklyEvent.type}: não existem dispositivos elegíveis.`);
+      continue;
+    }
 
     if (interestedUsers.length === 0) {
-      console.warn(`[processMarketNotifications] ${weeklyEvent.type}: não existem dispositivos elegíveis.`);
       continue;
     }
 
@@ -725,6 +789,11 @@ exports.processMarketNotifications = onSchedule({
       );
 
     const delivery = await sendPayloadToUsers(interestedUsers, payload);
+    const deliveredUserIds = [...new Set([
+      ...previouslyDelivered,
+      ...delivery.deliveredUserIds,
+    ])];
+    const completed = allInterestedUsers.every((userEntry) => deliveredUserIds.includes(userEntry.id));
 
     console.log(`[processMarketNotifications] ${weeklyEvent.type}: ${delivery.delivered}/${delivery.attempted} dispositivos entregues.`);
 
@@ -733,12 +802,20 @@ exports.processMarketNotifications = onSchedule({
       continue;
     }
 
+    const dispatchLog = {
+      weekKey: weeklyEvent.weekKey,
+      deliveredUserIds,
+      completed,
+      lastAttemptAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+
+    if (completed) {
+      dispatchLog.sentAt = admin.firestore.FieldValue.serverTimestamp();
+    }
+
     await configRef.set({
       weeklyDispatchLog: {
-        [weeklyEvent.type]: {
-          weekKey: getWeekKey(now),
-          sentAt: admin.firestore.FieldValue.serverTimestamp(),
-        },
+        [weeklyEvent.type]: dispatchLog,
       },
     }, { merge: true });
   }
