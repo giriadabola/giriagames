@@ -705,6 +705,7 @@ function updateAvatarPreview(url) {
 function updateAvatarFuseUI() {
   const saveBtn = document.getElementById('saveAvatarBtn');
   const removeBtn = document.getElementById('removeAvatarBtn');
+  const actions = document.getElementById('avatarActions');
   const grid = document.getElementById('presetAvatarsGrid');
   const tabPaneAvatar = document.getElementById('tabPaneAvatar');
 
@@ -724,6 +725,7 @@ function updateAvatarFuseUI() {
 
     if (saveBtn) saveBtn.disabled = true;
     if (removeBtn) removeBtn.disabled = true;
+    if (actions) actions.classList.add('is-hidden');
     if (grid) grid.style.pointerEvents = 'none';
   } else {
     if (warningEl) {
@@ -731,6 +733,7 @@ function updateAvatarFuseUI() {
     }
     if (saveBtn) saveBtn.disabled = false;
     if (removeBtn) removeBtn.disabled = false;
+    if (actions) actions.classList.remove('is-hidden');
     if (grid) grid.style.pointerEvents = 'auto';
   }
 }
