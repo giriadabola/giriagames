@@ -2,6 +2,7 @@ const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 const webpush = require("web-push");
+const { isDueDuringScheduledDay } = require("./notification-schedule");
 
 const VAPID_PUBLIC_KEY = "BNQqYP8I9537wDNcLm5Bfzj1-dR7ynWXs064sLLbJ3T6RxaZqVbNvPXX-ryv7I6rgBYET5mZCuwxXpUn7Jsiv9I";
 const VAPID_PRIVATE_KEY = "6SGGrihGmcnwfF_Fipd_V5hNc2th1M8Ez0FFGd0E9YU";
@@ -30,9 +31,7 @@ const DEFAULT_CONFIG = {
   ],
 };
 const DISPATCH_WINDOW_MS = 15 * 60 * 1000;
-const WEEKLY_DISPATCH_WINDOW_MS = 2 * 60 * 60 * 1000;
-// Um aviso semanal pode ser recuperado até duas horas depois do horário
-// configurado. Depois dessa janela, a ocorrência dessa semana é perdida.
+const WEEKLY_OFFSET_DISPATCH_WINDOW_MS = 2 * 60 * 60 * 1000;
 const MARKET_NOTIFICATION_FIELD = "notificacoesMercado";
 const ADMIN_ROLES = new Set(["ruler", "estafeta"]);
 
@@ -469,13 +468,18 @@ function isWeeklyNotificationDue(now, weekday, timeString, lastWeekKey) {
     return false;
   }
 
-  const nowMs = now.getTime();
-  const targetMs = targetDate.getTime();
   const currentWeekKey = getWeekKey(targetDate);
 
-  return nowMs >= targetMs &&
-    nowMs <= targetMs + WEEKLY_DISPATCH_WINDOW_MS &&
-    lastWeekKey !== currentWeekKey;
+  // Se a tentativa na hora exata falhar, continua a tentar durante o resto
+  // do mesmo dia. Assim, um atraso temporário do Scheduler não perde o aviso
+  // semanal nem obriga o administrador a alterar manualmente a hora.
+  return isDueDuringScheduledDay({
+    now,
+    targetDate,
+    lastOccurrenceKey: lastWeekKey,
+    currentOccurrenceKey: currentWeekKey,
+    timeZone: NOTIFICATION_TIME_ZONE,
+  });
 }
 
 function isWeeklyOffsetNotificationDue(now, weekday, timeString, hoursBefore, lastWeekKey) {
@@ -491,7 +495,7 @@ function isWeeklyOffsetNotificationDue(now, weekday, timeString, hoursBefore, la
   const currentWeekKey = getWeekKey(closingTarget || targetDate);
 
   return nowMs >= targetMs &&
-    nowMs <= targetMs + WEEKLY_DISPATCH_WINDOW_MS &&
+    nowMs <= targetMs + WEEKLY_OFFSET_DISPATCH_WINDOW_MS &&
     lastWeekKey !== currentWeekKey;
 }
 
