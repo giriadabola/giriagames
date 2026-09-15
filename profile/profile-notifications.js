@@ -723,16 +723,28 @@ function updateAvatarFuseUI() {
       warningEl.style.display = 'flex';
     }
 
-    if (saveBtn) saveBtn.disabled = true;
-    if (removeBtn) removeBtn.disabled = true;
+    if (saveBtn) {
+      saveBtn.disabled = true;
+      saveBtn.style.display = 'none';
+    }
+    if (removeBtn) {
+      removeBtn.disabled = true;
+      removeBtn.style.display = 'none';
+    }
     if (actions) actions.classList.add('is-hidden');
     if (grid) grid.style.pointerEvents = 'none';
   } else {
     if (warningEl) {
       warningEl.style.display = 'none';
     }
-    if (saveBtn) saveBtn.disabled = false;
-    if (removeBtn) removeBtn.disabled = false;
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.style.removeProperty('display');
+    }
+    if (removeBtn) {
+      removeBtn.disabled = false;
+      removeBtn.style.removeProperty('display');
+    }
     if (actions) actions.classList.remove('is-hidden');
     if (grid) grid.style.pointerEvents = 'auto';
   }
