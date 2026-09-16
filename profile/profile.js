@@ -3,6 +3,12 @@ import { signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
 import { doc, getDoc, collection, getDocs, query, orderBy, limit, where, updateDoc, addDoc, serverTimestamp, onSnapshot, writeBatch, increment } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 import { buildUserPredictionStats, renderUserStats } from "./profile-stats.js";
+import {
+    getUniquePredictionSeasons,
+    normalizeProfileSeason,
+    populateProfileSeasonSelect,
+    resolveInitialProfileSeason
+} from "./profile-season-filter.js";
 import { initProfileNotifications } from "./profile-notifications.js";
 import { compactSeason, getLatestSeason, getSeasonData, mergeUserSeasonData } from "../core/user-season.js";
 import { checkPageContentAccess } from "../js/page-content-guard.js";
@@ -45,8 +51,9 @@ const minigamesDisplay = document.querySelector('.minigames-display');
 const statsDisplay = document.getElementById('statsDisplay');
 const userStatsSection = document.getElementById('userStatsSection');
 const userStatsGrid = document.getElementById('userStatsGrid');
-const userStatsSeasonLabel = document.getElementById('userStatsSeasonLabel');
+const userStatsSeasonSelect = document.getElementById('userStatsSeasonSelect');
 const predictionsSection = document.getElementById('predictionsSection');
+const predictionsSeasonSelect = document.getElementById('predictionsSeasonSelect');
 const gcoinsChangePopup = document.getElementById('gcoinsChangePopup');
 const gcoinsChangeMessage = document.getElementById('gcoinsChangeMessage');
 const closeGcoinsChangePopupBtn = document.getElementById('closeGcoinsChangePopupBtn');
@@ -87,6 +94,9 @@ const group4Cats = ["Específicos por Equipa", "Jogadores"];
 
 let userPredictionsList = [];
 let clubsLogoMap = {};
+let userPredictionDocs = [];
+let activePredictionsGroup = 1;
+let selectedPredictionsSeason = '';
 
 function getGroupForPrediction(text) {
     if (!text) return null;
@@ -1003,12 +1013,26 @@ async function initUserPredictions(userId) {
         // Obter palpites do utilizador
         const palpiteQuery = query(collection(db, 'palpites'), where('userId', '==', userId));
         const querySnapshot = await getDocs(palpiteQuery);
-        const predictionDocs = querySnapshot.docs.map(docSnap => docSnap.data());
-        const predictionStats = buildUserPredictionStats(predictionDocs);
+        userPredictionDocs = querySnapshot.docs.map(docSnap => docSnap.data());
+        const predictionSeasons = getUniquePredictionSeasons(userPredictionDocs);
+        let configuredLatestSeason = '';
 
-        if (userStatsSeasonLabel) {
-            userStatsSeasonLabel.textContent = predictionStats.currentSeason || 'Sem temporada';
+        try {
+            configuredLatestSeason = await getLatestSeason(db);
+        } catch (error) {
+            console.warn('Não foi possível obter a temporada mais recente configurada:', error);
         }
+
+        const initialSeason = resolveInitialProfileSeason(
+            predictionSeasons,
+            configuredLatestSeason
+        );
+        selectedPredictionsSeason = initialSeason;
+
+        populateProfileSeasonSelect(userStatsSeasonSelect, predictionSeasons, initialSeason);
+        populateProfileSeasonSelect(predictionsSeasonSelect, predictionSeasons, initialSeason);
+
+        const predictionStats = buildUserPredictionStats(userPredictionDocs, initialSeason);
         renderUserStats(userStatsGrid, predictionStats);
         
         userPredictionsList = [];
@@ -1034,6 +1058,7 @@ async function initUserPredictions(userId) {
                         equipaCasaId: data.equipaCasaId || '',
                         equipaForaId: data.equipaForaId || '',
                         competicao: data.competicao || '',
+                        season: normalizeProfileSeason(data.temporada),
                         timestamp: timestamp
                     });
                 }
@@ -1044,20 +1069,36 @@ async function initUserPredictions(userId) {
         userPredictionsList.sort((a, b) => b.timestamp - a.timestamp);
         
         // Renderizar a aba padrão (Grupo 1)
-        renderActiveTabPredictions(1);
+        activePredictionsGroup = 1;
+        renderActiveTabPredictions(activePredictionsGroup);
         
         // Configurar eventos nas abas
         const tabButtons = document.querySelectorAll('.tab-btn');
         tabButtons.forEach(btn => {
-            btn.addEventListener('click', () => {
+            btn.onclick = () => {
                 tabButtons.forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 const group = parseInt(btn.dataset.group);
+                activePredictionsGroup = group;
                 const tabLabel = btn.querySelector('span')?.textContent?.trim() || `Grupo ${group}`;
                 logUserAction(`Mudou a aba de estatísticas no perfil para: ${tabLabel}`);
                 renderActiveTabPredictions(group);
-            });
+            };
         });
+
+        if (userStatsSeasonSelect) {
+            userStatsSeasonSelect.onchange = () => {
+                const stats = buildUserPredictionStats(userPredictionDocs, userStatsSeasonSelect.value);
+                renderUserStats(userStatsGrid, stats);
+            };
+        }
+
+        if (predictionsSeasonSelect) {
+            predictionsSeasonSelect.onchange = () => {
+                selectedPredictionsSeason = predictionsSeasonSelect.value;
+                renderActiveTabPredictions(activePredictionsGroup);
+            };
+        }
         
     } catch (error) {
         console.error("Erro ao carregar palpites:", error);
@@ -1072,10 +1113,13 @@ function renderActiveTabPredictions(groupNumber) {
     const predictionsGrid = document.getElementById('predictionsGrid');
     if (!predictionsGrid) return;
     
-    const filtered = userPredictionsList.filter(p => p.group === groupNumber);
+    const filtered = userPredictionsList.filter((prediction) => (
+        prediction.group === groupNumber
+        && prediction.season === selectedPredictionsSeason
+    ));
     
     if (filtered.length === 0) {
-        predictionsGrid.innerHTML = `<div class="predictions-status-msg">Não tens palpites registados para esta categoria.</div>`;
+        predictionsGrid.innerHTML = `<div class="predictions-status-msg">Não tens palpites registados para esta categoria na temporada selecionada.</div>`;
         return;
     }
     

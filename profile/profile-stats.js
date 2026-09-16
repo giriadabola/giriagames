@@ -1,3 +1,9 @@
+import {
+    getUniquePredictionSeasons,
+    isSameProfileSeason,
+    normalizeProfileSeason
+} from './profile-season-filter.js';
+
 function getPredictionStatuses(predictionDoc) {
     let total = 0;
     let hits = 0;
@@ -23,18 +29,14 @@ function getPredictionStatuses(predictionDoc) {
 }
 
 export function getLatestSeasonFromDocs(predictionDocs) {
-    const seasons = predictionDocs
-        .map((doc) => doc.temporada)
-        .filter(Boolean)
-        .sort((left, right) => right.localeCompare(left, 'pt'));
-
-    return seasons[0] || null;
+    return getUniquePredictionSeasons(predictionDocs)[0] || null;
 }
 
 export function buildUserPredictionStats(predictionDocs, preferredSeason = null) {
-    const currentSeason = preferredSeason || getLatestSeasonFromDocs(predictionDocs);
+    const currentSeason = normalizeProfileSeason(preferredSeason)
+        || getLatestSeasonFromDocs(predictionDocs);
     const seasonDocs = currentSeason
-        ? predictionDocs.filter((doc) => doc.temporada === currentSeason)
+        ? predictionDocs.filter((doc) => isSameProfileSeason(doc.temporada, currentSeason))
         : predictionDocs;
 
     let totalPredictions = 0;
@@ -61,7 +63,7 @@ export function buildUserPredictionStats(predictionDocs, preferredSeason = null)
         totalHits,
         totalMisses,
         hitRate,
-        totalSeasons: new Set(predictionDocs.map((doc) => doc.temporada).filter(Boolean)).size
+        totalSeasons: getUniquePredictionSeasons(predictionDocs).length
     };
 }
 
@@ -81,7 +83,7 @@ export function renderUserStats(container, stats) {
         <div class="profile-stat-card">
             <span class="profile-stat-label">Palpites registados</span>
             <strong class="profile-stat-value">${stats.totalPredictions}</strong>
-            <span class="profile-stat-foot">Selecoes feitas</span>
+            <span class="profile-stat-foot">Seleções feitas</span>
         </div>
         <div class="profile-stat-card">
             <span class="profile-stat-label">Acertos</span>
