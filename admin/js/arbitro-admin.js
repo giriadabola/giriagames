@@ -2,9 +2,10 @@
 import { db } from './auth-guard.js';
 
 // Importa as outras funções do Firestore que esta página específica precisa.
-import { collection, getDocs, doc, getDoc, updateDoc, where, addDoc, serverTimestamp, getCountFromServer, query, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { collection, getDocs, doc, getDoc, updateDoc, where, addDoc, serverTimestamp, getCountFromServer, query, setDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { CADERNETA_FREE_PACK_TYPE, CADERNETA_GIFT_OFFERS_COLLECTION, CADERNETA_GIFT_SOURCE_NAME, buildCadernetaGiftOfferId, isEligibleFreePackRound, normalizeSeasonKey } from "../../caderneta/pack-offers.js";
 import { compactSeason, getConfiguredSeasons, getLatestSeason, getSeasonData, mergeUserSeasonData } from "../../core/user-season.js";
+import { buildEquivalentPredictionStatusUpdates } from "./prediction-status-sync.js";
 
 // ========================================================================
 // === INTERAÇÃO DO POPUP & DRAGGING (Movido de arbitro.html) ===
@@ -962,6 +963,44 @@ async function fetchTotalEligibleVoters() {
     }
 }
 
+function getStatusForControl(control, statusUpdates) {
+    const update = statusUpdates.find(
+        (item) => item.predictionId === control.dataset.palpiteId
+    );
+    return update?.fields?.[control.dataset.statusKey];
+}
+
+function getStatusControlsForUpdates(statusUpdates) {
+    return Array.from(document.querySelectorAll('.status-select'))
+        .filter((control) => getStatusForControl(control, statusUpdates));
+}
+
+function applyPredictionStatusUpdatesLocally(statusUpdates) {
+    statusUpdates.forEach((update) => {
+        const localPrediction = allPredictions.find(
+            (prediction) => prediction.id === update.predictionId
+        );
+        if (localPrediction) {
+            Object.assign(localPrediction, update.fields);
+        }
+    });
+}
+
+function renderPredictionStatusUpdates(statusUpdates) {
+    getStatusControlsForUpdates(statusUpdates).forEach((control) => {
+        const status = getStatusForControl(control, statusUpdates);
+        control.value = status;
+        control.className = `status-select ${status}`;
+
+        const predictionNumber = control
+            .closest('.prediction-value')
+            ?.querySelector('.prediction-number');
+        if (predictionNumber) {
+            predictionNumber.className = `prediction-number ${status}`;
+        }
+    });
+}
+
 function addDynamicEventListeners() {
      document.querySelectorAll('.status-select').forEach(select => {
          select.replaceWith(select.cloneNode(true));
@@ -971,23 +1010,41 @@ function addDynamicEventListeners() {
      });
      document.querySelectorAll('.status-select').forEach(select => {
          select.addEventListener('change', async (e) => {
-            const palpiteId = e.target.dataset.palpiteId;
+             const palpiteId = e.target.dataset.palpiteId;
              const statusKey = e.target.dataset.statusKey;
              const newStatus = e.target.value;
              if (!palpiteId || !statusKey) return;
+
+             const statusUpdates = buildEquivalentPredictionStatusUpdates(
+                 allPredictions,
+                 palpiteId,
+                 statusKey,
+                 newStatus
+             );
+
+             if (statusUpdates.length === 0) return;
+
+             const affectedControls = getStatusControlsForUpdates(statusUpdates);
+             affectedControls.forEach(control => { control.disabled = true; });
+
              try {
-                 const palpiteRef = doc(db, 'palpites', palpiteId);
-                 await updateDoc(palpiteRef, { [statusKey]: newStatus });
-                 e.target.className = `status-select ${newStatus}`;
-                 const predictionNumberSpan = e.target.closest('.prediction-value')?.querySelector('.prediction-number');
-                 if (predictionNumberSpan) {
-                     predictionNumberSpan.className = `prediction-number ${newStatus}`;
-                 }
-                 const localPredictionIndex = allPredictions.findIndex(p => p.id === palpiteId);
-                 if(localPredictionIndex > -1) allPredictions[localPredictionIndex][statusKey] = newStatus;
+                 const batch = writeBatch(db);
+                 statusUpdates.forEach((update) => {
+                     batch.update(doc(db, 'palpites', update.predictionId), update.fields);
+                 });
+                 await batch.commit();
+
+                 applyPredictionStatusUpdatesLocally(statusUpdates);
+                 renderPredictionStatusUpdates(statusUpdates);
+
+                 const affectedSelections = statusUpdates.reduce(
+                     (total, update) => total + Object.keys(update.fields).length,
+                     0
+                 );
+                 console.info(`Estado sincronizado em ${affectedSelections} palpite(s) equivalente(s).`);
              } catch (error) {
-                 console.error('Error updating status:', error);
-                 alert('Erro ao atualizar o status.');
+                 console.error('Erro ao sincronizar o estado dos palpites:', error);
+                 alert('Erro ao atualizar o estado dos palpites equivalentes.');
                  const localPrediction = allPredictions.find(p => p.id === palpiteId);
                  if (localPrediction) {
                      e.target.value = localPrediction[statusKey] || 'neutro';
@@ -997,6 +1054,8 @@ function addDynamicEventListeners() {
                          predictionNumberSpan.className = `prediction-number ${e.target.value}`;
                      }
                  }
+             } finally {
+                 affectedControls.forEach(control => { control.disabled = false; });
              }
          });
      });
