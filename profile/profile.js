@@ -9,6 +9,10 @@ import {
     populateProfileSeasonSelect,
     resolveInitialProfileSeason
 } from "./profile-season-filter.js";
+import {
+    setProfileSeasonSelectLoading,
+    showProfileSectionLoading
+} from "./profile-section-loading.js";
 import { initProfileNotifications } from "./profile-notifications.js";
 import { compactSeason, getLatestSeason, getSeasonData, mergeUserSeasonData } from "../core/user-season.js";
 import { checkPageContentAccess } from "../js/page-content-guard.js";
@@ -894,9 +898,6 @@ onAuthStateChanged(auth, async (user) => {
             await loadBancaValue(); 
             // --- FIM DA LÓGICA FINANCEIRA ---
 
-            // --- CARREGAR PALPITES DO UTILIZADOR ---
-            initUserPredictions(user.uid);
-
             // --- CARREGAR EQUIPA DO UTILIZADOR ---
             initUserTeam(user.uid);
 
@@ -925,6 +926,15 @@ onAuthStateChanged(auth, async (user) => {
             profileUsernameSpan.textContent = userData.nomeDeUsuario || "Username Not Found";
             loadingScreen.style.display = 'none';
             content.style.display = 'block';
+
+            // Esta consulta mais pesada começa apenas depois de o conteúdo estar visível.
+            if (!panelSettings
+                || panelSettings.estatisticas === 'on'
+                || panelSettings.palpites === 'on') {
+                requestAnimationFrame(() => {
+                    initUserPredictions(user.uid);
+                });
+            }
 
         } catch (error) {
             console.error("Erro durante o processamento do estado de autenticação:", error);
@@ -1001,27 +1011,32 @@ document.addEventListener('click', async (event) => {
 async function initUserPredictions(userId) {
     const predictionsGrid = document.getElementById('predictionsGrid');
     if (!predictionsGrid) return;
+
+    showProfileSectionLoading(userStatsGrid, 'A carregar estatísticas...');
+    showProfileSectionLoading(predictionsGrid, 'A carregar palpites...');
+    setProfileSeasonSelectLoading(userStatsSeasonSelect);
+    setProfileSeasonSelectLoading(predictionsSeasonSelect);
     
     try {
+        const palpiteQuery = query(collection(db, 'palpites'), where('userId', '==', userId));
+        const [clubsSnapshot, querySnapshot, configuredLatestSeason] = await Promise.all([
+            getDocs(collection(db, 'clubes')),
+            getDocs(palpiteQuery),
+            getLatestSeason(db).catch((error) => {
+                console.warn('Não foi possível obter a temporada mais recente configurada:', error);
+                return '';
+            })
+        ]);
+
         // Obter logotipos dos clubes uma única vez
-        const clubsSnapshot = await getDocs(collection(db, 'clubes'));
         clubsLogoMap = {};
         clubsSnapshot.forEach(docSnap => {
             clubsLogoMap[docSnap.id] = docSnap.data().imagem || '';
         });
         
         // Obter palpites do utilizador
-        const palpiteQuery = query(collection(db, 'palpites'), where('userId', '==', userId));
-        const querySnapshot = await getDocs(palpiteQuery);
         userPredictionDocs = querySnapshot.docs.map(docSnap => docSnap.data());
         const predictionSeasons = getUniquePredictionSeasons(userPredictionDocs);
-        let configuredLatestSeason = '';
-
-        try {
-            configuredLatestSeason = await getLatestSeason(db);
-        } catch (error) {
-            console.warn('Não foi possível obter a temporada mais recente configurada:', error);
-        }
 
         const initialSeason = resolveInitialProfileSeason(
             predictionSeasons,
@@ -1106,6 +1121,8 @@ async function initUserPredictions(userId) {
         if (userStatsGrid) {
             userStatsGrid.innerHTML = `<div class="predictions-status-msg" style="color: #e74c3c;">Erro ao carregar estatísticas.</div>`;
         }
+        populateProfileSeasonSelect(userStatsSeasonSelect, [], '');
+        populateProfileSeasonSelect(predictionsSeasonSelect, [], '');
     }
 }
 
