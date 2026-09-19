@@ -12,7 +12,7 @@ const elements = {
     usersTotal: document.getElementById('users-total'),
     notificationsEnabled: document.getElementById('notifications-enabled'),
     notificationsDisabled: document.getElementById('notifications-disabled'),
-    currentRoundNumber: document.getElementById('current-round-number'),
+    currentRoundSelect: document.getElementById('current-round-select'),
     currentRoundSummary: document.getElementById('current-round-summary'),
     currentRoundActivePlayers: document.getElementById('current-round-active-players'),
     currentRoundGames: document.getElementById('current-round-games'),
@@ -31,7 +31,10 @@ const elements = {
 };
 
 const dashboardState = {
-    activeUsers: []
+    activeUsers: [],
+    games: [],
+    predictions: [],
+    selectedRound: null
 };
 
 function normalizeSeason(value) {
@@ -117,7 +120,16 @@ function renderLatestAccessRows(users) {
     </tr>`).join('');
 }
 
-function getCurrentRound(games) {
+function getRoundValues(games) {
+    return [...new Set(games
+        .map((game) => String(game.ronda ?? '').trim())
+        .filter(Boolean)
+        .map(Number)
+        .filter(Number.isFinite))]
+        .sort((first, second) => first - second);
+}
+
+function getOpenRound(games) {
     const now = new Date();
     const gamesInDispute = games.filter((game) => {
         const start = toDate(game.inicioIntervalo);
@@ -125,16 +137,37 @@ function getCurrentRound(games) {
         return start && end && now >= start && now <= end;
     });
 
-    if (gamesInDispute.length === 0) return { round: null, games: [] };
+    return getRoundValues(gamesInDispute)[0] ?? null;
+}
 
-    const roundValues = [...new Set(gamesInDispute.map((game) => Number(game.ronda)).filter(Number.isFinite))]
-        .sort((first, second) => first - second);
-    const currentRound = roundValues[0];
-    const currentRoundGames = gamesInDispute
-        .filter((game) => Number(game.ronda) === currentRound)
+function getRoundGames(games, round) {
+    return games
+        .filter((game) => Number(game.ronda) === Number(round))
         .sort((first, second) => (toDate(first.dataJogo)?.getTime() || Number.POSITIVE_INFINITY) - (toDate(second.dataJogo)?.getTime() || Number.POSITIVE_INFINITY));
+}
 
-    return { round: currentRound, games: currentRoundGames };
+function populateRoundSelect(games, preferredRound) {
+    const roundValues = getRoundValues(games);
+
+    if (roundValues.length === 0) {
+        elements.currentRoundSelect.innerHTML = '<option value="">Sem rondas</option>';
+        elements.currentRoundSelect.disabled = true;
+        return null;
+    }
+
+    const preferredRoundNumber = Number(preferredRound);
+    const openRound = getOpenRound(games);
+    const selectedRound = roundValues.includes(preferredRoundNumber)
+        ? preferredRoundNumber
+        : (roundValues.includes(openRound) ? openRound : roundValues[0]);
+
+    elements.currentRoundSelect.innerHTML = roundValues
+        .map((round) => `<option value="${round}">${round}</option>`)
+        .join('');
+    elements.currentRoundSelect.value = String(selectedRound);
+    elements.currentRoundSelect.disabled = false;
+
+    return selectedRound;
 }
 
 function getGameParticipants(game, predictions, activeUsers) {
@@ -221,20 +254,20 @@ function bindCurrentRoundCards(currentRoundGames, predictions, activeUsers) {
     });
 }
 
-function renderCurrentRound(games, predictions, activeUsers) {
-    const { round, games: currentRoundGames } = getCurrentRound(games);
+function renderSelectedRound(round, games, predictions, activeUsers) {
+    const currentRoundGames = getRoundGames(games, round);
     const activeUserIds = new Set(activeUsers.map((user) => user.id));
 
-    elements.currentRoundNumber.textContent = round ?? '—';
     elements.currentRoundActivePlayers.textContent = `Total de jogadores activos: ${activeUsers.length}`;
 
     if (round === null) {
-        elements.currentRoundSummary.textContent = 'Nenhuma ronda em disputa neste momento';
-        elements.currentRoundGames.innerHTML = '<div class="round-empty">Não existem jogos dentro do intervalo de palpites neste momento.</div>';
+        elements.currentRoundSummary.textContent = 'Nenhuma ronda registada nesta temporada';
+        elements.currentRoundGames.innerHTML = '<div class="round-empty">Não existem jogos com uma ronda definida nesta temporada.</div>';
         return;
     }
 
-    elements.currentRoundSummary.textContent = `${currentRoundGames.length} jogo(s) em disputa`;
+    const isOpenRound = getOpenRound(games) === Number(round);
+    elements.currentRoundSummary.textContent = `${currentRoundGames.length} jogo(s) na ronda${isOpenRound ? ' · palpites abertos agora' : ''}`;
     elements.currentRoundGames.innerHTML = currentRoundGames.map((game) => {
         const predictedUserIds = new Set(predictions
             .filter((prediction) => prediction.jogoId === game.id && activeUserIds.has(prediction.userId))
@@ -292,6 +325,8 @@ async function loadDashboard() {
         const users = usersSnapshot.docs.map((userDoc) => ({ id: userDoc.id, ...userDoc.data() }));
         const activeUsers = users.filter(isActivePlayer);
         dashboardState.activeUsers = activeUsers;
+        dashboardState.games = games;
+        dashboardState.predictions = predictions;
 
         const predictionCounts = predictions.reduce((counts, prediction) => {
             if (prediction.jogoId) {
@@ -313,7 +348,8 @@ async function loadDashboard() {
         elements.notificationsEnabled.textContent = notificationSummary.enabled;
         elements.notificationsDisabled.textContent = notificationSummary.disabled;
         elements.season.textContent = `Temporada ativa: ${latestSeason}`;
-        renderCurrentRound(games, predictions, activeUsers);
+        dashboardState.selectedRound = populateRoundSelect(games, dashboardState.selectedRound);
+        renderSelectedRound(dashboardState.selectedRound, games, predictions, activeUsers);
         elements.latestAccessBody.innerHTML = renderLatestAccessRows(users);
 
         elements.status.className = 'dashboard-status is-ok';
@@ -323,7 +359,8 @@ async function loadDashboard() {
         elements.status.className = 'dashboard-status is-error';
         elements.season.textContent = 'Temporada: indisponível';
         elements.status.textContent = error.message || 'Não foi possível carregar os dados. Atualize a página e tente novamente.';
-        elements.currentRoundNumber.textContent = '—';
+        elements.currentRoundSelect.innerHTML = '<option value="">Indisponível</option>';
+        elements.currentRoundSelect.disabled = true;
         elements.currentRoundSummary.textContent = 'Não foi possível verificar a ronda';
         elements.currentRoundActivePlayers.textContent = 'Não foi possível calcular os jogadores activos.';
         elements.currentRoundGames.innerHTML = '<div class="round-empty">Erro ao carregar os jogos da ronda.</div>';
@@ -334,6 +371,15 @@ async function loadDashboard() {
 }
 
 elements.refresh.addEventListener('click', loadDashboard);
+elements.currentRoundSelect.addEventListener('change', (event) => {
+    dashboardState.selectedRound = Number(event.currentTarget.value);
+    renderSelectedRound(
+        dashboardState.selectedRound,
+        dashboardState.games,
+        dashboardState.predictions,
+        dashboardState.activeUsers
+    );
+});
 elements.closeParticipantsModal.addEventListener('click', closeParticipantsModal);
 elements.closeNotificationsModal.addEventListener('click', closeNotificationsModal);
 elements.participantsModal.addEventListener('click', (event) => {
