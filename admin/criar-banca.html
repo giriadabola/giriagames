@@ -48,6 +48,12 @@
         .sim-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; }
         .sim-result { font-weight: bold; font-size: 18px; text-align: center; padding: 10px; border-radius: 4px; background: #fff; border: 1px solid #ddd; }
         .sim-advice { font-size: 13px; color: #666; margin-top: 8px; font-style: italic; background: #fff3cd; padding: 8px; border-radius: 4px; border-left: 4px solid #ffc107; }
+        .loan-actions { display: flex; gap: 10px; margin-top: 20px; align-items: stretch; }
+        .loan-actions #open-loan-popup-btn { flex: 1; margin-top: 0 !important; }
+        .pending-loans-button { position: relative; display: none; width: 58px; border: 1px solid #dc3545; border-radius: 4px; background: #fff5f5; color: #dc3545; cursor: pointer; font-size: 20px; }
+        .pending-loans-button:hover { background: #dc3545; color: white; }
+        .pending-loans-count { position: absolute; top: -9px; right: -9px; min-width: 22px; height: 22px; padding: 2px 5px; border-radius: 11px; background: #dc3545; color: white; font-size: 12px; line-height: 18px; font-weight: bold; }
+        .pending-loan-info { display: none; margin-bottom: 16px; padding: 10px 12px; border-left: 4px solid #ffc107; border-radius: 4px; background: #fff3cd; color: #664d03; font-size: 14px; }
     /* --- Estilos do Painel de Ajuda Flutuante --- */
 .helper-btn {
     right: 55px !important; /* Fica ao lado do botão de fechar (que está a 15px) */
@@ -503,7 +509,13 @@
                 <button type="submit" class="form-button">Guardar Alterações</button>
             </form>
             <p id="feedback-message" class="feedback-message"></p>
-            <button id="open-loan-popup-btn" class="form-button" style="margin-top: 20px; background-color: #28a745;"><i class="fas fa-hand-holding-usd"></i> Conceder Empréstimo</button>
+            <div class="loan-actions">
+                <button id="open-loan-popup-btn" class="form-button" style="background-color: #28a745;"><i class="fas fa-hand-holding-usd"></i> Conceder Empréstimo</button>
+                <button id="pending-loans-btn" class="pending-loans-button" type="button" title="Há pedidos de empréstimo por validar" aria-label="Abrir pedido de empréstimo por validar">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span id="pending-loans-count" class="pending-loans-count">0</span>
+                </button>
+            </div>
             <button id="open-query-popup-btn" class="form-button" style="margin-top: 10px; background-color: #007bff;"><i class="fas fa-search"></i> Consultar Movimentos</button>
         </div>
     </main>
@@ -579,6 +591,7 @@
     <div class="popup-overlay" id="loan-popup">
         <div class="popup-content">
             <h2>Conceder Empréstimo</h2>
+            <div id="pending-loan-info" class="pending-loan-info"></div>
             <form id="loan-form">
                 <div class="form-group">
                     <label for="user-select">Selecionar Utilizador</label>
@@ -701,7 +714,7 @@
 
     <script type="module">
         import { adminAuthReady, db } from './js/auth-guard.js';
-        import { doc, getDoc, setDoc, collection, query, where, getDocs, addDoc, Timestamp, writeBatch, orderBy } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        import { doc, getDoc, setDoc, collection, query, where, getDocs, addDoc, Timestamp, writeBatch, orderBy, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
         import { compactSeason, getLatestSeason, getSeasonData } from '../core/user-season.js';
 
         // Elements
@@ -720,6 +733,9 @@
         const cancelLoanBtn = document.getElementById('cancel-loan-btn');
         const loanFeedback = document.getElementById('loan-feedback');
         const loanInterestInput = document.getElementById('loan-interest');
+        const pendingLoansBtn = document.getElementById('pending-loans-btn');
+        const pendingLoansCount = document.getElementById('pending-loans-count');
+        const pendingLoanInfo = document.getElementById('pending-loan-info');
         const openQueryPopupBtn = document.getElementById('open-query-popup-btn');
         const queryPopup = document.getElementById('query-popup');
         const queryUserSelect = document.getElementById('query-user-select');
@@ -739,6 +755,9 @@
         const simAdviceText = document.getElementById('sim-advice-text');
 
         let movimentosSum = 0; let currentSeason = null; let currentSeasonLabel = null;
+        let pendingLoanRequests = [];
+        let activeLoanRequest = null;
+        const usersById = new Map();
 
         function updateSimulation() {
             const rate = parseFloat(taxaInput.value);
@@ -805,7 +824,11 @@
                 const q = query(collection(db, 'users'), where("aceite", "==", "Yes"));
                 const querySnapshot = await getDocs(q);
                 const users = [];
-                querySnapshot.forEach((doc) => users.push({ id: doc.id, ...doc.data() }));
+                querySnapshot.forEach((doc) => {
+                    const user = { id: doc.id, ...doc.data() };
+                    users.push(user);
+                    usersById.set(user.id, user);
+                });
                 users.sort((a, b) => (a.nometabela || a.id).localeCompare(b.nometabela || b.id));
                 const opt = '<option value="">-- Selecione --</option>';
                 if (userSelect) { userSelect.innerHTML = opt; users.forEach(u => { const o = document.createElement('option'); o.value = u.id; o.textContent = u.nometabela || u.id; userSelect.appendChild(o); }); }
@@ -813,9 +836,80 @@
             } catch (error) { console.error(error); }
         }
 
+        function getRequestDateValue(value) {
+            if (!value) return 0;
+            if (typeof value.toMillis === 'function') return value.toMillis();
+            if (typeof value.toDate === 'function') return value.toDate().getTime();
+            return 0;
+        }
+
+        async function loadPendingLoanRequests(snapshot = null) {
+            try {
+                const pendingQuery = query(collection(db, 'pedidosEmprestimo'), where('estado', '==', 'Pendente'));
+                const pendingSnapshot = snapshot || await getDocs(pendingQuery);
+                const requests = await Promise.all(pendingSnapshot.docs.map(async (requestDoc) => {
+                    const data = requestDoc.data();
+                    let user = usersById.get(data.userId);
+
+                    if (!user) {
+                        const userSnapshot = await getDoc(doc(db, 'users', data.userId));
+                        user = userSnapshot.exists() ? { id: userSnapshot.id, ...userSnapshot.data() } : null;
+                        if (user) usersById.set(user.id, user);
+                    }
+
+                    return {
+                        id: requestDoc.id,
+                        ...data,
+                        userName: user?.nometabela || user?.nome || user?.displayName || user?.email || data.userId
+                    };
+                }));
+
+                pendingLoanRequests = requests.sort((a, b) => getRequestDateValue(a.criadoEm) - getRequestDateValue(b.criadoEm));
+                pendingLoansCount.textContent = pendingLoanRequests.length;
+                pendingLoansBtn.style.display = pendingLoanRequests.length ? 'inline-flex' : 'none';
+                pendingLoansBtn.title = pendingLoanRequests.length === 1
+                    ? 'Há 1 pedido de empréstimo por validar'
+                    : `Há ${pendingLoanRequests.length} pedidos de empréstimo por validar`;
+            } catch (error) {
+                console.error('Erro ao carregar pedidos de empréstimo:', error);
+                pendingLoanRequests = [];
+                pendingLoansBtn.style.display = 'none';
+            }
+        }
+
+        function resetLoanPopup() {
+            activeLoanRequest = null;
+            loanFeedback.textContent = '';
+            loanForm.reset();
+            userSelect.disabled = false;
+            pendingLoanInfo.style.display = 'none';
+            pendingLoanInfo.textContent = '';
+        }
+
+        function openLoanPopupForRequest(request) {
+            activeLoanRequest = request;
+            loanForm.reset();
+            if (![...userSelect.options].some(option => option.value === request.userId)) {
+                const option = document.createElement('option');
+                option.value = request.userId;
+                option.textContent = request.userName;
+                userSelect.appendChild(option);
+            }
+            userSelect.disabled = true;
+            userSelect.value = request.userId;
+            loanAmountInput.value = request.valor;
+            loanDescriptionInput.value = 'Pedido de empréstimo';
+            loanInterestInput.value = 0;
+            pendingLoanInfo.textContent = `Pedido de ${request.userName}: ${request.valor} gCoins`;
+            pendingLoanInfo.style.display = 'block';
+            loanFeedback.textContent = '';
+            loanPopup.style.display = 'flex';
+        }
+
         async function handleLoanSubmit(e) {
             e.preventDefault(); const uid = userSelect.value; const amt = parseFloat(loanAmountInput.value);
             if (!uid || isNaN(amt) || amt <= 0) return;
+            const requestBeingProcessed = activeLoanRequest;
             loanFeedback.textContent = 'Processando...';
             try {
                 const batch = writeBatch(db);
@@ -826,8 +920,16 @@
                 const newBal = (seasonData.GCoins || 0) + amt;
                 batch.update(uRef, { [currentSeasonLabel]: { ...seasonData, GCoins: newBal } });
                 batch.set(doc(db, "paineis", "Banca"), { valor: movimentosSum - amt }, { merge: true });
+                if (requestBeingProcessed) {
+                    batch.update(doc(db, 'pedidosEmprestimo', requestBeingProcessed.id), {
+                        estado: 'Concedido',
+                        validadoEm: Timestamp.now()
+                    });
+                }
                 await batch.commit();
                 movimentosSum -= amt; updateCalculatedTotal(); loanPopup.style.display = 'none';
+                resetLoanPopup();
+                await loadPendingLoanRequests();
             } catch (e) { console.error(e); loanFeedback.textContent = 'Erro.'; }
         }
 
@@ -843,11 +945,16 @@
 
         async function initializePage() {
             try {
-                currentSeason = await fetchCurrentSeason();
-                movimentosSum = await calculateMovimentosSum(currentSeason);
-                updateCalculatedTotal(); 
-                await populateUsersDropdowns();
-                statusMessage.style.display = 'none';
+                 currentSeason = await fetchCurrentSeason();
+                 movimentosSum = await calculateMovimentosSum(currentSeason);
+                 updateCalculatedTotal(); 
+                 await populateUsersDropdowns();
+                 const pendingLoanQuery = query(collection(db, 'pedidosEmprestimo'), where('estado', '==', 'Pendente'));
+                 onSnapshot(pendingLoanQuery, (snapshot) => loadPendingLoanRequests(snapshot), (error) => {
+                     console.error('Erro ao acompanhar pedidos de empréstimo:', error);
+                     pendingLoansBtn.style.display = 'none';
+                 });
+                 statusMessage.style.display = 'none';
                 formContainer.style.display = 'block';
                 
                 // --- Lógica de Consulta ---
@@ -896,14 +1003,16 @@
                 // Event Listeners de Banca e Empréstimos
                 baseValueInput.addEventListener('input', updateCalculatedTotal);
                 bancaForm.addEventListener('submit', handleFormSubmit);
-                openLoanPopupBtn.addEventListener('click', () => {
-                    loanFeedback.textContent = '';
-                    loanForm.reset();
-                    loanPopup.style.display = 'flex';
-                });
-                cancelLoanBtn.addEventListener('click', () => loanPopup.style.display = 'none');
-                loanPopup.addEventListener('click', (e) => { if (e.target === loanPopup) loanPopup.style.display = 'none'; });
-                loanForm.addEventListener('submit', handleLoanSubmit);
+                 openLoanPopupBtn.addEventListener('click', () => {
+                     resetLoanPopup();
+                     loanPopup.style.display = 'flex';
+                 });
+                 pendingLoansBtn.addEventListener('click', () => {
+                     if (pendingLoanRequests.length) openLoanPopupForRequest(pendingLoanRequests[0]);
+                 });
+                 cancelLoanBtn.addEventListener('click', () => { resetLoanPopup(); loanPopup.style.display = 'none'; });
+                 loanPopup.addEventListener('click', (e) => { if (e.target === loanPopup) { resetLoanPopup(); loanPopup.style.display = 'none'; } });
+                 loanForm.addEventListener('submit', handleLoanSubmit);
 
                 // --- LÓGICA DO POPUP DE DESCONTO E COMISSÃO ---
                 const openDiscountPopupBtn = document.getElementById('open-discount-popup-btn');
