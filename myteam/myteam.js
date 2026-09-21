@@ -3,6 +3,7 @@ import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/fi
 import { doc, getDoc, collection, getDocs, query, orderBy, limit, setDoc, addDoc, where, serverTimestamp, updateDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { initRivalSquadsView } from '../core/rival-squads-view.js';
 import { compactSeason, getLatestSeason, getSeasonData, mergeUserSeasonData } from '../core/user-season.js';
+import { fetchOwnedPlayersForSeason } from '../core/player-season.js';
 import { checkPageContentAccess } from '../js/page-content-guard.js';
 
 // --- Sobrescrever window.alert com Modal Personalizado ---
@@ -1347,16 +1348,11 @@ function renderFormation(formationName) {
 // --- Funções de Dados (Firebase) ---
 async function fetchUserOwnedPlayers() { 
     if (!currentUserUid) return; 
-    const q = query(collection(db, 'jogadores'), where('compradopor', '==', currentUserUid)); 
-    const snapshot = await getDocs(q); 
-    const fetchedPlayers = []; 
+    const latestSeason = await getLatestSeason(db);
+    const fetchedPlayers = await fetchOwnedPlayersForSeason(db, currentUserUid, latestSeason);
     const uniqueClubs = new Set(); 
-    const uniqueCountryIds = new Set(); 
-    snapshot.forEach(doc => { 
-        const data = doc.data(); 
-        fetchedPlayers.push({ ...data, id: doc.id }); 
-        if (data.clube) uniqueClubs.add(data.clube); 
-        if (data.paisId) uniqueCountryIds.add(data.paisId); 
+    fetchedPlayers.forEach((player) => {
+        if (player.clube) uniqueClubs.add(player.clube);
     }); 
     userOwnedPlayers = fetchedPlayers; 
     clubs = uniqueClubs; 

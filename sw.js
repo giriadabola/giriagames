@@ -1,4 +1,4 @@
-const APP_SHELL_CACHE = 'gGames-shell-v23';
+const APP_SHELL_CACHE = 'gGames-shell-v24';
 const APP_SHELL_FILES = [
   './index.html',
   './1x.html',
@@ -22,6 +22,7 @@ const APP_SHELL_FILES = [
   './core/profile-menu-badge.js',
   './core/top-bar-component.js',
   './core/firebase.js',
+  './core/player-season.js',
   './core/pwa/register-pwa.js',
   './core/pwa/loading-watchdog.js',
   './core/pwa/push-config.js',

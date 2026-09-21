@@ -1,6 +1,7 @@
 import { db } from './firebase.js';
 import { collection, doc, getDoc, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { getLatestSeason, mergeUserSeasonData } from './user-season.js';
+import { fetchOwnedPlayersForSeason } from './player-season.js';
 
 const FORMATIONS = {
     '4-4-2': [
@@ -286,9 +287,8 @@ class RivalSquadsView {
             return;
         }
 
-        const playersQuery = query(collection(db, 'jogadores'), where('compradopor', '==', selectedUserId));
-        const playersSnapshot = await getDocs(playersQuery);
-        this.allPlayers = playersSnapshot.docs.map((playerDoc) => ({ ...playerDoc.data(), id: playerDoc.id }));
+        const latestSeason = await getCurrentSeason();
+        this.allPlayers = await fetchOwnedPlayersForSeason(db, selectedUserId, latestSeason);
     }
 
     async fetchPlayerStyles(selectedUserId) {
