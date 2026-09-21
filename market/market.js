@@ -1,11 +1,15 @@
 // market/market.js
 import { db, auth } from '../core/firebase.js';
-import { collection, getDocs, doc, getDoc, updateDoc, setDoc, Timestamp, addDoc, query, where, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { collection, getDocs, doc, getDoc, updateDoc, addDoc, query, where, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { fetchUniqueSeasons, getPlayerSeasonData, hasPlayerDataForSeason } from "../admin/js/player-season-helper.js";
-import { compactSeason, getLatestSeason, getSeasonData } from "../core/user-season.js";
+import { getLatestSeason, getSeasonData } from "../core/user-season.js";
 import { checkPageContentAccess } from "../js/page-content-guard.js";
 import { getManagerSuggestions } from './gmanager-suggestions.js';
+import {
+    getMarketPurchaseErrorMessage,
+    purchaseMarketPlayer
+} from './market-purchase-service.js';
 import {
     configureBiography,
     configureGManager,
@@ -703,154 +707,39 @@ async function createPlayerCard(player, season) {
                         return;
                     }
 
-                    const schedulesRef = collection(db, 'paineis', 'Banca', 'horarioMercado');
-                    const schedulesSnapshot = await getDocs(schedulesRef);
-
-                    if (schedulesSnapshot.empty) {
-                        displayErrorMessage(playerPopupContent, "O mercado está globalmente fechado. Nenhuma janela de transferências está ativa.");
-                        popupBuyButton.disabled = false;
-                        popupBuyButton.textContent = 'Comprar';
-                        return;
-                    }
-
-                    const agora = new Date();
-                    let isMarketCurrentlyOpen = false;
-
-                    schedulesSnapshot.forEach(doc => {
-                        const schedule = doc.data();
-                        const abertura = schedule.abertura.toDate();
-                        const fechamento = schedule.fechamento.toDate();
-                        if (agora >= abertura && agora <= fechamento) {
-                            isMarketCurrentlyOpen = true;
-                        }
-                    });
-
-                    if (!isMarketCurrentlyOpen) {
-                        displayErrorMessage(playerPopupContent, "O mercado está fechado. Por favor, aguarde pela próxima janela de transferências.");
-                        popupBuyButton.disabled = false;
-                        popupBuyButton.textContent = 'Comprar';
-                        return;
-                    }
-
                     if (!auth.currentUser) {
                         displayErrorMessage(playerPopupContent, "Utilizador não autenticado.");
                         popupBuyButton.disabled = false;
                         popupBuyButton.textContent = 'Comprar';
                         return;
                     }
-                    const userRef = doc(db, 'users', auth.currentUser.uid);
-                    const userSnap = await getDoc(userRef);
-                    if (!userSnap.exists()) {
-                        displayErrorMessage(playerPopupContent, "Erro ao verificar os seus fundos.");
-                        popupBuyButton.disabled = false;
-                        popupBuyButton.textContent = 'Comprar';
-                        return;
-                    }
-                    const userData = userSnap.data();
-                    const playerPrice = checkPlayerData.preco || 0;
-                    const mostRecentSeason = await getLatestSeason(db);
-                    const seasonData = getSeasonData(userData, mostRecentSeason);
-                    const gCoinsField = 'GCoins';
-                    const userGcoins = typeof seasonData.GCoins === 'number' ? seasonData.GCoins : 0;
-                    if (userGcoins < playerPrice) {
-                        displayErrorMessage(playerPopupContent, "Fundos insuficientes.");
-                        popupBuyButton.disabled = false;
-                        popupBuyButton.textContent = 'Comprar';
-                        return;
-                    }
-                    if (!gCoinsField) {
-                        displayErrorMessage(playerPopupContent, "Não foi possível determinar a época para a transação.");
-                        popupBuyButton.disabled = false;
-                        popupBuyButton.textContent = 'Comprar';
-                        return;
-                    }
 
                     popupBuyButton.textContent = 'Processando...';
-                    const currentSeason = compactSeason(mostRecentSeason);
+                    const purchaseResult = await purchaseMarketPlayer(checkPlayerData.id || player.id);
+                    const updatedBalance = Number(purchaseResult?.newBalance);
+                    const balanceMessage = Number.isFinite(updatedBalance)
+                        ? ` Saldo atual: ${updatedBalance} gCoins.`
+                        : '';
 
-                    try {
-                        const purchaseTimestamp = Timestamp.now();
-                        const existingSeasonData = rawPlayerData?.[mostRecentSeason];
-                        const hasSeasonData = existingSeasonData
-                            && typeof existingSeasonData === 'object'
-                            && !Array.isArray(existingSeasonData);
-                        const purchasePayload = hasSeasonData
-                            ? {
-                                [mostRecentSeason]: {
-                                    compradopor: auth.currentUser.uid,
-                                    dataCompra: purchaseTimestamp
-                                },
-                                temporadaCompra: mostRecentSeason
-                            }
-                            : {
-                                compradopor: auth.currentUser.uid,
-                                dataCompra: purchaseTimestamp,
-                                temporadaCompra: mostRecentSeason
-                            };
-
-                        await setDoc(playerDocRefPopup, purchasePayload, { merge: true });
-                    } catch (error) {
-                        console.error("ERRO CRÍTICO AO ATUALIZAR O JOGADOR:", error);
-                        displayErrorMessage(playerPopupContent, "Falha na Etapa 1: Atualizar jogador.");
-                        popupBuyButton.disabled = false;
-                        popupBuyButton.textContent = 'Comprar';
-                        return;
-                    }
-
-                    try {
-                        await addDoc(collection(db, 'movimentos'), {
-                            userId: auth.currentUser.uid,
-                            jogadorId: checkPlayerData.id || player.id || '',
-                            posicao: checkPlayerData.posicao || player.posicao || '',
-                            preco: playerPrice || 0,
-                            estado: "Comprado",
-                            valorreal: -playerPrice || 0,
-                            de: auth.currentUser.uid,
-                            para: null,
-                            mediapontos: null,
-                            movimentoData: Timestamp.now(),
-                            temporada: currentSeason || '',
-                            tipo: "Mercado",
-                            descricao: `Comprado por ${userData.nometabela || userData.nomeDeUsuario || 'Utilizador'}`
-                        });
-                    } catch (error) {
-                        console.error("ERRO CRÍTICO AO CRIAR O MOVIMENTO:", error);
-                        displayErrorMessage(playerPopupContent, "Falha na Etapa 2: Registar movimento.");
-                        popupBuyButton.disabled = false;
-                        popupBuyButton.textContent = 'Tentar Novamente';
-                        return;
-                    }
-
-                    const movimentosRef = collection(db, 'movimentos');
-                    const q = query(movimentosRef, where('userId', '==', auth.currentUser.uid), where('temporada', '==', currentSeason));
-                    const movimentosSnap = await getDocs(q);
-
-                    let totalValorReal = 0;
-
-                    // --- APLICAÇÃO DA LÓGICA CORRETA ---
-                    movimentosSnap.forEach((movDoc) => {
-                        const data = movDoc.data();
-                        // Apenas somar se o estado NÃO for 'WhoWins Paid'
-                        if (data?.estado !== 'WhoWins Paid') {
-                            totalValorReal += data?.valorreal || 0;
-                        }
-                    });
-
-                    // Agora o saldo será atualizado com o valor correto
-                    await updateDoc(userRef, {
-                        [mostRecentSeason]: {
-                            ...seasonData,
-                            [gCoinsField]: totalValorReal
-                        }
-                    });
-
-                    displaySuccessMessage(playerPopupContent, "Jogador comprado com sucesso!");
+                    popupBuyButton.disabled = true;
+                    popupBuyButton.textContent = 'Comprado';
+                    popupBuyButton.classList.add('purchased');
+                    popupBuyButton.classList.remove('buy');
+                    displaySuccessMessage(
+                        playerPopupContent,
+                        `Jogador comprado com sucesso!${balanceMessage}`
+                    );
+                    await loadUserGcoins(auth.currentUser.uid);
 
                 } catch (geralError) {
-                    console.error("Erro geral na verificação antes da compra:", geralError);
-                    displayErrorMessage(playerPopupContent, "Ocorreu um erro inesperado. Tente novamente.");
-                    popupBuyButton.disabled = false;
-                    popupBuyButton.textContent = 'Comprar';
+                    console.error("Erro ao comprar jogador:", geralError);
+                    displayErrorMessage(
+                        playerPopupContent,
+                        getMarketPurchaseErrorMessage(geralError)
+                    );
+                    const alreadyPurchased = String(geralError?.code || '').includes('already-exists');
+                    popupBuyButton.disabled = alreadyPurchased;
+                    popupBuyButton.textContent = alreadyPurchased ? 'Já comprado' : 'Comprar';
                 }
             };
 

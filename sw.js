@@ -1,4 +1,4 @@
-const APP_SHELL_CACHE = 'gGames-shell-v22';
+const APP_SHELL_CACHE = 'gGames-shell-v23';
 const APP_SHELL_FILES = [
   './index.html',
   './1x.html',
