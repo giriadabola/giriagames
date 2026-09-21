@@ -41,6 +41,7 @@ const content = document.querySelector('.content');
 
 // --- Global State ---
 let currentUserEstatuto = null;
+let countdownInterval = null;
 const DEFAULT_SVG_PLACEHOLDER = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="100%" height="100%" fill="%23161c28"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%238892b0" font-size="11">Sem Imagem</text></svg>';
 
 window.resolvePlayerImage = function(img, code) {
@@ -768,14 +769,26 @@ async function createPlayerCard(player, season) {
                     const currentSeason = compactSeason(mostRecentSeason);
 
                     try {
-                        await setDoc(playerDocRefPopup, {
-                            [mostRecentSeason]: {
+                        const purchaseTimestamp = Timestamp.now();
+                        const existingSeasonData = rawPlayerData?.[mostRecentSeason];
+                        const hasSeasonData = existingSeasonData
+                            && typeof existingSeasonData === 'object'
+                            && !Array.isArray(existingSeasonData);
+                        const purchasePayload = hasSeasonData
+                            ? {
+                                [mostRecentSeason]: {
+                                    compradopor: auth.currentUser.uid,
+                                    dataCompra: purchaseTimestamp
+                                },
+                                temporadaCompra: mostRecentSeason
+                            }
+                            : {
                                 compradopor: auth.currentUser.uid,
-                                dataCompra: Timestamp.now()
-                            },
-                            compradopor: auth.currentUser.uid,
-                            dataCompra: Timestamp.now()
-                        }, { merge: true });
+                                dataCompra: purchaseTimestamp,
+                                temporadaCompra: mostRecentSeason
+                            };
+
+                        await setDoc(playerDocRefPopup, purchasePayload, { merge: true });
                     } catch (error) {
                         console.error("ERRO CRÍTICO AO ATUALIZAR O JOGADOR:", error);
                         displayErrorMessage(playerPopupContent, "Falha na Etapa 1: Atualizar jogador.");
