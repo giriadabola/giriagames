@@ -15,6 +15,9 @@ const {
 const {
     buildAccountInvitationFunctions,
 } = require("./account-invitations");
+const {
+    buildMarketPurchaseFunction,
+} = require("./market-purchases");
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -50,6 +53,12 @@ const accountInvitationFunctions = buildAccountInvitationFunctions({
 });
 exports.createAccountInvite = accountInvitationFunctions.createAccountInvite;
 exports.acceptAccountInvite = accountInvitationFunctions.acceptAccountInvite;
+exports.purchaseMarketPlayer = buildMarketPurchaseFunction({
+    admin,
+    db,
+    getLatestSeason,
+    compactSeason,
+});
 
 exports.createGPlayer = onCall({
     cors: [
