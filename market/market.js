@@ -302,7 +302,10 @@ async function createPlayerCard(player) {
                 alert("Detalhes do jogador não encontrados.");
                 return;
             }
-            const currentPlayerPopupData = freshPlayerSnap.data();
+            const rawPlayerPopupData = freshPlayerSnap.data();
+            const seasonsList = await fetchUniqueSeasons(db);
+            const mostRecentSeasonPopup = seasonsList[0] || '2025/2026';
+            const currentPlayerPopupData = getPlayerSeasonData(rawPlayerPopupData, mostRecentSeasonPopup) || rawPlayerPopupData;
 
             let popupPaisImagem = '';
             if (currentPlayerPopupData?.paisId) {
@@ -427,7 +430,9 @@ async function createPlayerCard(player) {
             const unsubscribePopupListener = onSnapshot(playerDocRefPopup, async (docSnapshot) => {
                 if (!popupBuyButton) return;
                 if (docSnapshot.exists()) {
-                    const updatedPlayerForPopup = docSnapshot.data();
+                    const rawPopupSnapshotData = docSnapshot.data();
+                    const mostRecentSeasonListener = (await fetchUniqueSeasons(db))[0] || '2025/2026';
+                    const updatedPlayerForPopup = getPlayerSeasonData(rawPopupSnapshotData, mostRecentSeasonListener) || rawPopupSnapshotData;
                     const compradorUserIdPopup = updatedPlayerForPopup?.compradopor;
                     if (compradorUserIdPopup) {
                         const compradorUsernamePopup = await getUsername(compradorUserIdPopup);
