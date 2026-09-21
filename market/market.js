@@ -5,6 +5,15 @@ import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/fi
 import { fetchUniqueSeasons, getPlayerSeasonData, hasPlayerDataForSeason } from "../admin/js/player-season-helper.js";
 import { compactSeason, getLatestSeason, getSeasonData } from "../core/user-season.js";
 import { checkPageContentAccess } from "../js/page-content-guard.js";
+import { getManagerSuggestions } from './gmanager-suggestions.js';
+import {
+    configureBiography,
+    configureGManager,
+    lockPlayerPopupHeight,
+    renderPlayerAffiliation,
+    setHistoryAvailability,
+    setPlayerPopupTab
+} from "./player-popup-ui.js";
 
 const activeListeners = new Map();
 
@@ -13,7 +22,7 @@ function logUserAction(actionDescription) {
         console.log("Nenhum utilizador logado para registar a ação.");
         return;
     }
-    
+
     try {
         const eyeCollection = collection(db, 'eye');
         void addDoc(eyeCollection, {
@@ -46,7 +55,7 @@ window.resolvePlayerImage = function(img, code) {
     }
     const extensions = ['webp', 'png', 'jpg', 'jpeg', 'svg'];
     const currentIndex = parseInt(img.dataset.tryIndex);
-    
+
     if (currentIndex < extensions.length) {
         img.dataset.tryIndex = (currentIndex + 1).toString();
         img.src = `assets/faces/face_${code}.${extensions[currentIndex]}`;
@@ -85,6 +94,8 @@ async function getUserEstatuto(userId) {
  * @returns {Promise<string>} The username or the original user ID as fallback.
  */
 const usernameCache = new Map();
+const countryDetailsCache = new Map();
+const clubDetailsCache = new Map();
 
 async function getUsername(userId) {
     if (!userId) return 'Utilizador';
@@ -114,11 +125,65 @@ async function getUsername(userId) {
     return 'Utilizador';
 }
 
+async function getCountryDetails(countryId) {
+    if (!countryId) return null;
+    if (countryDetailsCache.has(countryId)) return countryDetailsCache.get(countryId);
+
+    try {
+        const countrySnap = await getDoc(doc(db, 'paises', countryId));
+        const country = countrySnap.exists() ? countrySnap.data() : null;
+        countryDetailsCache.set(countryId, country);
+        return country;
+    } catch (error) {
+        console.warn(`Não foi possível carregar o país com o ID ${countryId}.`, error);
+        return null;
+    }
+}
+
+async function getClubDetails(playerData) {
+    const clubId = playerData?.clubeId || '';
+    const clubName = playerData?.clube || '';
+    const cacheKey = clubId || clubName;
+    if (!cacheKey) return null;
+    if (clubDetailsCache.has(cacheKey)) return clubDetailsCache.get(cacheKey);
+
+    try {
+        let club = null;
+        if (clubId) {
+            const clubSnap = await getDoc(doc(db, 'clubes', clubId));
+            club = clubSnap.exists() ? clubSnap.data() : null;
+        }
+
+        if (!club && clubName) {
+            const clubQuery = query(collection(db, 'clubes'), where('nome', '==', clubName));
+            const clubSnap = await getDocs(clubQuery);
+            club = clubSnap.empty ? null : clubSnap.docs[0].data();
+        }
+
+        clubDetailsCache.set(cacheKey, club);
+        return club;
+    } catch (error) {
+        console.warn(`Não foi possível carregar a equipa ${clubName || clubId}.`, error);
+        return null;
+    }
+}
+
+function formatMovementSeason(value) {
+    const season = String(value ?? '').trim();
+    if (/^\d{8}$/.test(season)) {
+        return `${season.slice(0, 4)}/${season.slice(4)}`;
+    }
+    if (/^\d{4}[-/]\d{4}$/.test(season)) {
+        return season.replace('-', '/');
+    }
+    return season || 'Temporada não indicada';
+}
+
 /**
  * Removes any existing success or error messages from the popup.
  */
 function clearPopupMessages() {
-    const popupContent = document.querySelector('.popup-content');
+    const popupContent = document.querySelector('#playerPopup .popup-content');
     if (!popupContent) return;
     const existingError = popupContent.querySelector('.error-message');
     const existingSuccess = popupContent.querySelector('.success-message');
@@ -137,9 +202,9 @@ function displayErrorMessage(popupContent, message) {
     const errorElement = document.createElement('div');
     errorElement.className = 'error-message';
     errorElement.textContent = message;
-    const statsSection = popupContent.querySelector('.popup-stats');
-    if (statsSection) {
-        statsSection.insertAdjacentElement('afterend', errorElement);
+    const feedbackAnchor = popupContent.querySelector('.popup-affiliation') || popupContent.querySelector('.popup-stats');
+    if (feedbackAnchor) {
+        feedbackAnchor.insertAdjacentElement('afterend', errorElement);
     } else {
         popupContent.appendChild(errorElement);
     }
@@ -156,9 +221,9 @@ function displaySuccessMessage(popupContent, message) {
     const successElement = document.createElement('div');
     successElement.className = 'success-message';
     successElement.textContent = message;
-    const statsSection = popupContent.querySelector('.popup-stats');
-    if (statsSection) {
-        statsSection.insertAdjacentElement('afterend', successElement);
+    const feedbackAnchor = popupContent.querySelector('.popup-affiliation') || popupContent.querySelector('.popup-stats');
+    if (feedbackAnchor) {
+        feedbackAnchor.insertAdjacentElement('afterend', successElement);
     } else {
         popupContent.appendChild(successElement);
     }
@@ -179,6 +244,32 @@ function getTierClass(casta) {
     }
 }
 
+function getPositionIconName(position) {
+    switch (position) {
+        case 'Guarda-Redes': return 'mitten';
+        case 'Defesa': return 'shield';
+        case 'Médio': return 'puzzle-piece';
+        case 'Avançado': return 'bullseye';
+        default: return 'futbol';
+    }
+}
+
+function setPopupPositionIcon(position) {
+    const icon = document.getElementById('popupPlayerPositionIcon');
+    if (!icon) return;
+    icon.setAttribute('name', getPositionIconName(position));
+    icon.setAttribute('aria-label', position || 'Posição');
+}
+
+function setPopupCastaIcon(casta) {
+    const icon = document.getElementById('popupPlayerCastaIcon');
+    if (!icon) return;
+    const castaClasses = ['gold', 'silver', 'bronze', 'platinum'];
+    icon.classList.remove(...castaClasses);
+    const tierClass = getTierClass(casta);
+    if (tierClass) icon.classList.add(tierClass);
+}
+
 // --- Core Logic Functions ---
 
 /**
@@ -186,7 +277,7 @@ function getTierClass(casta) {
  * @param {object} player - The player data object from Firestore.
  * @returns {Promise<HTMLElement>} The created card element.
  */
-async function createPlayerCard(player) {
+async function createPlayerCard(player, season) {
     if (!player || !player.id) {
         console.warn("createPlayerCard chamada com jogador inválido ou ID em falta:", player);
         return null;
@@ -250,7 +341,10 @@ async function createPlayerCard(player) {
         if (!buyButtonCard) return;
 
         if (docSnapshot.exists()) {
-            const updatedPlayer = docSnapshot.data();
+            const rawUpdatedPlayer = docSnapshot.data();
+            // O estado de compra pertence à época. O campo na raiz é legado e
+            // não pode substituir um valor vazio da época actualmente exibida.
+            const updatedPlayer = getPlayerSeasonData(rawUpdatedPlayer, season) || rawUpdatedPlayer;
             const compradorUserId = updatedPlayer?.compradopor;
             if (compradorUserId) {
                 const compradorUsernameCard = await getUsername(compradorUserId);
@@ -290,11 +384,18 @@ async function createPlayerCard(player) {
         }
 
         card.classList.add('card-loading');
+        card.setAttribute('aria-busy', 'true');
+        card.setAttribute('aria-label', `A abrir ${player.nome || 'jogador'}...`);
+        const stopCardLoading = () => {
+            card.classList.remove('card-loading');
+            card.removeAttribute('aria-busy');
+            card.removeAttribute('aria-label');
+        };
 
         const popup = document.getElementById('playerPopup');
         if (!popup) {
             console.error("Popup element not found!");
-            card.classList.remove('card-loading');
+            stopCardLoading();
             return;
         }
 
@@ -316,18 +417,16 @@ async function createPlayerCard(player) {
 
         const popupImage = document.getElementById('popupPlayerImage');
         const popupName = document.getElementById('popupPlayerName');
-        const popupClub = document.getElementById('popupPlayerClub');
         const popupOverall = document.getElementById('popupPlayerOverall');
         const popupPrice = document.getElementById('popupPlayerPrice');
         const popupCasta = document.getElementById('popupPlayerCasta');
         const popupBuyButton = document.getElementById('popupBuyButton');
-        const popupCountryFlag = document.getElementById('popupCountryFlag');
         const popupPlayerPosicaoElement = document.getElementById('popupPlayerPosicao');
-        const playerPopupContent = document.querySelector('.popup-content');
+        const playerPopupContent = popup.querySelector('.player-popup-card');
 
-        if (!popupImage || !popupName || !popupClub || !popupOverall || !popupPrice || !popupCasta || !popupBuyButton || !popupCountryFlag || !popupPlayerPosicaoElement || !playerPopupContent) {
+        if (!popupImage || !popupName || !popupOverall || !popupPrice || !popupCasta || !popupBuyButton || !popupPlayerPosicaoElement || !playerPopupContent) {
             console.error("One or more essential popup elements were not found!");
-            card.classList.remove('card-loading');
+            stopCardLoading();
             alert("Erro ao carregar o popup do jogador.");
             return;
         }
@@ -337,7 +436,7 @@ async function createPlayerCard(player) {
             const freshPlayerSnap = await getDoc(playerDocRefPopup);
             if (!freshPlayerSnap.exists()) {
                 console.error("Player data not found for popup.");
-                card.classList.remove('card-loading');
+                stopCardLoading();
                 alert("Detalhes do jogador não encontrados.");
                 return;
             }
@@ -346,45 +445,92 @@ async function createPlayerCard(player) {
             const mostRecentSeasonPopup = seasonsList[0] || '2025/2026';
             const currentPlayerPopupData = getPlayerSeasonData(rawPlayerPopupData, mostRecentSeasonPopup) || rawPlayerPopupData;
 
-            let popupPaisImagem = '';
-            if (currentPlayerPopupData?.paisId) {
-                try {
-                    const popupPaisDoc = await getDoc(doc(db, 'paises', currentPlayerPopupData.paisId));
-                    popupPaisImagem = popupPaisDoc.exists() ? popupPaisDoc.data()?.imagem || '' : '';
-                } catch (error) {
-                    console.warn(`Could not fetch country data for popup (ID: ${currentPlayerPopupData.paisId})`, error);
-                }
-            }
+            const [popupCountryData, popupClubData] = await Promise.all([
+                getCountryDetails(currentPlayerPopupData?.paisId),
+                getClubDetails(currentPlayerPopupData)
+            ]);
+            const managerSuggestionsPromise = getManagerSuggestions(db, {
+                playerData: currentPlayerPopupData,
+                countryName: popupCountryData?.nome || currentPlayerPopupData?.pais,
+                clubData: popupClubData
+            });
 
             const popupCode = currentPlayerPopupData?.codigoUrl || player.codigoUrl || '';
+            const popupImageSource = currentPlayerPopupData?.imagem || (popupCode ? `assets/faces/face_${popupCode}.webp` : DEFAULT_SVG_PLACEHOLDER);
+            popupImage.onerror = null;
+            popupImage.dataset.tryIndex = '0';
+            popupImage.removeAttribute('src');
             popupImage.onerror = function() { window.resolvePlayerImage(this, popupCode); };
-            popupImage.src = currentPlayerPopupData?.imagem || (popupCode ? `assets/faces/face_${popupCode}.webp` : DEFAULT_SVG_PLACEHOLDER);
+            popupImage.src = popupImageSource;
             popupImage.alt = currentPlayerPopupData?.nome || 'Player Image';
             popupName.textContent = currentPlayerPopupData?.nome || 'Nome Indisponível';
-            popupClub.textContent = currentPlayerPopupData?.clube || 'Clube Indisponível';
             popupOverall.textContent = currentPlayerPopupData?.overall || '-';
             popupPrice.textContent = `${currentPlayerPopupData?.preco || 0} gCoins`;
             popupPlayerPosicaoElement.textContent = currentPlayerPopupData?.posicao || '-';
             popupCasta.textContent = currentPlayerPopupData?.casta || '-';
-            popupCountryFlag.style.display = popupPaisImagem ? 'block' : 'none';
-            if (popupPaisImagem) popupCountryFlag.src = popupPaisImagem;
-            popupCountryFlag.alt = 'Country flag';
+            setPopupPositionIcon(currentPlayerPopupData?.posicao);
+            setPopupCastaIcon(currentPlayerPopupData?.casta);
+
+            const clubName = popupClubData?.nome || currentPlayerPopupData?.clube || 'Equipa não disponível';
+            const countryName = popupCountryData?.nome || currentPlayerPopupData?.pais || 'País não disponível';
+
+            renderPlayerAffiliation({
+                clubName,
+                clubLogo: popupClubData?.imagem || '',
+                countryName,
+                countryFlag: popupCountryData?.imagem || ''
+            });
+
+            configureBiography({
+                position: currentPlayerPopupData?.posicao,
+                club: clubName,
+                country: countryName,
+                birthDate: currentPlayerPopupData?.dataNascimento,
+                height: currentPlayerPopupData?.altura,
+                bio: rawPlayerPopupData?.bio || currentPlayerPopupData?.bio || '',
+                overall: currentPlayerPopupData?.overall
+            });
+
+            const manuallyAttachedItems = Array.isArray(currentPlayerPopupData?.gManager?.items)
+                ? currentPlayerPopupData.gManager.items
+                : [];
+
+            configureGManager({
+                data: {
+                    ...(currentPlayerPopupData?.gManager || {}),
+                    items: manuallyAttachedItems
+                },
+                loading: true
+            });
+
+            managerSuggestionsPromise.then((suggestedManagerItems) => {
+                if (popup.dataset.currentPlayerId !== player.id) return;
+                const manuallyAttachedIds = new Set(manuallyAttachedItems.map(item => item?.id).filter(Boolean));
+                configureGManager({
+                    data: {
+                        ...(currentPlayerPopupData?.gManager || {}),
+                        items: [
+                            ...manuallyAttachedItems,
+                            ...suggestedManagerItems.filter(item => !manuallyAttachedIds.has(item.id))
+                        ]
+                    }
+                });
+            }).catch((error) => console.warn('Não foi possível actualizar sugestões gManager:', error));
 
             // Check if there is history for this player in movimentos
             const historyBtn = document.getElementById('popupHistoryButton');
             if (historyBtn) {
-                historyBtn.style.display = 'none';
+                setHistoryAvailability(historyBtn, false);
                 try {
                     const movQuery = query(collection(db, 'movimentos'), where('jogadorId', '==', player.id));
                     const movSnap = await getDocs(movQuery);
                     if (!movSnap.empty) {
-                        historyBtn.style.display = 'inline-block';
+                        setHistoryAvailability(historyBtn, true);
                         historyBtn.onclick = async () => {
-                            const historyPopup = document.getElementById('historyPopup');
                             const historyList = document.getElementById('playerHistoryList');
-                            if (historyPopup && historyList) {
+                            if (historyList) {
                                 historyList.innerHTML = '<p style="text-align: center; color: #8892b0;">A carregar histórico...</p>';
-                                historyPopup.classList.add('active');
+                                setPlayerPopupTab('history');
                                 
                                 try {
                                     const promises = movSnap.docs.map(async (docSnap) => {
@@ -432,29 +578,53 @@ async function createPlayerCard(player) {
                                         return;
                                     }
 
+                                    const seasonGroups = new Map();
                                     sortedItems.forEach(itemData => {
-                                        const { mov, desc, dateStr } = itemData;
-                                        const item = document.createElement('div');
-                                        item.style.cssText = 'background: #1f2736; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); font-size: 13px; margin-bottom: 12px; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 4px 12px rgba(0,0,0,0.3);';
-                                        
-                                        let priceText = '';
-                                        if (mov.preco !== undefined) {
-                                            priceText = `<strong style="color: #ffb703; font-weight: 700;">${mov.preco} gCoins</strong>`;
-                                        } else if (mov.valorreal !== undefined) {
-                                            priceText = `<strong style="color: #ffb703; font-weight: 700;">${mov.valorreal} gCoins</strong>`;
-                                        }
-                                        
-                                        item.innerHTML = `
-                                            <div style="background: #273144; padding: 8px 12px; font-size: 11px; color: #a2a8ba; font-weight: 600; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.15);">
-                                                <span>${dateStr}</span>
-                                                <span style="font-weight: 700; text-transform: uppercase; color: #3498db; font-size: 9px; letter-spacing: 0.5px; padding: 2px 6px; background: rgba(52, 152, 219, 0.15); border-radius: 4px;">${mov.tipo || 'Movimento'}</span>
-                                            </div>
-                                            <div style="padding: 12px; display: flex; justify-content: space-between; align-items: center; gap: 10px;">
-                                                <span style="color: #cbd5e1; line-height: 1.4; font-size: 12px;">${desc}</span>
-                                                <span style="white-space: nowrap;">${priceText}</span>
-                                            </div>
-                                        `;
-                                        historyList.appendChild(item);
+                                        const season = formatMovementSeason(itemData.mov?.temporada);
+                                        if (!seasonGroups.has(season)) seasonGroups.set(season, []);
+                                        seasonGroups.get(season).push(itemData);
+                                    });
+
+                                    seasonGroups.forEach((seasonItems, season) => {
+                                        const seasonGroup = document.createElement('section');
+                                        seasonGroup.className = 'history-season-group';
+
+                                        const seasonHeading = document.createElement('h4');
+                                        seasonHeading.className = 'history-season-heading';
+                                        seasonHeading.textContent = season;
+                                        seasonGroup.appendChild(seasonHeading);
+
+                                        const seasonMovements = document.createElement('div');
+                                        seasonMovements.className = 'history-season-movements';
+
+                                        seasonItems.forEach(itemData => {
+                                            const { mov, desc, dateStr } = itemData;
+                                            const item = document.createElement('div');
+                                            item.className = 'history-movement-card';
+                                            item.style.cssText = 'background: #1f2736; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); font-size: 13px; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 4px 12px rgba(0,0,0,0.3);';
+
+                                            let priceText = '';
+                                            if (mov.preco !== undefined) {
+                                                priceText = `<strong style="color: #ffb703; font-weight: 700;">${mov.preco} gCoins</strong>`;
+                                            } else if (mov.valorreal !== undefined) {
+                                                priceText = `<strong style="color: #ffb703; font-weight: 700;">${mov.valorreal} gCoins</strong>`;
+                                            }
+
+                                            item.innerHTML = `
+                                                <div style="background: #273144; padding: 8px 12px; font-size: 11px; color: #a2a8ba; font-weight: 600; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.15);">
+                                                    <span>${dateStr}</span>
+                                                    <span style="font-weight: 700; text-transform: uppercase; color: #3498db; font-size: 9px; letter-spacing: 0.5px; padding: 2px 6px; background: rgba(52, 152, 219, 0.15); border-radius: 4px;">${mov.tipo || 'Movimento'}</span>
+                                                </div>
+                                                <div style="padding: 12px; display: flex; justify-content: space-between; align-items: center; gap: 10px;">
+                                                    <span style="color: #cbd5e1; line-height: 1.4; font-size: 12px;">${desc}</span>
+                                                    <span style="white-space: nowrap;">${priceText}</span>
+                                                </div>
+                                            `;
+                                            seasonMovements.appendChild(item);
+                                        });
+
+                                        seasonGroup.appendChild(seasonMovements);
+                                        historyList.appendChild(seasonGroup);
                                     });
                                 } catch (err) {
                                     console.error("Error building player history list:", err);
@@ -672,13 +842,15 @@ async function createPlayerCard(player) {
             };
 
             setTimeout(() => {
-                card.classList.remove('card-loading');
+                stopCardLoading();
+                setPlayerPopupTab('overview');
                 popup.classList.add('active');
+                requestAnimationFrame(lockPlayerPopupHeight);
             }, 500);
 
         } catch (error) {
             console.error("Error preparing player popup:", error);
-            card.classList.remove('card-loading');
+            stopCardLoading();
             alert("Erro ao carregar detalhes do jogador.");
         }
     });
@@ -772,7 +944,7 @@ async function loadPlayers() {
         const cardCreationPromises = marketPlayers.map(player => {
             const grid = playersGrids[player.posicao];
             if (grid) {
-                return createPlayerCard(player)
+                return createPlayerCard(player, mostRecentSeason)
                     .then(card => ({
                         grid,
                         card
@@ -1225,6 +1397,9 @@ onAuthStateChanged(auth, async (user) => {
 // --- Event Listeners Setup ---
 
 document.addEventListener('DOMContentLoaded', () => {
+    setPlayerPopupTab('overview');
+    document.getElementById('popupSummaryButton')?.addEventListener('click', () => setPlayerPopupTab('overview'));
+
     // Player popup logic
     const popup = document.getElementById('playerPopup');
     const closePlayerPopup = document.getElementById('closePlayerPopup');
@@ -1246,6 +1421,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             clearPopupMessages();
+            setPlayerPopupTab('overview');
+            popup.querySelector('.player-popup-card')?.style.removeProperty('height');
         }
     };
 
@@ -1253,20 +1430,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (popup) popup.addEventListener('click', (e) => {
         if (e.target === popup) closePopup();
     });
-
-    // History popup logic
-    const historyPopup = document.getElementById('historyPopup');
-    const closeHistoryPopup = document.getElementById('closeHistoryPopup');
-    if (closeHistoryPopup) {
-        closeHistoryPopup.addEventListener('click', () => {
-            if (historyPopup) historyPopup.classList.remove('active');
-        });
-    }
-    if (historyPopup) {
-        historyPopup.addEventListener('click', (e) => {
-            if (e.target === historyPopup) historyPopup.classList.remove('active');
-        });
-    }
 
     // Schedules popup logic
     const countdownContainer = document.getElementById('countdown-container');
