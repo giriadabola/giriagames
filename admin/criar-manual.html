@@ -145,6 +145,8 @@
             border-bottom: none;
             padding: 10px;
             border-radius: 8px 8px 0 0;
+            align-items: center;
+            flex-wrap: wrap;
         }
         .toolbar-btn { 
             background: #111622; 
@@ -160,6 +162,51 @@
             background-color: rgba(33, 118, 255, 0.2); 
             color: #ffffff; 
             border-color: rgba(33, 118, 255, 0.4); 
+        }
+
+        .color-toolbar-group {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: #111622;
+            padding: 4px 10px;
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            margin-left: 4px;
+        }
+        .color-swatch-btn {
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            cursor: pointer;
+            transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+            padding: 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            outline: none;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        .color-swatch-btn:hover {
+            transform: scale(1.25);
+            border-color: #ffffff;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+        }
+        .color-swatch-btn.reset-swatch {
+            background-color: transparent;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #8892b0;
+            font-size: 11px;
+            border-radius: 4px;
+            width: 24px;
+            height: 22px;
+            box-shadow: none;
+        }
+        .color-swatch-btn.reset-swatch:hover {
+            color: #ffffff;
+            background-color: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.4);
         }
         
         #note-content { 
@@ -675,7 +722,22 @@
                     </div>
                     <div class="form-group">
                         <label for="note-content">Conteúdo:</label>
-                        <div class="editor-toolbar"><button type="button" class="toolbar-btn" id="bold-btn" title="Negrito"><i class="fas fa-bold"></i></button><button type="button" class="toolbar-btn" id="italic-btn" title="Itálico"><i class="fas fa-italic"></i></button><button type="button" class="toolbar-btn" id="columns-btn" title="Duas Colunas"><i class="fas fa-columns"></i></button><button type="button" class="toolbar-btn" id="image-btn" title="Inserir Imagem"><i class="fas fa-image"></i></button><button type="button" class="toolbar-btn" id="link-btn" title="Anexar Painel"><i class="fas fa-link"></i></button></div>
+                        <div class="editor-toolbar">
+                            <button type="button" class="toolbar-btn" id="bold-btn" title="Negrito"><i class="fas fa-bold"></i></button>
+                            <button type="button" class="toolbar-btn" id="italic-btn" title="Itálico"><i class="fas fa-italic"></i></button>
+                            <button type="button" class="toolbar-btn" id="columns-btn" title="Duas Colunas"><i class="fas fa-columns"></i></button>
+                            <button type="button" class="toolbar-btn" id="image-btn" title="Inserir Imagem"><i class="fas fa-image"></i></button>
+                            <button type="button" class="toolbar-btn" id="link-btn" title="Anexar Painel"><i class="fas fa-link"></i></button>
+                            <div class="color-toolbar-group" title="Cores de Texto">
+                                <span style="font-size: 13px; color: #8892b0; margin-right: 2px; display: flex; align-items: center;"><i class="fas fa-palette"></i></span>
+                                <button type="button" class="color-swatch-btn" data-color="#2ecc71" title="Verde (#2ecc71)" style="background-color: #2ecc71;"></button>
+                                <button type="button" class="color-swatch-btn" data-color="#2176ff" title="Azul (#2176ff)" style="background-color: #2176ff;"></button>
+                                <button type="button" class="color-swatch-btn" data-color="#ff4757" title="Vermelho (#ff4757)" style="background-color: #ff4757;"></button>
+                                <button type="button" class="color-swatch-btn" data-color="#ffb703" title="Amarelo (#ffb703)" style="background-color: #ffb703;"></button>
+                                <button type="button" class="color-swatch-btn" data-color="#a55eea" title="Roxo (#a55eea)" style="background-color: #a55eea;"></button>
+                                <button type="button" class="color-swatch-btn reset-swatch" id="color-reset-btn" title="Remover Cor (Cor Padrão)"><i class="fas fa-eraser"></i></button>
+                            </div>
+                        </div>
                         <div id="note-content" contenteditable="true"></div>
                     </div>
                     <div class="form-group" id="attached-pages-group" style="margin-top: 20px;">
@@ -885,7 +947,21 @@ async function loadExplicacoesParaAutoLink() {
 
         // --- Funções Originais do Editor --- //
 
-        function formatDoc(command, value = null) { noteContentInput.focus(); document.execCommand(command, false, value); }
+        function formatDoc(command, value = null) {
+            noteContentInput.focus();
+            try { document.execCommand('styleWithCSS', false, true); } catch (e) {}
+            document.execCommand(command, false, value);
+        }
+
+        function applyTextColor(color) {
+            noteContentInput.focus();
+            try { document.execCommand('styleWithCSS', false, true); } catch (e) {}
+            if (color === 'reset' || !color) {
+                document.execCommand('removeFormat', false, 'foreColor');
+            } else {
+                document.execCommand('foreColor', false, color);
+            }
+        }
         function insertImage() { const url = prompt("Introduza o URL da imagem:"); if (url) { const imgTag = `<img src="${url}" style="max-width: 100%; height: auto;">`; formatDoc('insertHTML', imgTag); } }
         function insertTwoColumns() { const html = `<p>&nbsp;</p><table style="width:100%; border-collapse: collapse;"><tbody><tr><td style="width:50%; padding:10px; border:1px dashed #ccc; vertical-align:top;"><p>Coluna 1...</p></td><td style="width:50%; padding:10px; border:1px dashed #ccc; vertical-align:top;"><p>Coluna 2...</p></td></tr></tbody></table><p>&nbsp;</p>`; formatDoc('insertHTML', html); }
         function saveSelection() { const sel = window.getSelection(); if (sel.rangeCount > 0) savedSelection = sel.getRangeAt(0); }
@@ -1181,7 +1257,8 @@ async function loadExplicacoesParaAutoLink() {
             if (currentTitleSvg) {
                 title = currentTitleSvg + ' ' + title;
             }
-            const content = noteContentInput.innerHTML.trim();
+            let content = noteContentInput.innerHTML.trim();
+            content = content.replace(/<font\s+color=["']?([^"'>]+)["']?>([\s\S]*?)<\/font>/gi, '<span style="color: $1;">$2</span>');
             if(!title) return alert("O título não pode estar vazio.");
             const paginasAnexadas = getSelectedPages();
             const dataToSave = { 
@@ -1341,6 +1418,16 @@ async function loadExplicacoesParaAutoLink() {
             columnsBtn.addEventListener('click', insertTwoColumns);
             imageBtn.addEventListener('click', insertImage);
             linkBtn.addEventListener('click', openModal);
+
+            document.querySelectorAll('.color-swatch-btn[data-color]').forEach(btn => {
+                btn.addEventListener('mousedown', e => e.preventDefault());
+                btn.addEventListener('click', () => applyTextColor(btn.dataset.color));
+            });
+            const colorResetBtn = document.getElementById('color-reset-btn');
+            if (colorResetBtn) {
+                colorResetBtn.addEventListener('mousedown', e => e.preventDefault());
+                colorResetBtn.addEventListener('click', () => applyTextColor('reset'));
+            }
             modalTypeSelect.addEventListener('change', e => populateModalList(e.target.value)); modalAttachBtn.addEventListener('click', attachLink); modalCancelBtn.addEventListener('click', closeModal); linkModal.addEventListener('click', e => { e.target === linkModal && closeModal() });
             const svgEditorContextMenu = document.getElementById('svg-editor-context-menu');
             const removeSvgEditorBtn = document.getElementById('remove-svg-editor-btn');
