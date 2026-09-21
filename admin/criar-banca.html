@@ -54,6 +54,8 @@
         .pending-loans-button:hover { background: #dc3545; color: white; }
         .pending-loans-count { position: absolute; top: -9px; right: -9px; min-width: 22px; height: 22px; padding: 2px 5px; border-radius: 11px; background: #dc3545; color: white; font-size: 12px; line-height: 18px; font-weight: bold; }
         .pending-loan-info { display: none; margin-bottom: 16px; padding: 10px 12px; border-left: 4px solid #ffc107; border-radius: 4px; background: #fff3cd; color: #664d03; font-size: 14px; }
+        .popup-button.reject { background-color: #dc3545; color: white; }
+        .popup-button.reject:hover { background-color: #c82333; }
     /* --- Estilos do Painel de Ajuda Flutuante --- */
 .helper-btn {
     right: 55px !important; /* Fica ao lado do botão de fechar (que está a 15px) */
@@ -610,7 +612,8 @@
                     <input type="number" id="loan-interest" placeholder="Ex: 50" value="0" required min="0" step="1">
                 </div>
                 <div class="popup-buttons">
-                    <button type="submit" class="popup-button confirm">Confirmar</button>
+                    <button type="submit" class="popup-button confirm" id="confirm-loan-btn">Confirmar</button>
+                    <button type="button" class="popup-button reject" id="reject-loan-btn" style="display: none;">Rejeitar Pedido</button>
                     <button type="button" class="popup-button cancel" id="cancel-loan-btn">Cancelar</button>
                 </div>
             </form>
@@ -714,7 +717,7 @@
 
     <script type="module">
         import { adminAuthReady, db } from './js/auth-guard.js';
-        import { doc, getDoc, setDoc, collection, query, where, getDocs, addDoc, Timestamp, writeBatch, orderBy, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs, addDoc, Timestamp, writeBatch, orderBy, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
         import { compactSeason, getLatestSeason, getSeasonData } from '../core/user-season.js';
 
         // Elements
@@ -736,6 +739,8 @@
         const pendingLoansBtn = document.getElementById('pending-loans-btn');
         const pendingLoansCount = document.getElementById('pending-loans-count');
         const pendingLoanInfo = document.getElementById('pending-loan-info');
+        const confirmLoanBtn = document.getElementById('confirm-loan-btn');
+        const rejectLoanBtn = document.getElementById('reject-loan-btn');
         const openQueryPopupBtn = document.getElementById('open-query-popup-btn');
         const queryPopup = document.getElementById('query-popup');
         const queryUserSelect = document.getElementById('query-user-select');
@@ -882,6 +887,10 @@
             loanFeedback.textContent = '';
             loanForm.reset();
             userSelect.disabled = false;
+            confirmLoanBtn.disabled = false;
+            confirmLoanBtn.textContent = 'Confirmar';
+            rejectLoanBtn.disabled = false;
+            rejectLoanBtn.style.display = 'none';
             pendingLoanInfo.style.display = 'none';
             pendingLoanInfo.textContent = '';
         }
@@ -900,6 +909,8 @@
             loanAmountInput.value = request.valor;
             loanDescriptionInput.value = 'Pedido de empréstimo';
             loanInterestInput.value = 0;
+            confirmLoanBtn.textContent = 'Aceitar e Conceder';
+            rejectLoanBtn.style.display = 'block';
             pendingLoanInfo.textContent = `Pedido de ${request.userName}: ${request.valor} gCoins`;
             pendingLoanInfo.style.display = 'block';
             loanFeedback.textContent = '';
@@ -910,6 +921,8 @@
             e.preventDefault(); const uid = userSelect.value; const amt = parseFloat(loanAmountInput.value);
             if (!uid || isNaN(amt) || amt <= 0) return;
             const requestBeingProcessed = activeLoanRequest;
+            confirmLoanBtn.disabled = true;
+            if (requestBeingProcessed) rejectLoanBtn.disabled = true;
             loanFeedback.textContent = 'Processando...';
             try {
                 const batch = writeBatch(db);
@@ -930,7 +943,33 @@
                 movimentosSum -= amt; updateCalculatedTotal(); loanPopup.style.display = 'none';
                 resetLoanPopup();
                 await loadPendingLoanRequests();
-            } catch (e) { console.error(e); loanFeedback.textContent = 'Erro.'; }
+            } catch (e) {
+                console.error(e);
+                confirmLoanBtn.disabled = false;
+                if (requestBeingProcessed) rejectLoanBtn.disabled = false;
+                loanFeedback.textContent = 'Erro.';
+            }
+        }
+
+        async function rejectPendingLoanRequest() {
+            if (!activeLoanRequest) return;
+            rejectLoanBtn.disabled = true;
+            confirmLoanBtn.disabled = true;
+            loanFeedback.textContent = 'A rejeitar pedido...';
+            try {
+                await updateDoc(doc(db, 'pedidosEmprestimo', activeLoanRequest.id), {
+                    estado: 'Rejeitado',
+                    validadoEm: Timestamp.now()
+                });
+                loanPopup.style.display = 'none';
+                resetLoanPopup();
+                await loadPendingLoanRequests();
+            } catch (e) {
+                console.error('Erro ao rejeitar pedido de empréstimo:', e);
+                rejectLoanBtn.disabled = false;
+                confirmLoanBtn.disabled = false;
+                loanFeedback.textContent = 'Não foi possível rejeitar o pedido.';
+            }
         }
 
         async function handleTaxaSubmit(e) {
@@ -1010,6 +1049,7 @@
                  pendingLoansBtn.addEventListener('click', () => {
                      if (pendingLoanRequests.length) openLoanPopupForRequest(pendingLoanRequests[0]);
                  });
+                 rejectLoanBtn.addEventListener('click', rejectPendingLoanRequest);
                  cancelLoanBtn.addEventListener('click', () => { resetLoanPopup(); loanPopup.style.display = 'none'; });
                  loanPopup.addEventListener('click', (e) => { if (e.target === loanPopup) { resetLoanPopup(); loanPopup.style.display = 'none'; } });
                  loanForm.addEventListener('submit', handleLoanSubmit);
