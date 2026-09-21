@@ -13,6 +13,7 @@ export const ATEMPORAL_FIELDS = [
     'altura',
     'pais',
     'paisId',
+    'bio',
     'ativo',
     'retirado',
     'ultimaAtualizacao'
@@ -138,6 +139,7 @@ export function getPlayerSeasonData(playerDocData, targetSeason) {
         altura: playerDocData.altura ?? sampleSeasonObj.altura ?? null,
         pais: playerDocData.pais ?? sampleSeasonObj.pais ?? '',
         paisId: playerDocData.paisId ?? sampleSeasonObj.paisId ?? '',
+        bio: playerDocData.bio ?? sampleSeasonObj.bio ?? '',
         ativo: playerDocData.ativo !== undefined ? Boolean(playerDocData.ativo) : (sampleSeasonObj.ativo !== undefined ? Boolean(sampleSeasonObj.ativo) : true),
         retirado: playerDocData.retirado !== undefined ? Boolean(playerDocData.retirado) : (sampleSeasonObj.retirado !== undefined ? Boolean(sampleSeasonObj.retirado) : false),
         ultimaAtualizacao: playerDocData.ultimaAtualizacao ?? sampleSeasonObj.ultimaAtualizacao ?? ''
@@ -230,4 +232,3 @@ export function buildPlayerSeasonUpdatePayload(season, playerData) {
         [season]: seasonPayload
     };
 }
-

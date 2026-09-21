@@ -181,8 +181,9 @@
 
 
     <link rel="stylesheet" href="css/admin-global.css">
+    <link rel="stylesheet" href="css/manager-admin.css">
 </head>
-<body style="display: none;">
+<body class="manager-admin-page manager-create-page" style="display: none;">
 
     <!-- ALTERAÇÃO 2: O menu estático foi substituído pelo placeholder dinâmico. -->
     <nav id="menu-placeholder" class="top-menu"></nav>
@@ -235,6 +236,27 @@
                 <label for="nota">Nota <span class="optional-text">(Opcional)</span></label>
                 <textarea id="nota" name="nota" rows="4" placeholder="Descreva o item..."></textarea>
             </div>
+
+            <fieldset class="manager-gain-section">
+                <legend><i class="fas fa-chart-line"></i> Mecanismos de Ganho</legend>
+                <p class="manager-gain-description">Todos os campos desta secção são opcionais.</p>
+                <div class="manager-gain-grid">
+                    <div class="form-group">
+                        <label for="ganhoPontosPais">No fim da temporada: pontos globais por jogador no plantel do país</label>
+                        <input type="number" id="ganhoPontosPais" min="0" step="1" placeholder="Ex.: 5">
+                        <select id="ganhoPaises" multiple aria-label="Países do plantel"></select>
+                    </div>
+                    <div class="form-group">
+                        <label for="ganhoPontosLiga">No fim da temporada: pontos globais por jogador no plantel da liga</label>
+                        <input type="number" id="ganhoPontosLiga" min="0" step="1" placeholder="Ex.: 10">
+                        <select id="ganhoLigasPlantel" multiple aria-label="Ligas do plantel"></select>
+                    </div>
+                    <div class="form-group">
+                        <label for="ganhoLigasGrandeJogador">Ao longo da temporada: encontrar um grande jogador da liga</label>
+                        <select id="ganhoLigasGrandeJogador" multiple aria-label="Ligas para encontrar um grande jogador"></select>
+                    </div>
+                </div>
+            </fieldset>
 
             <div class="form-group">
                 <label for="competicoes">Competições <span class="optional-text">(Multiescolha - Opcional)</span></label>
@@ -339,7 +361,7 @@
             </div>
 
             <div class="form-group">
-                <label for="compradoPor">Comprado Por <span class="optional-text">(Multiescolha - Opcional)</span></label>
+                <label for="compradoPor">Comprado Por</label>
                 <select id="compradoPor" name="compradoPor" multiple placeholder="Selecione os usuários...">
                 </select>
             </div>
@@ -351,10 +373,13 @@
 
     <script type="module">
     import { db } from './js/auth-guard.js';
+    import { initializeManagerGainFields } from './js/manager-gain-fields.js';
     import { collection, getDocs, addDoc, serverTimestamp, query, where, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
     let competicoesChoicesInstance = null;
     let compradoPorChoicesInstance = null;
+    let managerGainFields = null;
+    let managerGainFieldsReady = Promise.resolve();
 
     async function loadCompeticoes() {
         const competicoesSelect = document.getElementById('competicoes');
@@ -567,6 +592,7 @@
 
         submitButton.disabled = true;
         submitButton.textContent = 'A Criar...';
+        await managerGainFieldsReady;
 
         const tipo = form.tipo.value;
         const nome = form.nome.value;
@@ -580,6 +606,7 @@
 
         const selectedCompeticoes = competicoesChoicesInstance ? competicoesChoicesInstance.getValue(true) : [];
         const selectedUsers = compradoPorChoicesInstance ? compradoPorChoicesInstance.getValue(true) : [];
+        const mecanismosGanho = managerGainFields?.getValue() || {};
 
         const itemData = {
             tipo: tipo,
@@ -593,6 +620,7 @@
             ...(ordemValue && { ordem: parseInt(ordemValue, 10) }),
             ...(selectedUsers.length > 0 && { compradoPorUids: selectedUsers }),
             ...(selectedCompeticoes.length > 0 && { competicoesIds: selectedCompeticoes }),
+            ...(Object.keys(mecanismosGanho).length > 0 && { mecanismosGanho }),
             criadoEm: serverTimestamp()
         };
 
@@ -608,6 +636,7 @@
             if (compradoPorChoicesInstance) {
                 compradoPorChoicesInstance.setChoiceByValue([]);
             }
+            managerGainFields?.clear();
 
             form.reset(); // Maneira mais simples de limpar o formulário
             suggestNextOrdem(); // Recalcula a ordem caso o tipo/anexo não tenham mudado
@@ -624,7 +653,10 @@
     document.addEventListener('DOMContentLoaded', () => {
         loadCompeticoes();
         loadUsers();
-        loadAnexadoOptions(); 
+        loadAnexadoOptions();
+        managerGainFieldsReady = initializeManagerGainFields(db)
+            .then((fields) => { managerGainFields = fields; })
+            .catch((error) => console.error('Erro ao carregar mecanismos de ganho:', error));
 
         const managerItemForm = document.getElementById('manager-item-form');
         if (managerItemForm) {

@@ -784,8 +784,9 @@
             background-color: #1f6feb !important;
         }
     </style>
+    <link rel="stylesheet" href="css/manager-admin.css?v=20260921_gain">
 </head>
-<body style="display: none;">
+<body class="manager-admin-page manager-edit-page" style="display: none;">
 
     <!-- ALTERAÇÃO 2: O menu estático foi substituído pelo placeholder dinâmico. -->
     <nav id="menu-placeholder" class="top-menu"></nav>
@@ -832,6 +833,26 @@
                 <div class="form-group"> <label for="anexadoItem">Anexado? <span class="optional-text">(Mentalidade ou Estádio - Opcional)</span></label> <select id="anexadoItem" name="anexadoItem"> <option value="" selected enable>-- Selecione Item Anexado (Opcional) --</option> </select> </div>
                 <div class="form-group"> <label for="valor">Valor <span class="optional-text">(Opcional)</span></label> <input type="number" id="valor" name="valor" placeholder="Ex: 1000" step="any"> </div>
                 <div class="form-group"> <label for="nota">Nota <span class="optional-text">(Opcional)</span></label> <textarea id="nota" name="nota" rows="4" placeholder="Descreva o item..."></textarea> </div>
+                <fieldset class="manager-gain-section">
+                    <legend><i class="fas fa-chart-line"></i> Mecanismos de Ganho</legend>
+                    <p class="manager-gain-description">Todos os campos desta secção são opcionais.</p>
+                    <div class="manager-gain-grid">
+                        <div class="form-group">
+                            <label for="ganhoPontosPais">No fim da temporada: pontos globais por jogador no plantel do país</label>
+                            <input type="number" id="ganhoPontosPais" min="0" step="1" placeholder="Ex.: 5">
+                            <select id="ganhoPaises" multiple aria-label="Países do plantel"></select>
+                        </div>
+                        <div class="form-group">
+                            <label for="ganhoPontosLiga">No fim da temporada: pontos globais por jogador no plantel da liga</label>
+                            <input type="number" id="ganhoPontosLiga" min="0" step="1" placeholder="Ex.: 10">
+                            <select id="ganhoLigasPlantel" multiple aria-label="Ligas do plantel"></select>
+                        </div>
+                        <div class="form-group">
+                            <label for="ganhoLigasGrandeJogador">Ao longo da temporada: encontrar um grande jogador da liga</label>
+                            <select id="ganhoLigasGrandeJogador" multiple aria-label="Ligas para encontrar um grande jogador"></select>
+                        </div>
+                    </div>
+                </fieldset>
                 <div class="form-group"> <label for="competicoes">Competições <span class="optional-text">(Multiescolha - Opcional)</span></label> <select id="competicoes" name="competicoes" multiple placeholder="Selecione as competições..."> </select> </div>
                 <div class="form-group"> <label for="nivel">Nível <span class="optional-text">(Opcional)</span></label> <select id="nivel" name="nivel"> <option value="">-- Selecione o Nível (se aplicável) --</option> <option value="Nível 1">Nível 1</option> <option value="Nível 2">Nível 2</option> <option value="Nível 3">Nível 3</option> </select> </div>
                 <div class="form-group"> <label for="noMercado">No Mercado?</label> <select id="noMercado" name="noMercado"> <option value="" selected disabled>-- Selecione --</option> <option value="sim">Sim</option> <option value="nao">Não</option> </select> </div>
@@ -911,7 +932,7 @@
                         <option value="70">70</option>
                     </select>
                 </div>
-                <div class="form-group"> <label for="compradoPor">Comprado Por <span class="optional-text">(Multiescolha - Opcional)</span></label> <select id="compradoPor" name="compradoPor" multiple placeholder="Selecione os usuários..."> </select> </div>
+                <div class="form-group"> <label for="compradoPor">Comprado Por</label> <select id="compradoPor" name="compradoPor" multiple placeholder="Selecione os usuários..."> </select> </div>
                  <button type="button" class="back-button" id="back-to-list-button">Voltar à Lista</button>
                  <button type="submit" class="submit-button">Salvar Alterações</button>
             </form>
@@ -948,9 +969,11 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { getLatestSeason, getSeasonData } from '../core/user-season.js';
-
+import { initializeManagerGainFields } from './js/manager-gain-fields.js';
 let competicoesChoicesInstance = null;
 let compradoPorChoicesInstance = null;
+let managerGainFields = null;
+let managerGainFieldsReady = Promise.resolve();
 const itemListDiv = document.getElementById('item-list');
 const itemEditFormContainer = document.getElementById('item-edit-form-container');
 const itemEditForm = document.getElementById('item-edit-form');
@@ -1263,6 +1286,8 @@ async function loadItemDetails(itemId) {
              itemEditForm.nivel.value = item.nivel || '';
              itemEditForm.noMercado.value = item.noMercado === true ? 'sim' : (item.noMercado === false ? 'nao' : '');
              itemEditForm.ordem.value = item.ordem || '';
+             await managerGainFieldsReady;
+             managerGainFields?.setValue(item.mecanismosGanho || {});
 
              const anexadoSelect = itemEditForm.querySelector('#anexadoItem');
              if (anexadoSelect) {
@@ -1354,6 +1379,9 @@ function handleValorRealClick(isTirar) {
 }
 
 function initializePage() {
+    managerGainFieldsReady = initializeManagerGainFields(db)
+        .then((fields) => { managerGainFields = fields; })
+        .catch((error) => console.error('Erro ao carregar mecanismos de ganho:', error));
     Promise.all([
         loadCompeticoes(),
         loadUsers(),
@@ -1382,12 +1410,14 @@ function initializePage() {
              const ordemValue = itemEditForm.ordem.value;
              const selectedCompeticoes = competicoesChoicesInstance ? competicoesChoicesInstance.getValue(true) : [];
              const selectedUsers = compradoPorChoicesInstance ? compradoPorChoicesInstance.getValue(true) : [];
+             const mecanismosGanho = managerGainFields ? managerGainFields.getValue() : null;
 
              const updatedData = {
                  tipo: tipo, nome: nome, noMercado: noMercadoValue === 'sim',
                  atualizadoEm: serverTimestamp(),
                  compradoPorUids: Array.isArray(selectedUsers) ? selectedUsers : [],
                  competicoesIds: Array.isArray(selectedCompeticoes) ? selectedCompeticoes : [],
+                 ...(mecanismosGanho !== null && { mecanismosGanho }),
              };
              if (imagem) updatedData.imagem = imagem;
              if (valorInput !== '' && !isNaN(parseFloat(valorInput))) updatedData.valor = parseFloat(valorInput); else if (itemEditForm.valor.hasAttribute('value')) updatedData.valor = null;
@@ -1419,6 +1449,7 @@ function initializePage() {
              if(itemEditForm) itemEditForm.reset();
              if (competicoesChoicesInstance) competicoesChoicesInstance.removeActiveItems();
              if (compradoPorChoicesInstance) compradoPorChoicesInstance.removeActiveItems();
+             managerGainFields?.clear();
              if(itemIdInput) itemIdInput.value = '';
              if(itemEditForm.tipo) itemEditForm.tipo.value = "";
              if(itemEditForm.anexadoItem) itemEditForm.anexadoItem.value = "";
