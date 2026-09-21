@@ -18,6 +18,9 @@ const {
 const {
     buildMarketPurchaseFunction,
 } = require("./market-purchases");
+const {
+    buildBalanceReconciliationFunction,
+} = require("./balance-reconciliation");
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -58,6 +61,11 @@ exports.purchaseMarketPlayer = buildMarketPurchaseFunction({
     db,
     getLatestSeason,
     compactSeason,
+});
+exports.reconcileUserBalances = buildBalanceReconciliationFunction({
+    admin,
+    db,
+    getLatestSeason,
 });
 
 exports.createGPlayer = onCall({
