@@ -168,6 +168,13 @@ import { checkPageContentAccess } from "./js/page-content-guard.js";
     let modalZIndex = 2000;
     let scrollObserver = null;
 
+    function prepareManualHtml(html = '') {
+        return String(html).replace(/<img\b([^>]*)>/gi, (match, attributes) => {
+            if (/\breferrerpolicy\s*=/i.test(attributes)) return match;
+            return `<img referrerpolicy="no-referrer"${attributes}>`;
+        });
+    }
+
     async function getUserStatus(userId) { return getDoc(doc(db, 'users', userId)).then(d => d.exists() ? { estatuto: d.data().estatuto, aceite: d.data().aceite } : null); }
     async function loadMenuSettings() { return getDoc(doc(db, 'paineis', 'paineis menu')).then(d => d.exists() ? d.data() : {}); }
     function checkPageAccess(userStatus, menuSettings) { return (menuSettings['manual'] === 'on' || userStatus === 'ruler'); }
@@ -251,7 +258,7 @@ import { checkPageContentAccess } from "./js/page-content-guard.js";
         if (scrollObserver) scrollObserver.disconnect();
         if (!manualDataCache.has(docId)) return;
         const data = manualDataCache.get(docId);
-        manualContent.innerHTML = `<h2 id="content-title">${data.title}</h2><div id="content-body">${data.content}</div>`;
+        manualContent.innerHTML = `<h2 id="content-title">${data.title}</h2><div id="content-body">${prepareManualHtml(data.content)}</div>`;
     }
     
     function displayThemeContent(themeId) {
@@ -260,19 +267,19 @@ import { checkPageContentAccess } from "./js/page-content-guard.js";
         const themeData = manualDataCache.get(themeId);
         const childTopics = Array.from(manualDataCache.values()).filter(item => item.type === 'Tópico' && item.parentId === themeId).sort((a, b) => (a.posicao ?? Infinity) - (b.posicao ?? Infinity));
         if (childTopics.length === 0) {
-            manualContent.innerHTML = `<h2 id="content-title">${themeData.title}</h2><div id="content-body">${themeData.content || '<p>Este tema não possui tópicos visíveis.</p>'}</div>`;
+            manualContent.innerHTML = `<h2 id="content-title">${themeData.title}</h2><div id="content-body">${prepareManualHtml(themeData.content || '<p>Este tema não possui tópicos visíveis.</p>')}</div>`;
             return;
         }
         let pickcardsHTML = '<div class="topic-pickcards-container"><h4>Tópicos:</h4>';
         childTopics.forEach(topic => pickcardsHTML += `<a href="#topic-${topic.id}" class="topic-pickcard" data-id="${topic.id}">${topic.title}</a>`);
         pickcardsHTML += '</div>';
-        let contentHTML = themeData.content ? `<div class="theme-intro">${themeData.content}</div>` : '';
+        let contentHTML = themeData.content ? `<div class="theme-intro">${prepareManualHtml(themeData.content)}</div>` : '';
         childTopics.forEach(topic => {
-            contentHTML += `<div class="topic-content-block scroll-spy-target" data-type="Tópico" id="topic-${topic.id}"><h3>${topic.title}</h3><div>${topic.content}</div>`;
+            contentHTML += `<div class="topic-content-block scroll-spy-target" data-type="Tópico" id="topic-${topic.id}"><h3>${topic.title}</h3><div>${prepareManualHtml(topic.content)}</div>`;
             const childElements = Array.from(manualDataCache.values()).filter(item => item.type === 'Elemento' && item.topicParentId === topic.id).sort((a, b) => a.title.localeCompare(b.title));
             if (childElements.length > 0) {
                 childElements.forEach(element => {
-                    contentHTML += `<div class="element-content-block scroll-spy-target" data-type="Elemento" id="element-${element.id}"><h4>${element.title}</h4><div>${element.content}</div></div>`;
+                    contentHTML += `<div class="element-content-block scroll-spy-target" data-type="Elemento" id="element-${element.id}"><h4>${element.title}</h4><div>${prepareManualHtml(element.content)}</div></div>`;
                 });
             }
             contentHTML += `</div>`;
@@ -319,7 +326,7 @@ import { checkPageContentAccess } from "./js/page-content-guard.js";
                     <i class="fas fa-plus faq-icon"></i>
                 </button>
                 <div class="faq-answer">
-                    <div class="faq-answer-content">${faq.content}</div>
+                    <div class="faq-answer-content">${prepareManualHtml(faq.content)}</div>
                 </div>
             </div>
         `).join('');
@@ -342,7 +349,7 @@ import { checkPageContentAccess } from "./js/page-content-guard.js";
         newModal.style.zIndex = modalZIndex++;
         newModal.classList.add('has-opaque-background');
         newModal.querySelector('.modal-title').innerHTML = data.title;
-        newModal.querySelector('.modal-body').innerHTML = data.content;
+        newModal.querySelector('.modal-body').innerHTML = prepareManualHtml(data.content);
         document.body.appendChild(newModal);
         newModal.style.display = 'flex';
         if (window.innerWidth <= 768) document.body.classList.add('modal-open');
