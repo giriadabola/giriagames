@@ -32,7 +32,29 @@ const content = document.querySelector('.content');
 
 // --- Global State ---
 let currentUserEstatuto = null;
-let countdownInterval; // Variável global para controlar o cronómetro
+const DEFAULT_SVG_PLACEHOLDER = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="100%" height="100%" fill="%23161c28"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%238892b0" font-size="11">Sem Imagem</text></svg>';
+
+window.resolvePlayerImage = function(img, code) {
+    if (!img) return;
+    if (!code || code === 'undefined' || code === 'null' || String(code).trim() === '') {
+        img.onerror = null;
+        img.src = DEFAULT_SVG_PLACEHOLDER;
+        return;
+    }
+    if (!img.dataset.tryIndex) {
+        img.dataset.tryIndex = "0";
+    }
+    const extensions = ['webp', 'png', 'jpg', 'jpeg', 'svg'];
+    const currentIndex = parseInt(img.dataset.tryIndex);
+    
+    if (currentIndex < extensions.length) {
+        img.dataset.tryIndex = (currentIndex + 1).toString();
+        img.src = `assets/faces/face_${code}.${extensions[currentIndex]}`;
+    } else {
+        img.onerror = null;
+        img.src = DEFAULT_SVG_PLACEHOLDER;
+    }
+};
 
 // --- Helper Functions ---
 
@@ -62,20 +84,34 @@ async function getUserEstatuto(userId) {
  * @param {string} userId - The user ID to look up.
  * @returns {Promise<string>} The username or the original user ID as fallback.
  */
+const usernameCache = new Map();
+
 async function getUsername(userId) {
-    if (!userId) return userId;
-    const userDoc = doc(db, 'users', userId);
+    if (!userId) return 'Utilizador';
+    if (usernameCache.has(userId)) return usernameCache.get(userId);
+
+    // Se já for um nome curto (e não um UID longo de 28 caracteres do Firebase Auth)
+    if (typeof userId === 'string' && userId.length < 20 && !userId.includes('/')) {
+        return userId;
+    }
+
     try {
+        const userDoc = doc(db, 'users', userId);
         const docSnap = await getDoc(userDoc);
         if (docSnap.exists()) {
-            return docSnap.data()?.nometabela || userId;
-        } else {
-            return userId;
+            const data = docSnap.data();
+            const name = (data?.nometabela || data?.nomeDeUsuario || data?.nome || data?.username || (data?.email ? data.email.split('@')[0] : '') || '').trim();
+            if (name) {
+                usernameCache.set(userId, name);
+                return name;
+            }
         }
     } catch (error) {
         console.error(`Error fetching username for userId ${userId}:`, error);
-        return userId;
     }
+
+    usernameCache.set(userId, 'Utilizador');
+    return 'Utilizador';
 }
 
 /**
@@ -176,16 +212,19 @@ async function createPlayerCard(player) {
     if (player.compradopor) {
         initialButtonClass = 'purchased';
         initialButtonDisabled = true;
-        initialButtonText = `Comprado por ${player.compradopor}`; // Temp ID
+        initialButtonText = 'Comprado';
         getUsername(player.compradopor).then(username => {
             const buttonElement = card.querySelector('.buy-button');
-            if (buttonElement) buttonElement.textContent = `Comprado por ${username || player.compradopor}`;
+            if (buttonElement) buttonElement.textContent = `Comprado por ${username || 'Utilizador'}`;
         }).catch(err => console.error("Error fetching initial card username:", err));
     }
 
+    const playerCode = player.codigoUrl || '';
+    const playerImgSrc = player.imagem || (playerCode ? `assets/faces/face_${playerCode}.webp` : DEFAULT_SVG_PLACEHOLDER);
+
     card.innerHTML = `
         ${paisImagem ? `<img src="${paisImagem}" alt="Country flag" class="country-flag">` : ''}
-        <img src="${player.imagem || ''}" alt="${player.nome || 'Player'}" class="player-image">
+        <img src="${playerImgSrc}" alt="${player.nome || 'Player'}" class="player-image" onerror="window.resolvePlayerImage(this, '${playerCode}')">
         <div class="player-info">
             <div class="player-name">${player.nome || '-'}</div>
             <div class="player-club">${player.clube || '-'}</div>
@@ -317,7 +356,9 @@ async function createPlayerCard(player) {
                 }
             }
 
-            popupImage.src = currentPlayerPopupData?.imagem || '';
+            const popupCode = currentPlayerPopupData?.codigoUrl || player.codigoUrl || '';
+            popupImage.onerror = function() { window.resolvePlayerImage(this, popupCode); };
+            popupImage.src = currentPlayerPopupData?.imagem || (popupCode ? `assets/faces/face_${popupCode}.webp` : DEFAULT_SVG_PLACEHOLDER);
             popupImage.alt = currentPlayerPopupData?.nome || 'Player Image';
             popupName.textContent = currentPlayerPopupData?.nome || 'Nome Indisponível';
             popupClub.textContent = currentPlayerPopupData?.clube || 'Clube Indisponível';
