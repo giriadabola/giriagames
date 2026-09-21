@@ -881,6 +881,7 @@ exports.sendInboxNotification = onCall({
 });
 
 exports.sendManualMarketNotification = onCall({
+  invoker: "public",
   cors: [
     "https://g-games-8a8fc.web.app",
     "https://giriagames.win",
