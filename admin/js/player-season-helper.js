@@ -187,11 +187,14 @@ export function getPlayerSeasonData(playerDocData, targetSeason) {
         seasonData = legacyCopy;
     }
 
-    return {
-        id: playerDocData.id,
+    const result = {
         ...rootAtemporal,
         ...seasonData
     };
+    if (playerDocData.id) {
+        result.id = playerDocData.id;
+    }
+    return result;
 }
 
 /**
