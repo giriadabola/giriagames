@@ -336,6 +336,12 @@
         const testMockBtn = document.getElementById('testMockBtn');
         const testMockContainer = document.getElementById('testMockContainer');
         const testMockSelect = document.getElementById('testMockSelect');
+        const loanRequestCard = document.getElementById('loanRequestCard');
+        const loanRequestPopup = document.getElementById('loanRequestPopup');
+        const closeLoanPopupBtn = document.getElementById('closeLoanPopupBtn');
+        const loanAmountInput = document.getElementById('loanAmountInput');
+        const confirmLoanRequestBtn = document.getElementById('confirmLoanRequestBtn');
+        const loanFeedback = document.getElementById('loanFeedback');
 
         let currentUserGCoins = 0;
         let currentUserMiniGCoins = 0;
@@ -756,11 +762,78 @@
             }
         });
 
-        document.getElementById('loanRequestCard').addEventListener('click', () => {
+        loanRequestCard.addEventListener('click', () => {
+            loanAmountInput.value = '';
+            loanFeedback.textContent = '';
+            loanFeedback.style.color = '';
             document.getElementById('loanFeeInfo').textContent = "Será aplicada uma taxa de juro sobre o valor solicitado.";
-            document.getElementById('loanRequestPopup').style.display = 'flex';
+            loanRequestPopup.style.display = 'flex';
         });
-        document.getElementById('closeLoanPopupBtn').addEventListener('click', () => document.getElementById('loanRequestPopup').style.display = 'none');
+        closeLoanPopupBtn.addEventListener('click', () => loanRequestPopup.style.display = 'none');
+        loanRequestPopup.addEventListener('click', (event) => {
+            if (event.target === loanRequestPopup) loanRequestPopup.style.display = 'none';
+        });
+
+        confirmLoanRequestBtn.addEventListener('click', async () => {
+            const amount = Number(loanAmountInput.value);
+            const targetUid = activeSimulatedUid || auth.currentUser?.uid;
+
+            if (!Number.isFinite(amount) || amount <= 0) {
+                loanFeedback.textContent = 'Indica um valor de empréstimo válido.';
+                loanFeedback.style.color = '#e74c3c';
+                return;
+            }
+            if (!targetUid) {
+                loanFeedback.textContent = 'Utilizador não autenticado.';
+                loanFeedback.style.color = '#e74c3c';
+                return;
+            }
+            if (targetUid !== auth.currentUser?.uid) {
+                loanFeedback.textContent = 'Termina a simulação antes de enviares um pedido.';
+                loanFeedback.style.color = '#e74c3c';
+                return;
+            }
+
+            confirmLoanRequestBtn.disabled = true;
+            confirmLoanRequestBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> A enviar...';
+            loanFeedback.textContent = 'A verificar pedidos pendentes...';
+            loanFeedback.style.color = '';
+
+            try {
+                const pendingQuery = query(
+                    collection(db, 'pedidosEmprestimo'),
+                    where('userId', '==', targetUid),
+                    where('estado', '==', 'Pendente')
+                );
+                const pendingSnapshot = await getDocs(pendingQuery);
+                if (!pendingSnapshot.empty) {
+                    loanFeedback.textContent = 'Já tens um pedido de empréstimo pendente.';
+                    loanFeedback.style.color = '#f1c40f';
+                    return;
+                }
+
+                await addDoc(collection(db, 'pedidosEmprestimo'), {
+                    userId: targetUid,
+                    valor: amount,
+                    temporada: currentSeason,
+                    estado: 'Pendente',
+                    criadoEm: serverTimestamp()
+                });
+
+                loanFeedback.textContent = 'Pedido enviado à Banca com sucesso.';
+                loanFeedback.style.color = '#2ecc71';
+                setTimeout(() => {
+                    loanRequestPopup.style.display = 'none';
+                }, 1200);
+            } catch (error) {
+                console.error('Erro ao solicitar empréstimo:', error);
+                loanFeedback.textContent = 'Não foi possível enviar o pedido. Tenta novamente.';
+                loanFeedback.style.color = '#e74c3c';
+            } finally {
+                confirmLoanRequestBtn.disabled = false;
+                confirmLoanRequestBtn.textContent = 'Solicitar';
+            }
+        });
         document.getElementById('investmentsCard').addEventListener('click', async () => {
             let startArenaNum = 1;
             let startArenaName = 'Arena 4';
