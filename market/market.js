@@ -151,6 +151,10 @@ function getTierClass(casta) {
  * @returns {Promise<HTMLElement>} The created card element.
  */
 async function createPlayerCard(player) {
+    if (!player || !player.id) {
+        console.warn("createPlayerCard chamada com jogador inválido ou ID em falta:", player);
+        return null;
+    }
     const card = document.createElement('div');
     card.className = `player-card ${getTierClass(player.casta)}`;
     card.dataset.playerId = player.id;
@@ -467,7 +471,9 @@ async function createPlayerCard(player) {
                         popupBuyButton.disabled = true;
                         return;
                     }
-                    const checkPlayerData = checkPlayerSnap.data();
+                    const rawPlayerData = checkPlayerSnap.data();
+                    const mostRecentSeasonForPopup = await getLatestSeason(db);
+                    const checkPlayerData = getPlayerSeasonData(rawPlayerData, mostRecentSeasonForPopup) || rawPlayerData;
                     checkPlayerData.id = checkPlayerSnap.id;
 
                     if (checkPlayerData.compradopor) {
@@ -565,16 +571,16 @@ async function createPlayerCard(player) {
                     try {
                         await addDoc(collection(db, 'movimentos'), {
                             userId: auth.currentUser.uid,
-                            jogadorId: checkPlayerData.id,
-                            posicao: checkPlayerData.posicao,
-                            preco: playerPrice,
+                            jogadorId: checkPlayerData.id || player.id || '',
+                            posicao: checkPlayerData.posicao || player.posicao || '',
+                            preco: playerPrice || 0,
                             estado: "Comprado",
-                            valorreal: -playerPrice,
+                            valorreal: -playerPrice || 0,
                             de: auth.currentUser.uid,
                             para: null,
                             mediapontos: null,
                             movimentoData: Timestamp.now(),
-                            temporada: currentSeason,
+                            temporada: currentSeason || '',
                             tipo: "Mercado",
                             descricao: `Comprado por ${userData.nometabela || userData.nomeDeUsuario || 'Utilizador'}`
                         });
@@ -670,8 +676,8 @@ async function loadPlayers() {
                 const sData = getPlayerSeasonData(rawData, mostRecentSeason);
                 if (sData && sData.noMercado === true) {
                     marketPlayers.push({
-                        id: docSnap.id,
-                        ...sData
+                        ...sData,
+                        id: docSnap.id
                     });
                 }
             }
