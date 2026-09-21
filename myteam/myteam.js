@@ -100,6 +100,17 @@ const posicaoMapping = { "Avançado": "FWD", "Defesa": "DEF", "Médio": "MID", "
 // --- Seletores de Elementos DOM ---
 const loadingScreen = document.getElementById('loading-screen');
 const content = document.querySelector('.content');
+
+function showFirestoreConnectionError(error) {
+    console.error('Não foi possível ligar ao Firestore:', error);
+    loadingScreen.innerHTML = `
+        <div style="max-width: 420px; padding: 24px; text-align: center; color: #f0f2f5;">
+            <i class="fas fa-exclamation-triangle" style="font-size: 42px; color: #e74c3c; margin-bottom: 16px;"></i>
+            <p style="font-weight: 700; margin-bottom: 8px;">Sem ligação à base de dados</p>
+            <p style="font-size: 14px; line-height: 1.5; opacity: 0.85;">Verifica a ligação à Internet e tenta novamente.</p>
+        </div>`;
+    loadingScreen.style.display = 'flex';
+}
 const formationSelect = document.getElementById('formation-select');
 const pitchArea = document.querySelector('.pitch-area');
 const playerResultsContainer = document.querySelector('.player-results');
@@ -1577,7 +1588,12 @@ async function getUserStatus(userId) {
 onAuthStateChanged(auth, async (user) => { 
     if (user) { 
         currentUserUid = user.uid; 
-        currentUserStatus = await getUserStatus(user.uid); 
+        try {
+            currentUserStatus = await getUserStatus(user.uid);
+        } catch (error) {
+            showFirestoreConnectionError(error);
+            return;
+        }
         if (!currentUserStatus) { 
             window.location.href = '404.html'; 
             return; 
