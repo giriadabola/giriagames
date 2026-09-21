@@ -34,6 +34,17 @@ const DISPATCH_WINDOW_MS = 15 * 60 * 1000;
 const WEEKLY_DISPATCH_WINDOW_MS = 15 * 60 * 1000;
 const MARKET_NOTIFICATION_FIELD = "notificacoesMercado";
 const ADMIN_ROLES = new Set(["ruler", "estafeta"]);
+const CALLABLE_CORS_ORIGINS = [
+  "https://g-games-8a8fc.web.app",
+  "https://giriagames.win",
+  "https://www.giriagames.win",
+  "http://127.0.0.1:5174",
+  "http://localhost:5174",
+  "http://127.0.0.1:5502",
+  "http://localhost:5502",
+  "http://127.0.0.1:5503",
+  "http://localhost:5503",
+];
 
 webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
 
@@ -825,14 +836,7 @@ exports.processMarketNotifications = onSchedule({
 
 exports.sendInboxNotification = onCall({
   invoker: "public",
-  cors: [
-    "https://g-games-8a8fc.web.app",
-    "https://giriagames.win",
-    "http://127.0.0.1:5502",
-    "http://localhost:5502",
-    "http://127.0.0.1:5503",
-    "http://localhost:5503",
-  ],
+  cors: CALLABLE_CORS_ORIGINS,
 }, async (request) => {
   await ensureAdminAccess(request.auth?.uid || null);
 
@@ -882,14 +886,7 @@ exports.sendInboxNotification = onCall({
 
 exports.sendManualMarketNotification = onCall({
   invoker: "public",
-  cors: [
-    "https://g-games-8a8fc.web.app",
-    "https://giriagames.win",
-    "http://127.0.0.1:5502",
-    "http://localhost:5502",
-    "http://127.0.0.1:5503",
-    "http://localhost:5503",
-  ],
+  cors: CALLABLE_CORS_ORIGINS,
 }, async (request) => {
   await ensureAdminAccess(request.auth?.uid || null);
 
