@@ -48,12 +48,44 @@
         #content-body svg, #manual-nav svg, .modal-title svg, .topic-pickcard svg { vertical-align: middle; display: inline-block; margin-right: 6px; stroke-width: 1.5; }
         manual-link { color: #2ecc71; text-decoration: underline; cursor: pointer; font-weight: bold; }
         /* Suporte para texto colorido no manual */
-        #content-body [style*="color"], .modal-body [style*="color"] { display: inline; }
+        #content-body span[style*="color"], .modal-body span[style*="color"] { display: inline; }
         #content-body font[color="#2ecc71"], .modal-body font[color="#2ecc71"], #content-body font[color="rgb(46, 204, 113)"], .modal-body font[color="rgb(46, 204, 113)"] { color: #2ecc71 !important; }
         #content-body font[color="#2176ff"], .modal-body font[color="#2176ff"], #content-body font[color="rgb(33, 118, 255)"], .modal-body font[color="rgb(33, 118, 255)"] { color: #2176ff !important; }
         #content-body font[color="#ff4757"], .modal-body font[color="#ff4757"], #content-body font[color="rgb(255, 71, 87)"], .modal-body font[color="rgb(255, 71, 87)"] { color: #ff4757 !important; }
         #content-body font[color="#ffb703"], .modal-body font[color="#ffb703"], #content-body font[color="rgb(255, 183, 3)"], .modal-body font[color="rgb(255, 183, 3)"] { color: #ffb703 !important; }
         #content-body font[color="#a55eea"], .modal-body font[color="#a55eea"], #content-body font[color="rgb(165, 94, 234)"], .modal-body font[color="rgb(165, 94, 234)"] { color: #a55eea !important; }
+        
+        /* Suporte para colunas e tabelas no manual */
+        #content-body table, .modal-body table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1em 0;
+            table-layout: fixed;
+        }
+        #content-body tr, .modal-body tr {
+            display: table-row;
+        }
+        #content-body td, .modal-body td, #content-body th, .modal-body th {
+            display: table-cell;
+            vertical-align: top;
+            padding: 10px;
+            border: 1px dashed rgba(255, 255, 255, 0.12);
+            box-sizing: border-box;
+        }
+        
+        /* Suporte para estruturas de colunas com divs (flex / grid) */
+        #content-body .manual-columns, .modal-body .manual-columns,
+        #content-body .columns-container, .modal-body .columns-container {
+            display: flex;
+            gap: 15px;
+            margin: 1em 0;
+            width: 100%;
+        }
+        #content-body .manual-column, .modal-body .manual-column,
+        #content-body .column, .modal-body .column {
+            flex: 1;
+            min-width: 0;
+        }
         .modal-backdrop { position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; padding: 15px; transition: background-color 0.3s ease; }
         .modal-backdrop.has-opaque-background { background-color: rgba(0,0,0,0.85); backdrop-filter: blur(5px); }
         .modal-backdrop.has-translucent-background { background-color: rgba(0,0,0,0.4); }
@@ -98,6 +130,24 @@
             body.nav-open #manual-nav { transform: translateX(0); }
             body.nav-open .mobile-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1400; }
             #manual-content { padding: 15px; }
+
+            /* Adaptação responsiva para colunas no telemóvel */
+            #content-body table, .modal-body table,
+            #content-body tbody, .modal-body tbody,
+            #content-body tr, .modal-body tr {
+                display: block;
+                width: 100% !important;
+            }
+            #content-body td, .modal-body td, #content-body th, .modal-body th {
+                display: block;
+                width: 100% !important;
+                box-sizing: border-box;
+                margin-bottom: 10px;
+            }
+            #content-body .manual-columns, .modal-body .manual-columns,
+            #content-body .columns-container, .modal-body .columns-container {
+                flex-direction: column;
+            }
         }
     </style>
 </head>
@@ -167,13 +217,6 @@ import { checkPageContentAccess } from "./js/page-content-guard.js";
     let manualDataCache = new Map();
     let modalZIndex = 2000;
     let scrollObserver = null;
-
-    function prepareManualHtml(html = '') {
-        return String(html).replace(/<img\b([^>]*)>/gi, (match, attributes) => {
-            if (/\breferrerpolicy\s*=/i.test(attributes)) return match;
-            return `<img referrerpolicy="no-referrer"${attributes}>`;
-        });
-    }
 
     async function getUserStatus(userId) { return getDoc(doc(db, 'users', userId)).then(d => d.exists() ? { estatuto: d.data().estatuto, aceite: d.data().aceite } : null); }
     async function loadMenuSettings() { return getDoc(doc(db, 'paineis', 'paineis menu')).then(d => d.exists() ? d.data() : {}); }
@@ -258,7 +301,7 @@ import { checkPageContentAccess } from "./js/page-content-guard.js";
         if (scrollObserver) scrollObserver.disconnect();
         if (!manualDataCache.has(docId)) return;
         const data = manualDataCache.get(docId);
-        manualContent.innerHTML = `<h2 id="content-title">${data.title}</h2><div id="content-body">${prepareManualHtml(data.content)}</div>`;
+        manualContent.innerHTML = `<h2 id="content-title">${data.title}</h2><div id="content-body">${data.content}</div>`;
     }
     
     function displayThemeContent(themeId) {
@@ -267,19 +310,19 @@ import { checkPageContentAccess } from "./js/page-content-guard.js";
         const themeData = manualDataCache.get(themeId);
         const childTopics = Array.from(manualDataCache.values()).filter(item => item.type === 'Tópico' && item.parentId === themeId).sort((a, b) => (a.posicao ?? Infinity) - (b.posicao ?? Infinity));
         if (childTopics.length === 0) {
-            manualContent.innerHTML = `<h2 id="content-title">${themeData.title}</h2><div id="content-body">${prepareManualHtml(themeData.content || '<p>Este tema não possui tópicos visíveis.</p>')}</div>`;
+            manualContent.innerHTML = `<h2 id="content-title">${themeData.title}</h2><div id="content-body">${themeData.content || '<p>Este tema não possui tópicos visíveis.</p>'}</div>`;
             return;
         }
         let pickcardsHTML = '<div class="topic-pickcards-container"><h4>Tópicos:</h4>';
         childTopics.forEach(topic => pickcardsHTML += `<a href="#topic-${topic.id}" class="topic-pickcard" data-id="${topic.id}">${topic.title}</a>`);
         pickcardsHTML += '</div>';
-        let contentHTML = themeData.content ? `<div class="theme-intro">${prepareManualHtml(themeData.content)}</div>` : '';
+        let contentHTML = themeData.content ? `<div class="theme-intro">${themeData.content}</div>` : '';
         childTopics.forEach(topic => {
-            contentHTML += `<div class="topic-content-block scroll-spy-target" data-type="Tópico" id="topic-${topic.id}"><h3>${topic.title}</h3><div>${prepareManualHtml(topic.content)}</div>`;
+            contentHTML += `<div class="topic-content-block scroll-spy-target" data-type="Tópico" id="topic-${topic.id}"><h3>${topic.title}</h3><div>${topic.content}</div>`;
             const childElements = Array.from(manualDataCache.values()).filter(item => item.type === 'Elemento' && item.topicParentId === topic.id).sort((a, b) => a.title.localeCompare(b.title));
             if (childElements.length > 0) {
                 childElements.forEach(element => {
-                    contentHTML += `<div class="element-content-block scroll-spy-target" data-type="Elemento" id="element-${element.id}"><h4>${element.title}</h4><div>${prepareManualHtml(element.content)}</div></div>`;
+                    contentHTML += `<div class="element-content-block scroll-spy-target" data-type="Elemento" id="element-${element.id}"><h4>${element.title}</h4><div>${element.content}</div></div>`;
                 });
             }
             contentHTML += `</div>`;
@@ -326,7 +369,7 @@ import { checkPageContentAccess } from "./js/page-content-guard.js";
                     <i class="fas fa-plus faq-icon"></i>
                 </button>
                 <div class="faq-answer">
-                    <div class="faq-answer-content">${prepareManualHtml(faq.content)}</div>
+                    <div class="faq-answer-content">${faq.content}</div>
                 </div>
             </div>
         `).join('');
@@ -349,7 +392,7 @@ import { checkPageContentAccess } from "./js/page-content-guard.js";
         newModal.style.zIndex = modalZIndex++;
         newModal.classList.add('has-opaque-background');
         newModal.querySelector('.modal-title').innerHTML = data.title;
-        newModal.querySelector('.modal-body').innerHTML = prepareManualHtml(data.content);
+        newModal.querySelector('.modal-body').innerHTML = data.content;
         document.body.appendChild(newModal);
         newModal.style.display = 'flex';
         if (window.innerWidth <= 768) document.body.classList.add('modal-open');
