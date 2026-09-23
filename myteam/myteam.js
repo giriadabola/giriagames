@@ -1269,7 +1269,7 @@ async function showGPlayersListPopup(player) {
         const users = [];
         querySnapshot.forEach((userDoc) => {
             const userData = mergeUserSeasonData(userDoc.data(), latestSeason);
-            if (userData.natabela === "Yes" && userData.nometabela && userDoc.id !== currentUserUid) {
+            if (userData.natabela === "Yes" && userData.nometabela && userData.aceite === "Yes" && userDoc.id !== currentUserUid) {
                 users.push({ id: userDoc.id, displayNome: userData.nometabela });
             }
         });

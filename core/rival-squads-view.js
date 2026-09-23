@@ -379,7 +379,7 @@ class RivalSquadsView {
 
         querySnapshot.forEach((userDoc) => {
             const userData = mergeUserSeasonData(userDoc.data(), latestSeason);
-            if (userData.natabela === "Yes" && userData.nometabela) {
+            if (userData.natabela === "Yes" && userData.nometabela && userData.aceite === "Yes") {
                 users.push({ id: userDoc.id, displayNome: userData.nometabela });
             }
         });
