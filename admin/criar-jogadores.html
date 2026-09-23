@@ -1127,7 +1127,7 @@ async function searchCountries(searchTerm) {
     const querySnapshot = await getDocs(collection(db, 'paises'));
     const results = querySnapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() }))
-        .filter(country => country.nome.toLowerCase().includes(searchTermLower));
+        .filter(country => (country.nome && country.nome.toLowerCase().includes(searchTermLower)) || (country.nome_en && country.nome_en.toLowerCase().includes(searchTermLower)) || (country.name && country.name.toLowerCase().includes(searchTermLower)));
     return results;
 }
 
@@ -1137,7 +1137,7 @@ async function searchClubs(searchTerm) {
     const querySnapshot = await getDocs(collection(db, 'clubes'));
     const results = querySnapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() }))
-        .filter(club => club.nome.toLowerCase().includes(searchTermLower));
+        .filter(club => (club.nome && club.nome.toLowerCase().includes(searchTermLower)) || (club.nome_en && club.nome_en.toLowerCase().includes(searchTermLower)) || (club.name && club.name.toLowerCase().includes(searchTermLower)));
     return results;
 }
 
@@ -2166,11 +2166,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         paisList.innerHTML = '';
         if (searchTerm.length < 1) return;
 
-        const countries = allCountries.filter(c => c.nome.toLowerCase().includes(searchTerm));
+        const countries = allCountries.filter(c => 
+            (c.nome && c.nome.toLowerCase().includes(searchTerm)) ||
+            (c.nome_en && c.nome_en.toLowerCase().includes(searchTerm)) ||
+            (c.name && c.name.toLowerCase().includes(searchTerm))
+        );
         countries.forEach(country => {
             const div = document.createElement('div');
             div.className = 'search-option';
-            div.textContent = country.nome;
+            const enPart = country.nome_en && country.nome_en.toLowerCase() !== country.nome.toLowerCase() ? ` (${country.nome_en})` : '';
+            div.textContent = `${country.nome}${enPart}`;
             div.addEventListener('click', () => {
                 paisInput.value = country.nome;
                 selectedPaisId = country.id;
@@ -2185,11 +2190,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         clubeList.innerHTML = '';
         if (searchTerm.length < 1) return;
 
-        const clubs = allClubs.filter(c => c.nome.toLowerCase().includes(searchTerm));
+        const clubs = allClubs.filter(c => 
+            (c.nome && c.nome.toLowerCase().includes(searchTerm)) ||
+            (c.nome_en && c.nome_en.toLowerCase().includes(searchTerm)) ||
+            (c.name && c.name.toLowerCase().includes(searchTerm))
+        );
         clubs.forEach(club => {
             const div = document.createElement('div');
             div.className = 'search-option';
-            div.textContent = `${club.nome} (${club.pais})`; 
+            const enPart = club.nome_en && club.nome_en.toLowerCase() !== club.nome.toLowerCase() ? ` [${club.nome_en}]` : '';
+            div.textContent = `${club.nome}${enPart} (${club.pais || 'Sem País'})`; 
             div.addEventListener('click', () => {
                 clubeInput.value = club.nome;
                 selectedClubeId = club.id;
@@ -2197,6 +2207,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
             clubeList.appendChild(div);
         });
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!paisInput.contains(e.target) && !paisList.contains(e.target)) {
+            paisList.innerHTML = '';
+        }
+        if (!clubeInput.contains(e.target) && !clubeList.contains(e.target)) {
+            clubeList.innerHTML = '';
+        }
     });
 
     const minigamesContainerEl = document.getElementById('minigames-container');
