@@ -269,6 +269,63 @@
             background-color: rgba(255, 255, 255, 0.15);
         }
 
+        .modal-back-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #8b949e;
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-right: 8px;
+        }
+        .modal-back-btn:hover {
+            color: #58a6ff;
+            background-color: rgba(56, 139, 253, 0.15);
+            border-color: rgba(56, 139, 253, 0.4);
+        }
+
+        .modal-breadcrumbs {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: #8b949e;
+            margin-bottom: 16px;
+            padding: 8px 14px;
+            background: #0d1117;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            overflow-x: auto;
+            white-space: nowrap;
+        }
+        .modal-breadcrumbs .crumb-item {
+            color: #58a6ff;
+            cursor: pointer;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            transition: color 0.2s;
+        }
+        .modal-breadcrumbs .crumb-item:hover {
+            text-decoration: underline;
+            color: #79c0ff;
+        }
+        .modal-breadcrumbs .crumb-current {
+            color: #f0f6fc;
+            font-weight: 600;
+        }
+        .modal-breadcrumbs .crumb-sep {
+            font-size: 10px;
+            color: #484f58;
+        }
+
         .modal-body {
             padding: 24px;
             overflow-y: auto;
@@ -367,6 +424,43 @@
             margin-bottom: 8px;
         }
 
+        .btn-sub-anexos {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(56, 139, 253, 0.15);
+            color: #58a6ff;
+            border: 1px solid rgba(56, 139, 253, 0.35);
+            border-radius: 6px;
+            padding: 5px 10px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 10px;
+            transition: all 0.2s ease;
+            width: fit-content;
+        }
+        .btn-sub-anexos:hover {
+            background: #388bfd;
+            color: #ffffff;
+            border-color: #388bfd;
+            box-shadow: 0 0 10px rgba(56, 139, 253, 0.4);
+            transform: translateY(-1px);
+        }
+
+        .badge-sub-anexos-indicator {
+            background: rgba(56, 139, 253, 0.12);
+            color: #58a6ff;
+            border: 1px solid rgba(56, 139, 253, 0.25);
+            font-size: 11px;
+            font-weight: 600;
+            padding: 2px 7px;
+            border-radius: 10px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
         .empty-state {
             text-align: center;
             padding: 50px 20px;
@@ -403,26 +497,30 @@
         </div>
     </main>
 
-    <!-- Modal para Exibir os Itens Anexados ao Estádio Selecionado -->
+    <!-- Modal para Exibir os Itens Anexados ao Estádio ou Item Selecionado -->
     <div id="modal-overlay" class="modal-overlay">
         <div class="modal-container">
             <div class="modal-header">
-                <h2 id="modal-stadium-title"><i class="fas fa-landmark"></i> Detalhes do Estádio</h2>
+                <div style="display: flex; align-items: center;">
+                    <button id="modal-back-btn" class="modal-back-btn" style="display: none;" title="Voltar"><i class="fas fa-arrow-left"></i></button>
+                    <h2 id="modal-stadium-title"><i class="fas fa-landmark"></i> Detalhes do Estádio</h2>
+                </div>
                 <button id="modal-close-btn" class="modal-close-btn">×</button>
             </div>
             <div class="modal-body">
+                <div id="modal-breadcrumbs" class="modal-breadcrumbs" style="display: none;"></div>
                 <div id="stadium-banner" class="stadium-detail-banner"></div>
-                <h3 style="color: #f0f6fc; font-size: 16px; margin-bottom: 16px;">Itens Anexados</h3>
+                <h3 id="attached-section-title" style="color: #f0f6fc; font-size: 16px; margin-bottom: 16px;">Itens Anexados</h3>
                 <div id="attached-items-container" class="attached-items-container"></div>
             </div>
         </div>
     </div>
 
-    <!-- Modal Secundário para Exibir Todos os Detalhes do Item Anexado -->
+    <!-- Modal Secundário para Exibir Todos os Detalhes do Item -->
     <div id="item-detail-modal-overlay" class="modal-overlay" style="z-index: 3000;">
         <div class="modal-container" style="max-width: 650px;">
             <div class="modal-header">
-                <h2 id="detail-modal-title"><i class="fas fa-info-circle"></i> Detalhes da Opção</h2>
+                <h2 id="detail-modal-title"><i class="fas fa-info-circle"></i> Detalhes do Item</h2>
                 <button id="detail-modal-close-btn" class="modal-close-btn">×</button>
             </div>
             <div id="detail-modal-body" class="modal-body"></div>
@@ -435,14 +533,45 @@
 
         let allItems = [];
         let estadiosItems = [];
+        let modalHistory = []; // Stack de navegação no modal [item1, item2, ...]
+        let currentModalItem = null;
+
         const estadiosGrid = document.getElementById('estadios-grid');
         const searchInput = document.getElementById('search-input');
 
         const modalOverlay = document.getElementById('modal-overlay');
         const modalCloseBtn = document.getElementById('modal-close-btn');
+        const modalBackBtn = document.getElementById('modal-back-btn');
+        const modalBreadcrumbs = document.getElementById('modal-breadcrumbs');
         const modalStadiumTitle = document.getElementById('modal-stadium-title');
         const stadiumBanner = document.getElementById('stadium-banner');
         const attachedItemsContainer = document.getElementById('attached-items-container');
+        const attachedSectionTitle = document.getElementById('attached-section-title');
+
+        const itemDetailModalOverlay = document.getElementById('item-detail-modal-overlay');
+        const detailModalCloseBtn = document.getElementById('detail-modal-close-btn');
+        const detailModalBody = document.getElementById('detail-modal-body');
+
+        // Helper para obter itens anexados a qualquer item ou estádio
+        function getAttachedItems(parent) {
+            if (!parent || !parent.id) return [];
+            const pId = String(parent.id);
+            const pNome = (parent.nome || '').trim().toLowerCase();
+
+            return allItems.filter(item => {
+                if (item.id === parent.id) return false;
+
+                if (item.anexadoItemId && String(item.anexadoItemId) === pId) return true;
+                if (Array.isArray(item.anexadoItemIds) && item.anexadoItemIds.map(String).includes(pId)) return true;
+                
+                if (item.anexadoItem) {
+                    const val = String(item.anexadoItem).trim();
+                    if (val === pId || (pNome && val.toLowerCase() === pNome)) return true;
+                }
+
+                return false;
+            });
+        }
 
         async function loadData() {
             try {
@@ -482,17 +611,11 @@
             estadiosGrid.innerHTML = '';
             filteredEstadios.forEach(estadio => {
                 // Encontrar os itens anexados a este estádio
-                const attached = allItems.filter(item => 
-                    item.id !== estadio.id && (
-                        item.anexadoItemId === estadio.id || 
-                        item.anexadoItem === estadio.id || 
-                        item.anexadoItem === estadio.nome
-                    )
-                );
+                const attached = getAttachedItems(estadio);
 
                 const card = document.createElement('div');
                 card.className = 'estadio-card';
-                card.onclick = () => openStadiumModal(estadio, attached);
+                card.onclick = () => openRootModal(estadio);
 
                 const imageHtml = estadio.imagem 
                     ? `<img src="${estadio.imagem}" alt="${estadio.nome}">`
@@ -513,26 +636,102 @@
             });
         }
 
-        function openStadiumModal(estadio, attachedItems) {
-            modalStadiumTitle.innerHTML = `<i class="fas fa-landmark" style="color: #388bfd;"></i> ${estadio.nome || 'Estádio'}`;
-            
-            const bannerImage = estadio.imagem
-                ? `<img src="${estadio.imagem}" alt="${estadio.nome}">`
-                : `<i class="fas fa-landmark banner-icon"></i>`;
+        function openRootModal(item) {
+            modalHistory = [];
+            renderModalView(item);
+            modalOverlay.classList.add('active');
+        }
+
+        function navigateToSubItem(childItem) {
+            if (currentModalItem) {
+                modalHistory.push(currentModalItem);
+            }
+            renderModalView(childItem);
+        }
+
+        function navigateBack() {
+            if (modalHistory.length > 0) {
+                const prevItem = modalHistory.pop();
+                renderModalView(prevItem);
+            }
+        }
+
+        function navigateToHistoryIndex(index) {
+            if (index >= 0 && index < modalHistory.length) {
+                const targetItem = modalHistory[index];
+                modalHistory = modalHistory.slice(0, index);
+                renderModalView(targetItem);
+            }
+        }
+
+        function renderModalView(parentItem) {
+            currentModalItem = parentItem;
+            const attachedItems = getAttachedItems(parentItem);
+            const isEstadio = (parentItem.tipo || '').toLowerCase().includes('estádio') || (parentItem.tipo || '').toLowerCase().includes('estadio');
+
+            // Configurar Botão Voltar
+            if (modalHistory.length > 0) {
+                modalBackBtn.style.display = 'flex';
+            } else {
+                modalBackBtn.style.display = 'none';
+            }
+
+            // Configurar Breadcrumbs
+            if (modalHistory.length > 0) {
+                modalBreadcrumbs.style.display = 'flex';
+                let crumbsHtml = '';
+                modalHistory.forEach((histItem, idx) => {
+                    const isHistEstadio = (histItem.tipo || '').toLowerCase().includes('estádio') || (histItem.tipo || '').toLowerCase().includes('estadio');
+                    const icon = isHistEstadio ? '<i class="fas fa-landmark"></i>' : '<i class="fas fa-box"></i>';
+                    crumbsHtml += `<span class="crumb-item" data-idx="${idx}">${icon} ${histItem.nome || 'Item'}</span><i class="fas fa-chevron-right crumb-sep"></i>`;
+                });
+                crumbsHtml += `<span class="crumb-current">${parentItem.nome || 'Item'}</span>`;
+                modalBreadcrumbs.innerHTML = crumbsHtml;
+
+                // Event listener para os cliques nas migalhas
+                modalBreadcrumbs.querySelectorAll('.crumb-item').forEach(el => {
+                    el.addEventListener('click', () => {
+                        const idx = parseInt(el.getAttribute('data-idx'), 10);
+                        navigateToHistoryIndex(idx);
+                    });
+                });
+            } else {
+                modalBreadcrumbs.style.display = 'none';
+                modalBreadcrumbs.innerHTML = '';
+            }
+
+            // Título do cabeçalho
+            const titleIcon = isEstadio ? 'fa-landmark' : 'fa-box-open';
+            modalStadiumTitle.innerHTML = `<i class="fas ${titleIcon}" style="color: #388bfd;"></i> ${parentItem.nome || (isEstadio ? 'Estádio' : 'Item')}`;
+
+            // Banner
+            const bannerImage = parentItem.imagem
+                ? `<img src="${parentItem.imagem}" alt="${parentItem.nome}">`
+                : `<i class="fas ${isEstadio ? 'fa-landmark' : 'fa-box'} banner-icon"></i>`;
+
+            const valorHtml = (parentItem.valor !== undefined && parentItem.valor !== null)
+                ? `<span style="display:inline-block; margin-left:8px; font-size:12px; color:#58a6ff; font-weight:600; background:rgba(56,139,253,0.15); padding:2px 8px; border-radius:10px;">${parentItem.valor} GCoins</span>`
+                : '';
 
             stadiumBanner.innerHTML = `
                 ${bannerImage}
-                <div>
-                    <h3>${estadio.nome || 'Estádio'}</h3>
-                    <p><strong>Nota:</strong> ${estadio.nota || 'Sem nota cadastrada.'}</p>
+                <div style="flex-grow: 1;">
+                    <div style="display: flex; align-items: center; margin-bottom: 4px;">
+                        <span class="item-tag" style="margin: 0;">${parentItem.tipo || (isEstadio ? 'Estádio' : 'Item')}</span>
+                        ${valorHtml}
+                    </div>
+                    <h3 style="margin: 4px 0 6px 0;">${parentItem.nome || 'Sem nome'}</h3>
+                    <p><strong>Nota:</strong> ${parentItem.nota || 'Sem nota cadastrada.'}</p>
                 </div>
             `;
+
+            attachedSectionTitle.innerHTML = `<i class="fas fa-paperclip" style="color: #58a6ff;"></i> Itens Anexados (${attachedItems.length})`;
 
             if (attachedItems.length === 0) {
                 attachedItemsContainer.innerHTML = `
                     <div class="empty-state">
                         <i class="fas fa-folder-open"></i>
-                        <p>Nenhum item anexado a este estádio ainda.</p>
+                        <p>Nenhum item anexado a este ${isEstadio ? 'estádio' : 'item'} ainda.</p>
                     </div>
                 `;
             } else {
@@ -542,6 +741,16 @@
                     const tipo = item.tipo || 'Outros';
                     if (!grouped[tipo]) grouped[tipo] = [];
                     grouped[tipo].push(item);
+                });
+
+                // Ordenar itens dentro de cada grupo por ordem, depois nome
+                Object.keys(grouped).forEach(tipo => {
+                    grouped[tipo].sort((a, b) => {
+                        const oA = a.ordem !== undefined && a.ordem !== null && a.ordem !== '' ? Number(a.ordem) : 99999;
+                        const oB = b.ordem !== undefined && b.ordem !== null && b.ordem !== '' ? Number(b.ordem) : 99999;
+                        if (oA !== oB) return oA - oB;
+                        return (a.nome || '').localeCompare(b.nome || '');
+                    });
                 });
 
                 attachedItemsContainer.innerHTML = '';
@@ -561,20 +770,47 @@
                     categoryGrid.className = 'attached-items-grid';
 
                     grouped[category].forEach(item => {
+                        const subAttached = getAttachedItems(item);
                         const card = document.createElement('div');
                         card.className = 'attached-item-card';
                         card.style.cursor = 'pointer';
-                        card.onclick = () => openItemDetailModal(item, estadio);
+                        card.onclick = () => openItemDetailModal(item, parentItem);
                         
                         const valorText = item.valor !== undefined && item.valor !== null ? `${item.valor} GCoins` : 'Sem valor';
                         const notaText = item.nota ? item.nota : 'Sem nota';
+                        const ordemText = item.ordem !== undefined && item.ordem !== null && item.ordem !== '' ? item.ordem : null;
+
+                        const subAttachedBtnHtml = subAttached.length > 0
+                            ? `<button class="btn-sub-anexos" title="Ver os ${subAttached.length} item(ns) anexados a este item">
+                                    <i class="fas fa-paperclip"></i> ${subAttached.length} ${subAttached.length === 1 ? 'Anexo' : 'Anexos'}
+                                    <i class="fas fa-chevron-right" style="font-size: 9px; margin-left: 2px;"></i>
+                               </button>`
+                            : '';
 
                         card.innerHTML = `
-                            <span class="item-tag">${item.tipo || 'Item'}</span>
-                            <h4>${item.nome || 'Item'}</h4>
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                                <span class="item-tag" style="margin-bottom: 0;">${item.tipo || 'Item'}</span>
+                                ${subAttached.length > 0 ? `<span class="badge-sub-anexos-indicator"><i class="fas fa-paperclip"></i> ${subAttached.length}</span>` : ''}
+                            </div>
+                            <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 8px;">
+                                ${item.imagem ? `<img src="${item.imagem}" alt="${item.nome}" style="width:34px; height:34px; object-fit:cover; border-radius:6px; border:1px solid rgba(255,255,255,0.1);">` : ''}
+                                <h4 style="margin: 0; word-break: break-word;">${item.nome || 'Item'}</h4>
+                            </div>
                             <p><strong>Valor:</strong> ${valorText}</p>
+                            ${ordemText !== null ? `<p><strong>Ordem:</strong> ${ordemText}</p>` : ''}
                             <p><strong>Nota:</strong> ${notaText}</p>
+                            ${subAttachedBtnHtml}
                         `;
+
+                        // Anexar handler no botão de sub-anexos (com stopPropagation para não abrir o detail modal)
+                        const subBtn = card.querySelector('.btn-sub-anexos');
+                        if (subBtn) {
+                            subBtn.onclick = (e) => {
+                                e.stopPropagation();
+                                navigateToSubItem(item);
+                            };
+                        }
+
                         categoryGrid.appendChild(card);
                     });
 
@@ -583,15 +819,9 @@
                     attachedItemsContainer.appendChild(groupSection);
                 });
             }
-
-            modalOverlay.classList.add('active');
         }
 
-        const itemDetailModalOverlay = document.getElementById('item-detail-modal-overlay');
-        const detailModalCloseBtn = document.getElementById('detail-modal-close-btn');
-        const detailModalBody = document.getElementById('detail-modal-body');
-
-        function openItemDetailModal(item, estadio) {
+        function openItemDetailModal(item, parentItem) {
             if (!itemDetailModalOverlay || !detailModalBody) return;
 
             const imageHtml = item.imagem
@@ -602,7 +832,20 @@
             const nivelDisplay = item.nivel || 'N/A';
             const ordemDisplay = item.ordem !== undefined && item.ordem !== null ? item.ordem : 'N/A';
             const noMercadoDisplay = item.noMercado === true ? 'Sim' : (item.noMercado === false ? 'Não' : 'N/A');
-            const estadioNome = estadio ? estadio.nome : (item.anexadoItem || 'Nenhum');
+            const parentNome = parentItem ? parentItem.nome : (item.anexadoItem || 'Nenhum');
+
+            const subAttached = getAttachedItems(item);
+            const subAttachedActionHtml = subAttached.length > 0
+                ? `<div style="margin-top: 16px; padding: 12px; background: rgba(56,139,253,0.1); border: 1px solid rgba(56,139,253,0.3); border-radius: 8px; display: flex; align-items: center; justify-content: space-between;">
+                        <div>
+                            <strong style="color: #58a6ff; font-size: 13px;"><i class="fas fa-paperclip"></i> Este item possui ${subAttached.length} item(ns) anexado(s)</strong>
+                            <p style="margin: 2px 0 0 0; font-size: 11px; color: #8b949e;">Clique para abrir a lista de anexos deste item.</p>
+                        </div>
+                        <button id="detail-open-sub-btn" class="btn-sub-anexos" style="margin: 0; padding: 6px 12px;">
+                            Ver Anexos <i class="fas fa-arrow-right" style="font-size: 10px;"></i>
+                        </button>
+                   </div>`
+                : '';
 
             detailModalBody.innerHTML = `
                 <div style="background:#0d1117; border-radius:14px; padding:20px; border:1px solid rgba(255,255,255,0.08);">
@@ -637,19 +880,31 @@
                             <strong style="color:#f0f6fc; font-size:14px;">${ordemDisplay}</strong>
                         </div>
                         <div>
-                            <span style="color:#8b949e; font-size:12px; display:block; margin-bottom:2px;">Estádio Anexado:</span>
-                            <strong style="color:#58a6ff; font-size:14px;"><i class="fas fa-landmark"></i> ${estadioNome}</strong>
+                            <span style="color:#8b949e; font-size:12px; display:block; margin-bottom:2px;">Item / Estádio Pai:</span>
+                            <strong style="color:#58a6ff; font-size:14px;"><i class="fas fa-layer-group"></i> ${parentNome}</strong>
                         </div>
                     </div>
 
-                    <div style="margin-top:14px;">
+                    <div>
                         <span style="color:#8b949e; font-size:12px; display:block; margin-bottom:4px;">Nota / Descrição Completa:</span>
                         <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); padding:12px; border-radius:8px; color:#c9d1d9; font-size:13px; line-height:1.45; word-break:break-word;">
                             ${item.nota || 'Sem nota cadastrada.'}
                         </div>
                     </div>
+
+                    ${subAttachedActionHtml}
                 </div>
             `;
+
+            if (subAttached.length > 0) {
+                const detailOpenSubBtn = detailModalBody.querySelector('#detail-open-sub-btn');
+                if (detailOpenSubBtn) {
+                    detailOpenSubBtn.onclick = () => {
+                        closeDetailModal();
+                        navigateToSubItem(item);
+                    };
+                }
+            }
 
             itemDetailModalOverlay.classList.add('active');
         }
@@ -670,6 +925,8 @@
 
         function closeModal() {
             modalOverlay.classList.remove('active');
+            modalHistory = [];
+            currentModalItem = null;
         }
 
         if (searchInput) {
@@ -678,6 +935,10 @@
 
         if (modalCloseBtn) {
             modalCloseBtn.addEventListener('click', closeModal);
+        }
+
+        if (modalBackBtn) {
+            modalBackBtn.addEventListener('click', navigateBack);
         }
 
         if (modalOverlay) {
