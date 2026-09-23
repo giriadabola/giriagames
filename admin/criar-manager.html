@@ -102,20 +102,20 @@
              background-image: url('data:image/svg+xml;utf8,<svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M8.99984 1L5.00001 5L1 8.99984M1.00016 1L5.00001 5L9 8.99984" stroke="%23666" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>');
          }
 
-         .form-group select:not([multiple]):not(.choices__input):not(#anexadoItem) {
+         .form-group select:not([multiple]):not(.choices__input) {
              background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M2 5l6 6 6-6'/%3e%3c/svg%3e");
              background-repeat: no-repeat;
              background-position: right .75rem center;
              background-size: 16px 12px;
              appearance: none;
          }
-          .form-group #anexadoItem {
-             background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M2 5l6 6 6-6'/%3e%3c/svg%3e");
-             background-repeat: no-repeat;
-             background-position: right .75rem center;
-             background-size: 16px 12px;
-             appearance: none;
-          }
+
+
+
+
+
+
+
 
 
         .form-group input:focus,
@@ -221,9 +221,9 @@
             </div>
 
             <div class="form-group">
-                <label for="anexadoItem">Anexado? <span class="optional-text">(Mentalidade ou Estádio - Opcional)</span></label>
-                <select id="anexadoItem" name="anexadoItem">
-                    <option value="" selected enable>-- Selecione Item Anexado (Opcional) --</option>
+                <label for="anexadoItem">Anexado? <span class="optional-text">(Multiescolha - Opcional)</span></label>
+                <select id="anexadoItem" name="anexadoItem" multiple placeholder="Selecione os itens anexados...">
+
                 </select>
             </div>
 
@@ -378,6 +378,7 @@
 
     let competicoesChoicesInstance = null;
     let compradoPorChoicesInstance = null;
+    let anexadoItemChoicesInstance = null;
     let managerGainFields = null;
     let managerGainFieldsReady = Promise.resolve();
 
@@ -426,7 +427,8 @@
     const anexadoSelect = document.getElementById('anexadoItem');
     const ordemSelect = document.getElementById('ordem');
 
-    const selectedAnexadoId = anexadoSelect.value;
+    const selectedAnexados = anexadoItemChoicesInstance ? anexadoItemChoicesInstance.getValue(true) : [];
+    const selectedAnexadoId = Array.isArray(selectedAnexados) && selectedAnexados.length > 0 ? selectedAnexados[0] : "";
     console.log(`ID do Item Anexado selecionado: "${selectedAnexadoId}"`);
 
     // A função só executa se um item anexado for selecionado
@@ -543,40 +545,48 @@
             console.error("Elemento #anexadoItem não encontrado.");
             return;
         }
-        anexadoSelect.innerHTML = anexadoSelect.options[0].outerHTML;
+        const choicesData = [];
 
         try {
             const itemsCol = collection(db, 'managerItens');
             const itemsSnapshot = await getDocs(itemsCol);
-            const allItems = [];
+
             
             itemsSnapshot.forEach((doc) => {
                 const data = doc.data();
                 if (data.nome && data.tipo) { 
-                    allItems.push({
-                        id: doc.id,
-                        nome: data.nome,
-                        tipo: data.tipo
+                    choicesData.push({
+                        value: doc.id,
+                        label: `${data.tipo}: ${data.nome}`
+
                     });
                 }
             });
 
-            allItems.sort((a, b) => {
-                const textA = `${a.tipo}: ${a.nome}`;
-                const textB = `${b.tipo}: ${b.nome}`;
-                return textA.localeCompare(textB);
+            choicesData.sort((a, b) => a.label.localeCompare(b.label));
+            if (anexadoItemChoicesInstance) anexadoItemChoicesInstance.destroy();
+            anexadoItemChoicesInstance = new Choices(anexadoSelect, {
+                removeItemButton: true,
+                placeholder: true,
+                placeholderValue: 'Selecione os itens anexados...',
+                choices: choicesData,
+                searchPlaceholderValue: "Pesquisar itens...",
+                itemSelectText: '',
+                shouldSort: false,
+                maxItemCount: -1,
+                position: 'bottom'
             });
 
-            allItems.forEach(item => {
-                const option = document.createElement('option');
-                option.value = item.id;
-                option.textContent = `${item.tipo}: ${item.nome}`;
-                anexadoSelect.appendChild(option);
-            });
+
+
+
+
+
+
 
         } catch (error) {
             console.error("Erro ao carregar todas as opções de Anexado:", error);
-            anexadoSelect.innerHTML = anexadoSelect.options[0].outerHTML;
+            if (anexadoItemChoicesInstance) anexadoItemChoicesInstance.destroy();
             const errorOption = document.createElement('option');
             errorOption.textContent = "Erro ao carregar itens";
             errorOption.disabled = true;
@@ -597,7 +607,7 @@
         const tipo = form.tipo.value;
         const nome = form.nome.value;
         const imagem = form.imagem.value;
-        const anexadoItemId = form.anexadoItem.value;
+        const selectedAnexados = anexadoItemChoicesInstance ? anexadoItemChoicesInstance.getValue(true) : [];
         const valorInput = form.valor.value;
         const nota = form.nota.value;
         const nivel = form.nivel.value;
@@ -613,7 +623,7 @@
             nome: nome,
             noMercado: noMercadoValue === 'sim',
             ...(imagem && { imagem: imagem }),
-            ...(anexadoItemId && { anexadoItemId: anexadoItemId }),
+            ...(selectedAnexados.length > 0 && { anexadoItemIds: selectedAnexados, anexadoItemId: selectedAnexados[0] }),
             ...(valorInput && { valor: parseFloat(valorInput) || 0 }),
             ...(nota && { nota: nota }),
             ...(nivel && { nivel: nivel }),
@@ -635,6 +645,9 @@
             }
             if (compradoPorChoicesInstance) {
                 compradoPorChoicesInstance.setChoiceByValue([]);
+            }
+            if (anexadoItemChoicesInstance) {
+                anexadoItemChoicesInstance.setChoiceByValue([]);
             }
             managerGainFields?.clear();
 

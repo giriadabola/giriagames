@@ -830,7 +830,7 @@
                
                 <div class="form-group"> <label for="nome">Nome:</label> <input type="text" id="nome" name="nome" required> </div>
                 <div class="form-group"> <label for="imagem">Imagem <span class="optional-text">(Link - Opcional)</span></label> <input type="url" id="imagem" name="imagem" placeholder="https://exemplo.com/imagem.png"> </div>
-                <div class="form-group"> <label for="anexadoItem">Anexado? <span class="optional-text">(Mentalidade ou Estádio - Opcional)</span></label> <select id="anexadoItem" name="anexadoItem"> <option value="" selected enable>-- Selecione Item Anexado (Opcional) --</option> </select> </div>
+                <div class="form-group"> <label for="anexadoItem">Anexado? <span class="optional-text">(Multiescolha - Opcional)</span></label> <select id="anexadoItem" name="anexadoItem" multiple placeholder="Selecione os itens anexados..."> </select> </div>
                 <div class="form-group"> <label for="valor">Valor <span class="optional-text">(Opcional)</span></label> <input type="number" id="valor" name="valor" placeholder="Ex: 1000" step="any"> </div>
                 <div class="form-group"> <label for="nota">Nota <span class="optional-text">(Opcional)</span></label> <textarea id="nota" name="nota" rows="4" placeholder="Descreva o item..."></textarea> </div>
                 <fieldset class="manager-gain-section">
@@ -972,6 +972,7 @@ import { getLatestSeason, getSeasonData } from '../core/user-season.js';
 import { initializeManagerGainFields } from './js/manager-gain-fields.js';
 let competicoesChoicesInstance = null;
 let compradoPorChoicesInstance = null;
+let anexadoItemChoicesInstance = null;
 let managerGainFields = null;
 let managerGainFieldsReady = Promise.resolve();
 const itemListDiv = document.getElementById('item-list');
@@ -1048,40 +1049,40 @@ async function loadAnexadoOptions() {
         console.error("Elemento #anexadoItem não encontrado.");
         return;
     }
-    const placeholderOptionHTML = anexadoSelect.querySelector('option[value=""]')?.outerHTML || '<option value="" selected enable>-- Selecione Item Anexado (Opcional) --</option>';
-    anexadoSelect.innerHTML = placeholderOptionHTML;
+    const choicesData = [];
+
 
     try {
         const itemsCol = collection(db, 'managerItens');
         const itemsSnapshot = await getDocs(itemsCol);
-        const allItems = [];
+
         itemsSnapshot.forEach((doc) => {
             const data = doc.data();
             if (data.nome && data.tipo) {
-                allItems.push({
-                    id: doc.id,
-                    nome: data.nome,
-                    tipo: data.tipo
+                choicesData.push({
+                    value: doc.id,
+                    label: `${data.tipo}: ${data.nome}`
+
                 });
             }
         });
 
-        allItems.sort((a, b) => {
-            const textA = `${a.tipo}: ${a.nome}`;
-            const textB = `${b.tipo}: ${b.nome}`;
-            return textA.localeCompare(textB);
-        });
+        choicesData.sort((a, b) => a.label.localeCompare(b.label));
+        if (anexadoItemChoicesInstance) anexadoItemChoicesInstance.destroy();
+        anexadoItemChoicesInstance = new Choices(anexadoSelect, {
+            removeItemButton: true, placeholder: true, placeholderValue: 'Selecione os itens anexados...', choices: choicesData, searchPlaceholderValue: 'Pesquisar itens...', itemSelectText: '', shouldSort: false, maxItemCount: -1, position: 'bottom' });
 
-        allItems.forEach(item => {
-            const option = document.createElement('option');
-            option.value = item.id;
-            option.textContent = `${item.tipo}: ${item.nome}`;
-            anexadoSelect.appendChild(option);
-        });
+
+
+
+
+
+
+
 
     } catch (error) {
         console.error("Erro ao carregar todas as opções de Anexado:", error);
-        anexadoSelect.innerHTML = placeholderOptionHTML;
+        if (anexadoItemChoicesInstance) anexadoItemChoicesInstance.destroy();
         const errorOption = document.createElement('option');
         errorOption.textContent = "Erro ao carregar itens";
         errorOption.disabled = true;
@@ -1289,11 +1290,12 @@ async function loadItemDetails(itemId) {
              await managerGainFieldsReady;
              managerGainFields?.setValue(item.mecanismosGanho || {});
 
-             const anexadoSelect = itemEditForm.querySelector('#anexadoItem');
-             if (anexadoSelect) {
-                 anexadoSelect.value = item.anexadoItemId || '';
-                 if (item.anexadoItemId && !anexadoSelect.querySelector(`option[value="${item.anexadoItemId}"]`)) {
-                     console.warn(`Anexado ID "${item.anexadoItemId}" não encontrado nas opções.`);
+             if (anexadoItemChoicesInstance) {
+             
+                                   anexadoItemChoicesInstance.removeActiveItems();
+                 
+                     const selectedAnexados = item.anexadoItemIds && Array.isArray(item.anexadoItemIds) ? item.anexadoItemIds : (item.anexadoItemId ? [item.anexadoItemId] : []);
+                 if (selectedAnexados.length > 0) { anexadoItemChoicesInstance.setChoiceByValue(selectedAnexados); }
                  }
              }
 
@@ -1402,7 +1404,7 @@ function initializePage() {
              const tipo = itemEditForm.tipo.value;
              const nome = itemEditForm.nome.value;
              const imagem = itemEditForm.imagem.value;
-             const anexadoItemId = itemEditForm.anexadoItem.value;
+                          const selectedAnexados = anexadoItemChoicesInstance ? anexadoItemChoicesInstance.getValue(true) : [];
              const valorInput = itemEditForm.valor.value;
              const nota = itemEditForm.nota.value;
              const nivel = itemEditForm.nivel.value;
@@ -1424,7 +1426,7 @@ function initializePage() {
              if (nota) updatedData.nota = nota; else if (itemEditForm.nota.hasAttribute('value')) updatedData.nota = null;
              if (nivel) updatedData.nivel = nivel; else if (itemEditForm.nivel.hasAttribute('value')) updatedData.nivel = null;
              if (ordemValue && !isNaN(parseInt(ordemValue, 10))) updatedData.ordem = parseInt(ordemValue, 10); else if (itemEditForm.ordem.hasAttribute('value')) updatedData.ordem = null;
-             if (anexadoItemId) { updatedData.anexadoItemId = anexadoItemId; } else { updatedData.anexadoItemId = null; }
+             if (Array.isArray(selectedAnexados) && selectedAnexados.length > 0) { updatedData.anexadoItemIds = selectedAnexados; updatedData.anexadoItemId = selectedAnexados[0]; } else { updatedData.anexadoItemIds = []; updatedData.anexadoItemId = null; }
 
              try {
                  const itemDocRef = doc(db, 'managerItens', itemId);
@@ -1452,7 +1454,7 @@ function initializePage() {
              managerGainFields?.clear();
              if(itemIdInput) itemIdInput.value = '';
              if(itemEditForm.tipo) itemEditForm.tipo.value = "";
-             if(itemEditForm.anexadoItem) itemEditForm.anexadoItem.value = "";
+                          if (anexadoItemChoicesInstance) anexadoItemChoicesInstance.removeActiveItems();
              if(itemEditForm.nivel) itemEditForm.nivel.value = "";
              if(itemEditForm.noMercado) itemEditForm.noMercado.value = "";
              if(itemEditForm.ordem) itemEditForm.ordem.value = "";
