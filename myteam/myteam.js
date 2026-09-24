@@ -4,6 +4,7 @@ import { doc, getDoc, collection, getDocs, query, orderBy, limit, setDoc, addDoc
 import { initRivalSquadsView } from '../core/rival-squads-view.js';
 import { compactSeason, getLatestSeason, getSeasonData, mergeUserSeasonData } from '../core/user-season.js';
 import { fetchOwnedPlayersForSeason } from '../core/player-season.js';
+import { readPlayerStatistic } from '../core/player-stats.js';
 import { checkPageContentAccess } from '../js/page-content-guard.js';
 
 // --- Sobrescrever window.alert com Modal Personalizado ---
@@ -141,7 +142,6 @@ function calculateCategoryOveralls(player) {
     const statsText = player.estatisticas; 
     const playerPosition = player.posicao; 
     if (!statsText || !paineisCoeficienteData) { return {}; } 
-    const lines = statsText.split('\n'); 
     for (const categoria in paineisCoeficienteData) { 
         if (!categoryTotals[categoria]) { categoryTotals[categoria] = 0; } 
         const subcategorias = paineisCoeficienteData[categoria]; 
@@ -151,21 +151,8 @@ function calculateCategoryOveralls(player) {
                 for (const tipoItem of subcategoriaData.tipo) { 
                     if (tipoItem.name === playerPosition) { 
                         const coefficient = parseFloat(String(tipoItem.text).replace(',', '.')) || 0; 
-                        let statValue = 0; 
-                        for (let i = 0; i < lines.length; i++) { 
-                            const line = lines[i].trim(); 
-                            if (line.toLowerCase().startsWith(subcategoriaNome.toLowerCase())) { 
-                                const valueLine = lines[i + 1] ? lines[i + 1].trim() : ''; 
-                                if (valueLine) { 
-                                    const numberMatch = valueLine.match(/^-?\d+(\.\d+)?/); 
-                                    if (numberMatch) { 
-                                        statValue = parseFloat(numberMatch[0].replace(',', '.')); 
-                                    } 
-                                } 
-                                break; 
-                            } 
-                        } 
-                        categoryTotals[categoria] += (coefficient * statValue); 
+                        const parsedStatistic = readPlayerStatistic(statsText, subcategoriaNome);
+                        categoryTotals[categoria] += (coefficient * parsedStatistic.value);
                     } 
                 } 
             } 
