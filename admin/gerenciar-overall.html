@@ -765,8 +765,9 @@
 
     <script type="module">
         import { adminAuthReady, db } from './js/auth-guard.js';
-        import { collection, getDocs, doc, getDoc, updateDoc, setDoc, query, where, Timestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-        import { fetchUniqueSeasons, getPlayerSeasonData, buildPlayerSeasonUpdatePayload, hasPlayerDataForSeason } from './js/player-season-helper.js';
+import { collection, getDocs, doc, getDoc, updateDoc, setDoc, query, where, Timestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { fetchUniqueSeasons, getPlayerSeasonData, buildPlayerSeasonUpdatePayload, hasPlayerDataForSeason } from './js/player-season-helper.js';
+import { readPlayerStatistic } from '../core/player-stats.js';
 
         let allRawPlayers = [];
         let allPlayers = [];
@@ -1134,23 +1135,9 @@
                                 const coefText = item.text || '0';
                                 const coefVal = parseFloat(coefText.replace(',', '.')) || 0;
                                 
-                                let statValText = '-';
-                                let statValNum = 0;
-
-                                if (currentPastedStats) {
-                                    const lines = currentPastedStats.split('\n');
-                                    for (let i = 0; i < lines.length; i++) {
-                                        if (lines[i].trim().toLowerCase().startsWith(subcatName.toLowerCase())) {
-                                            const valLine = lines[i + 1] ? lines[i + 1].trim() : '';
-                                            const match = valLine.match(/^(\d+(\.\d+)?)/);
-                                            if (match) {
-                                                statValText = match[1];
-                                                statValNum = parseFloat(statValText.replace(',', '.')) || 0;
-                                            }
-                                            break;
-                                        }
-                                    }
-                                }
+                                const parsedStatistic = readPlayerStatistic(currentPastedStats, subcatName);
+                                const statValText = parsedStatistic.display;
+                                const statValNum = parsedStatistic.value;
 
                                 const partialTotal = coefVal * statValNum;
                                 totalSum += partialTotal;
@@ -2016,18 +2003,10 @@
                                 if (item.name === pos) {
                                     const coefVal = parseFloat((item.text || '0').replace(',', '.')) || 0;
                                     
-                                    const lines = statsText.split('\n');
-                                    for (let i = 0; i < lines.length; i++) {
-                                        if (lines[i].trim().toLowerCase().startsWith(subcatName.toLowerCase())) {
-                                            const valLine = lines[i + 1] ? lines[i + 1].trim() : '';
-                                            const match = valLine.match(/^(\d+(\.\d+)?)/);
-                                            if (match) {
-                                                const statNum = parseFloat(match[1].replace(',', '.')) || 0;
-                                                totalSum += coefVal * statNum;
-                                                statsFoundCount++;
-                                            }
-                                            break;
-                                        }
+                                    const parsedStatistic = readPlayerStatistic(statsText, subcatName);
+                                    if (parsedStatistic.found) {
+                                        totalSum += coefVal * parsedStatistic.value;
+                                        statsFoundCount++;
                                     }
                                     break;
                                 }
