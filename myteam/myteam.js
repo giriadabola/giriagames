@@ -1,8 +1,9 @@
 import { db, auth } from '../core/firebase.js';
+import { callFinance } from '../core/finance-client.js';
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { doc, getDoc, collection, getDocs, query, orderBy, limit, setDoc, addDoc, where, serverTimestamp, updateDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { initRivalSquadsView } from '../core/rival-squads-view.js';
-import { compactSeason, getLatestSeason, getSeasonData, mergeUserSeasonData } from '../core/user-season.js';
+import { getLatestSeason, getSeasonData, mergeUserSeasonData } from '../core/user-season.js';
 import { fetchOwnedPlayersForSeason } from '../core/player-season.js';
 import { readPlayerStatistic } from '../core/player-stats.js';
 import { checkPageContentAccess } from '../js/page-content-guard.js';
@@ -1042,8 +1043,11 @@ async function handleSellToBanca(player) {
         const bancaRef = doc(db, "paineis", "Banca");
         const docSnap = await getDoc(bancaRef);
         if (docSnap.exists()) {
-            configData = docSnap.data();
-            currentBankMoney = configData.valor || 0;
+            const rawConfig = docSnap.data();
+            const season = await getLatestSeason(db);
+            const seasonal = rawConfig[season] ?? rawConfig[season.replaceAll('/', '')];
+            configData = { ...rawConfig, ...(typeof seasonal === 'object' ? seasonal : {}) };
+            currentBankMoney = (typeof seasonal === 'number' ? seasonal : configData.valor) || 0;
             discount = configData.descontoBanca || 0;
             allowedAfterDateStr = configData.dataVendaBanca || '';
         }
@@ -1101,65 +1105,16 @@ async function handleSellToBanca(player) {
         confirmBtn.disabled = true;
         confirmBtn.style.opacity = '0.5';
         try {
-            const latestSeason = await getLatestSeason(db);
-
-            const batch = writeBatch(db);
-
-            batch.update(doc(db, 'jogadores', player.id), {
-                compradopor: null
+            const result = await callFinance('sellPlayerToBank', {
+                playerId: player.id, season: await getLatestSeason(db)
             });
-
-            batch.set(doc(collection(db, 'movimentos')), {
-                de: currentUserUid,
-                estado: 'Devolvido',
-                jogadorId: player.id,
-                mediapontos: null,
-                movimentoData: serverTimestamp(),
-                posicao: player.posicao,
-                preco: finalPrice,
-                valorreal: finalPrice,
-                temporada: compactSeason(latestSeason),
-                userId: currentUserUid,
-                tipo: 'Mercado',
-                descricao: `Vendido à Banca com desconto de ${discount} gCoins`
-            });
-
-            const newBankBal = currentBankMoney - finalPrice;
-            batch.update(doc(db, "paineis", "Banca"), { valor: newBankBal });
-
-            batch.set(doc(collection(db, 'movimentos')), {
-                preco: -finalPrice,
-                movimentoData: serverTimestamp(),
-                tipo: "Banca",
-                temporada: compactSeason(latestSeason),
-                descricao: `Compra de jogador ${player.nome}`,
-                para_userId: currentUserUid
-            });
-
-            const userRef = doc(db, 'users', currentUserUid);
-            const userSnap = await getDoc(userRef);
-            if (userSnap.exists()) {
-            const seasonData = getSeasonData(userSnap.data(), latestSeason);
-            const currentGCoins = seasonData.GCoins || 0;
-            batch.update(userRef, {
-                [latestSeason]: {
-                    ...seasonData,
-                    GCoins: currentGCoins + finalPrice
-                }
-            });
-            }
-
             const positionAssigned = Object.keys(assignedPlayers).find(key => assignedPlayers[key] === player.id);
-            if (positionAssigned) {
-                removePlayerFromPosition(positionAssigned);
-            }
-
-            await batch.commit();
-            logUserAction(`Vendeu jogador ${player.nome} à Banca por ${finalPrice} gCoins`);
+            if (positionAssigned) removePlayerFromPosition(positionAssigned);
+            logUserAction(`Vendeu jogador ${player.nome} à Banca por ${result.proceeds} gCoins`);
 
             const successMessage = document.createElement('div');
             successMessage.className = 'success-message';
-            successMessage.textContent = `Jogador Vendido! +${finalPrice} gCoins`;
+            successMessage.textContent = `Jogador Vendido! +${result.proceeds} gCoins`;
             successMessage.style.position = 'fixed';
             successMessage.style.top = '50%';
             successMessage.style.left = '50%';
@@ -1181,7 +1136,7 @@ async function handleSellToBanca(player) {
 
         } catch (error) {
             console.error('Error selling player to Banca:', error);
-            alert('Erro ao vender jogador. Tente novamente.');
+            alert(error.message || 'Erro ao vender jogador. Tente novamente.');
             confirmPopup.remove();
         }
     });
@@ -1209,7 +1164,9 @@ async function showGPlayersListPopup(player) {
     try {
         const docSnap = await getDoc(doc(db, "paineis", "Banca"));
         if (docSnap.exists()) {
-            configData = docSnap.data();
+            const season = await getLatestSeason(db);
+            const rawConfig = docSnap.data();
+            configData = { ...rawConfig, ...(rawConfig[season] || rawConfig[season.replaceAll('/', '')] || {}) };
             allowedAfterDateStr = configData.dataVendaBanca || '';
         }
     } catch (e) {
@@ -1280,14 +1237,8 @@ async function showGPlayersListPopup(player) {
                 btn.disabled = true;
                 btn.style.opacity = '0.5';
                 try {
-                    await addDoc(collection(db, 'inbox'), {
-                        de: currentUserUid,
-                        para: u.id,
-                        jogadorId: player.id,
-                        preco: player.preco,
-                        status: true,
-                        tipo: 'Venda',
-                        data: serverTimestamp()
+                    await callFinance('acceptPlayerSale', {
+                        action: 'propose', buyerId: u.id, playerId: player.id, season: latestSeason
                     });
                     logUserAction(`Enviou proposta de venda do jogador ${player.nome} a ${u.displayNome}`);
                     
@@ -1295,7 +1246,7 @@ async function showGPlayersListPopup(player) {
                     alert(`Proposta de venda do jogador ${player.nome} enviada com sucesso para ${u.displayNome}.`);
                 } catch (err) {
                     console.error("Erro ao enviar proposta:", err);
-                    alert("Erro ao enviar a proposta. Tente novamente.");
+                    alert(err.message || "Erro ao enviar a proposta. Tente novamente.");
                     btn.disabled = false;
                     btn.style.opacity = '1';
                 }

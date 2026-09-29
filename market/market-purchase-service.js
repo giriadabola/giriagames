@@ -1,11 +1,4 @@
-import { app } from '../core/firebase.js';
-import {
-    getFunctions,
-    httpsCallable
-} from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
-
-const functions = getFunctions(app, 'us-central1');
-const purchasePlayerCallable = httpsCallable(functions, 'purchaseMarketPlayer');
+import { callFinance } from '../core/finance-client.js';
 
 export async function purchaseMarketPlayer(playerId) {
     const normalizedPlayerId = String(playerId || '').trim();
@@ -13,11 +6,9 @@ export async function purchaseMarketPlayer(playerId) {
         throw new Error('Não foi possível identificar o jogador.');
     }
 
-    const response = await purchasePlayerCallable({
+    return callFinance('purchaseMarketPlayer', {
         playerId: normalizedPlayerId
     });
-
-    return response.data;
 }
 
 export function getMarketPurchaseErrorMessage(error) {
