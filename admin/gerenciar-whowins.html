@@ -109,7 +109,7 @@
         import { db, auth } from './js/auth-guard.js';
         import { collection, query, getDocs, doc, getDoc, updateDoc, Timestamp, where, writeBatch, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-        import { getSeasonData } from '../core/user-season.js';
+        import { callFinance } from '../core/finance-client.js';
 
         document.addEventListener('DOMContentLoaded', () => {
             const temporadaSelect = document.getElementById('temporada-select');
@@ -145,99 +145,16 @@
             }
             
             async function recalculateUserTotalsForSeason(userIds, season) {
-                if (userIds.size === 0) return 0;
-
-                try {
-                    const movementsQuery = query(collection(db, 'movimentos'),
-                        where("estado", "==", "WhoWins Paid"),
-                        where("temporada", "==", season)
-                    );
-                    const movementsSnapshot = await getDocs(movementsQuery);
-
-                    const userTotals = {};
-                    userIds.forEach(id => { userTotals[id] = 0; });
-
-                    movementsSnapshot.forEach(movDoc => {
-                        const movimento = movDoc.data();
-                        if (userTotals.hasOwnProperty(movimento.userId)) {
-                            userTotals[movimento.userId] += movimento.valorreal || 0;
-                        }
-                    });
-
-                     const userUpdateBatch = writeBatch(db);
-                     for (const userId of userIds) {
-                         const userRef = doc(db, 'users', userId);
-                         const userSnapshot = await getDoc(userRef);
-                         const seasonData = userSnapshot.exists() ? getSeasonData(userSnapshot.data(), season) : {};
-                         userUpdateBatch.update(userRef, { [season]: { ...seasonData, whowinsgCoins: userTotals[userId] } });
-                     }
-
-                    await userUpdateBatch.commit();
-                    return userIds.size;
-
-                } catch (error) {
-                    console.error("Erro ao recalcular totais dos utilizadores:", error);
-                    throw new Error("Falha ao atualizar saldos dos utilizadores.");
-                }
+                // Wallets are adjusted by the movement transaction; only fame needs a rebuild.
+                return recalculateUserFameForSeason(userIds, season);
             }
 
-          async function recalculateUserFameForSeason(userIds, season) {
-    console.log(`--- [INÍCIO - FAMA] Função 'recalculateUserFameForSeason' chamada.`);
-    console.log(`- Temporada para cálculo: ${season}`);
-    console.log(`- Utilizadores a recalcular (${userIds.size}):`, Array.from(userIds));
-
-    if (userIds.size === 0) {
-        console.log("- Nenhum utilizador para atualizar. A função vai terminar.");
-        return 0;
-    }
-
-    try {
-        console.log("- A consultar a base de dados por TODOS os palpites da temporada...");
-        const predictionsQuery = query(collection(db, 'palpiteswhowins'),
-            where("temporada", "==", season)
-        );
-        const predictionsSnapshot = await getDocs(predictionsQuery);
-        console.log(`- Encontrados ${predictionsSnapshot.size} palpites no total para a temporada '${season}'.`);
-
-        const userFameTotals = {};
-        userIds.forEach(id => { userFameTotals[id] = 0; });
-        console.log("- Totais de fama inicializados a zero:", userFameTotals);
-
-        console.log("- A processar cada palpite para somar o 'valorreal'...");
-        predictionsSnapshot.forEach(predDoc => {
-            const prediction = predDoc.data();
-            // Verifica se o palpite pertence a um dos utilizadores afetados.
-            if (userFameTotals.hasOwnProperty(prediction.userId)) {
-                const fameToAdd = prediction.valorreal || 0;
-                userFameTotals[prediction.userId] += fameToAdd;
-                if (fameToAdd > 0) {
-                    console.log(`  -> Palpite do UserID: ${prediction.userId} | valorreal: ${prediction.valorreal} | Nova Fama Parcial: ${userFameTotals[prediction.userId]}`);
+            async function recalculateUserFameForSeason(userIds, season) {
+                for (const userId of userIds) {
+                    await callFinance('adminUserReconcile', { userId, season, fields: ['fame'] });
                 }
+                return userIds.size;
             }
-        });
-
-        console.log("--- [IMPORTANTE] TOTAIS DE FAMA CALCULADOS ANTES DE ATUALIZAR A BD: ---", userFameTotals);
-
-         const userUpdateBatch = writeBatch(db);
-         for (const userId of userIds) {
-             const userRef = doc(db, 'users', userId);
-             const userSnapshot = await getDoc(userRef);
-             const seasonData = userSnapshot.exists() ? getSeasonData(userSnapshot.data(), season) : {};
-             userUpdateBatch.update(userRef, { [season]: { ...seasonData, fame: userFameTotals[userId] } });
-         }
-
-        console.log("- A preparar a atualização em lote para o campo 'fame' de cada utilizador...");
-        await userUpdateBatch.commit();
-        console.log(`- Sucesso! Campo 'fame' atualizado para ${userIds.size} utilizadores.`);
-        
-        console.log("--- [FIM - FAMA] Função concluída com sucesso. ---");
-        return userIds.size;
-
-    } catch (error) {
-        console.error("--- [ERRO - FAMA] Erro ao recalcular a fama dos utilizadores: ---", error);
-        throw new Error("Falha ao atualizar a fama dos utilizadores.");
-    }
-}
 
             async function initializeFilters() {
                 placeholder.innerHTML = '<i class="fas fa-spinner fa-spin"></i> A carregar dados...';
@@ -365,14 +282,15 @@
                     const predictionsQuery = query(collection(db, 'palpiteswhowins'), where("nomeJogo", "==", gameId));
                     const predictionsSnapshot = await getDocs(predictionsQuery);
 
-                    predictionsSnapshot.forEach(predictionDoc => {
+                    for (const predictionDoc of predictionsSnapshot.docs) {
                         const userId = predictionDoc.data().userId;
                         affectedUserIds.add(userId);
                         batch.update(predictionDoc.ref, { resultado: null, acertou: null, valorreal: null });
-                        const movimentoId = `whowins_${userId}_${gameId}`;
-                        const movimentoRef = doc(db, 'movimentos', movimentoId);
-                        batch.update(movimentoRef, { valorreal: 0, movimentoData: Timestamp.now() });
-                    });
+                        await callFinance('adminPostMovements', { entries: [{
+                            userId, jogoId: gameId, estado: 'WhoWins Paid',
+                            temporada: currentSeason, valorreal: 0
+                        }] });
+                    }
 
                     await batch.commit();
                     
@@ -429,7 +347,7 @@
             const predictionsQuery = query(collection(db, 'palpiteswhowins'), where("nomeJogo", "==", game.id));
             const predictionsSnapshot = await getDocs(predictionsQuery);
 
-            predictionsSnapshot.forEach(predictionDoc => {
+            for (const predictionDoc of predictionsSnapshot.docs) {
                 const predictionData = predictionDoc.data();
                 // Adiciona à lista de utilizadores diretamente afetados
                 directlyAffectedUserIds.add(predictionData.userId);
@@ -441,12 +359,13 @@
                 
                 batch.update(predictionDoc.ref, { resultado: gameResult, acertou: userGuessedCorrectly ? "sim" : "nao", valorreal: finalPrize });
                 
-                const movimentoId = `whowins_${predictionData.userId}_${game.id}`;
-                const movimentoRef = doc(db, 'movimentos', movimentoId);
-                batch.set(movimentoRef, { de: currentAdminId, estado: "WhoWins Paid", movimentoData: Timestamp.now(), nomeJogo: game.nomeJogo, para: predictionData.userId, temporada: game.temporada, userId: predictionData.userId, valorreal: finalPrize }, { merge: true });
-                
+                await callFinance('adminPostMovements', { entries: [{
+                    estado: 'WhoWins Paid', jogoId: game.id, nomeJogo: game.nomeJogo,
+                    temporada: game.temporada, userId: predictionData.userId, valorreal: finalPrize
+                }] });
+
                 processedPredictionsCount++;
-            });
+            }
         }
         
         console.log(`[PASSO 4] Fim do processamento de jogos. ${processedPredictionsCount} palpites adicionados ao lote de atualização.`);

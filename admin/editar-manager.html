@@ -1160,6 +1160,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { getLatestSeason, getSeasonData } from '../core/user-season.js';
+import { callFinance } from '../core/finance-client.js';
 import { initializeManagerGainFields } from './js/manager-gain-fields.js';
 let competicoesChoicesInstance = null;
 let compradoPorChoicesInstance = null;
@@ -1931,43 +1932,11 @@ function initializePage() {
                 managerTipo: managerTipo, estado: estado, itemManager: itemManager,
                 preco: parseFloat(preco), valorreal: parseFloat(valorReal),
                 temporada: temporada, tipo: tipo, userId: userId,
-                movimentoData: serverTimestamp(),
                 userName: popupUserIdSelect.selectedOptions[0]?.textContent || userId
             };
 
           try {
-            const movimentosCollectionRef = collection(db, 'movimentos');
-            const docRef = await addDoc(movimentosCollectionRef, movimentoData);
-            console.log("Movimento gravado com ID: ", docRef.id);
-
-            const movimentosQuery = query(collection(db, 'movimentos'),
-                where("userId", "==", userId),
-                where("temporada", "==", temporada),
-                where("estado", "!=", "Dívida")
-            );
-
-            const movimentosSnapshot = await getDocs(movimentosQuery);
-            let totalGcoinsRecalculado = 0;
-            
-            movimentosSnapshot.forEach(movDoc => {
-                const movData = movDoc.data();
-                if (typeof movData.valorreal === 'number') {
-                    totalGcoinsRecalculado += movData.valorreal;
-                }
-            });
-
-            const userDocRef = doc(db, 'users', userId);
-            const seasonLabel = await getLatestSeason(db);
-            const userSnapshot = await getDoc(userDocRef);
-            const seasonData = userSnapshot.exists() ? getSeasonData(userSnapshot.data(), seasonLabel) : {};
-            await updateDoc(userDocRef, {
-                [seasonLabel]: {
-                    ...seasonData,
-                    GCoins: totalGcoinsRecalculado
-                }
-            });
-            
-            console.log(`Saldo de GCoins do utilizador ${userId} reconciliado para: ${totalGcoinsRecalculado}`);
+            await callFinance('adminPostMovements', { entries: [movimentoData] });
             
             alert('Movimento gravado e saldo do utilizador atualizado com sucesso!');
             closePopup();

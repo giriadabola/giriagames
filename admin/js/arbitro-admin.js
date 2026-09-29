@@ -1,5 +1,6 @@
 // Importa a conexão 'db' do guardião central. A inicialização do Firebase já foi feita lá.
 import { db } from './auth-guard.js';
+import { callFinance } from '../../core/finance-client.js';
 
 // Importa as outras funções do Firestore que esta página específica precisa.
 import { collection, getDocs, doc, getDoc, updateDoc, where, addDoc, serverTimestamp, getCountFromServer, query, setDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
@@ -756,8 +757,6 @@ async function processNormalPalpites(ronda, temporada) {
 
             const temporadaKey = normalizeSeasonKey(palpite.temporada);
             const transacaoId = `palpite-${palpite.userId}-${palpite.jogoId}`;
-            const movQuery = query(collection(db, 'movimentos'), where("detalhes.transacaoId", "==", transacaoId));
-            const movSnapshot = await getDocs(movQuery);
 
             const movimentoData = {
                 userId: palpite.userId,
@@ -771,15 +770,7 @@ async function processNormalPalpites(ronda, temporada) {
                 detalhes: { transacaoId: transacaoId, jogoId: palpite.jogoId }
             };
 
-            if (movSnapshot.empty) {
-                if (cardTotalPontosGanhos > 0) {
-                    movimentoData.movimentoData = serverTimestamp();
-                    await addDoc(collection(db, 'movimentos'), movimentoData);
-                }
-            } else {
-                const docId = movSnapshot.docs[0].id;
-                await updateDoc(doc(db, 'movimentos', docId), movimentoData);
-            }
+            await callFinance('adminPostMovements', { entries: [movimentoData] });
             
             affectedUserIds.add(palpite.userId);
         }
@@ -872,8 +863,6 @@ async function processGameMods(ronda, temporada) {
                     apostaAtualizada.pontosGanhosJogadorAlvo = pontosAlvo;
 
                     const transacaoModId = `${jogadorId}-${alvoUserId}-${jogoId}`;
-                    const movQuery = query(collection(db, 'movimentos'), where("detalhes.transacaoModId", "==", transacaoModId));
-                    const movSnapshot = await getDocs(movQuery);
                     
                     const temporadaKey = normalizeSeasonKey(pMod.temporada);
                     const commonDetails = {
@@ -882,21 +871,10 @@ async function processGameMods(ronda, temporada) {
                         alvoUserId: alvoUserId, palpiteAlvo: palpiteAlvoTexto
                     };
 
-                    if (movSnapshot.empty) {
-                        const movJogador = { userId: jogadorId, valorreal: pontosJogador, estado: "Mod Play", temporada: temporadaKey, ronda: ronda, movimentoData: serverTimestamp(), detalhes: commonDetails };
-                        const movAlvo = { userId: alvoUserId, valorreal: pontosAlvo, estado: "Mod Play", temporada: temporadaKey, ronda: ronda, movimentoData: serverTimestamp(), detalhes: commonDetails };
-                        await Promise.all([
-                            addDoc(collection(db, 'movimentos'), movJogador),
-                            addDoc(collection(db, 'movimentos'), movAlvo)
-                        ]);
-                    } else {
-                        const updatePromises = movSnapshot.docs.map(docSnap => {
-                            const movData = docSnap.data();
-                            const novoValor = movData.userId === jogadorId ? pontosJogador : pontosAlvo;
-                            return updateDoc(doc(db, 'movimentos', docSnap.id), { valorreal: novoValor, detalhes: commonDetails, ronda: ronda });
-                        });
-                        await Promise.all(updatePromises);
-                    }
+                    await callFinance('adminPostMovements', { entries: [
+                        { userId: jogadorId, valorreal: pontosJogador, estado: "Mod Play", temporada: temporadaKey, ronda: String(ronda), detalhes: commonDetails },
+                        { userId: alvoUserId, valorreal: pontosAlvo, estado: "Mod Play", temporada: temporadaKey, ronda: String(ronda), detalhes: commonDetails }
+                    ] });
                     
                     affectedUserIds.add(jogadorId);
                     affectedUserIds.add(alvoUserId);
@@ -915,39 +893,8 @@ async function processGameMods(ronda, temporada) {
 }
 
 async function recalculateUserTotals(userIds, temporada) {
-    const temporadaKey = compactSeason(temporada);
-    const estadosQueValemPontos = ["Palpite Paid", "Mod Play"];
-
     for (const userId of userIds) {
-        const userRef = doc(db, 'users', userId);
-        const userSnapshot = await getDoc(userRef);
-        const currentSeasonData = userSnapshot.exists() ? getSeasonData(userSnapshot.data(), temporada) : {};
-
-        const gcoinsQuery = query(collection(db, 'movimentos'), where("userId", "==", userId), where("temporada", "==", temporadaKey));
-        let totalGCoins = 0;
-        const gcoinsSnapshot = await getDocs(gcoinsQuery);
-        
-        gcoinsSnapshot.forEach(doc => {
-            const data = doc.data();
-            if (data.estado !== 'WhoWins Paid') {
-                totalGCoins += (data.valorreal || 0);
-            }
-        });
-        const seasonUpdate = {
-            ...currentSeasonData,
-            GCoins: totalGCoins
-        };
-
-        const pontosQuery = query(collection(db, 'movimentos'), where("userId", "==", userId), where("temporada", "==", temporadaKey), where("estado", "in", estadosQueValemPontos));
-        let totalPontos = 0;
-        const pontosSnapshot = await getDocs(pontosQuery);
-        pontosSnapshot.forEach(doc => totalPontos += (doc.data().valorreal || 0));
-        seasonUpdate.Pontos = totalPontos;
-        
-        if (Object.keys(seasonUpdate).length > 0) {
-            await setDoc(userRef, { [temporada]: seasonUpdate }, { merge: true });
-            console.log(`Utilizador ${userId} atualizado: Pontos=${totalPontos}, GCoins=${totalGCoins}`);
-        }
+        await callFinance('adminUserReconcile', { userId, season: temporada, fields: ['GCoins', 'Pontos'] });
     }
 }
 

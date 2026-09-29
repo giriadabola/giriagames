@@ -718,6 +718,7 @@
     <script type="module">
         import { adminAuthReady, db } from './js/auth-guard.js';
         import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs, addDoc, Timestamp, writeBatch, orderBy, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        import { callFinance } from '../core/finance-client.js';
         import { compactSeason, getLatestSeason, getSeasonData } from '../core/user-season.js';
 
         // Elements
@@ -801,10 +802,10 @@
         }
 
         async function calculateMovimentosSum(season) {
-            const q = query(collection(db, "movimentos"), where("tipo", "==", "Banca"), where("temporada", "==", season));
-            const querySnapshot = await getDocs(q);
-            let sum = 0; querySnapshot.forEach((doc) => { const p = parseFloat(doc.data().preco); if (!isNaN(p)) sum += p; });
-            return sum;
+            const snapshot = await getDoc(doc(db, 'paineis', 'Banca'));
+            const data = snapshot.data() || {};
+            const seasonal = data[currentSeasonLabel] ?? data[season];
+            return (typeof seasonal === 'number' ? seasonal : seasonal?.valor) ?? data.valor ?? 0;
         }
 
         function updateCalculatedTotal() { totalInput.value = ((parseFloat(baseValueInput.value) || 0) + movimentosSum).toFixed(2); }
@@ -812,14 +813,8 @@
         async function handleFormSubmit(e) {
             e.preventDefault(); feedbackMessage.textContent = 'A guardar...';
             try {
-                await addDoc(collection(db, 'movimentos'), { preco: parseFloat(baseValueInput.value) || 0, movimentoData: Timestamp.now(), tipo: "Banca", temporada: currentSeason, descricao: "Ajuste manual" });
-                movimentosSum = await calculateMovimentosSum(currentSeason);
-                const sKey = currentSeasonLabel || currentSeason;
-                const bancaSnap = await getDoc(doc(db, "paineis", "Banca"));
-                const existingSData = bancaSnap.exists() && typeof bancaSnap.data()[sKey] === 'object' ? bancaSnap.data()[sKey] : {};
-                await setDoc(doc(db, "paineis", "Banca"), { 
-                    [sKey]: { ...existingSData, valor: movimentosSum }
-                }, { merge: true });
+                const result = await callFinance('adjustBank', {amount: Number(baseValueInput.value || 0)});
+                movimentosSum = result.balance;
                 baseValueInput.value = 0; updateCalculatedTotal(); feedbackMessage.textContent = 'Sucesso!'; feedbackMessage.className = 'feedback-message success';
             } catch (error) { console.error(error); feedbackMessage.textContent = 'Erro.'; feedbackMessage.className = 'feedback-message error'; }
         }
@@ -925,22 +920,11 @@
             if (requestBeingProcessed) rejectLoanBtn.disabled = true;
             loanFeedback.textContent = 'Processando...';
             try {
-                const batch = writeBatch(db);
-                batch.set(doc(collection(db, 'movimentos')), { tipo: "Banca", preco: -amt, movimentoData: Timestamp.now(), temporada: currentSeason, descricao: `Empréstimo`, para_userId: uid });
-                batch.set(doc(collection(db, 'movimentos')), { userId: uid, valorreal: amt, tipo: "Empréstimo", movimentoData: Timestamp.now(), temporada: currentSeason, de: "Banca", descricao: loanDescriptionInput.value || "Empréstimo", valorJuros: parseFloat(loanInterestInput.value) || 0, valorTotalAPagar: amt + (parseFloat(loanInterestInput.value) || 0), estado: "Por Pagar" });
-                const uRef = doc(db, 'users', uid); const uSnap = await getDoc(uRef);
-                const seasonData = getSeasonData(uSnap.data(), currentSeasonLabel);
-                const newBal = (seasonData.GCoins || 0) + amt;
-                batch.set(uRef, { [currentSeasonLabel]: { ...seasonData, GCoins: newBal } }, { merge: true });
-                batch.set(doc(db, "paineis", "Banca"), { valor: movimentosSum - amt }, { merge: true });
-                if (requestBeingProcessed) {
-                    batch.update(doc(db, 'pedidosEmprestimo', requestBeingProcessed.id), {
-                        estado: 'Concedido',
-                        validadoEm: Timestamp.now()
-                    });
-                }
-                await batch.commit();
-                movimentosSum -= amt; updateCalculatedTotal(); loanPopup.style.display = 'none';
+                await callFinance('grantLoan', {userId: uid, amount: amt,
+                    interest: Number(loanInterestInput.value || 0), description: loanDescriptionInput.value || 'Empréstimo',
+                    ...(requestBeingProcessed ? {requestId: requestBeingProcessed.id} : {})});
+                movimentosSum = await calculateMovimentosSum(currentSeason);
+                updateCalculatedTotal(); loanPopup.style.display = 'none';
                 resetLoanPopup();
                 await loadPendingLoanRequests();
             } catch (e) {
@@ -974,10 +958,10 @@
 
         async function handleTaxaSubmit(e) {
             e.preventDefault(); const r = parseFloat(taxaInput.value); const f = parseFloat(taxaBancaInput.value);
-            if (isNaN(r) || r <= 0 || isNaN(f) || f < 0) return;
+            if (!Number.isFinite(r) || r <= 0 || !Number.isFinite(f) || f < 0 || f > 1) return;
             taxaFeedback.textContent = 'A guardar...';
             try {
-                await setDoc(doc(db, "paineis", "Banca"), { taxaWhoWins: r, taxaBanca: f }, { merge: true });
+                await setDoc(doc(db, "paineis", "Banca"), { [currentSeasonLabel]: { taxaWhoWins: r, taxaBanca: f } }, { merge: true });
                 taxaFeedback.textContent = 'Guardado!'; setTimeout(() => taxaPopup.style.display = 'none', 1000);
             } catch (e) { taxaFeedback.textContent = 'Erro.'; }
         }
@@ -1094,7 +1078,8 @@
                     try {
                         const docSnap = await getDoc(doc(db, "paineis", "Banca"));
                         if (docSnap.exists()) {
-                            const data = docSnap.data();
+                            const raw = docSnap.data();
+                            const data = { ...raw, ...raw[currentSeasonLabel] };
                             descontoInput.value = data.descontoBanca !== undefined ? data.descontoBanca : '';
                             dataVendaInput.value = data.dataVendaBanca || '';
                             taxaBancaDiscountInput.value = data.taxaBanca !== undefined ? data.taxaBanca : '';
@@ -1129,7 +1114,8 @@
                         if (!isNaN(taxaBanca)) updateObj.taxaBanca = taxaBanca;
                         if (!isNaN(comissaoVenda)) updateObj.comissaoBancaVenda = comissaoVenda;
                         
-                        await setDoc(doc(db, "paineis", "Banca"), updateObj, { merge: true });
+                        if (Object.values(updateObj).some(value => typeof value === 'number' && (!Number.isFinite(value) || value < 0)) || updateObj.taxaBanca > 1) throw new Error('Taxas ou descontos inválidos.');
+                        await setDoc(doc(db, "paineis", "Banca"), { [currentSeasonLabel]: updateObj }, { merge: true });
                         discountFeedback.textContent = 'Configurações guardadas com sucesso!';
                         discountFeedback.className = 'feedback-message success';
                         setTimeout(closeDiscount, 1500);
@@ -1151,8 +1137,10 @@
                         const docSnap = await getDoc(bancaRef);
                         
                         if (docSnap.exists()) {
-                            taxaInput.value = docSnap.data().taxaWhoWins || 0;
-                            taxaBancaInput.value = docSnap.data().taxaBanca || 0;
+                            const raw = docSnap.data();
+                            const config = { ...raw, ...raw[currentSeasonLabel] };
+                            taxaInput.value = config.taxaWhoWins || 0;
+                            taxaBancaInput.value = config.taxaBanca || 0;
                         }
                         updateSimulation();
                     } catch (error) {
