@@ -1,4 +1,5 @@
 const {onCall, HttpsError} = require("firebase-functions/v2/https");
+const {buildFinanceCommon} = require('./finance-common');
 const {
     MarketPurchaseError,
     calculateMarketPurchase,
@@ -57,6 +58,7 @@ function validatePlayerId(value) {
 }
 
 function buildMarketPurchaseFunction({admin, db, getLatestSeason, compactSeason}) {
+    const {runOperation} = buildFinanceCommon({admin, db});
     return onCall({
         invoker: "public",
         cors: ALLOWED_ORIGINS,
@@ -77,7 +79,7 @@ function buildMarketPurchaseFunction({admin, db, getLatestSeason, compactSeason}
                 .doc("Banca")
                 .collection("horarioMercado");
 
-            return await db.runTransaction(async (transaction) => {
+            return await runOperation(request, 'purchaseMarketPlayer', async (transaction) => {
                 const [userSnapshot, playerSnapshot] = await transaction.getAll(
                     userRef,
                     playerRef,
@@ -145,6 +147,7 @@ function buildMarketPurchaseFunction({admin, db, getLatestSeason, compactSeason}
                     posicao: purchase.playerSeasonData.posicao || "",
                     preco: purchase.price,
                     estado: "Comprado",
+                    currency: "gcoins",
                     valorreal: -purchase.price,
                     de: userId,
                     para: null,

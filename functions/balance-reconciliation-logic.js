@@ -1,9 +1,12 @@
+const {movementCurrency} = require('./finance-logic');
+
 function compactMovementSeason(value) {
     return String(value || "").replace(/\D/g, "");
 }
 
 function parseMovementValue(value) {
-    const parsed = typeof value === "number" ? value : Number.parseFloat(value);
+    if (value === null || value === undefined || (typeof value !== 'number' && typeof value !== 'string') || String(value).trim() === '') return null;
+    const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : null;
 }
 
@@ -14,7 +17,7 @@ function calculateMovementBalance(movements, season) {
 
     (movements || []).forEach((movement) => {
         if (compactMovementSeason(movement?.temporada) !== expectedSeason ||
-            movement?.estado === "WhoWins Paid") {
+            movementCurrency(movement) !== 'gcoins') {
             return;
         }
 

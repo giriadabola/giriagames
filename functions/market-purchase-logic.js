@@ -13,6 +13,9 @@ function isPlainObject(value) {
 function getPlayerSeasonContext(playerData, season) {
     const nestedSeasonData = playerData?.[season];
     const usesSeasonData = isPlainObject(nestedSeasonData);
+    if (!usesSeasonData && Object.keys(playerData || {}).some(key => /^\d{4}\/\d{4}$/.test(key))) {
+        throw new MarketPurchaseError('failed-precondition', 'Este jogador não tem dados para a época activa.');
+    }
 
     return {
         usesSeasonData,
