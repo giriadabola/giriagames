@@ -1,5 +1,6 @@
 // manager/manager.js
 import { db, auth } from '../core/firebase.js';
+import { callFinance } from '../core/finance-client.js';
 import { getDoc, doc, collection, query, where, getDocs, updateDoc, runTransaction, serverTimestamp, writeBatch, orderBy, addDoc, arrayUnion, limit } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { compactSeason, getLatestSeason as getConfiguredLatestSeason, getSeasonData, mergeUserSeasonData } from "../core/user-season.js";
@@ -307,10 +308,18 @@ function closeConfirmation() {
     console.log("closeConfirmation: Closing mentalidade confirmation popup."); const popup = document.getElementById('confirmation-popup'); if (popup) popup.classList.remove('active');
 }
 async function confirmChoice(confirmed) {
-    console.log(`confirmChoice: User action - confirmed: ${confirmed}`); closeConfirmation(); if (!confirmed) { console.log("confirmChoice: Choice cancelled."); return; } if (!selectedMentalidade || !currentUser) { console.error("confirmChoice: Missing mentalidade or user data."); showInfoPopup("Erro", "Dados em falta."); return; } showInfoPopup("Processando...", "A gravar..."); try { const userDocRef = doc(db, 'users', currentUser.uid); const latestSeason = await getLatestSeason(); const existingSeasonData = getSeasonData(currentUser.data, latestSeason); await updateDoc(userDocRef, { [latestSeason]: { ...existingSeasonData, mentalidade: selectedMentalidade.id } }); console.log('confirmChoice: User mentalidade updated.'); try { const latestSeason = await getLatestSeason(); if (latestSeason) { const precoMentalidade = selectedMentalidade.valor ?? 0; const valorRealMentalidade = -precoMentalidade; const movimentoData = { estado: "Escolhido", itemManager: selectedMentalidade.nome || "?", temporada: compactSeason(latestSeason), movimentoData: serverTimestamp(), preco: precoMentalidade, tipo: "Manager", userId: currentUser.uid, valorreal: valorRealMentalidade, managerTipo: selectedMentalidade.tipo || "Mentalidade", nivel: selectedMentalidade.nivel || 'Nível 1' }; console.log("confirmChoice: Creating movement data:", movimentoData); const movRef = await addDoc(collection(db, 'movimentos'), movimentoData); console.log("confirmChoice: Movement record created:", movRef.id); } else { console.warn("confirmChoice: No season. Skipping movement."); } } catch (movError) { console.error("confirmChoice: Error creating movement:", movError); showInfoPopup("Aviso", "Escolha salva, erro no registo."); await new Promise(resolve => setTimeout(resolve, 1500)); } console.log('confirmChoice: Refreshing page...'); closePopup(); closeInfoPopup(); location.reload(); } catch (error) { console.error('confirmChoice: Error updating user:', error); closeInfoPopup(); showInfoPopup('Erro', 'Falha ao salvar. Tente novamente.'); }
+    closeConfirmation();
+    if (!confirmed || !selectedMentalidade || isProcessingPurchase) return;
+    isProcessingPurchase = true;
+    try {
+        await callFinance('purchaseManagerItem', {itemId: selectedMentalidade.id});
+        location.reload();
+    } catch (error) {
+        showInfoPopup('Erro', error.message || 'Não foi possível gravar a escolha.');
+    } finally {
+        isProcessingPurchase = false;
+    }
 }
-
-// --- Nested Item Popup Logic ---
 async function showNestedPopup(parentItem) {
     console.log("showNestedPopup (FINAL COM REGRA PAI): Mostrando popup para:", parentItem);
     if (!parentItem || !parentItem.id) return;
@@ -336,9 +345,11 @@ async function showNestedPopup(parentItem) {
         const ownedItemsQuery = query(collection(db, 'movimentos'), where('userId', '==', currentUser.uid), where('tipo', '==', 'Manager'));
         const [dailyPurchaseSnapshot, ownedItemsSnapshot] = await Promise.all([getDocs(dailyPurchaseQuery), getDocs(ownedItemsQuery)]);
 
-        userHasBoughtToday = !dailyPurchaseSnapshot.empty;
+        const activeSeason = compactSeason(await getLatestSeason());
+        userHasBoughtToday = dailyPurchaseSnapshot.docs.some(document => compactSeason(document.data().temporada) === activeSeason);
         ownedItemsSnapshot.forEach(doc => {
             const movData = doc.data();
+            if (compactSeason(movData.temporada) !== activeSeason) return;
             if (movData.itemManager) ownedItemNamesSet.add(movData.itemManager);
             if (movData.managerTipo && movData.nivel) ownedTypeLevelSet.add(`${movData.managerTipo}:${movData.nivel}`);
         });
@@ -482,135 +493,16 @@ function closeStadiumConfirmation() {
     console.log("closeStadiumConfirmation: Closing stadium confirmation."); const popup = document.getElementById('stadium-confirmation-popup'); if (popup) popup.classList.remove('active');
 }
 async function confirmStadiumPurchase(confirmed) {
-    console.log(`confirmStadiumPurchase: User action - confirmed: ${confirmed}`);
     closeStadiumConfirmation();
-    if (!confirmed) {
-        console.log("confirmStadiumPurchase: Cancelled.");
-        selectedStadiumForPurchase = null;
-        return;
-    }
-
-    if (!selectedStadiumForPurchase?.id || selectedStadiumForPurchase.valor === undefined || !selectedStadiumForPurchase.tipo || !selectedStadiumForPurchase.nome || !currentUser) {
-        console.error("confirmStadiumPurchase: Pre-transaction check failed (missing data).", { stadium: selectedStadiumForPurchase, user: currentUser });
-        showInfoPopup("Erro", "Dados inválidos para iniciar a compra (nome do estádio em falta?).");
-        selectedStadiumForPurchase = null;
-        return;
-    }
-
-    const stadiumToPurchase = selectedStadiumForPurchase;
-    const stadiumPrice = stadiumToPurchase.valor;
-    const userDocRef = doc(db, 'users', currentUser.uid);
-    const stadiumLockRef = doc(db, 'stadiumLocks', stadiumToPurchase.nome);
-
-    console.log(`confirmStadiumPurchase: Processing purchase for ${stadiumToPurchase.nome}`);
-    showInfoPopup("Processando", "A processar compra...");
-
-    let latestSeason;
+    if (!confirmed || !selectedStadiumForPurchase || isProcessingPurchase) return;
+    isProcessingPurchase = true;
     try {
-        latestSeason = await getLatestSeason();
-        if (!latestSeason) throw new Error("Temporada atual não pôde ser determinada.");
-
-        await runTransaction(db, async (transaction) => {
-            console.log(`confirmStadiumPurchase: Transaction started.`);
-
-            const userDocSnap = await transaction.get(userDocRef);
-            const lockDocSnap = await transaction.get(stadiumLockRef);
-
-            if (!userDocSnap.exists()) throw new Error("Documento do utilizador não encontrado na transação.");
-            const userData = userDocSnap.data();
-
-            if (lockDocSnap.exists()) {
-                throw new Error("Este estádio já foi adquirido por outro manager (lock existente).");
-            }
-            const seasonData = getSeasonData(userData, latestSeason);
-            if (seasonData.estadio) {
-                throw new Error("Já possui um estádio. Compra cancelada.");
-            }
-
-            console.log("confirmStadiumPurchase: Lock/Ownership checks passed inside transaction. Preparing updates.");
-
-            transaction.set(stadiumLockRef, {
-                boughtByUid: currentUser.uid,
-                boughtByName: userData.nomeDeUsuario || '???',
-                boughtAt: serverTimestamp(),
-                stadiumId: stadiumToPurchase.id
-            });
-
-            transaction.update(userDocRef, {
-                [latestSeason]: {
-                    ...seasonData,
-                    estadio: stadiumToPurchase.nome
-                }
-            });
-
-            const movimentoDocRef = doc(collection(db, 'movimentos'));
-            const movimentoData = {
-                estado: "Comprado",
-                itemManager: stadiumToPurchase.nome,
-                temporada: compactSeason(latestSeason),
-                movimentoData: serverTimestamp(),
-                preco: stadiumPrice,
-                tipo: "Manager",
-                userId: currentUser.uid,
-                valorreal: -stadiumPrice,
-                managerTipo: stadiumToPurchase.tipo,
-                nivel: stadiumToPurchase.nivel || 'Nível 1',
-                imagem: stadiumToPurchase.imagem || null
-            };
-            transaction.set(movimentoDocRef, movimentoData);
-
-            console.log("confirmStadiumPurchase: Transaction updates prepared (User estadio update + New movement + Lock set).");
-        });
-
-        console.log("confirmStadiumPurchase: Transaction successful (Lock acquired, Movement created, User estadio set)!");
-
-        console.log("confirmStadiumPurchase: Recalculating total GCoins based on all movements...");
-        let calculatedTotalGCoins = 0;
-        try {
-            const allMovimentosQuery = query(collection(db, 'movimentos'), where('userId', '==', currentUser.uid), where('temporada', '==', compactSeason(latestSeason)));
-            const allMovimentosSnapshot = await getDocs(allMovimentosQuery);
-
-            allMovimentosSnapshot.forEach(doc => {
-                calculatedTotalGCoins += doc.data().valorreal || 0;
-            });
-            console.log(`confirmStadiumPurchase: Calculated total GCoins from ${allMovimentosSnapshot.size} movements: ${calculatedTotalGCoins}`);
-
-            const latestUserSnapshot = await getDoc(userDocRef);
-            const latestSeasonData = latestUserSnapshot.exists() ? getSeasonData(latestUserSnapshot.data(), latestSeason) : {};
-            await updateDoc(userDocRef, {
-                [latestSeason]: {
-                    ...latestSeasonData,
-                    GCoins: calculatedTotalGCoins
-                }
-            });
-            console.log(`confirmStadiumPurchase: User GCoins for ${latestSeason} updated successfully with calculated total value.`);
-
-        } catch (recalcError) {
-            console.error("confirmStadiumPurchase: ERROR during GCoins recalculation and update:", recalcError);
-            showInfoPopup("Aviso Importante", `O estádio foi adquirido, mas houve um erro ao recalcular o seu saldo final (${recalcError.message}). O seu saldo pode estar incorreto. Contacte o suporte.`);
-        }
-
-        closeInfoPopup();
-        if (!document.getElementById('info-popup').classList.contains('active')) {
-            showInfoPopup("Sucesso!", `Estádio ${stadiumToPurchase.nome} adquirido com sucesso! Saldo atualizado.`);
-        }
-        selectedStadiumForPurchase = null;
-        console.log("confirmStadiumPurchase: Reloading page...");
-        setTimeout(() => location.reload(), 3000);
-
+        await callFinance('purchaseManagerItem', {itemId: selectedStadiumForPurchase.id});
+        location.reload();
     } catch (error) {
-        console.error("confirmStadiumPurchase: A operação falhou:", error);
-        closeInfoPopup();
-        let displayError;
-        if (error.message.includes("lock existente")) {
-            displayError = "Este estádio já foi adquirido por outro manager.";
-        } else if (error.message.includes("Já possui um estádio")) {
-            displayError = "A sua conta já possui um estádio.";
-        } else {
-            displayError = "Ocorreu uma falha inesperada. Tente novamente.";
-        }
-        showInfoPopup("Erro na Compra", displayError);
-        selectedStadiumForPurchase = null;
+        showInfoPopup('Erro na Compra', error.message || 'Não foi possível comprar o estádio.');
+    } finally {
+        isProcessingPurchase = false;
     }
 }
 
@@ -637,9 +529,11 @@ async function showManagerShopPopup(stadiumId, ownedTypeLevelSet) {
         
         const [dailyPurchaseSnapshot, ownedItemsSnapshot] = await Promise.all([getDocs(dailyPurchaseQuery), getDocs(ownedItemsQuery)]);
 
-        userHasBoughtToday = !dailyPurchaseSnapshot.empty;
+        const activeSeason = compactSeason(await getLatestSeason());
+        userHasBoughtToday = dailyPurchaseSnapshot.docs.some(document => compactSeason(document.data().temporada) === activeSeason);
         ownedItemsSnapshot.forEach(doc => {
             const movData = doc.data();
+            if (compactSeason(movData.temporada) !== activeSeason) return;
             if (movData.itemManager) ownedItemNamesSet.add(movData.itemManager);
         });
 
@@ -741,144 +635,21 @@ function handleConfirmPurchase() {
 }
 
 async function confirmItemPurchase(confirmed) {
-    console.log(`confirmItemPurchase: User action - confirmed: ${confirmed}`);
-
-    if (!confirmed) {
-        closeItemConfirmation();
-        selectedItemForPurchase = null;
-        return;
-    }
-
-    if (isProcessingPurchase) {
-        console.log("confirmItemPurchase: Compra já em processamento. Ignorando.");
-        return;
-    }
-
-    if (!selectedItemForPurchase?.id || selectedItemForPurchase.valor === undefined || !selectedItemForPurchase.tipo || !currentUser) {
-        console.error("confirmItemPurchase: Pre-check failed.", { item: selectedItemForPurchase, user: currentUser });
-        closeItemConfirmation();
-        showInfoPopup("Erro", "Dados inválidos para a compra.");
-        selectedItemForPurchase = null;
-        return;
-    }
-    
+    if (!confirmed) { closeItemConfirmation(); return; }
+    if (!selectedItemForPurchase || isProcessingPurchase) return;
     isProcessingPurchase = true;
-    const itemToPurchase = selectedItemForPurchase;
-    const itemPrice = itemToPurchase.valor;
-    const userDocRef = doc(db, 'users', currentUser.uid);
-    const managerItemRef = doc(db, 'managerItens', itemToPurchase.id);
-    let latestSeason;
-
     try {
-        latestSeason = await getLatestSeason(); if (!latestSeason) throw new Error("Temporada não determinada.");
-        const gcoinsFieldCheck = 'GCoins';
-
-        const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
-        const tomorrowStart = new Date(todayStart); tomorrowStart.setDate(todayStart.getDate() + 1);
-        const dailyPurchaseQuery = query(collection(db, 'movimentos'), where('userId', '==', currentUser.uid), where('tipo', '==', 'Manager'), where('movimentoData', '>=', todayStart), where('movimentoData', '<', tomorrowStart), limit(1));
-        const dailyPurchaseSnapshot = await getDocs(dailyPurchaseQuery);
-        if (!dailyPurchaseSnapshot.empty) { throw new Error("Limite Diário Atingido"); }
-
-        const availabilityCheckRule = itemToPurchase.diaDisponivel || itemToPurchase.dataMercado;
-        if (!isItemAvailableToday(availabilityCheckRule)) { throw new Error("Item não disponível hoje."); }
-
-        if (itemToPurchase.nivel === 'Nível 2') {
-            const level1CheckQuery = query(collection(db, 'movimentos'), where('userId', '==', currentUser.uid), where('managerTipo', '==', itemToPurchase.tipo), where('nivel', '==', 'Nível 1'), limit(1));
-            const level1Snapshot = await getDocs(level1CheckQuery);
-            if (level1Snapshot.empty) { throw new Error(`Requisito: Nível 1 (${itemToPurchase.tipo}) necessário.`); }
-        }
-
-        await runTransaction(db, async (transaction) => {
-            const userDocSnap = await transaction.get(userDocRef);
-            if (!userDocSnap.exists()) throw new Error("User doc not found in transaction.");
-            const userData = userDocSnap.data();
-            const seasonData = getSeasonData(userData, latestSeason);
-            const currentUserGCoins = seasonData[gcoinsFieldCheck] || 0;
-            if (currentUserGCoins < itemPrice) { throw new Error(`Saldo insuficiente`); }
-            
-            const movimentoDocRef = doc(collection(db, 'movimentos'));
-            const movimentoData = { 
-                estado: "Comprado", 
-                itemManager: itemToPurchase.nome, 
-                temporada: compactSeason(latestSeason), 
-                movimentoData: serverTimestamp(), 
-                preco: itemPrice, 
-                tipo: "Manager", 
-                userId: currentUser.uid, 
-                valorreal: -itemPrice, 
-                managerTipo: itemToPurchase.tipo, 
-                nivel: itemToPurchase.nivel || 'Nível 1',
-                imagem: itemToPurchase.imagem || null
-            };
-            transaction.set(movimentoDocRef, movimentoData);
-
-            const mercadoDocRef = doc(collection(db, 'managerMercado'));
-            const mercadoData = {
-                itemNome: itemToPurchase.nome,
-                itemPreco: itemToPurchase.valor,
-                compradorId: currentUser.uid,
-                compradorNome: userData.nomeDeUsuario || 'Nome Desconhecido',
-                dataCompra: serverTimestamp(),
-                tipoItem: itemToPurchase.tipo,
-                nivelItem: itemToPurchase.nivel || 'Nível 1'
-            };
-            transaction.set(mercadoDocRef, mercadoData);
-            
-            transaction.update(managerItemRef, { compradoPorUids: arrayUnion(currentUser.uid) });
-            if (itemToPurchase.tipo === "Formações") {
-                transaction.update(userDocRef, {
-                    [latestSeason]: {
-                        ...seasonData,
-                        tática: arrayUnion(itemToPurchase.nome)
-                    }
-                });
-            }
-        });
-
-        console.log("confirmItemPurchase: Transaction OK! Recalculating GCoins...");
-        const finalSeason = latestSeason;
-        const allMovimentosQuery = query(collection(db, 'movimentos'), where('userId', '==', currentUser.uid), where('temporada', '==', compactSeason(finalSeason)));
-        const allMovimentosSnapshot = await getDocs(allMovimentosQuery);
-        let totalValorReal = 0;
-        allMovimentosSnapshot.forEach(doc => { totalValorReal += doc.data().valorreal || 0; });
-        const latestUserSnapshot = await getDoc(userDocRef);
-        const finalSeasonData = latestUserSnapshot.exists() ? getSeasonData(latestUserSnapshot.data(), finalSeason) : {};
-        await updateDoc(userDocRef, {
-            [finalSeason]: {
-                ...finalSeasonData,
-                GCoins: totalValorReal
-            }
-        });
-
+        await callFinance('purchaseManagerItem', {itemId: selectedItemForPurchase.id});
         closeItemConfirmation();
-        setTimeout(() => location.reload(), 1000);
-
+        location.reload();
     } catch (error) {
-        console.error("confirmItemPurchase: A compra falhou:", error);
-        let displayError;
-        if (error.message.includes("Saldo insuficiente")) { displayError = "Saldo Insuficiente"; }
-        else if (error.message.includes("Limite Diário Atingido")) { displayError = "Você já atingiu o limite de uma compra por dia."; }
-        else if (error.message.includes("Item não disponível hoje")) { displayError = "Este item não está disponível para compra hoje."; }
-        else if (error.message.includes("Requisito: Nível 1")) { displayError = "É necessário possuir o Nível 1 deste tipo de item primeiro."; }
-        else { displayError = "Ocorreu uma falha inesperada. Tente novamente."; }
-        
-        closeItemConfirmation();
-        showInfoPopup("Erro na Compra", displayError);
-        selectedItemForPurchase = null;
-
+        showInfoPopup('Erro na Compra', error.message || 'Não foi possível comprar o item.');
     } finally {
         isProcessingPurchase = false;
-        console.log("confirmItemPurchase: Flag de processamento resetada.");
-
         const yesButton = document.getElementById('confirm-item-btn-yes');
         const noButton = document.getElementById('confirm-item-btn-no');
-        if (yesButton) {
-            yesButton.disabled = false;
-            yesButton.innerHTML = 'Sim';
-        }
-        if (noButton) {
-            noButton.disabled = false;
-        }
+        if (yesButton) { yesButton.disabled = false; yesButton.innerHTML = 'Sim'; }
+        if (noButton) noButton.disabled = false;
     }
 }
 

@@ -1,7 +1,8 @@
 import { app, db, auth } from '../core/firebase.js';
-import { getDoc, doc, collection, query, where, getDocs, setDoc, writeBatch, Timestamp, increment, updateDoc, onSnapshot, orderBy, limit, deleteField, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getDoc, doc, collection, query, where, getDocs, updateDoc, onSnapshot, orderBy, limit, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js";
+import { callFinance } from '../core/finance-client.js';
 import { checkPageContentAccess } from "../js/page-content-guard.js";
 
 function logUserAction(actionDescription) {
@@ -34,21 +35,6 @@ let liveLeagueClubs = [];
 let allowRealtimeLeagueRender = false; 
 let leagueListener = null;
 
-const fictitiousNames = [
-    "Estádio da Colina", "Arena do Horizonte", "Parque dos Campeões", "Fortaleza do Dragão", 
-    "Ninho da Águia", "Caldeirão do Leão", "Vale Dourado", "Centro Desportivo Metropolitano",
-    "Estádio Vanguarda", "Arena Sideral", "Complexo Olímpico da Planície", "Estádio da Fronteira",
-    "Cidadela Imperial", "Parque dos Pioneiros", "Arena da Costa Dourada", "Santuário do Gladiador",
-    "Estádio do Monarca", "Coliseu do Trovão", "Arena da Maré Alta", "Recinto dos Titãs",
-    "Estádio Aurora Boreal", "Parque Centenário", "Fortaleza do Norte", "Estádio do Penhasco",
-    "Arena de Mármore", "Estádio da Capital", "O Ninho do Falcão", "Estádio Ciclone",
-    "Arena dos Vulcões", "Parque Esmeralda",
-    "Estádio do Sol Poente", "Arena das Lendas", "Parque da Vitória", "Catedral do Futebol",
-    "Estádio Titânico", "Ninho dos Grifos", "Arena da Constelação", "Fortaleza Escarlate",
-    "Estádio da Muralha", "Recinto dos Heróis", "Campo de Elísio", "Arena do Pinhal",
-    "Estádio do Farol", "Parque dos Ventos", "Arena da Baía", "Estádio da Rocha",
-    "O Colosso Verde", "Estádio da Coroa", "Arena do Deserto", "Vale dos Gigantes"
-];
 
 // --- Access and Menu settings ---
 async function loadAccessSettings() {
@@ -83,130 +69,6 @@ async function getUserStatus(userId) {
     return null;
 }
 
-async function adjustGamesForDeactivatedBot(botId, seasonIdentifier) {
-    console.log(`A ajustar jogos para o bot desativado: ${botId}`);
-    const gamesRef = collection(db, "endlessjogos");
-    const batch = writeBatch(db);
-
-    const homeGamesQuery = query(gamesRef, where("homeTeamId", "==", botId), where("seasonId", "==", seasonIdentifier));
-    const awayGamesQuery = query(gamesRef, where("awayTeamId", "==", botId), where("seasonId", "==", seasonIdentifier));
-
-    try {
-        const [homeGamesSnapshot, awayGamesSnapshot] = await Promise.all([
-            getDocs(homeGamesQuery),
-            getDocs(awayGamesQuery)
-        ]);
-
-        const allGames = [...homeGamesSnapshot.docs, ...awayGamesSnapshot.docs];
-        if (allGames.length === 0) {
-            console.log("Nenhum jogo encontrado para ajustar.");
-            return;
-        }
-
-        console.log(`Encontrados ${allGames.length} jogos para ajustar.`);
-
-        for (const gameDoc of allGames) {
-            const gameData = gameDoc.data();
-            const opponentId = gameData.homeTeamId === botId ? gameData.awayTeamId : gameData.homeTeamId;
-            const opponentRef = doc(db, 'endlessclubes', opponentId);
-            
-            const oldOpponentPoints = gameData.awayScore > gameData.homeScore ? 3 : (gameData.awayScore === gameData.homeScore ? 1 : 0);
-
-            const newScore = gameData.homeTeamId === botId ? { home: 0, away: 3 } : { home: 3, away: 0 };
-            
-            const pointsDelta = 3 - oldOpponentPoints;
-            const winsDelta = (oldOpponentPoints < 3) ? 1 : 0; 
-            const lossesDelta = (oldOpponentPoints === 3) ? -1 : 0; 
-            const drawsDelta = (oldOpponentPoints === 1) ? -1 : 0; 
-
-            batch.update(gameDoc.ref, { homeScore: newScore.home, awayScore: newScore.away });
-            
-            batch.update(opponentRef, {
-                pontos: increment(pointsDelta),
-                vitorias: increment(winsDelta),
-                derrotas: increment(lossesDelta),
-                empates: increment(drawsDelta),
-                golosMarcados: increment(newScore.away - gameData.awayScore),
-                golosSofridos: increment(newScore.home - gameData.homeScore)
-            });
-        }
-        
-        await batch.commit();
-        console.log("Jogos e estatísticas ajustados com sucesso.");
-
-    } catch (error) {
-        console.error("Erro ao ajustar os jogos do bot desativado:", error);
-    }
-}
-
-async function generateRandomCoach() {
-    try {
-        const getRandomUsers = httpsCallable(functions, 'getRandomUsers');
-        const result = await getRandomUsers({ count: 20 }); 
-        
-        const coach = result.data[0]; 
-        const name = `${coach.name.first} ${coach.name.last}`;
-        const countryCode = coach.nat;
-        
-        const BASIC_FORMATIONS = ["1-2-2-1", "1-3-1-1"];
-        const shuffledBasics = BASIC_FORMATIONS.sort(() => 0.5 - Math.random());
-        const availableFormations = shuffledBasics.slice(0, Math.floor(Math.random() * 2) + 1);
-
-        return {
-            name: name,
-            countryCode: countryCode,
-            overall: Math.floor(Math.random() * 49) + 2,
-            quimica: Math.floor(Math.random() * 49) + 2,
-            temporadas: 1,
-            formacaoAtual: availableFormations[0],
-            formacoesDisponiveis: availableFormations
-        };
-    } catch (error) {
-        console.error("Erro ao gerar treinador aleatório via Cloud Function, usando fallback:", error);
-        return {
-            name: "Treinador Genérico", countryCode: "PT",
-            overall: Math.floor(Math.random() * 49) + 2, quimica: Math.floor(Math.random() * 49) + 2,
-            temporadas: 1, formacaoAtual: "1-2-2-1", formacoesDisponiveis: ["1-2-2-1"]
-        };
-    }
-}
-
-async function generateUniqueStadiumOptions(count = 3) {
-    try {
-        const clubsQuery = query(collection(db, 'endlessclubes'), where("estadio", "!=", null));
-        const querySnapshot = await getDocs(clubsQuery);
-        const existingStadiumNames = new Set();
-        querySnapshot.forEach(doc => {
-            if (doc.data().estadio && doc.data().estadio.name) {
-                existingStadiumNames.add(doc.data().estadio.name);
-            }
-        });
-
-        const availableNames = fictitiousNames.filter(name => !existingStadiumNames.has(name));
-
-        if (availableNames.length < count) {
-            console.warn(`Não há nomes de estádios únicos suficientes (${availableNames.length}/${count})! A gerar nomes de fallback.`);
-            const fallbacks = [];
-            for (let i = 0; i < count; i++) {
-                fallbacks.push({ name: `Estádio Genérico ${Date.now() + i}`, ambiente: 0 });
-            }
-            return fallbacks;
-        }
-
-        const shuffled = availableNames.sort(() => 0.5 - Math.random());
-        const selectedNames = shuffled.slice(0, count);
-
-        return selectedNames.map(name => ({ name: name, ambiente: 0 }));
-
-    } catch (error) {
-        console.error("Erro ao gerar opções de estádio únicas:", error);
-        const fallbacks = [];
-        for (let i = 0; i < count; i++) {
-            fallbacks.push({ name: `Estádio de Emergência ${Date.now() + i}`, ambiente: 0 });
-        }
-        return fallbacks;
-    }
-}
 
 async function generateUniquePlayers(excludeNamesSet = new Set()) {
     const positions = ['GR', 'DEF', 'DEF', 'MED', 'MED', 'AVA'];
@@ -257,29 +119,6 @@ async function generateUniquePlayers(excludeNamesSet = new Set()) {
     return players.map((player, index) => ({ ...player, position: positions[index] }));
 }
 
-async function generateCoachPack(size = 3) {
-    const coaches = [];
-    for (let i = 0; i < size; i++) {
-        coaches.push(await generateRandomCoach());
-    }
-    return coaches;
-}
-
-function generateStadiumPack(size = 3) {
-    const stadiums = [];
-    for (let i = 0; i < size; i++) {
-        stadiums.push(generateRandomStadium());
-    }
-    return stadiums;
-}
-
-function generateRandomStadium() {
-    const name = fictitiousStadiumNames[Math.floor(Math.random() * fictitiousStadiumNames.length)];
-    return {
-        name: name,
-        ambiente: 0
-    };
-}
 
 onAuthStateChanged(auth, async (user) => {
     console.log("[Endless Championship] onAuthStateChanged fired. User:", user ? user.uid : "None");
@@ -413,10 +252,11 @@ async function handleCreateClub() {
         }
 
         createClubContainer.style.display = 'none';
-        showInitialSquadSelection(auth.currentUser.uid, clubName); 
+        await showInitialSquadSelection(auth.currentUser.uid, clubName);
 
     } catch (error) {
         console.error("Erro ao validar nome do clube:", error);
+        createClubContainer.style.display = 'block';
         showNotification("Erro", "Ocorreu um erro ao verificar o nome. Tente novamente.");
         saveBtn.disabled = false;
         saveBtn.textContent = "Criar Clube";
@@ -479,51 +319,8 @@ async function showDashboard(userId, clubData) {
             btn.textContent = "A Evoluir Equipa...";
 
             try {
-                let updatedSquad = JSON.parse(JSON.stringify(currentUserClubData.plantel));
-                let updatedCoach = JSON.parse(JSON.stringify(currentUserClubData.treinador));
-                
-                const userRankIndex = leagueClubs.findIndex(club => club.id === userId);
-                const userPosition = userRankIndex !== -1 ? userRankIndex + 1 : 20;
-                const change = Math.floor(Math.random() * 3) + 2;
-                let coachEvolutionMessage = "";
-
-                if (userPosition <= 5) {
-                    updatedCoach.quimica += change;
-                    coachEvolutionMessage = `Parabéns pelo Top 5! A química do seu treinador aumentou em ${change} pontos!`;
-                } else {
-                    if (Math.random() < 0.5) {
-                        updatedCoach.quimica += change;
-                        coachEvolutionMessage = `Apesar de uma temporada difícil, o treinador conseguiu melhorar a sua química em ${change} pontos!`;
-                    } else {
-                        updatedCoach.quimica -= change;
-                        updatedCoach.quimica = Math.max(10, updatedCoach.quimica); 
-                        coachEvolutionMessage = `Devido aos resultados, a química do treinador diminuiu em ${change} pontos.`;
-                    }
-                }
-                
-                updatedSquad.sort(() => 0.5 - Math.random());
-                updatedSquad.forEach((player, index) => {
-                    const playerChange = Math.floor(Math.random() * 5) + 2;
-                    if (index < 4) player.overall += playerChange;
-                    else {
-                        if (Math.random() < 0.5) player.overall = Math.max(10, player.overall - playerChange);
-                        else player.overall += playerChange;
-                    }
-                });
-                
-                const novoPlantelOverall = updatedSquad.reduce((sum, p) => sum + p.overall, 0);
-                const novoOverallTotal = novoPlantelOverall + updatedCoach.overall + currentUserClubData.formacaoatualpontos;
-                const novaQuimicaTotal = updatedCoach.quimica + currentUserClubData.estadio.ambiente;
-                const novaTemporadaReal = (currentUserClubData.numerorealtemporada || 1) + 1;
-
-                const clubRef = doc(db, 'endlessclubes', userId);
-                await setDoc(clubRef, {
-                    plantel: updatedSquad, treinador: updatedCoach, plantelLastUpdated: Timestamp.now(),
-                    overall: novoOverallTotal, quimica: novaQuimicaTotal, numerorealtemporada: novaTemporadaReal
-                }, { merge: true });
-
-                alert(coachEvolutionMessage);
-                alert("Equipa evoluída com sucesso para a nova temporada!");
+                const result = await callFinance('manageEndlessClub', {action: 'evolve'});
+                alert(result.message);
                 location.reload();
 
             } catch (error) {
@@ -547,7 +344,7 @@ async function showDashboard(userId, clubData) {
 
             try {
                 const clubRef = doc(db, 'endlessclubes', userId);
-                await updateDoc(clubRef, { renewalState: 'pendingChoice' });
+                await callFinance('manageEndlessClub', {action: 'prepareRenewal'});
                 location.reload();
 
             } catch (error) {
@@ -587,42 +384,8 @@ async function handleRenewalPurchase(packType) {
     shopPopup.innerHTML = `<div class="popup-content" style="text-align: center;"><div class="loading-spinner"></div><h3 style="margin-top:20px;">A aplicar alterações...</h3></div>`;
 
     try {
-        const userId = auth.currentUser.uid;
-        const clubRef = doc(db, 'endlessclubes', userId);
-        const clubData = currentUserClubData; 
-        let updates = {};
-        let finalMessage = "";
-
-        if (packType === 'players') {
-            const newPlayers = await generateUniquePlayers();
-            updates.plantel = newPlayers;
-            
-            const newPlantelOverall = newPlayers.reduce((sum, p) => sum + p.overall, 0);
-            const coachOverall = clubData.treinador.overall || 0;
-            const formationPoints = clubData.formacaoatualpontos || 0;
-            updates.overall = newPlantelOverall + coachOverall + formationPoints - 6; 
-            finalMessage = "Novo plantel recrutado! Foi aplicada uma penalização de -6 ao overall total da equipa devido à reestruturação.";
-        } 
-        else if (packType === 'coach') {
-            const newCoach = await generateRandomCoach();
-            updates.treinador = newCoach;
-
-            const stadiumAmbience = clubData.estadio.ambiente || 0;
-            updates.quimica = newCoach.quimica + stadiumAmbience - 5;
-            finalMessage = "Novo treinador contratado! Foi aplicada uma penalização de -5 à química da equipa para refletir o período de adaptação.";
-        } 
-        else if (packType === 'stadium') {
-            const newStadiums = await generateUniqueStadiumOptions(1);
-            updates.estadio = { ...newStadiums[0], nivel: 1 }; 
-            finalMessage = "Novo estádio selecionado! Bem-vindo à sua nova casa.";
-        }
-
-        updates.renewalState = deleteField();
-        updates.plantelLastUpdated = Timestamp.now();
-
-        await updateDoc(clubRef, updates);
-
-        alert(finalMessage);
+        const result = await callFinance('manageEndlessClub', {action: 'renew', pack: packType});
+        alert(result.message);
         location.reload();
 
     } catch (error) {
@@ -670,10 +433,9 @@ async function setupWinningsSystem(userId, clubData, seasonId) {
             claimBtn.textContent = "A Processar...";
 
             try {
-                const claimReward = httpsCallable(functions, 'claimEndlessSeasonWinnings');
-                const result = await claimReward();
+                const result = await callFinance('claimEndlessSeasonWinnings');
                 
-                alert(result.data.message);
+                alert(result.message);
                 location.reload();
 
             } catch (error) {
@@ -710,9 +472,8 @@ async function showInitialSquadSelection(userId, clubName) {
     let chosenCoach = null;
     let chosenStadium = null;
     let preGeneratedStadiums = [];
+    const draft = await callFinance('getEndlessDraft');
 
-    const allDbPlayerNames = await fetchAllPlayerNamesFromDB();
-    const sessionGeneratedPlayerNames = new Set();
 
     const handlePackOpenClick = async (event) => {
         const button = event.target;
@@ -720,19 +481,9 @@ async function showInitialSquadSelection(userId, clubName) {
         button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
 
         let newOption;
-        if (!chosenSquad) {
-            const namesToExclude = new Set([...allDbPlayerNames, ...sessionGeneratedPlayerNames]);
-            newOption = await generateUniquePlayers(namesToExclude);
-            newOption.forEach(player => sessionGeneratedPlayerNames.add(normalizePlayerName(player.name)));
-        } else if (!chosenCoach) {
-            newOption = await generateRandomCoach();
-        } else {
-            if (preGeneratedStadiums.length > 0) {
-                newOption = preGeneratedStadiums.shift();
-            } else {
-                newOption = { name: "Estádio de Fallback", ambiente: 0 };
-            }
-        }
+        if (!chosenSquad) newOption = draft.squads[generatedOptions.length].players;
+        else if (!chosenCoach) newOption = draft.coaches[generatedOptions.length];
+        else newOption = preGeneratedStadiums.shift();
         
         generatedOptions.push(newOption);
         renderOptions();
@@ -766,7 +517,7 @@ async function showInitialSquadSelection(userId, clubName) {
         } else if (!chosenStadium) {
             title.textContent = 'Passo 3: Escolha o Seu Estádio';
             statusText.textContent = 'Finalmente, descobra e escolha a sua casa.';
-            preGeneratedStadiums = await generateUniqueStadiumOptions(3);
+            preGeneratedStadiums = [...draft.stadiums];
             setupPackButtons();
         } else {
             title.textContent = 'Confirme a Fundação do Clube';
@@ -807,97 +558,12 @@ async function showInitialSquadSelection(userId, clubName) {
                 popupContent.innerHTML = animationHtml;
         
                 try {
-                    const batch = writeBatch(db);
-                    const { currentGameSeason, seasonIdentifier } = await getGameSeasonInfo();
-                    
-                    const plantelOverall = chosenSquad.reduce((sum, p) => sum + p.overall, 0);
-                    const totalOverall = plantelOverall + chosenCoach.overall + 5;
-                    const totalQuimica = chosenCoach.quimica + 15;
-                    const finalClubData = {
-                        nome: clubName,
-                        userId: userId,
-                        dataDeCriacao: Timestamp.now(),
-                        ativo: true,
-                        plantel: chosenSquad,
-                        treinador: { ...chosenCoach, formacaoAtual: "1-2-2-1" },
-                        estadio: { ...chosenStadium, nivel: 1, ambiente: 15 },
-                        overall: totalOverall, quimica: totalQuimica,
-                        formacaoatualpontos: 5, numerorealtemporada: 1,
-                        plantelLastUpdated: Timestamp.now(),
-                        pontos: 0, vitorias: 0, empates: 0, derrotas: 0, jogosDisputados: 0,
-                        golosMarcados: 0, golosSofridos: 0,
-                        temporada: seasonIdentifier, seasonGame: currentGameSeason,
-                        estado: "real"
-                    };
-                    const userClubRef = doc(db, 'endlessclubes', userId);
-                    batch.set(userClubRef, finalClubData);
-        
-                    const LEAGUE_SIZE = 20;
-                    const clubsRef = collection(db, 'endlessclubes');
-                    const activeClubsQuery = query(clubsRef, where("ativo", "==", true));
-                    const activeClubsSnapshot = await getDocs(activeClubsQuery);
-                    const currentLeagueSize = activeClubsSnapshot.size;
-
-                    if (currentLeagueSize >= LEAGUE_SIZE) {
-                        console.log("A liga está cheia. A procurar um bot para substituir...");
-                        const botQuery = query(clubsRef, 
-                            where("estado", "==", "temporario"), 
-                            where("ativo", "==", true), 
-                            limit(1) 
-                        );
-                        const botSnapshot = await getDocs(botQuery);
-
-                        if (!botSnapshot.empty) {
-                            const botToRemoveDoc = botSnapshot.docs[0];
-                            const botRef = doc(db, 'endlessclubes', botToRemoveDoc.id);
-                            console.log(`Bot encontrado para substituição: ${botToRemoveDoc.id}. A desativá-lo...`);
-                            
-                            batch.update(botRef, { ativo: false });
-                            await adjustGamesForDeactivatedBot(botToRemoveDoc.id, seasonIdentifier);
-
-                        } else {
-                            console.error("ERRO CRÍTICO: A liga está cheia e não foram encontrados bots para remover.");
-                            popupContent.innerHTML = `<h3 style="color: #ff6b6b;">Liga Cheia!</h3><p>De momento, a liga está preenchida com 20 jogadores reais. Não é possível entrar. Por favor, tente mais tarde.</p>`;
-                            return; 
-                        }
-                    } 
-                    else {
-                        const botsNeeded = LEAGUE_SIZE - (currentLeagueSize + 1); 
-                        
-                        if (botsNeeded > 0) {
-                            console.log(`A gerar ${botsNeeded} bots para completar a liga...`);
-                            const allDbPlayerNames = await fetchAllPlayerNamesFromDB();
-                            const stadiumOptions = await generateUniqueStadiumOptions(botsNeeded);
-                            const shuffledFictitiousNames = fictitiousTeamNames.sort(() => 0.5 - Math.random());
-
-                            for (let i = 0; i < botsNeeded; i++) {
-                                const botSquad = await generateUniquePlayers(allDbPlayerNames);
-                                botSquad.forEach(player => allDbPlayerNames.add(normalizePlayerName(player.name)));
-                                const botCoach = await generateRandomCoach();
-                                const botStadium = stadiumOptions[i] || { name: `Estádio Bot ${Date.now() + i}`};
-                                const botPlantelOverall = botSquad.reduce((sum, p) => sum + p.overall, 0);
-                                const botTotalOverall = botPlantelOverall + botCoach.overall + 5;
-                                const botTotalQuimica = botCoach.quimica + 15;
-                                const botName = shuffledFictitiousNames[i % shuffledFictitiousNames.length] || `Bot Team ${i}`;
-
-                                const newBotData = {
-                                    nome: botName,
-                                    userId: null, dataDeCriacao: Timestamp.now(), ativo: true, plantel: botSquad,
-                                    treinador: { ...botCoach, formacaoAtual: "1-2-2-1" },
-                                    estadio: { ...botStadium, nivel: 1, ambiente: 15 },
-                                    overall: botTotalOverall, quimica: botTotalQuimica, formacaoatualpontos: 5,
-                                    numerorealtemporada: 1, plantelLastUpdated: Timestamp.now(),
-                                    pontos: 0, vitorias: 0, empates: 0, derrotas: 0, jogosDisputados: 0,
-                                    golosMarcados: 0, golosSofridos: 0,
-                                    temporada: seasonIdentifier, seasonGame: currentGameSeason, estado: "temporario"
-                                };
-                                const newBotRef = doc(collection(db, 'endlessclubes'));
-                                batch.set(newBotRef, newBotData);
-                            }
-                        }
-                    }
-  
-                    await batch.commit();
+                    await callFinance('foundEndlessClub', {
+                        name: clubName,
+                        squad: draft.squads.findIndex(option => option.players === chosenSquad),
+                        coach: draft.coaches.indexOf(chosenCoach),
+                        stadium: draft.stadiums.indexOf(chosenStadium)
+                    });
                     setTimeout(() => location.reload(), 2000);
                 } catch (error) {
                     console.error("Erro ao fundar o clube e gerar a liga:", error);
@@ -951,28 +617,6 @@ function normalizePlayerName(name) {
         .replace(/[^a-z]/g, '');
 }
 
-async function fetchAllPlayerNamesFromDB() {
-    const playerNames = new Set();
-    const clubsQuery = query(collection(db, 'endlessclubes'));
-    try {
-        const querySnapshot = await getDocs(clubsQuery);
-        querySnapshot.forEach(doc => {
-            const clubData = doc.data();
-            if (clubData.plantel && Array.isArray(clubData.plantel)) {
-                clubData.plantel.forEach(player => {
-                    if (player.name) {
-                        playerNames.add(normalizePlayerName(player.name));
-                    }
-                });
-            }
-        });
-        console.log(`Carregados ${playerNames.size} nomes de jogadores únicos da base de dados.`);
-        return playerNames;
-    } catch (error) {
-        console.error("Erro ao carregar os nomes dos jogadores da base de dados:", error);
-        return playerNames; 
-    }
-}
 
 function render3DStadium(stadium, containerId) {
     const container = document.getElementById(containerId);
@@ -1481,8 +1125,7 @@ async function openStadiumPopup(popupBody) {
         upgradeBtn.textContent = 'A Processar Compra...';
 
         try {
-            const purchase = httpsCallable(functions, 'purchaseUpgrade');
-            const result = await purchase({ upgradeType: 'stadium' });
+            const result = {data: await callFinance('purchaseUpgrade', { upgradeType: 'stadium' })};
             alert(result.data.message);
             location.reload(); 
         } catch (error) {
@@ -1558,11 +1201,7 @@ async function openCoachPopup(popupBody) {
                 const newTotalOverall = (currentUserClubData.overall - oldFormationPoints) + newFormationPoints;
 
                 const clubRef = doc(db, 'endlessclubes', auth.currentUser.uid);
-                await updateDoc(clubRef, {
-                    'treinador.formacaoAtual': selectedFormation,
-                    'formacaoatualpontos': newFormationPoints,
-                    'overall': newTotalOverall
-                });
+                await callFinance('manageEndlessClub', {action: 'formation', formation: selectedFormation});
 
                 currentUserClubData.treinador.formacaoAtual = selectedFormation;
                 currentUserClubData.formacaoatualpontos = newFormationPoints;
@@ -1586,8 +1225,7 @@ async function openCoachPopup(popupBody) {
             btn.textContent = 'A Processar Compra...';
 
             try {
-                const purchase = httpsCallable(functions, 'purchaseUpgrade');
-                const result = await purchase({ upgradeType: 'tactic', itemId: formationToBuy });
+                const result = {data: await callFinance('purchaseUpgrade', { upgradeType: 'tactic', itemId: formationToBuy })};
                 
                 alert(result.data.message);
                 location.reload(); 

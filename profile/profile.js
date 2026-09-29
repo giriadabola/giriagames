@@ -1,4 +1,6 @@
 import { app, db, auth } from "../core/firebase.js";
+import { callFinance } from '../core/finance-client.js';
+import { fetchOwnedPlayersForSeason, getPlayerSeasonData } from '../core/player-season.js';
 import { signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
 import { doc, getDoc, collection, getDocs, query, orderBy, limit, where, updateDoc, addDoc, serverTimestamp, onSnapshot, writeBatch, increment } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
@@ -344,8 +346,7 @@ async function loadReturnPlayers() {
     if (!user) return;
 
     try {
-        const q = query(collection(db, 'jogadores'), where('compradopor', '==', user.uid));
-        const querySnapshot = await getDocs(q);
+        const ownedPlayers = await fetchOwnedPlayersForSeason(db, user.uid, await getLatestSeason(db));
         returnPlayersList.innerHTML = '';
 
         const positionOrder = ['Guarda-Redes', 'Defesa', 'Médio', 'Avançado'];
@@ -354,8 +355,8 @@ async function loadReturnPlayers() {
             playersByPosition[pos] = [];
         });
 
-        const promises = querySnapshot.docs.map(async playerDoc => {
-            const player = playerDoc.data();
+        const promises = ownedPlayers.map(async player => {
+            const playerDoc = {id: player.id};
             const paisRef = doc(db, 'paises', player.paisId);
             const paisDoc = await getDoc(paisRef);
             const paisData = paisDoc.exists() ? paisDoc.data() : null;
@@ -433,27 +434,7 @@ async function loadReturnPlayers() {
 
                         confirmButton.addEventListener('click', async () => {
                             try {
-                                const seasonsQuery = query(collection(db, 'palpites'), orderBy('temporada', 'desc'), limit(1));
-                                const seasonsSnapshot = await getDocs(seasonsQuery);
-                                let latestSeason = seasonsSnapshot.docs[0]?.data()?.temporada || '';
-                                latestSeason = latestSeason.replace('/', '');
-
-                                await updateDoc(doc(db, 'jogadores', playerDoc.id), {
-                                    compradopor: null
-                                });
-
-                                await addDoc(collection(db, 'movimentos'), {
-                                    de: user.uid,
-                                    estado: 'Devolvido',
-                                    jogadorId: playerDoc.id,
-                                    mediapontos: null,
-                                    movimentoData: serverTimestamp(),
-                                    posicao: player.posicao,
-                                    preco: 0,
-                                    temporada: latestSeason,
-                                    userId: user.uid,
-                                    tipo: 'Mercado'
-                                });
+                                await callFinance('returnPlayer', {playerId: playerDoc.id, season: await getLatestSeason(db)});
 
                                 const successMessage = document.createElement('div');
                                 successMessage.className = 'success-message';
@@ -677,7 +658,8 @@ async function loadTransactions() {
 
         for (const itemDoc of docs) {
             const transaction = itemDoc.data;
-            if (transaction.estado === 'WhoWins Paid' || transaction.estado === 'Dívida') {
+            if (transaction.currency === 'mini-gcoins' ||
+                (!transaction.currency && ['WhoWins Paid', 'Investimentos Paid', 'Endless Paid'].includes(transaction.estado)) || transaction.estado === 'Dívida') {
                 continue; 
             }
             const listItem = document.createElement('li');
@@ -1302,17 +1284,15 @@ async function initUserTeam(userId) {
         });
         
         // Obter jogadores comprados pelo utilizador
-        const q = query(collection(db, 'jogadores'), where('compradopor', '==', userId));
-        const querySnapshot = await getDocs(q);
+        const ownedPlayers = await fetchOwnedPlayersForSeason(db, userId, await getLatestSeason(db));
         
-        if (querySnapshot.empty) {
+        if (!ownedPlayers.length) {
             myTeamGrid.innerHTML = `<div class="my-team-status-msg">Sem jogadores na tua equipa.</div>`;
             return;
         }
         
         let html = '';
-        querySnapshot.forEach(docSnap => {
-            const player = docSnap.data();
+        ownedPlayers.forEach(player => {
             const country = countriesMap[player.paisId] || { nome: 'N/A', imagem: '' };
             
             // Mapeamento da classe de casta
@@ -1625,7 +1605,7 @@ async function loadInbox(userId) {
                 // Fetch player details
                 const playerSnap = await getDoc(doc(db, 'jogadores', data.jogadorId));
                 if (!playerSnap.exists()) return null;
-                const player = playerSnap.data();
+                const player = getPlayerSeasonData(playerSnap.data(), await getLatestSeason(db));
 
                 return {
                     id: inboxDoc.id,
@@ -1789,139 +1769,7 @@ async function loadInbox(userId) {
                         acceptBtn.disabled = true;
                         acceptBtn.style.opacity = '0.5';
                         try {
-                            const configSnap = await getDoc(doc(db, "paineis", "Banca"));
-                            let comissaoBancaVenda = 0;
-                            let bankBalance = 0;
-                            if (configSnap.exists()) {
-                                comissaoBancaVenda = configSnap.data().comissaoBancaVenda || 0;
-                                bankBalance = configSnap.data().valor || 0;
-                            }
-
-                            const latestSeason = await getLatestSeason(db);
-
-                            const buyerRef = doc(db, 'users', userId);
-                            const buyerSnap = await getDoc(buyerRef);
-                            if (!buyerSnap.exists()) return;
-                            const buyerData = buyerSnap.data();
-                            const buyerSeasonData = getSeasonData(buyerData, latestSeason);
-                            const buyerGCoins = buyerSeasonData.GCoins || 0;
-
-                            if (buyerGCoins < p.player.preco) {
-                                alert(`Não tens GCoins suficientes para aceitar esta proposta! Preço: ${p.player.preco} GCoins, O teu Saldo: ${buyerGCoins} GCoins.`);
-                                acceptBtn.disabled = false;
-                                acceptBtn.style.opacity = '1';
-                                return;
-                            }
-
-                            const sellerRef = doc(db, 'users', p.data.de);
-                            const sellerSnap = await getDoc(sellerRef);
-                            if (!sellerSnap.exists()) {
-                                alert("Vendedor não encontrado.");
-                                acceptBtn.disabled = false;
-                                acceptBtn.style.opacity = '1';
-                                return;
-                            }
-                            const sellerData = sellerSnap.data();
-
-                            if (!sellerData.permissoes || sellerData.permissoes.vender !== 'yes') {
-                                alert("Esta proposta já não é válida porque o vendedor não tem permissão para vender.");
-                                await updateDoc(doc(db, 'inbox', p.id), { status: false, estado: 'Invalido' });
-                                return;
-                            }
-
-                            const sellerSeasonData = getSeasonData(sellerData, latestSeason);
-                            const sellerGCoins = sellerSeasonData.GCoins || 0;
-                            const buyerName = buyerData.nometabela || 'Utilizador';
-
-                            const batch = writeBatch(db);
-
-                            batch.update(doc(db, 'jogadores', p.player.id), {
-                                compradopor: userId
-                            });
-
-                            batch.update(buyerRef, {
-                                [latestSeason]: {
-                                    ...buyerSeasonData,
-                                    GCoins: buyerGCoins - p.player.preco
-                                }
-                            });
-
-                            const finalSellerGains = Math.max(0, p.player.preco - comissaoBancaVenda);
-                            batch.update(sellerRef, {
-                                [latestSeason]: {
-                                    ...sellerSeasonData,
-                                    GCoins: sellerGCoins + finalSellerGains
-                                }
-                            });
-
-                            batch.update(doc(db, "paineis", "Banca"), {
-                                valor: bankBalance + comissaoBancaVenda
-                            });
-
-                            batch.update(doc(db, 'inbox', p.id), {
-                                status: false,
-                                estado: 'Aceite'
-                            });
-
-                            batch.set(doc(collection(db, 'movimentos')), {
-                                de: p.data.de,
-                                para_userId: userId,
-                                userId: userId,
-                                estado: 'Comprado',
-                                jogadorId: p.player.id,
-                                posicao: p.player.posicao,
-                                preco: -p.player.preco,
-                                valorreal: -p.player.preco,
-                                temporada: compactSeason(latestSeason),
-                                tipo: 'Mercado',
-                                movimentoData: serverTimestamp(),
-                                descricao: `Compra de jogador ${p.player.nome} a ${p.senderName}`
-                            });
-
-                            batch.set(doc(collection(db, 'movimentos')), {
-                                de: p.data.de,
-                                para_userId: userId,
-                                userId: p.data.de,
-                                estado: 'Vendido',
-                                jogadorId: p.player.id,
-                                posicao: p.player.posicao,
-                                preco: p.player.preco,
-                                valorreal: finalSellerGains,
-                                temporada: compactSeason(latestSeason),
-                                tipo: 'Mercado',
-                                movimentoData: serverTimestamp(),
-                                descricao: `Venda de jogador ${p.player.nome} a ${buyerName} (Comissão da Banca: ${comissaoBancaVenda} gCoins)`
-                            });
-
-                            batch.set(doc(collection(db, 'movimentos')), {
-                                preco: comissaoBancaVenda,
-                                tipo: "Banca",
-                                temporada: compactSeason(latestSeason),
-                                movimentoData: serverTimestamp(),
-                                descricao: `Comissão de venda de jogador ${p.player.nome} entre ${p.senderName} e ${buyerName}`
-                            });
-
-                            // Invalidate all other pending proposals for this same player
-                            try {
-                                const pendingQuery = query(
-                                    collection(db, 'inbox'), 
-                                    where('jogadorId', '==', p.player.id),
-                                    where('status', '==', true)
-                                );
-                                const pendingSnapshot = await getDocs(pendingQuery);
-                                pendingSnapshot.forEach(pendingDoc => {
-                                    if (pendingDoc.id !== p.id) {
-                                        batch.update(pendingDoc.ref, {
-                                            status: false,
-                                            estado: 'Expirado'
-                                        });
-                                    }
-                                });
-                            } catch (pendingErr) {
-                                console.error("Erro ao invalidar propostas pendentes concorrentes:", pendingErr);
-                            }
-
-                            await batch.commit();
+                            await callFinance('acceptPlayerSale', {proposalId: p.id});
 
                             alert(`Jogador ${p.player.nome} adquirido com sucesso por ${p.player.preco} GCoins!`);
                             location.reload();

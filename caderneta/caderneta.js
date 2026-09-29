@@ -1,5 +1,6 @@
 // caderneta/caderneta.js
 import { app, db, auth } from "../core/firebase.js";
+import { callFinance, readMiniBalance } from '../core/finance-client.js';
 import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
 import { doc, getDoc, collection, getDocs, query, where, updateDoc, addDoc, serverTimestamp, writeBatch, runTransaction } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 import { COUNTRY_NAME_TO_ISO, normalizeCountryName } from "./map-data.js";
@@ -255,7 +256,7 @@ async function loadSeasonAndUserGcoins() {
         currentSeasonData = getSeasonData(rawUserData, currentSeasonLabel);
         currentUserStatus = userData.estatuto || "";
         userGcoins = userData.GCoins || 0;
-        userMiniGcoins = userData.whowinsgCoins || 0;
+        userMiniGcoins = readMiniBalance(rawUserData, currentSeasonLabel);
     }
 }
 
@@ -298,59 +299,8 @@ async function fetchPendingGiftPackOffers() {
 }
 
 async function claimGiftPackOffer(offer) {
-    const roundNumber = Number(offer.ronda || 0);
-    const defaultCardsCount = (roundNumber === 4 || roundNumber === 5) ? 6 : 1;
-    const cardsCount = Number.isInteger(offer.cardsCount) ? offer.cardsCount : defaultCardsCount;
-    const drawnPlayers = drawPackPlayers(eligiblePlayers, offer.packType || CADERNETA_FREE_PACK_TYPE, cardsCount);
-
-    await runTransaction(db, async (transaction) => {
-        const offerRef = doc(db, CADERNETA_GIFT_OFFERS_COLLECTION, offer.id);
-        const offerSnap = await transaction.get(offerRef);
-
-        if (!offerSnap.exists()) {
-            throw new Error('A oferta do cromo ja nao existe.');
-        }
-
-        const offerData = offerSnap.data();
-        if (offerData.userId !== currentUser.uid) {
-            throw new Error('Esta oferta nao pertence ao utilizador atual.');
-        }
-
-        if (offerData.status !== 'pending') {
-            throw new Error('Esta oferta ja foi resgatada.');
-        }
-
-        transaction.update(offerRef, {
-            status: 'claimed',
-            claimedAt: serverTimestamp(),
-            claimedFrom: 'caderneta'
-        });
-
-        const seasonToSave = currentSeasonLabel || offerData.temporadaKey || (await getLatestSeason(db));
-        drawnPlayers.forEach((draw) => {
-            const stickerRef = doc(collection(db, 'caderneta'));
-            transaction.set(stickerRef, createStickerPayload(draw, currentUser.uid, serverTimestamp(), seasonToSave));
-        });
-
-        const movimentoRef = doc(collection(db, 'movimentos'));
-        transaction.set(movimentoRef, {
-            descricao: cardsCount === 1 ? 'Cromo Oferecido' : 'Saqueta Oferecida',
-            para: currentUser.uid,
-            de: offerData.sourceName || null,
-            estado: 'CadernetaOffer',
-            movimentoData: serverTimestamp(),
-            taxa: null,
-            temporada: offerData.temporadaKey || currentSeason,
-            userId: currentUser.uid,
-            tipo: 'Caderneta',
-            valorreal: 0
-        });
-    });
-
-    return {
-        ...offer,
-        drawnPlayers
-    };
+    const result = await callFinance('claimCadernetaOffer', {offerId: offer.id});
+    return {...offer, drawnPlayers: result.drawnPlayers};
 }
 
 async function maybeProcessGiftPackOffersFromRankings() {
@@ -2135,100 +2085,30 @@ async function pasteSticker(playerId, slotEl) {
 
 // Purchase and roll a pack
 async function handlePackPurchase(packType) {
+    if (isPurchasingPack) return;
     if (!isShopUnlocked()) {
-        alert(`Ainda nao desbloqueaste o mercado de saquetas. Precisas de ${REQUIRED_PREDICTED_GAMES_FOR_SHOP} jogos palpitados na temporada e tens ${userSeasonPredictedGames}.`);
+        alert(`Precisas de ${REQUIRED_PREDICTED_GAMES_FOR_SHOP} jogos palpitados nesta época.`);
         return;
     }
-
-    const packConfig = getPackConfigForType(packType);
-    const price = packConfig?.price;
-    const currency = packConfig?.currency || 'gcoins';
-
-    if (!Number.isFinite(price) || price <= 0) {
-        alert("Este pack ainda nao tem preco configurado no painel de administracao.");
-        return;
-    }
-
-    if (eligiblePlayers.length === 0) {
-        alert("Nao existem jogadores ativos na Caderneta. Configure primeiro os jogadores em /admin/gerenciar-caderneta-casta.html.");
-        return;
-    }
-
-    if (currency === 'mini-gcoins' && userMiniGcoins < price) {
-        alert("Mini-gcoins insuficientes para comprar esta saqueta!");
-        return;
-    }
-
-    if (currency !== 'mini-gcoins' && userGcoins < price) {
-        alert("GCoins insuficientes para comprar esta saqueta!");
-        return;
-    }
-
+    isPurchasingPack = true;
     showLoader();
     shopModal.classList.remove('active');
-
     try {
-        const drawnPlayers = drawPackPlayers(eligiblePlayers, packType);
-
-        // Fire Transaction
-        const batch = writeBatch(db);
-
-        // 1. Deduct the configured balance
-        const userRef = doc(db, 'users', currentUser.uid);
-        const isMiniGcoinsPurchase = currency === 'mini-gcoins';
-        const newBalance = isMiniGcoinsPurchase ? userMiniGcoins - price : userGcoins - price;
-        const updatedUserBalanceField = isMiniGcoinsPurchase ? 'whowinsgCoins' : currentGcoinsField;
-        batch.update(userRef, {
-            [currentSeasonLabel]: {
-                ...currentSeasonData,
-                [updatedUserBalanceField]: newBalance
-            }
-        });
-
-        // 2. Create movimento
-        const movimentoRef = doc(collection(db, 'movimentos'));
-        const rightNow = new Date();
-        batch.set(movimentoRef, {
-            descricao: isMiniGcoinsPurchase ? "Comprou Saqueta com Mini-gcoins" : "Comprou Saqueta",
-            para: currentUser.uid,
-            de: null,
-            estado: isMiniGcoinsPurchase ? "WhoWins Paid" : "CadernetaPaid",
-            movimentoData: rightNow, // Firestore converts JavaScript Date automatically
-            taxa: null,
-            temporada: currentSeason,
-            userId: currentUser.uid,
-            tipo: "Caderneta",
-            valorreal: -price
-        });
-
-        // 3. Create stickers
-        const seasonToSave = currentSeasonLabel || (await getLatestSeason(db));
-        drawnPlayers.forEach(draw => {
-            const stickerRef = doc(collection(db, 'caderneta'));
-            batch.set(stickerRef, createStickerPayload(draw, currentUser.uid, serverTimestamp(), seasonToSave));
-        });
-
-        // Execute Batch
-        await batch.commit();
-        logUserAction(`Comprou saqueta (${packType}) na Caderneta`);
-
-        // Update local balance
-        if (isMiniGcoinsPurchase) {
-            userMiniGcoins = newBalance;
-        } else {
-            userGcoins = newBalance;
-            const topGcoinsVal = document.getElementById('top-user-gcoins-value');
-            if (topGcoinsVal) topGcoinsVal.textContent = userGcoins.toLocaleString('pt-PT');
+        const result = await callFinance('purchaseCadernetaPack', {packType});
+        if (result.currency === 'mini-gcoins') userMiniGcoins = result.newBalance;
+        else {
+            userGcoins = result.newBalance;
+            const topBalance = document.getElementById('top-user-gcoins-value');
+            if (topBalance) topBalance.textContent = userGcoins.toLocaleString('pt-PT');
         }
-
-        // Reveal transition modal setup
-        setupRevealScreen(packType, drawnPlayers);
-
-    } catch (e) {
-        console.error("Erro na compra da saqueta:", e);
-        alert("Erro ao comprar a saqueta. Tente novamente.");
+        setupRevealScreen(result.packType, result.drawnPlayers);
+    } catch (error) {
+        console.error('Erro na compra da saqueta:', error);
+        alert(error.message || 'Não foi possível comprar a saqueta. Tenta novamente.');
+    } finally {
+        isPurchasingPack = false;
+        hideLoader();
     }
-    hideLoader();
 }
 
 // Reveal cards inside modal one by one

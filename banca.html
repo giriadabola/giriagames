@@ -298,6 +298,8 @@
         import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
         import { getFirestore, doc, getDoc, collection, query, where, getDocs, onSnapshot, orderBy, limit, addDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
         import { checkPageContentAccess } from './js/page-content-guard.js';
+        import { getLatestSeason } from './core/user-season.js';
+        import { callFinance, readMiniBalance } from './core/finance-client.js';
 
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
@@ -457,11 +459,7 @@
                                 ? data[seasonWithSlash + 'GCoins'] 
                                 : 0));
 
-                    currentUserMiniGCoins = sData['mini-gcoins'] !== undefined 
-                        ? sData['mini-gcoins'] 
-                        : (data['mini-gcoins'] !== undefined 
-                            ? data['mini-gcoins'] 
-                            : ((sData.whowinsgCoins || data.whowinsgCoins || 0) + (sData.investimentosgCoins || data.investimentosgCoins || 0)));
+currentUserMiniGCoins = readMiniBalance(data, currentSeason);
                     
                     const gcoinsEl = document.getElementById('userGCoinsValue');
                     const miniGcoinsEl = document.getElementById('userMiniGCoinsValue');
@@ -495,20 +493,7 @@
                         return;
                     }
 
-                    try {
-                        const settingsSnap = await getDoc(doc(db, 'settings', 'temporadas'));
-                        if (settingsSnap.exists() && Array.isArray(settingsSnap.data()?.temporadas) && settingsSnap.data().temporadas.length > 0) {
-                            const temps = settingsSnap.data().temporadas;
-                            currentSeason = String(temps[temps.length - 1] || '').trim();
-                        }
-                    } catch (e) {
-                        console.warn("Erro ao obter temporada de settings/temporadas:", e);
-                    }
-
-                    if (!currentSeason) {
-                        const configSnap = await getDoc(doc(db, 'paineis', 'configuracoes_gerais'));
-                        currentSeason = configSnap.exists() ? configSnap.data().temporadaAtual : '';
-                    }
+                    currentSeason = await getLatestSeason(db);
 
                     // Inicia os listeners em tempo real
                     setupBancaListener();
@@ -584,43 +569,20 @@
         }
 
         async function loadUserDebts(uid) {
-            let latestSeasonStr = '';
-            try {
-                const settingsSnap = await getDoc(doc(db, 'settings', 'temporadas'));
-                if (settingsSnap.exists() && Array.isArray(settingsSnap.data()?.temporadas) && settingsSnap.data().temporadas.length > 0) {
-                    const temps = settingsSnap.data().temporadas;
-                    latestSeasonStr = String(temps[temps.length - 1] || '').trim();
-                }
-            } catch (e) {
-                console.warn("Erro ao obter temporada para dívidas:", e);
-            }
 
-            if (!latestSeasonStr) {
-                try {
-                    const configSnap = await getDoc(doc(db, 'paineis', 'configuracoes_gerais'));
-                    if (configSnap.exists() && configSnap.data()?.temporadaAtual) {
-                        latestSeasonStr = String(configSnap.data().temporadaAtual).trim();
-                    }
-                } catch (e) {}
-            }
-
-            const seasonWithSlash = latestSeasonStr;
-            const seasonWithoutSlash = latestSeasonStr.replace('/', '');
 
             const q = query(collection(db, 'movimentos'), where('userId', '==', uid), where('estado', '==', 'Por Pagar'), where('tipo', '==', 'Empréstimo'));
             const snap = await getDocs(q);
             let total = 0;
             snap.forEach(d => {
                 const data = d.data();
-                const temp = String(data.temporada || '').trim();
-                if (!seasonWithSlash || temp === seasonWithSlash || temp === seasonWithoutSlash) {
-                    total += data.valorTotalAPagar || 0;
-                }
+                total += data.valorTotalAPagar || 0;
             });
             totalUserDebt = total;
             debtValueOnCard.textContent = total.toLocaleString('pt-PT') + ' ₲₵';
             const uSnap = await getDoc(doc(db, 'users', uid));
-            if (uSnap.exists()) currentUserGCoins = uSnap.data()[currentSeason + 'GCoins'] || 0;
+            if (uSnap.exists()) currentUserGCoins = uSnap.data()[currentSeason]?.GCoins ?? uSnap.data()[currentSeason.replace(/\D/g, '') + 'GCoins'] ?? 0;
+            document.getElementById('popupDebtTotal').textContent = total.toLocaleString('pt-PT') + ' ₲₵';
         }
 
         // Eventos Exchange
@@ -640,11 +602,7 @@
                 const seasonWithoutSlash = currentSeason.replace('/', '');
                 const sData = uData[seasonWithSlash] || uData[seasonWithoutSlash] || {};
                 
-                currentUserMiniGCoins = sData['mini-gcoins'] !== undefined 
-                    ? sData['mini-gcoins'] 
-                    : (uData['mini-gcoins'] !== undefined 
-                        ? uData['mini-gcoins'] 
-                        : ((sData.whowinsgCoins || uData.whowinsgCoins || 0) + (sData.investimentosgCoins || uData.investimentosgCoins || 0)));
+currentUserMiniGCoins = readMiniBalance(uData, currentSeason);
 
                 currentUserGCoins = sData.GCoins !== undefined 
                     ? sData.GCoins 
@@ -721,8 +679,9 @@
             
             confirmConversionBtn.disabled = true; confirmConversionBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
             try {
-                const res = await httpsCallable(functions, 'convertCoins')({ amount: amt });
-                if (res.data.success) {
+                if (activeSimulatedUid !== auth.currentUser.uid) throw new Error('Termina a simulação antes de converter moedas.');
+                const res = await callFinance('convertCoins', { amount: amt });
+                if (res.success) {
                     document.getElementById('conversionFeedback').textContent = "Sucesso!"; document.getElementById('conversionFeedback').style.color = "green";
                     setTimeout(() => location.reload(), 1500);
                 }
@@ -751,8 +710,9 @@
 
             try {
                 await auth.currentUser.getIdToken(true);
-                const res = await httpsCallable(functions, 'payDebt')({ amount: amount });
-                if (res.data.success) {
+                if (activeSimulatedUid !== auth.currentUser.uid) throw new Error('Termina a simulação antes de pagar dívidas.');
+                const res = await callFinance('payDebt', { amount: amount });
+                if (res.success) {
                     feedback.textContent = 'Pagamento bem-sucedido!'; feedback.style.color = 'green';
                     setTimeout(() => { location.reload(); }, 1500);
                 }
@@ -930,33 +890,7 @@
             }
 
             try {
-                let latestSeasonStr = '';
-                try {
-                    const settingsSnap = await getDoc(doc(db, 'settings', 'temporadas'));
-                    if (settingsSnap.exists() && Array.isArray(settingsSnap.data()?.temporadas) && settingsSnap.data().temporadas.length > 0) {
-                        const temps = settingsSnap.data().temporadas;
-                        latestSeasonStr = String(temps[temps.length - 1] || '').trim();
-                    }
-                } catch (e) {
-                    console.warn("Erro ao obter temporada de settings/temporadas:", e);
-                }
-
-                if (!latestSeasonStr) {
-                    try {
-                        const configSnap = await getDoc(doc(db, 'paineis', 'configuracoes_gerais'));
-                        if (configSnap.exists() && configSnap.data()?.temporadaAtual) {
-                            latestSeasonStr = String(configSnap.data().temporadaAtual).trim();
-                        }
-                    } catch (e) {}
-                }
-
-                if (!latestSeasonStr) {
-                    try {
-                        const seasonsQuery = query(collection(db, 'palpites'), orderBy('temporada', 'desc'), limit(1));
-                        const seasonsSnapshot = await getDocs(seasonsQuery);
-                        latestSeasonStr = String(seasonsSnapshot.docs[0]?.data()?.temporada || '').trim();
-                    } catch (e) {}
-                }
+                const latestSeasonStr = await getLatestSeason(db);
 
                 const seasonWithSlash = latestSeasonStr;
                 const seasonWithoutSlash = latestSeasonStr.replace('/', '');
@@ -1001,7 +935,8 @@
 
                 for (const itemDoc of docs) {
                     const transaction = itemDoc.data;
-                    if (transaction.estado === 'WhoWins Paid' || transaction.estado === 'Dívida') {
+                    if (transaction.currency === 'mini-gcoins' ||
+                        (!transaction.currency && ['WhoWins Paid', 'Investimentos Paid', 'Endless Paid'].includes(transaction.estado)) || transaction.estado === 'Dívida') {
                         continue; 
                     }
                     const listItem = document.createElement('li');
