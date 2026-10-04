@@ -41,7 +41,12 @@ function buildBankFunctions({admin, db, getLatestSeason, compactSeason}) {
             const user = requireAccepted(userSnap);
             const balance = readWallet(user, season, 'gcoins');
             const bank = bankData(bankSnap.data(), season);
-            const debts = debtSnapshot.docs.filter(d => d.data().tipo === 'Empréstimo' && d.data().estado === 'Por Pagar');
+            const latestSeason = compactSeason(season);
+            const debts = debtSnapshot.docs.filter(d => {
+                const debt = d.data();
+                return debt.tipo === 'Empréstimo' && debt.estado === 'Por Pagar' &&
+                    compactSeason(debt.temporada) === latestSeason;
+            });
             const total = debts.reduce((sum, doc) => sum + amount(doc.data().valorTotalAPagar, {allowZero: true}), 0);
             if (payment > total || payment > balance) throw new HttpsError('failed-precondition', 'O pagamento excede a dívida ou o saldo disponível.');
             debts.sort((a, b) => (a.data().movimentoData?.toMillis?.() || 0) - (b.data().movimentoData?.toMillis?.() || 0) || a.id.localeCompare(b.id));
