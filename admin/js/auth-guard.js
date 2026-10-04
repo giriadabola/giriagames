@@ -1,21 +1,7 @@
-import { getApp, getApps, initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
-import { getFirestore, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+import { doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+import { app, auth, db } from '../../core/firebase.js';
 import { completeAuthLoading, showAuthError, showAuthLoading } from './auth-loading-panel.js';
-
-const firebaseConfig = {
-    apiKey: "AIzaSyD8WcFD7jC55feYYqdY7aJSgxXyXkEjTX0",
-    authDomain: "g-games-8a8fc.firebaseapp.com",
-    projectId: "g-games-8a8fc",
-    storageBucket: "g-games-8a8fc.appspot.com",
-    messagingSenderId: "689897349449",
-    appId: "1:689897349449:web:536599794579901beb7a98",
-    measurementId: "G-GTTPJ6G5MD"
-};
-
-const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
 
 const DEFAULT_ALLOWED_ROLES = ['ruler', 'estafeta'];
 
