@@ -1,0 +1,934 @@
+const { onSchedule } = require("firebase-functions/v2/scheduler");
+const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const admin = require("firebase-admin");
+const webpush = require("web-push");
+const { isDueWithinRetryWindow } = require("./notification-schedule");
+
+const VAPID_PUBLIC_KEY = "BNQqYP8I9537wDNcLm5Bfzj1-dR7ynWXs064sLLbJ3T6RxaZqVbNvPXX-ryv7I6rgBYET5mZCuwxXpUn7Jsiv9I";
+const VAPID_PRIVATE_KEY = "6SGGrihGmcnwfF_Fipd_V5hNc2th1M8Ez0FFGd0E9YU";
+const VAPID_SUBJECT = "mailto:admin@giriagames.com";
+const NOTIFICATION_TIME_ZONE = "Europe/Lisbon";
+const WEEKLY_PREDICTION_WARNING_COUNT = 3;
+const DEFAULT_CONFIG = {
+  beforeOpenEnabled: true,
+  beforeOpenHours: 2,
+  onOpenEnabled: true,
+  onCloseEnabled: true,
+  predictionsOpenEnabled: false,
+  predictionsOpenWeekday: 5,
+  predictionsOpenTime: "09:00",
+  predictionsCloseEnabled: false,
+  predictionsCloseWeekday: 6,
+  predictionsCloseTime: "20:00",
+  predictionsClosingSoonEnabled: false,
+  predictionsClosingSoonWeekday: 6,
+  predictionsClosingSoonTime: "20:00",
+  predictionsClosingSoonHours: 2,
+  weeklyPredictionWarnings: [
+    { enabled: false, weekday: 1, time: "09:00" },
+    { enabled: false, weekday: 3, time: "09:00" },
+    { enabled: false, weekday: 5, time: "09:00" },
+  ],
+};
+const DISPATCH_WINDOW_MS = 15 * 60 * 1000;
+const WEEKLY_DISPATCH_WINDOW_MS = 15 * 60 * 1000;
+const MARKET_NOTIFICATION_FIELD = "notificacoesMercado";
+const ADMIN_ROLES = new Set(["ruler", "estafeta"]);
+const CALLABLE_CORS_ORIGINS = [
+  "https://g-games-8a8fc.web.app",
+  "https://giriagames.win",
+  "https://www.giriagames.win",
+  "http://127.0.0.1:5174",
+  "http://localhost:5174",
+  "http://127.0.0.1:5502",
+  "http://localhost:5502",
+  "http://127.0.0.1:5503",
+  "http://localhost:5503",
+];
+
+webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+
+function normalizeUserSettings(rawSettings) {
+  return {
+    pushEnabled: rawSettings?.pushEnabled === true,
+    pushSubscriptions: Array.isArray(rawSettings?.pushSubscriptions) ? rawSettings.pushSubscriptions : [],
+    weeklyPredictionWarningPreferences: Array.from(
+      { length: WEEKLY_PREDICTION_WARNING_COUNT },
+      (_, index) => typeof rawSettings?.weeklyPredictionWarningPreferences?.[index] === "boolean"
+        ? rawSettings.weeklyPredictionWarningPreferences[index]
+        : true
+    ),
+  };
+}
+
+function asDate(value) {
+  if (!value) {
+    return null;
+  }
+
+  if (typeof value.toDate === "function") {
+    return value.toDate();
+  }
+
+  if (value instanceof Date) {
+    return value;
+  }
+
+  if (typeof value === "number") {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  if (typeof value === "string") {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  if (typeof value.seconds === "number") {
+    const milliseconds = (value.seconds * 1000) + Math.floor((value.nanoseconds || 0) / 1000000);
+    const date = new Date(milliseconds);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  if (typeof value._seconds === "number") {
+    const milliseconds = (value._seconds * 1000) + Math.floor((value._nanoseconds || 0) / 1000000);
+    const date = new Date(milliseconds);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  return null;
+}
+
+function isDue(nowMs, targetDate, sentAtValue) {
+  if (!targetDate) {
+    return false;
+  }
+
+  const targetMs = targetDate.getTime();
+
+  if (nowMs < targetMs || nowMs > targetMs + DISPATCH_WINDOW_MS) {
+    return false;
+  }
+
+  const sentAtDate = asDate(sentAtValue);
+  return !sentAtDate || sentAtDate.getTime() < targetMs;
+}
+
+function buildDispatchKey(type, hoursBeforeOpen) {
+  if (type === "beforeOpen") {
+    return `beforeOpen_${hoursBeforeOpen}h`;
+  }
+
+  return type;
+}
+
+function buildPayload(type, scheduleId, scheduleData, hoursBeforeOpen) {
+  const abertura = asDate(scheduleData.abertura);
+  const fechamento = asDate(scheduleData.fechamento);
+  const targetLabel = scheduleData.observacoes || "a janela de mercado";
+  const formatDate = (date) => date ? date.toLocaleString("pt-PT", { timeZone: NOTIFICATION_TIME_ZONE }) : "brevemente";
+
+  if (type === "beforeOpen") {
+    return {
+      title: "Mercado a abrir em breve",
+      body: `${targetLabel} abre às ${formatDate(abertura)}. Aviso enviado ${hoursBeforeOpen}h antes.`,
+      tag: `market-${scheduleId}-${buildDispatchKey(type, hoursBeforeOpen)}`,
+      url: "./market.html",
+    };
+  }
+
+  if (type === "onOpen") {
+    return {
+      title: "Mercado aberto",
+      body: `${targetLabel} abriu agora. Fecha às ${formatDate(fechamento)}.`,
+      tag: `market-${scheduleId}-onOpen`,
+      url: "./market.html",
+    };
+  }
+
+  return {
+    title: "Mercado fechado",
+    body: `${targetLabel} fechou agora.`,
+    tag: `market-${scheduleId}-onClose`,
+    url: "./market.html",
+  };
+}
+
+function shouldReceiveNotification(settings, type) {
+  const match = /^weeklyPredictionWarning(\d+)$/.exec(type || "");
+
+  if (!match) {
+    return true;
+  }
+
+  const preferenceIndex = Number.parseInt(match[1], 10) - 1;
+  return settings.weeklyPredictionWarningPreferences[preferenceIndex] !== false;
+}
+
+function getInterestedUsers(users, type = null) {
+  return users.filter((userEntry) => {
+    const settings = userEntry.settings;
+
+    return settings.pushEnabled &&
+      settings.pushSubscriptions.length > 0 &&
+      shouldReceiveNotification(settings, type);
+  });
+}
+
+async function sendPayloadToUser(userEntry, payload) {
+  const validSubscriptions = [];
+  let delivered = 0;
+  const attempted = userEntry.settings.pushSubscriptions.length;
+
+  for (const subscription of userEntry.settings.pushSubscriptions) {
+    try {
+      await webpush.sendNotification(subscription, JSON.stringify(payload));
+      validSubscriptions.push(subscription);
+      delivered += 1;
+    } catch (error) {
+      const statusCode = error?.statusCode || null;
+      const isExpired = statusCode === 404 || statusCode === 410;
+
+      if (!isExpired) {
+        console.error(`Push error for user ${userEntry.id}:`, error.message || error);
+        validSubscriptions.push(subscription);
+      }
+    }
+  }
+
+  if (validSubscriptions.length !== userEntry.settings.pushSubscriptions.length) {
+    await userEntry.ref.set({
+      [MARKET_NOTIFICATION_FIELD]: {
+        ...userEntry.settings,
+        pushSubscriptions: validSubscriptions,
+        pushEnabled: validSubscriptions.length > 0,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+    }, { merge: true });
+
+    userEntry.settings = {
+      ...userEntry.settings,
+      pushSubscriptions: validSubscriptions,
+      pushEnabled: validSubscriptions.length > 0,
+    };
+  }
+
+  return {
+    delivered,
+    attempted,
+  };
+}
+
+async function sendPayloadToUsers(userEntries, payload) {
+  const results = await Promise.all(
+    userEntries.map(async (userEntry) => {
+      try {
+        const result = await sendPayloadToUser(userEntry, payload);
+        return { ...result, userId: userEntry.id };
+      } catch (error) {
+        // Um utilizador com uma subscrição problemática não deve impedir o
+        // envio para os restantes utilizadores.
+        console.error(`Erro ao enviar push para o utilizador ${userEntry.id}:`, error.message || error);
+        return {
+          delivered: 0,
+          attempted: userEntry.settings.pushSubscriptions.length,
+          userId: userEntry.id,
+        };
+      }
+    })
+  );
+
+  return results.reduce((summary, result) => {
+    summary.delivered += result.delivered;
+    summary.attempted += result.attempted;
+
+    if (result.delivered > 0) {
+      summary.deliveredUserIds.push(result.userId);
+    }
+
+    return summary;
+  }, { delivered: 0, attempted: 0, deliveredUserIds: [] });
+}
+
+async function dispatchForEvent(scheduleEntry, users, type, hoursBeforeOpen) {
+  const payload = buildPayload(type, scheduleEntry.id, scheduleEntry.data, hoursBeforeOpen);
+  const interestedUsers = getInterestedUsers(users, type);
+
+  if (interestedUsers.length === 0) {
+    return false;
+  }
+
+  const delivery = await sendPayloadToUsers(interestedUsers, payload);
+  return delivery.delivered > 0;
+}
+
+async function loadEligibleUsers() {
+  const db = admin.firestore();
+  const usersSnapshot = await db.collection("users").get();
+
+  return usersSnapshot.docs.map((userDoc) => ({
+    id: userDoc.id,
+    ref: userDoc.ref,
+    settings: normalizeUserSettings(userDoc.data()?.[MARKET_NOTIFICATION_FIELD]),
+  }));
+}
+
+async function ensureAdminAccess(uid) {
+  if (!uid) {
+    throw new HttpsError("unauthenticated", "Precisas de login para usar esta função.");
+  }
+
+  const userSnapshot = await admin.firestore().doc(`users/${uid}`).get();
+  const role = userSnapshot.data()?.estatuto || null;
+
+  if (!ADMIN_ROLES.has(role)) {
+    throw new HttpsError("permission-denied", "Sem permissões para enviar notificações.");
+  }
+}
+
+function sanitizeManualMessage(message) {
+  if (typeof message !== "string") {
+    throw new HttpsError("invalid-argument", "A mensagem tem de ser texto.");
+  }
+
+  const trimmed = message.trim().replace(/\s+/g, " ");
+
+  if (!trimmed) {
+    throw new HttpsError("invalid-argument", "Escreve uma mensagem antes de enviar.");
+  }
+
+  if (trimmed.length > 180) {
+    throw new HttpsError("invalid-argument", "A mensagem não pode ultrapassar 180 caracteres.");
+  }
+
+  return trimmed;
+}
+
+function isValidWeekday(value) {
+  return Number.isInteger(value) && value >= 0 && value <= 6;
+}
+
+function isValidTime(value) {
+  if (typeof value !== "string" || !/^\d{2}:\d{2}$/.test(value)) {
+    return false;
+  }
+
+  const [hours, minutes] = value.split(":").map((part) => Number.parseInt(part, 10));
+  return hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59;
+}
+
+function isValidHoursBefore(value) {
+  return Number.isInteger(value) && value > 0 && value <= 48;
+}
+
+function normalizeBoolean(value, fallback) {
+  if (value === true || value === "true" || value === 1) {
+    return true;
+  }
+
+  if (value === false || value === "false" || value === 0) {
+    return false;
+  }
+
+  return fallback;
+}
+
+function normalizeInteger(value, fallback) {
+  const parsed = typeof value === "number" ? value : Number.parseInt(value, 10);
+  return Number.isInteger(parsed) ? parsed : fallback;
+}
+
+function normalizeTime(value, fallback) {
+  return isValidTime(value) ? value : fallback;
+}
+
+function normalizeWeeklyPredictionWarnings(rawWarnings) {
+  const source = Array.isArray(rawWarnings) ? rawWarnings : [];
+
+  return DEFAULT_CONFIG.weeklyPredictionWarnings.map((fallback, index) => {
+    const raw = source[index] || {};
+
+    return {
+      enabled: normalizeBoolean(raw.enabled, fallback.enabled),
+      weekday: normalizeInteger(raw.weekday, fallback.weekday),
+      time: normalizeTime(raw.time, fallback.time),
+    };
+  });
+}
+
+function normalizeNotificationConfig(rawConfig) {
+  const raw = rawConfig || {};
+
+  return {
+    ...DEFAULT_CONFIG,
+    ...raw,
+    beforeOpenEnabled: normalizeBoolean(raw.beforeOpenEnabled, DEFAULT_CONFIG.beforeOpenEnabled),
+    beforeOpenHours: normalizeInteger(raw.beforeOpenHours, DEFAULT_CONFIG.beforeOpenHours),
+    onOpenEnabled: normalizeBoolean(raw.onOpenEnabled, DEFAULT_CONFIG.onOpenEnabled),
+    onCloseEnabled: normalizeBoolean(raw.onCloseEnabled, DEFAULT_CONFIG.onCloseEnabled),
+    predictionsOpenEnabled: normalizeBoolean(raw.predictionsOpenEnabled, DEFAULT_CONFIG.predictionsOpenEnabled),
+    predictionsOpenWeekday: normalizeInteger(raw.predictionsOpenWeekday, DEFAULT_CONFIG.predictionsOpenWeekday),
+    predictionsOpenTime: normalizeTime(raw.predictionsOpenTime, DEFAULT_CONFIG.predictionsOpenTime),
+    predictionsCloseEnabled: normalizeBoolean(raw.predictionsCloseEnabled, DEFAULT_CONFIG.predictionsCloseEnabled),
+    predictionsCloseWeekday: normalizeInteger(raw.predictionsCloseWeekday, DEFAULT_CONFIG.predictionsCloseWeekday),
+    predictionsCloseTime: normalizeTime(raw.predictionsCloseTime, DEFAULT_CONFIG.predictionsCloseTime),
+    predictionsClosingSoonEnabled: normalizeBoolean(
+      raw.predictionsClosingSoonEnabled,
+      DEFAULT_CONFIG.predictionsClosingSoonEnabled
+    ),
+    predictionsClosingSoonWeekday: normalizeInteger(
+      raw.predictionsClosingSoonWeekday,
+      DEFAULT_CONFIG.predictionsClosingSoonWeekday
+    ),
+    predictionsClosingSoonTime: normalizeTime(
+      raw.predictionsClosingSoonTime,
+      DEFAULT_CONFIG.predictionsClosingSoonTime
+    ),
+    predictionsClosingSoonHours: normalizeInteger(
+      raw.predictionsClosingSoonHours,
+      DEFAULT_CONFIG.predictionsClosingSoonHours
+    ),
+    weeklyPredictionWarnings: normalizeWeeklyPredictionWarnings(raw.weeklyPredictionWarnings),
+  };
+}
+
+function getZonedParts(date) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: NOTIFICATION_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date).reduce((result, part) => {
+    if (part.type !== "literal") {
+      result[part.type] = Number.parseInt(part.value, 10);
+    }
+    return result;
+  }, {});
+
+  return parts;
+}
+
+function getTimeZoneOffsetMs(date) {
+  const parts = getZonedParts(date);
+  const zonedAsUtc = Date.UTC(
+    parts.year,
+    parts.month - 1,
+    parts.day,
+    parts.hour,
+    parts.minute,
+    parts.second
+  );
+
+  return zonedAsUtc - date.getTime();
+}
+
+function zonedLocalDateToUtc(localDate) {
+  let timestamp = localDate.getTime();
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    timestamp = localDate.getTime() - getTimeZoneOffsetMs(new Date(timestamp));
+  }
+
+  return new Date(timestamp);
+}
+
+function getWeekKey(date) {
+  const parts = getZonedParts(date);
+  const current = new Date(Date.UTC(parts.year, parts.month - 1, parts.day));
+  const day = current.getUTCDay();
+  const diffToMonday = (day + 6) % 7;
+  current.setUTCDate(current.getUTCDate() - diffToMonday);
+
+  const year = current.getUTCFullYear();
+  const month = String(current.getUTCMonth() + 1).padStart(2, "0");
+  const dayOfMonth = String(current.getUTCDate()).padStart(2, "0");
+
+  return `${year}-${month}-${dayOfMonth}`;
+}
+
+function getWeeklyTriggerDate(now, weekday, timeString) {
+  if (!isValidWeekday(weekday) || !isValidTime(timeString)) {
+    return null;
+  }
+
+  const [hours, minutes] = timeString.split(":").map((value) => Number.parseInt(value, 10));
+  const localNow = getZonedParts(now);
+  const target = new Date(Date.UTC(localNow.year, localNow.month - 1, localNow.day));
+  const diffDays = (weekday - target.getUTCDay() + 7) % 7;
+
+  target.setUTCDate(target.getUTCDate() + diffDays);
+  target.setUTCHours(hours, minutes, 0, 0);
+
+  return zonedLocalDateToUtc(target);
+}
+
+function getWeeklyTriggerDateWithOffset(now, weekday, timeString, hoursBefore) {
+  if (!isValidHoursBefore(hoursBefore)) {
+    return null;
+  }
+
+  const target = getWeeklyTriggerDate(now, weekday, timeString);
+
+  if (!target) {
+    return null;
+  }
+
+  return new Date(target.getTime() - (hoursBefore * 60 * 60 * 1000));
+}
+
+function isWeeklyNotificationDue(now, weekday, timeString, lastWeekKey) {
+  const targetDate = getWeeklyTriggerDate(now, weekday, timeString);
+
+  if (!targetDate) {
+    return false;
+  }
+
+  const currentWeekKey = getWeekKey(targetDate);
+
+  return isDueWithinRetryWindow({
+    now,
+    targetDate,
+    retryWindowMs: WEEKLY_DISPATCH_WINDOW_MS,
+    lastOccurrenceKey: lastWeekKey,
+    currentOccurrenceKey: currentWeekKey,
+  });
+}
+
+function isWeeklyOffsetNotificationDue(now, weekday, timeString, hoursBefore, lastWeekKey) {
+  const targetDate = getWeeklyTriggerDateWithOffset(now, weekday, timeString, hoursBefore);
+
+  if (!targetDate) {
+    return false;
+  }
+
+  const nowMs = now.getTime();
+  const targetMs = targetDate.getTime();
+  const closingTarget = getWeeklyTriggerDate(now, weekday, timeString);
+  const currentWeekKey = getWeekKey(closingTarget || targetDate);
+
+  return nowMs >= targetMs &&
+    nowMs <= targetMs + WEEKLY_DISPATCH_WINDOW_MS &&
+    lastWeekKey !== currentWeekKey;
+}
+
+function getCompletedWeekKey(dispatchLog) {
+  if (!dispatchLog?.weekKey) {
+    return null;
+  }
+
+  // Um registo antigo não permite saber quem recebeu. Não o consideramos
+  // concluído para que a versão nova possa fazer uma tentativa controlada e
+  // passar a acompanhar cada utilizador separadamente.
+  if (!Array.isArray(dispatchLog.deliveredUserIds)) {
+    return null;
+  }
+
+  return dispatchLog.completed === true ? dispatchLog.weekKey : null;
+}
+
+function getDeliveredUserIds(dispatchLog, weekKey) {
+  if (dispatchLog?.weekKey !== weekKey || !Array.isArray(dispatchLog.deliveredUserIds)) {
+    return [];
+  }
+
+  return [...new Set(dispatchLog.deliveredUserIds.filter((userId) => typeof userId === "string"))];
+}
+
+function buildWeeklyPredictionPayload(type, weekday, timeString, closeWeekday, closeTimeString) {
+  const weekdays = ["domingo", "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado"];
+
+  if (type === "predictionsOpen") {
+    const closeTimeFormatted = (closeTimeString || timeString || "").replace(":", "h");
+    const closeDayLabel = weekdays[closeWeekday !== undefined && closeWeekday !== null ? closeWeekday : weekday] || "sexta-feira";
+    return {
+      title: "Jogos para palpitar aptos!",
+      body: `Os jogos desta semana já estão disponíveis para palpitar. Irá fechar: ${closeDayLabel}, ${closeTimeFormatted}.`,
+      tag: `predictions-open-${weekday}-${timeString}`,
+      url: "./1x.html",
+    };
+  }
+
+  const formattedTime = (timeString || "").replace(":", "h");
+  const whenLabel = `${formattedTime} de ${weekdays[weekday] || "sexta-feira"}`;
+
+  return {
+    title: "Prognósticos fechados",
+    body: `O período dos prognósticos fechou. Regra semanal: ${whenLabel}.`,
+    tag: `predictions-close-${weekday}-${timeString}`,
+    url: "./1x.html",
+  };
+}
+
+function buildPredictionsClosingSoonPayload(weekday, timeString, hoursBefore) {
+  const formattedTime = (timeString || "").replace(":", "h");
+  const whenLabel = `${formattedTime} de ${["domingo", "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado"][weekday]}`;
+
+  return {
+    title: "Prognósticos a fechar...",
+    body: `Os jogos para prognóstico vão fechar daqui a ${hoursBefore}h. Fecho semanal: ${whenLabel}.`,
+    tag: `predictions-closing-soon-${weekday}-${timeString}-${hoursBefore}`,
+    url: "./1x.html",
+  };
+}
+
+function getPredictionsClosingSchedule(config) {
+  return {
+    weekday: config.predictionsCloseWeekday,
+    timeString: config.predictionsCloseTime,
+  };
+}
+
+function buildWeeklyPredictionWarningPayload(warningIndex, closeWeekday, closeTimeString) {
+  const weekdays = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
+  const closeDay = weekdays[closeWeekday] || "sexta";
+  const closeDayLabel = closeDay.charAt(0).toUpperCase() + closeDay.slice(1);
+  const closeTime = (closeTimeString || "").replace(":", "h");
+
+  return {
+    title: "Aviso de palpites",
+    body: `Aviso: Palpites desta semana já estão disponíveis. ${closeDayLabel} ${closeTime} fecha.`,
+    tag: `predictions-weekly-warning-${warningIndex + 1}-${closeWeekday}-${closeTimeString}`,
+    url: "./1x.html",
+  };
+}
+
+exports.processMarketNotifications = onSchedule({
+  schedule: "every 1 minutes",
+  timeZone: "Europe/Lisbon",
+}, async () => {
+  const db = admin.firestore();
+  const configRef = db.doc("paineis/notificacoesMercado");
+  const configSnapshot = await configRef.get();
+  const config = normalizeNotificationConfig(configSnapshot.exists ? configSnapshot.data() : DEFAULT_CONFIG);
+  const schedulesSnapshot = await db.collection("paineis").doc("Banca").collection("horarioMercado").get();
+  const now = new Date();
+  const nowMs = now.getTime();
+  const dueEvents = [];
+
+  if (!schedulesSnapshot.empty) {
+    schedulesSnapshot.forEach((scheduleDoc) => {
+      const data = scheduleDoc.data();
+      const abertura = asDate(data.abertura);
+      const fechamento = asDate(data.fechamento);
+      const sentNotifications = data.sentNotifications || {};
+
+      if (config.beforeOpenEnabled && abertura) {
+        const beforeOpenDate = new Date(abertura.getTime() - (config.beforeOpenHours * 60 * 60 * 1000));
+        if (isDue(nowMs, beforeOpenDate, sentNotifications[buildDispatchKey("beforeOpen", config.beforeOpenHours)])) {
+          dueEvents.push({
+            scheduleRef: scheduleDoc.ref,
+            id: scheduleDoc.id,
+            data,
+            type: "beforeOpen",
+          });
+        }
+      }
+
+      if (config.onOpenEnabled && isDue(nowMs, abertura, sentNotifications.onOpen)) {
+        dueEvents.push({
+          scheduleRef: scheduleDoc.ref,
+          id: scheduleDoc.id,
+          data,
+          type: "onOpen",
+        });
+      }
+
+      if (config.onCloseEnabled && isDue(nowMs, fechamento, sentNotifications.onClose)) {
+        dueEvents.push({
+          scheduleRef: scheduleDoc.ref,
+          id: scheduleDoc.id,
+          data,
+          type: "onClose",
+        });
+      }
+    });
+  }
+
+  const weeklyLog = config.weeklyDispatchLog || {};
+  const dueWeeklyEvents = [];
+  const currentWeekKey = getWeekKey(now);
+  const predictionsOpenLog = weeklyLog.predictionsOpen || null;
+
+  if (config.predictionsOpenEnabled &&
+    isWeeklyNotificationDue(
+      now,
+      config.predictionsOpenWeekday,
+      config.predictionsOpenTime,
+      getCompletedWeekKey(predictionsOpenLog)
+    )) {
+    dueWeeklyEvents.push({
+      type: "predictionsOpen",
+      weekday: config.predictionsOpenWeekday,
+      timeString: config.predictionsOpenTime,
+      weekKey: currentWeekKey,
+      deliveredUserIds: getDeliveredUserIds(predictionsOpenLog, currentWeekKey),
+    });
+  }
+
+  const predictionsCloseLog = weeklyLog.predictionsClose || null;
+
+  if (config.predictionsCloseEnabled &&
+    isWeeklyNotificationDue(
+      now,
+      config.predictionsCloseWeekday,
+      config.predictionsCloseTime,
+      getCompletedWeekKey(predictionsCloseLog)
+    )) {
+    dueWeeklyEvents.push({
+      type: "predictionsClose",
+      weekday: config.predictionsCloseWeekday,
+      timeString: config.predictionsCloseTime,
+      weekKey: currentWeekKey,
+      deliveredUserIds: getDeliveredUserIds(predictionsCloseLog, currentWeekKey),
+    });
+  }
+
+  const predictionsClosingSchedule = getPredictionsClosingSchedule(config);
+  const predictionsClosingSoonLog = weeklyLog.predictionsClosingSoon || null;
+  const predictionsClosingTarget = getWeeklyTriggerDate(
+    now,
+    predictionsClosingSchedule.weekday,
+    predictionsClosingSchedule.timeString
+  );
+  const predictionsClosingWeekKey = getWeekKey(predictionsClosingTarget || now);
+
+  if (config.predictionsClosingSoonEnabled &&
+    isWeeklyOffsetNotificationDue(
+      now,
+      predictionsClosingSchedule.weekday,
+      predictionsClosingSchedule.timeString,
+      config.predictionsClosingSoonHours,
+      getCompletedWeekKey(predictionsClosingSoonLog)
+    )) {
+    dueWeeklyEvents.push({
+      type: "predictionsClosingSoon",
+      weekday: predictionsClosingSchedule.weekday,
+      timeString: predictionsClosingSchedule.timeString,
+      hoursBefore: config.predictionsClosingSoonHours,
+      weekKey: predictionsClosingWeekKey,
+      deliveredUserIds: getDeliveredUserIds(predictionsClosingSoonLog, predictionsClosingWeekKey),
+    });
+  }
+
+  config.weeklyPredictionWarnings.forEach((warning, index) => {
+    const eventType = `weeklyPredictionWarning${index + 1}`;
+    const eventLog = weeklyLog[eventType] || null;
+
+    if (!warning.enabled ||
+      !isWeeklyNotificationDue(now, warning.weekday, warning.time, getCompletedWeekKey(eventLog))) {
+      return;
+    }
+
+    dueWeeklyEvents.push({
+      type: eventType,
+      warningIndex: index,
+      weekday: warning.weekday,
+      timeString: warning.time,
+      weekKey: currentWeekKey,
+      deliveredUserIds: getDeliveredUserIds(eventLog, currentWeekKey),
+    });
+  });
+
+  if (dueEvents.length === 0 && dueWeeklyEvents.length === 0) {
+    return null;
+  }
+
+  console.log("[processMarketNotifications] Eventos devidos:", {
+    at: now.toISOString(),
+    marketEvents: dueEvents.map((eventEntry) => `${eventEntry.type}:${eventEntry.id}`),
+    weeklyEvents: dueWeeklyEvents.map((eventEntry) => eventEntry.type),
+  });
+
+  const users = await loadEligibleUsers();
+
+  for (const eventEntry of dueEvents) {
+    const didDispatch = await dispatchForEvent(
+      eventEntry,
+      users,
+      eventEntry.type,
+      config.beforeOpenHours
+    );
+
+    if (!didDispatch) {
+      continue;
+    }
+
+    const dispatchKey = buildDispatchKey(eventEntry.type, config.beforeOpenHours);
+    await eventEntry.scheduleRef.set({
+      sentNotifications: {
+        [dispatchKey]: admin.firestore.FieldValue.serverTimestamp(),
+      },
+    }, { merge: true });
+  }
+
+  for (const weeklyEvent of dueWeeklyEvents) {
+    const previouslyDelivered = new Set(weeklyEvent.deliveredUserIds || []);
+    const allInterestedUsers = getInterestedUsers(users, weeklyEvent.type);
+    const interestedUsers = allInterestedUsers.filter((userEntry) => !previouslyDelivered.has(userEntry.id));
+
+    if (allInterestedUsers.length === 0) {
+      console.warn(`[processMarketNotifications] ${weeklyEvent.type}: não existem dispositivos elegíveis.`);
+      continue;
+    }
+
+    if (interestedUsers.length === 0) {
+      continue;
+    }
+
+    const payload = weeklyEvent.type.startsWith("weeklyPredictionWarning")
+      ? buildWeeklyPredictionWarningPayload(
+        weeklyEvent.warningIndex,
+        config.predictionsCloseWeekday,
+        config.predictionsCloseTime
+      )
+      : weeklyEvent.type === "predictionsClosingSoon"
+      ? buildPredictionsClosingSoonPayload(
+        weeklyEvent.weekday,
+        weeklyEvent.timeString,
+        weeklyEvent.hoursBefore
+      )
+      : buildWeeklyPredictionPayload(
+        weeklyEvent.type,
+        weeklyEvent.weekday,
+        weeklyEvent.timeString,
+        config.predictionsCloseWeekday,
+        config.predictionsCloseTime
+      );
+
+    const delivery = await sendPayloadToUsers(interestedUsers, payload);
+    const deliveredUserIds = [...new Set([
+      ...previouslyDelivered,
+      ...delivery.deliveredUserIds,
+    ])];
+    const completed = allInterestedUsers.every((userEntry) => deliveredUserIds.includes(userEntry.id));
+
+    console.log(`[processMarketNotifications] ${weeklyEvent.type}: ${delivery.delivered}/${delivery.attempted} dispositivos entregues.`);
+
+    if (delivery.delivered === 0) {
+      console.warn(`[processMarketNotifications] ${weeklyEvent.type}: nenhuma entrega confirmada; será tentado novamente.`);
+      continue;
+    }
+
+    const dispatchLog = {
+      weekKey: weeklyEvent.weekKey,
+      deliveredUserIds,
+      completed,
+      lastAttemptAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+
+    if (completed) {
+      dispatchLog.sentAt = admin.firestore.FieldValue.serverTimestamp();
+    }
+
+    await configRef.set({
+      weeklyDispatchLog: {
+        [weeklyEvent.type]: dispatchLog,
+      },
+    }, { merge: true });
+  }
+
+  return null;
+});
+
+exports.sendInboxNotification = onCall({
+  invoker: "public",
+  cors: CALLABLE_CORS_ORIGINS,
+}, async (request) => {
+  await ensureAdminAccess(request.auth?.uid || null);
+
+  const sender = typeof request.data?.sender === "string" ? request.data.sender.trim() : "";
+  const emailTitle = typeof request.data?.emailTitle === "string" ? request.data.emailTitle.trim() : "";
+  const rawMessage = typeof request.data?.message === "string" ? request.data.message : "";
+  const message = sanitizeManualMessage(`${emailTitle}\n${rawMessage}`);
+
+  if (!sender || !emailTitle) {
+    throw new HttpsError("invalid-argument", "O remetente e o título são obrigatórios.");
+  }
+  const targetUserIds = Array.isArray(request.data?.targetUserIds)
+    ? [...new Set(request.data.targetUserIds.filter((userId) => typeof userId === "string" && userId.trim()))]
+    : [];
+
+  if (targetUserIds.length === 0) {
+    throw new HttpsError("invalid-argument", "Seleciona pelo menos um destinat\u00e1rio.");
+  }
+
+  const users = await loadEligibleUsers();
+  const targetUsers = getInterestedUsers(users)
+    .filter((userEntry) => targetUserIds.includes(userEntry.id));
+
+  if (targetUsers.length === 0) {
+    return {
+      success: true,
+      deliveredTo: 0,
+      message: "N\u00e3o h\u00e1 dispositivos ativos para receber esta notifica\u00e7\u00e3o.",
+    };
+  }
+
+  const payload = {
+    title: `(${sender}) :: gGames`,
+    body: message,
+    tag: `inbox-notification-${Date.now()}`,
+    url: "./profile.html",
+  };
+
+  const delivery = await sendPayloadToUsers(targetUsers, payload);
+
+  return {
+    success: true,
+    deliveredTo: delivery.delivered,
+    message: "Notifica\u00e7\u00e3o enviada com sucesso.",
+  };
+});
+
+exports.sendManualMarketNotification = onCall({
+  invoker: "public",
+  cors: CALLABLE_CORS_ORIGINS,
+}, async (request) => {
+  await ensureAdminAccess(request.auth?.uid || null);
+
+  const hasTargetFilter = Array.isArray(request.data?.targetUserIds);
+  const targetUserIds = hasTargetFilter
+    ? [...new Set(request.data.targetUserIds.filter((userId) => typeof userId === "string" && userId.trim()))]
+    : [];
+  const sender = typeof request.data?.sender === "string" ? request.data.sender.trim() : "";
+  const emailTitle = typeof request.data?.emailTitle === "string" ? request.data.emailTitle.trim() : "";
+  const rawMessage = typeof request.data?.message === "string" ? request.data.message : "";
+
+  if (hasTargetFilter && (targetUserIds.length === 0 || !sender || !emailTitle)) {
+    throw new HttpsError("invalid-argument", "O remetente, o título e os destinatários são obrigatórios.");
+  }
+
+  const message = hasTargetFilter
+    ? sanitizeManualMessage(`${emailTitle}\n${rawMessage}`)
+    : sanitizeManualMessage(request.data?.message);
+  const users = await loadEligibleUsers();
+  const interestedUsers = getInterestedUsers(users)
+    .filter((userEntry) => !hasTargetFilter || targetUserIds.includes(userEntry.id));
+
+  if (interestedUsers.length === 0) {
+    return {
+      success: true,
+      deliveredTo: 0,
+      message: "Não há dispositivos ativos para receber esta notificação.",
+    };
+  }
+
+  const payload = {
+    title: hasTargetFilter ? `(${sender}) :: gGames` : "gGames",
+    body: message,
+    tag: `market-manual-${Date.now()}`,
+    url: "./profile.html",
+  };
+
+  const delivery = await sendPayloadToUsers(interestedUsers, payload);
+
+  return {
+    success: true,
+    deliveredTo: delivery.delivered,
+    message: "Notificação enviada com sucesso.",
+  };
+});
