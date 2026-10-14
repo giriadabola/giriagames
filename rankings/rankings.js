@@ -1,11 +1,10 @@
 import { db, auth } from "../core/firebase.js";
-import { doc, getDoc, collection, getDocs, query, where, updateDoc, serverTimestamp, addDoc, runTransaction } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { doc, getDoc, collection, getDocs, query, where, updateDoc, serverTimestamp, addDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { checkPageContentAccess } from "../js/page-content-guard.js";
 import { buildAlfredoGiftMessage, CADERNETA_GIFT_OFFERS_COLLECTION, CADERNETA_GIFT_REDIRECT_PARAM } from "../caderneta/pack-offers.js";
 import { getLatestSeason, mergeUserSeasonData } from "../core/user-season.js";
-import { drawPackPlayers, createStickerPayload, VALID_CADERNETA_RARITIES } from "../caderneta/pack-engine.js";
-import { fetchUniqueSeasons, getPlayerSeasonData, hasPlayerDataForSeason } from "../admin/js/player-season-helper.js";
+import { callFinance } from "../core/finance-client.js";
 
 function logUserAction(actionDescription) {
     if (!auth.currentUser) {
@@ -385,31 +384,6 @@ function getPositionClass(position = '') {
     }
 }
 
-async function fetchEligiblePlayersForRankings() {
-    const seasonsList = await fetchUniqueSeasons(db);
-    const mostRecentSeason = seasonsList[0] || '2025/2026';
-    const defaultBaseSeason = seasonsList[seasonsList.length - 1] || '2025/2026';
-
-    const playersSnap = await getDocs(collection(db, 'jogadores'));
-    const seasonPlayersDocs = playersSnap.docs.filter(docSnap => 
-        hasPlayerDataForSeason(docSnap.data(), mostRecentSeason, defaultBaseSeason)
-    );
-
-    const catalog = seasonPlayersDocs.map(docSnap => {
-        const sData = getPlayerSeasonData(docSnap.data(), mostRecentSeason) || {};
-        return {
-            ...sData,
-            id: docSnap.id
-        };
-    });
-
-    return catalog.filter((player) => {
-        if (player.miniGames?.caderneta?.estado !== true) return false;
-        const rarity = player.miniGames?.caderneta?.casta || 'comum';
-        return VALID_CADERNETA_RARITIES.has(rarity);
-    });
-}
-
 function renderDrawnCardsInRevealPopup(drawnPlayers) {
     if (!alfredoRevealCardsContainer) return;
 
@@ -522,50 +496,10 @@ async function claimAndRevealOfferInRankings() {
             return;
         }
 
-        const offer = offers[0];
-        const roundNumber = Number(offer.ronda || 0);
-        const defaultCardsCount = (roundNumber === 4 || roundNumber === 5) ? 6 : 1;
-        const cardsCount = Number.isInteger(offer.cardsCount) ? offer.cardsCount : defaultCardsCount;
+        const result = await callFinance('claimCadernetaOffer', {offerId: offers[0].id});
+        const drawnPlayers = result.drawnPlayers;
 
-        const eligiblePlayers = await fetchEligiblePlayersForRankings();
-        const drawnPlayers = drawPackPlayers(eligiblePlayers, offer.packType || 'normal', cardsCount);
-
-        await runTransaction(db, async (transaction) => {
-            const offerRef = doc(db, CADERNETA_GIFT_OFFERS_COLLECTION, offer.id);
-            const offerSnap = await transaction.get(offerRef);
-
-            if (!offerSnap.exists() || offerSnap.data().status !== 'pending') {
-                throw new Error('Esta oferta já não se encontra disponível.');
-            }
-
-            transaction.update(offerRef, {
-                status: 'claimed',
-                claimedAt: serverTimestamp(),
-                claimedFrom: 'rankings'
-            });
-
-            const seasonToSave = offer.temporadaKey || (await getLatestSeason(db));
-            drawnPlayers.forEach((draw) => {
-                const stickerRef = doc(collection(db, 'caderneta'));
-                transaction.set(stickerRef, createStickerPayload(draw, auth.currentUser.uid, serverTimestamp(), seasonToSave));
-            });
-
-            const movimentoRef = doc(collection(db, 'movimentos'));
-            transaction.set(movimentoRef, {
-                descricao: cardsCount === 1 ? 'Cromo Oferecido' : 'Saqueta Oferecida',
-                para: auth.currentUser.uid,
-                de: offer.sourceName || 'Sr Alfredo',
-                estado: 'CadernetaOffer',
-                movimentoData: serverTimestamp(),
-                taxa: null,
-                temporada: offer.temporadaKey || '',
-                userId: auth.currentUser.uid,
-                tipo: 'Caderneta',
-                valorreal: 0
-            });
-        });
-
-        void logUserAction(`Resgatou cromo/saqueta do Sr Alfredo na pagina de rankings`);
+        void logUserAction('Resgatou cromo/saqueta do Sr Alfredo na página de rankings');
         pendingGiftOfferCount = Math.max(0, pendingGiftOfferCount - 1);
 
         renderDrawnCardsInRevealPopup(drawnPlayers);
