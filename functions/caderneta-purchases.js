@@ -66,7 +66,8 @@ function buildCadernetaPurchaseHandlers(deps) {
     function handler(gift) {
         return operationHandler(deps, gift ? 'claimCadernetaOffer' : 'purchaseCadernetaPack', gift ? 'offerId' : 'packType', async ctx => {
             const {tx, uid, user, userRef, target, timestamp, operationId} = ctx;
-            if (!hasCadernetaAccess(user)) fail('Sem acesso à Caderneta.', 'permission-denied');
+            // Uma oferta válida pode ser recebida mesmo sem a Caderneta ativada no perfil.
+            if (!gift && !hasCadernetaAccess(user)) fail('Sem acesso à Caderneta.', 'permission-denied');
             let season = ctx.season;
             let packType = target;
             let count = 6;
