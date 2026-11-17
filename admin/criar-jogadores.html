@@ -1709,16 +1709,27 @@ function parseAndFillForm() {
         }
     }
 
-    lines.forEach(line => {
-        if (!countryFound) {
-            const foundCountry = findCountryByName(line);
-            if (foundCountry) {
-                paisInput.value = foundCountry.nome;
-                selectedPaisId = foundCountry.id;
-                countryFound = true;
-            }
+    const explicitNationalityLine = lines.find(line => /^(?:Nacionalidade|Nationality)\s*[:：]/i.test(line));
+    if (explicitNationalityLine) {
+        const explicitNationality = explicitNationalityLine.replace(/^(?:Nacionalidade|Nationality)\s*[:：]\s*/i, '').trim();
+        const foundCountry = findCountryByName(explicitNationality);
+        if (foundCountry) {
+            paisInput.value = foundCountry.nome;
+            selectedPaisId = foundCountry.id;
+            countryFound = true;
         }
-    });
+    } else {
+        lines.forEach(line => {
+            if (!countryFound) {
+                const foundCountry = findCountryByName(line);
+                if (foundCountry) {
+                    paisInput.value = foundCountry.nome;
+                    selectedPaisId = foundCountry.id;
+                    countryFound = true;
+                }
+            }
+        });
+    }
 
     if (extractedClubCandidate) {
         const foundClub = findClubByName(extractedClubCandidate);
@@ -2322,6 +2333,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     const temporadaSelecionada = document.getElementById('temporada-jogador')?.value || '2025/2026';
+    const imageCode = codigoUrlInput.value.trim();
+    const previewPath = imagePreview.complete && imagePreview.naturalWidth > 0
+        ? imagePreview.getAttribute('src')
+        : '';
+    const localPng = `../assets/faces/face_${imageCode}.png`;
+    const localWebp = `../assets/faces/face_${imageCode}.webp`;
+    const cdnPng = `https://sortitoutsi.b-cdn.net/uploads/face/face_${imageCode}.png`;
+    const playerImage = !imageCode ? ''
+        : previewPath === localPng ? `assets/faces/face_${imageCode}.png`
+        : previewPath === localWebp ? `assets/faces/face_${imageCode}.webp`
+        : previewPath === cdnPng ? cdnPng
+        : '';
 
     const novoJogadorData = {
         nome: document.getElementById('nome-jogador').value.trim(),
@@ -2332,8 +2355,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         posicao: document.getElementById('posicao-jogador').value,
         dataNascimento: document.getElementById('data-nascimento').value,
         altura: parseFloat(document.getElementById('altura-jogador').value) || null,
-        codigoUrl: document.getElementById('codigo-url-jogador').value.trim(),
-        imagem: document.getElementById('codigo-url-jogador').value.trim() ? `assets/faces/face_${document.getElementById('codigo-url-jogador').value.trim()}.webp` : "",
+        codigoUrl: imageCode,
+        imagem: playerImage,
         overall: parseFloat(document.getElementById('overall-jogador').value) || 0,
         casta: document.getElementById('casta-jogador').value,
         noMercado: document.getElementById('mercado-jogador').value === 'true',
