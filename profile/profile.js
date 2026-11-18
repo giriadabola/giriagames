@@ -198,7 +198,8 @@ async function loadDynamicMiniGames(userData) {
 
             let gameIndex = 0;
             for (const game of gamesArray) {
-                const isUserAllowed = userData && userData.minigames && userData.minigames[game.key] === 'on';
+                const isUserAllowed = userData?.minigames?.[game.key] === 'on'
+                    || userData?.permissoes?.[game.key] === 'yes';
                 if (game.status && isUserAllowed) {
                     let existingEl = document.getElementById(`sec-dynamic-${game.key}`);
                     if (!existingEl) {
