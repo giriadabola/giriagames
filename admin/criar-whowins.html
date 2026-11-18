@@ -62,11 +62,30 @@
         .result-item.error { background-color: #fce8e6; border-left: 4px solid #dc3545; }
         .result-item strong { color: #333; display: block; margin-bottom: 4px; }
         .result-item span { color: #666; font-size: 12px; }
+
+        #multi-add-modal { padding: 16px; overflow-y: auto; overscroll-behavior: contain; }
+        #multi-add-modal .modal-content { width: 100%; max-width: 750px; min-width: 0; max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px); overflow-y: auto; background: #1c2331; color: #f0f2f5; padding: 24px; scrollbar-gutter: stable; }
+        #multi-add-modal h2 { color: #fff; font-size: clamp(20px, 4vw, 28px); padding-right: 30px; margin-bottom: 20px; }
+        #multi-add-modal .multi-add-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+        #multi-add-modal .form-group { min-width: 0; margin-bottom: 16px; }
+        #multi-add-modal small { display: block; color: #b8c3da; font-size: 13px; line-height: 1.5; margin-top: 8px; }
+        #multi-add-textarea { min-height: 120px; height: clamp(120px, 28vh, 240px); max-height: 40vh; resize: vertical; }
+        #multi-add-results { max-height: 220px; border-color: #39445b; overflow-wrap: anywhere; }
+        #multi-add-results:empty { display: none; }
+        #multi-add-results .result-item { color: #1c2331; }
+        #multi-add-modal .close-btn { color: #c4cee0; }
+        @media (max-width: 480px) {
+            #multi-add-modal { padding: 8px; }
+            #multi-add-modal .modal-content { padding: 18px 14px; max-height: calc(100vh - 16px); max-height: calc(100dvh - 16px); }
+            #multi-add-modal .multi-add-options { grid-template-columns: minmax(0, 1fr); gap: 0; }
+            #multi-add-modal input, #multi-add-modal select, #multi-add-modal textarea { min-width: 0; max-width: 100%; }
+        }
     </style>
 
     <link rel="stylesheet" href="css/admin-global.css">
 
     <link rel="stylesheet" href="css/menu-admin.css">
+    <link rel="stylesheet" href="css/criar-whowins.css">
 </head>
 <!-- 2. BOA PRÁTICA: O corpo da página está oculto por padrão para evitar "flash" de conteúdo. -->
 <body style="display: none;">
@@ -122,10 +141,11 @@
         <div class="modal-content">
             <span id="close-multi-add-modal" class="close-btn">&times;</span>
             <h2>Adicionar Múltiplos Jogos</h2>
-            <div style="display: flex; gap: 15px; margin-bottom: 15px;">
+            <div class="multi-add-options">
                 <div class="form-group" style="flex: 1;"><label for="multi-temporada">Temporada</label><select id="multi-temporada" name="multi-temporada" required></select></div>
                 <div class="form-group" style="flex: 1;"><label for="multi-ronda">Ronda</label><select id="multi-ronda" name="multi-ronda" required></select></div>
             </div>
+            <div class="form-group"><label for="multi-data-jogos">Data dos jogos (para listas sem data)</label><input type="date" id="multi-data-jogos"><small>Escolha a data se a lista só tiver horários. Pode manter os cabeçalhos das ligas, países, classificações e nomes repetidos.</small></div>
             <div class="form-group"><label for="multi-add-textarea">Cole a lista de jogos aqui</label><textarea id="multi-add-textarea" placeholder="Exemplo:&#10;Quarta - 15.10.&#10;...&#10;16:30&#10;Mouna&#10;Mouna&#10;Racing d'Abidjan&#10;Racing d'Abidjan&#10;-&#10;-"></textarea></div>
             <button id="analyze-btn" class="submit-btn" style="margin-top: 0;">Analisar Texto</button>
             <div id="multi-add-results"></div>
@@ -568,11 +588,13 @@
                     alert("Por favor, preencha a temporada e cole o texto dos jogos.");
                     return;
                 }
+                validGamesToCreate = [];
+                confirmCreateBtn.style.display = 'none';
                 analyzeBtn.disabled = true;
                 analyzeBtn.textContent = 'Analisando...';
                 resultsDiv.innerHTML = 'A processar...';
                 try {
-                    const parsedGames = parseGamesFromText(text, temporada);
+                    const parsedGames = parseGamesFromText(text, temporada, document.getElementById('multi-data-jogos').value);
                     const { validGames, invalidGames } = await processAndValidateGames(parsedGames, temporada, ronda);
                     validGamesToCreate = validGames;
                     displayAnalysisResults(validGames, invalidGames);
@@ -584,7 +606,7 @@
                     }
                 } catch (error) {
                     console.error("Erro na análise:", error);
-                    resultsDiv.innerHTML = `<div class="result-item error"><strong>Erro inesperado durante a análise.</strong><span>Verifique a consola para mais detalhes.</span></div>`;
+                    resultsDiv.textContent = error.message || 'Erro inesperado durante a análise.';
                 } finally {
                     analyzeBtn.disabled = false;
                     analyzeBtn.textContent = 'Analisar Texto';
@@ -609,8 +631,52 @@
                 } finally { confirmCreateBtn.disabled = false; }
             });
 
-            function parseGamesFromText(text, temporada) { const lines = text.split('\n').filter(line => line.trim() !== ''); const games = []; let currentDateStr = ''; const year = parseInt(temporada.split('/')[0]); for (let i = 0; i < lines.length; i++) { const line = lines[i].trim(); const dateMatch = line.match(/(\d{1,2})\.(\d{1,2})/); if (dateMatch) { const day = dateMatch[1].padStart(2, '0'); const month = dateMatch[2].padStart(2, '0'); currentDateStr = `${year}-${month}-${day}`; continue; } const timeMatch = line.match(/^(\d{2}:\d{2})$/); if (timeMatch && currentDateStr && i + 4 < lines.length) { const timeStr = timeMatch[1]; const equipaCasa = lines[i + 1]?.trim(); const equipaFora = lines[i + 3]?.trim(); if (equipaCasa && equipaFora) { games.push({ dataJogoStr: `${currentDateStr}T${timeStr}`, equipaCasa, equipaFora }); i += 4; } } } return games; }
-            async function processAndValidateGames(parsedGames, temporada, ronda) { const validGames = []; const invalidGames = []; const clubCache = new Map(); const competitionCache = new Map(); const existingGamesQuery = query(collection(db, 'whowinsJogos'), where('temporada', '==', temporada)); const existingGamesSnapshot = await getDocs(existingGamesQuery); const existingGameNames = new Set(existingGamesSnapshot.docs.map(doc => doc.data().nomeJogo)); const batchGameNames = new Set(); async function getClubData(name) { if (clubCache.has(name)) return clubCache.get(name); const q = query(collection(db, 'clubes'), where('nome', '==', name)); const snapshot = await getDocs(q); if (snapshot.empty) { clubCache.set(name, null); return null; } const data = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() }; clubCache.set(name, data); return data; } async function getCompetitionData(id) { if (competitionCache.has(id)) return competitionCache.get(id); const docRef = doc(db, 'competicoes', id); const docSnap = await getDoc(docRef); if (!docSnap.exists()) { competitionCache.set(id, null); return null; } const data = { id: docSnap.id, ...docSnap.data() }; competitionCache.set(id, data); return data; } for (const game of parsedGames) { const { dataJogoStr, equipaCasa, equipaFora } = game; const homeClub = await getClubData(equipaCasa); if (!homeClub) { invalidGames.push({ ...game, error: `Equipa da casa "${equipaCasa}" não encontrada.` }); continue; } const awayClub = await getClubData(equipaFora); if (!awayClub) { invalidGames.push({ ...game, error: `Equipa de fora "${equipaFora}" não encontrada.` }); continue; } if (!homeClub.competicaoId) { invalidGames.push({ ...game, error: `Equipa "${equipaCasa}" não tem competição associada.` }); continue; } const competition = await getCompetitionData(homeClub.competicaoId); if (!competition) { invalidGames.push({ ...game, error: `Competição ID "${homeClub.competicaoId}" não encontrada.` }); continue; } const dataJogo = new Date(dataJogoStr); const nomeJogo = `${equipaCasa} x ${equipaFora} - ${dataJogo.toLocaleDateString('pt-PT')}`; if (existingGameNames.has(nomeJogo)) { invalidGames.push({ ...game, error: `Jogo duplicado. Já existe na base de dados.` }); continue; } if (batchGameNames.has(nomeJogo)) { invalidGames.push({ ...game, error: `Jogo duplicado no texto que colou.` }); continue; } const fimIntervalo = new Date(dataJogo.getTime() - (60 * 60 * 1000)); batchGameNames.add(nomeJogo); validGames.push({ equipaCasaId: homeClub.id, equipaCasa: homeClub.nome, equipaForaId: awayClub.id, equipaFora: awayClub.nome, competicaoId: competition.id, competicao: competition.nome, arena: competition.arena || '', dataJogo, inicioIntervalo: new Date(), fimIntervalo, anexado: "whowins", nomeJogo, ronda, temporada, dataCriacao: new Date(), timestamp: Date.now(), userId: currentUser.uid }); } return { validGames, invalidGames }; }
+            function parseGamesFromText(text, temporada, fallbackDate = '') {
+                const normalizedText = text.replace(/(\d{1,2}\.\d{1,2}\.(?:\d{4})?)[ \t]+((?:[01]\d|2[0-3]):[0-5]\d)/g, '$1\n$2');
+                const lines = normalizedText.split(/\r?\n/).map(line => line.trim().replace(/\\+$/, '').trim()).filter(Boolean);
+                const games = [];
+                let currentDateStr = fallbackDate;
+                const year = parseInt(temporada.split('/')[0]);
+                for (let i = 0; i < lines.length; i++) {
+                    const line = lines[i];
+                    const dateMatch = line.match(/^(?:[^\d]* - )?(\d{1,2})\.(\d{1,2})\.(?:(\d{4}))?$/);
+                    if (dateMatch) {
+                        const day = dateMatch[1].padStart(2, '0');
+                        const month = dateMatch[2].padStart(2, '0');
+                        currentDateStr = `${dateMatch[3] || year}-${month}-${day}`;
+                        continue;
+                    }
+                    const timeMatch = line.match(/^([01]\d|2[0-3]):[0-5]\d$/);
+                    if (!timeMatch) continue;
+                    if (!currentDateStr) {
+                        throw new Error('Escolha a data dos jogos ou inclua uma data no texto (ex.: Quarta - 18.11.).');
+                    }
+                    const equipaCasa = lines[i + 1];
+                    const duplicatedHome = equipaCasa && lines[i + 2] === equipaCasa;
+                    const awayIndex = i + (duplicatedHome ? 3 : 2);
+                    const equipaFora = lines[awayIndex];
+                    if (equipaCasa && equipaFora && !/^[-–—]|^\d{2}:\d{2}$/.test(equipaCasa) && !/^[-–—]|^\d{2}:\d{2}$/.test(equipaFora)) {
+                        games.push({ dataJogoStr: `${currentDateStr}T${line}`, equipaCasa, equipaFora });
+                        i = awayIndex + (lines[awayIndex + 1] === equipaFora ? 1 : 0);
+                    }
+                }
+                return games;
+            }
+            async function processAndValidateGames(parsedGames, temporada, ronda) { const validGames = []; const invalidGames = []; const clubCache = new Map(); const competitionCache = new Map(); const existingGamesQuery = query(collection(db, 'whowinsJogos'), where('temporada', '==', temporada)); const existingGamesSnapshot = await getDocs(existingGamesQuery); const existingGameNames = new Set(existingGamesSnapshot.docs.map(doc => doc.data().nomeJogo)); const batchGameNames = new Set(); async function getClubData(name) {
+                const searchName = String(name || '').trim();
+                if (clubCache.has(searchName)) return clubCache.get(searchName);
+                for (const field of ['nome', 'nome_en']) {
+                    const clubQuery = query(collection(db, 'clubes'), where(field, '==', searchName));
+                    const snapshot = await getDocs(clubQuery);
+                    if (!snapshot.empty) {
+                        const data = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
+                        clubCache.set(searchName, data);
+                        return data;
+                    }
+                }
+                clubCache.set(searchName, null);
+                return null;
+            } async function getCompetitionData(id) { if (competitionCache.has(id)) return competitionCache.get(id); const docRef = doc(db, 'competicoes', id); const docSnap = await getDoc(docRef); if (!docSnap.exists()) { competitionCache.set(id, null); return null; } const data = { id: docSnap.id, ...docSnap.data() }; competitionCache.set(id, data); return data; } for (const game of parsedGames) { const { dataJogoStr, equipaCasa, equipaFora } = game; const homeClub = await getClubData(equipaCasa); if (!homeClub) { invalidGames.push({ ...game, error: `Equipa da casa "${equipaCasa}" não encontrada.` }); continue; } const awayClub = await getClubData(equipaFora); if (!awayClub) { invalidGames.push({ ...game, error: `Equipa de fora "${equipaFora}" não encontrada.` }); continue; } if (!homeClub.competicaoId) { invalidGames.push({ ...game, error: `Equipa "${equipaCasa}" não tem competição associada.` }); continue; } const competition = await getCompetitionData(homeClub.competicaoId); if (!competition) { invalidGames.push({ ...game, error: `Competição ID "${homeClub.competicaoId}" não encontrada.` }); continue; } const dataJogo = new Date(dataJogoStr); const nomeCasa = homeClub.nome || homeClub.nome_en || equipaCasa; const nomeFora = awayClub.nome || awayClub.nome_en || equipaFora; const nomeJogo = `${nomeCasa} x ${nomeFora} - ${dataJogo.toLocaleDateString('pt-PT')}`; if (existingGameNames.has(nomeJogo)) { invalidGames.push({ ...game, error: `Jogo duplicado. Já existe na base de dados.` }); continue; } if (batchGameNames.has(nomeJogo)) { invalidGames.push({ ...game, error: `Jogo duplicado no texto que colou.` }); continue; } const fimIntervalo = new Date(dataJogo.getTime() - (60 * 60 * 1000)); batchGameNames.add(nomeJogo); validGames.push({ equipaCasaId: homeClub.id, equipaCasa: nomeCasa, equipaForaId: awayClub.id, equipaFora: nomeFora, competicaoId: competition.id, competicao: competition.nome, arena: competition.arena || '', dataJogo, inicioIntervalo: new Date(), fimIntervalo, anexado: "whowins", nomeJogo, ronda, temporada, dataCriacao: new Date(), timestamp: Date.now(), userId: currentUser.uid }); } return { validGames, invalidGames }; }
 
             function displayAnalysisResults(validGames, invalidGames) {
                 resultsDiv.innerHTML = ''; 
