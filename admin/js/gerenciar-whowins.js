@@ -9,6 +9,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const gamesList = document.getElementById('games-list');
     const placeholder = document.getElementById('placeholder-message');
     const feedbackMessage = document.getElementById('feedback-message');
+    const processingOverlay = document.getElementById('processing-overlay');
+    const processingCard = processingOverlay.querySelector('.processing-card');
+    const processingTitle = document.getElementById('processing-title');
+    const processingDetail = document.getElementById('processing-detail');
+    const processingCount = document.getElementById('processing-count');
+    const processingBar = document.getElementById('processing-progress');
+    const processingTrack = processingBar.parentElement;
+    const processingSteps = [...processingOverlay.querySelectorAll('[data-processing-step]')];
     
     let allGamesData = [];
     let currentlyDisplayedGames = [];
@@ -30,25 +38,85 @@ document.addEventListener('DOMContentLoaded', () => {
         })[character]);
     }
 
+    function updateProcessing({step, progress, title, detail, count = ''}) {
+        if (title) processingTitle.textContent = title;
+        if (detail) processingDetail.textContent = detail;
+        processingCount.textContent = count;
+        processingBar.style.width = `${Math.max(0, Math.min(100, progress))}%`;
+        processingTrack.setAttribute('aria-valuenow', String(Math.round(progress)));
+
+        processingSteps.forEach((item, index) => {
+            item.classList.toggle('is-active', index === step);
+            item.classList.toggle('is-complete', step >= processingSteps.length || index < step);
+            if (index === step) item.setAttribute('aria-current', 'step');
+            else item.removeAttribute('aria-current');
+        });
+    }
+
+    function beginProcessing(title, {clearing = false} = {}) {
+        processingCard.classList.remove('has-success', 'has-error');
+        const labels = clearing
+            ? [['A ler palpites', 'Jogo e previsões'], ['A anular prémios', 'Movimentos e carteiras'], ['A limpar resultados', 'Palpites e acertos'], ['A recalcular fama', 'Totais dos utilizadores']]
+            : [['A ler palpites', 'Jogos e previsões'], ['A distribuir pontos e prémios', 'Pontos, moedas e movimentos'], ['A guardar resultados', 'Palpites e acertos'], ['A recalcular fama', 'Totais dos utilizadores']];
+        processingSteps.forEach((item, index) => {
+            item.querySelector('strong').textContent = labels[index][0];
+            item.querySelector('small').textContent = labels[index][1];
+        });
+        processingOverlay.hidden = false;
+        processingOverlay.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('processing-active');
+        updateProcessing({step: 0, progress: 2, title, detail: 'A iniciar a leitura dos palpites.', count: 'A preparar…'});
+    }
+
+    async function finishProcessing(success, message = '') {
+        processingCard.classList.toggle('has-success', success);
+        processingCard.classList.toggle('has-error', !success);
+        updateProcessing({
+            step: success ? processingSteps.length : -1,
+            progress: success ? 100 : Number(processingTrack.getAttribute('aria-valuenow')),
+            title: success ? 'Processamento concluído' : 'O processamento foi interrompido',
+            detail: success ? 'Os resultados e os totais foram atualizados.' : (message || 'Ocorreu um erro durante o processamento.'),
+            count: success ? 'Concluído' : 'Verifica a mensagem de erro no painel.'
+        });
+        await new Promise(resolve => setTimeout(resolve, success ? 650 : 1000));
+        processingOverlay.hidden = true;
+        processingOverlay.setAttribute('aria-hidden', 'true');
+        document.body.classList.remove('processing-active');
+    }
+
     const MOVEMENT_CHUNK_SIZE = 50;
     const FIRESTORE_BATCH_SIZE = 450;
 
-    async function postMovementEntries(entries) {
+    async function postMovementEntries(entries, onProgress = () => {}) {
+        if (entries.length === 0) {
+            onProgress(0, 0);
+            return;
+        }
+        let completed = 0;
         for (let index = 0; index < entries.length; index += MOVEMENT_CHUNK_SIZE) {
-            await callFinance('adminPostMovements', {
-                entries: entries.slice(index, index + MOVEMENT_CHUNK_SIZE)
-            });
+            const chunk = entries.slice(index, index + MOVEMENT_CHUNK_SIZE);
+            await callFinance('adminPostMovements', {entries: chunk});
+            completed += chunk.length;
+            onProgress(completed, entries.length);
         }
     }
 
-    async function commitPredictionUpdates(updates, extraWrites = []) {
+    async function commitPredictionUpdates(updates, extraWrites = [], onProgress = () => {}) {
         const writes = [...extraWrites, ...updates];
+        if (writes.length === 0) {
+            onProgress(0, 0);
+            return;
+        }
+        let completed = 0;
         for (let index = 0; index < writes.length; index += FIRESTORE_BATCH_SIZE) {
             const batch = writeBatch(db);
-            writes.slice(index, index + FIRESTORE_BATCH_SIZE).forEach(({ref, data}) => {
+            const chunk = writes.slice(index, index + FIRESTORE_BATCH_SIZE);
+            chunk.forEach(({ref, data}) => {
                 batch.update(ref, data);
             });
             await batch.commit();
+            completed += chunk.length;
+            onProgress(completed, writes.length);
         }
     }
 
@@ -61,13 +129,21 @@ document.addEventListener('DOMContentLoaded', () => {
         return clubData;
     }
     
-    async function recalculateUserFameForSeason(userIds, season) {
+    async function recalculateUserFameForSeason(userIds, season, onProgress = () => {}) {
         const ids = [...userIds];
         const concurrency = 10;
+        if (ids.length === 0) {
+            onProgress(0, 0);
+            return 0;
+        }
+        let completed = 0;
         for (let index = 0; index < ids.length; index += concurrency) {
-            await Promise.all(ids.slice(index, index + concurrency).map(userId =>
+            const chunk = ids.slice(index, index + concurrency);
+            await Promise.all(chunk.map(userId =>
                 callFinance('adminUserReconcile', { userId, season, fields: ['fame'] })
             ));
+            completed += chunk.length;
+            onProgress(completed, ids.length);
         }
         return ids.length;
     }
@@ -196,6 +272,7 @@ document.addEventListener('DOMContentLoaded', () => {
         clickedButton.disabled = true;
         launchBtn.disabled = true;
         clickedButton.textContent = 'A limpar...';
+        beginProcessing('A anular resultado', {clearing: true});
         
         const affectedUserIds = new Set();
         const currentSeason = temporadaSelect.value;
@@ -204,6 +281,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const gameRef = doc(db, 'whowinsJogos', gameId);
             const predictionsQuery = query(collection(db, 'palpiteswhowins'), where("nomeJogo", "==", gameId));
             const predictionsSnapshot = await getDocs(predictionsQuery);
+            updateProcessing({
+                step: 0,
+                progress: 30,
+                title: 'A ler palpites',
+                detail: 'A preparar a anulação deste jogo.',
+                count: `${predictionsSnapshot.size} palpite(s) encontrado(s)`
+            });
             const movementEntries = [];
             const predictionUpdates = [];
             const movementUserIds = new Set();
@@ -226,18 +310,32 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             // Os movimentos são transaccionais; depois sincronizamos os palpites em lotes seguros.
-            await postMovementEntries(movementEntries);
-            await commitPredictionUpdates(predictionUpdates, [{ref: gameRef, data: {resultado: null}}]);
-            const updatedFameCount = await recalculateUserFameForSeason(affectedUserIds, currentSeason);
+            updateProcessing({step: 1, progress: 38, title: 'A anular prémios', detail: 'A corrigir os movimentos financeiros.', count: `0 / ${movementEntries.length} movimento(s)`});
+            await postMovementEntries(movementEntries, (done, total) => updateProcessing({
+                step: 1, progress: total ? 38 + (done / total) * 24 : 62,
+                title: 'A anular prémios', detail: 'A corrigir as carteiras e o ledger.', count: `${done} / ${total} movimento(s)`
+            }));
+            updateProcessing({step: 2, progress: 65, title: 'A limpar resultados', detail: 'A guardar a anulação dos palpites.', count: `0 / ${predictionUpdates.length + 1} registo(s)`});
+            await commitPredictionUpdates(predictionUpdates, [{ref: gameRef, data: {resultado: null}}], (done, total) => updateProcessing({
+                step: 2, progress: total ? 65 + (done / total) * 20 : 85,
+                title: 'A limpar resultados', detail: 'A atualizar os palpites e o jogo.', count: `${done} / ${total} registo(s)`
+            }));
+            updateProcessing({step: 3, progress: 88, title: 'A recalcular fama', detail: 'A atualizar os totais dos utilizadores afetados.', count: `0 / ${affectedUserIds.size} utilizador(es)`});
+            const updatedFameCount = await recalculateUserFameForSeason(affectedUserIds, currentSeason, (done, total) => updateProcessing({
+                step: 3, progress: total ? 88 + (done / total) * 10 : 98,
+                title: 'A recalcular fama', detail: 'A fechar a cascata de processamento.', count: `${done} / ${total} utilizador(es)`
+            }));
 
             gameItem.querySelectorAll('.selected').forEach(el => el.classList.remove('selected'));
             const gameIndex = allGamesData.findIndex(g => g.id === gameId);
             if (gameIndex > -1) allGamesData[gameIndex].resultado = null;
             
             showFeedback(`Resultado e ${predictionsSnapshot.size} palpites limpos. Fama recalculada para ${updatedFameCount} utilizador(es).`, 'info');
+            await finishProcessing(true);
         } catch (error) {
             console.error("Erro ao remover resultado:", error);
             showFeedback(error.message || "Ocorreu um erro ao remover o resultado.", 'error');
+            await finishProcessing(false, error.message);
         } finally {
             clickedButton.disabled = false;
             clickedButton.textContent = 'Sem Resultado';
@@ -248,11 +346,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function handleLaunchResults() {
         if (isProcessing) return;
+        const gamesToProcess = currentlyDisplayedGames.filter(game => Boolean(game.resultado));
+        if (gamesToProcess.length === 0) {
+            showFeedback('Escolhe o resultado de pelo menos um jogo antes de lançar.', 'info');
+            return;
+        }
+
         isProcessing = true;
         launchBtn.disabled = true;
         launchBtn.textContent = 'A processar...';
+        beginProcessing('A preparar resultados');
 
-        const gamesToProcess = [...currentlyDisplayedGames];
         const selectedSeason = temporadaSelect.value;
         const affectedUserIds = new Set();
         const movementEntries = [];
@@ -262,22 +366,30 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const arenaDocSnap = await getDoc(doc(db, 'paineis', 'paineis arena'));
             const arenaPrizes = arenaDocSnap.exists() ? arenaDocSnap.data() : {};
+            updateProcessing({step: 0, progress: 5, title: 'A ler palpites', detail: 'A procurar os palpites dos jogos com resultado.', count: `0 / ${gamesToProcess.length} jogo(s)`});
 
-            for (const game of gamesToProcess) {
-                if (!game.resultado) continue;
-
+            for (let gameIndex = 0; gameIndex < gamesToProcess.length; gameIndex++) {
+                const game = gamesToProcess[gameIndex];
                 const configuredPrize = Number(arenaPrizes[game.arena]?.ganhos ?? 0);
-            if (!Number.isFinite(configuredPrize) || configuredPrize < 0 || configuredPrize > 1e12) {
-                throw new Error(`O prémio configurado para a arena ${game.arena || 'desconhecida'} é inválido.`);
-            }
-            const prizeValue = configuredPrize;
+                if (!Number.isFinite(configuredPrize) || configuredPrize < 0 || configuredPrize > 1e12) {
+                    throw new Error(`O prémio configurado para a arena ${game.arena || 'desconhecida'} é inválido.`);
+                }
+                const prizeValue = configuredPrize;
+                updateProcessing({
+                    step: 0,
+                    progress: 5 + (gameIndex / gamesToProcess.length) * 30,
+                    title: 'A ler palpites',
+                    detail: `A carregar palpites de ${game.nomeJogo || 'um jogo'}.`,
+                    count: `${gameIndex} / ${gamesToProcess.length} jogo(s) lido(s)`
+                });
                 const predictionsQuery = query(
                     collection(db, 'palpiteswhowins'),
                     where('nomeJogo', '==', game.id)
                 );
                 const predictionsSnapshot = await getDocs(predictionsQuery);
 
-                for (const predictionDoc of predictionsSnapshot.docs) {
+                for (let predictionIndex = 0; predictionIndex < predictionsSnapshot.docs.length; predictionIndex++) {
+                    const predictionDoc = predictionsSnapshot.docs[predictionIndex];
                     const prediction = predictionDoc.data();
                     if (!prediction.userId) {
                         throw new Error(`O palpite ${predictionDoc.id} não tem utilizador associado.`);
@@ -309,21 +421,67 @@ document.addEventListener('DOMContentLoaded', () => {
                             valorreal: prize
                         });
                     }
+
+                    if ((predictionIndex + 1) % 25 === 0 || predictionIndex + 1 === predictionsSnapshot.size) {
+                        const readRatio = (gameIndex + (predictionIndex + 1) / predictionsSnapshot.size) / gamesToProcess.length;
+                        updateProcessing({
+                            step: 0,
+                            progress: 5 + readRatio * 30,
+                            title: 'A ler palpites',
+                            detail: `A calcular os prémios de ${game.nomeJogo || 'um jogo'}.`,
+                            count: `${predictionUpdates.length} palpite(s) lido(s)`
+                        });
+                        await new Promise(resolve => requestAnimationFrame(resolve));
+                    }
+                }
+
+                if (predictionsSnapshot.empty) {
+                    updateProcessing({
+                        step: 0,
+                        progress: 5 + ((gameIndex + 1) / gamesToProcess.length) * 30,
+                        title: 'A ler palpites',
+                        detail: `Não há palpites para ${game.nomeJogo || 'este jogo'}.`,
+                        count: `${gameIndex + 1} / ${gamesToProcess.length} jogo(s) lido(s)`
+                    });
+                    await new Promise(resolve => requestAnimationFrame(resolve));
                 }
             }
 
             // O ledger altera a carteira em transações determinísticas; os palpites ficam em batches separados.
-            await postMovementEntries(movementEntries);
-            await commitPredictionUpdates(predictionUpdates);
-            const updatedFameCount = await recalculateUserFameForSeason(affectedUserIds, selectedSeason);
+            updateProcessing({
+                step: 1,
+                progress: 38,
+                title: 'A distribuir pontos e prémios',
+                detail: 'A atualizar carteiras e movimentos financeiros.',
+                count: `0 / ${movementEntries.length} movimento(s)`
+            });
+            await postMovementEntries(movementEntries, (done, total) => updateProcessing({
+                step: 1,
+                progress: total ? 38 + (done / total) * 25 : 63,
+                title: 'A distribuir pontos e prémios',
+                detail: 'A gravar os prémios no ledger financeiro.',
+                count: `${done} / ${total} movimento(s)`
+            }));
+            updateProcessing({step: 2, progress: 66, title: 'A guardar resultados', detail: 'A registar acertos e prémios nos palpites.', count: `0 / ${predictionUpdates.length} palpite(s)`});
+            await commitPredictionUpdates(predictionUpdates, [], (done, total) => updateProcessing({
+                step: 2, progress: total ? 66 + (done / total) * 19 : 85,
+                title: 'A guardar resultados', detail: 'A gravar os resultados na base de dados.', count: `${done} / ${total} palpite(s)`
+            }));
+            updateProcessing({step: 3, progress: 87, title: 'A recalcular fama', detail: 'A atualizar os totais dos utilizadores premiados.', count: `0 / ${affectedUserIds.size} utilizador(es)`});
+            const updatedFameCount = await recalculateUserFameForSeason(affectedUserIds, selectedSeason, (done, total) => updateProcessing({
+                step: 3, progress: total ? 87 + (done / total) * 11 : 98,
+                title: 'A recalcular fama', detail: 'A fechar o processamento dos resultados.', count: `${done} / ${total} utilizador(es)`
+            }));
 
             showFeedback(
                 `Resultados lançados! ${predictionUpdates.length} palpites atualizados. Fama recalculada para ${updatedFameCount} utilizador(es).`,
                 'success'
             );
+            await finishProcessing(true);
         } catch (error) {
             console.error('Erro ao lançar resultados:', error);
             showFeedback(error.message || 'Ocorreu um erro ao processar os resultados.', 'error');
+            await finishProcessing(false, error.message);
         } finally {
             launchBtn.disabled = false;
             launchBtn.textContent = 'Lançar Resultados';
