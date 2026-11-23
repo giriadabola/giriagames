@@ -54,6 +54,11 @@
         .pending-loans-button:hover { background: #dc3545; color: white; }
         .pending-loans-count { position: absolute; top: -9px; right: -9px; min-width: 22px; height: 22px; padding: 2px 5px; border-radius: 11px; background: #dc3545; color: white; font-size: 12px; line-height: 18px; font-weight: bold; }
         .pending-loan-info { display: none; margin-bottom: 16px; padding: 10px 12px; border-left: 4px solid #ffc107; border-radius: 4px; background: #fff3cd; color: #664d03; font-size: 14px; }
+        .pending-loan-navigation { display: none; align-items: center; justify-content: space-between; gap: 12px; margin: -4px 0 14px; padding: 8px 10px; border: 1px solid #e2e6ea; border-radius: 6px; background: #f8f9fa; }
+        .pending-loan-navigation button { min-width: 38px; min-height: 36px; border: 1px solid #ced4da; border-radius: 5px; background: white; color: #495057; cursor: pointer; }
+        .pending-loan-navigation button:hover:not(:disabled) { border-color: #2176ff; color: #2176ff; }
+        .pending-loan-navigation button:disabled { opacity: .45; cursor: not-allowed; }
+        .pending-loan-position { color: #495057; font-size: 13px; font-weight: 700; text-align: center; }
         .popup-button.reject { background-color: #dc3545; color: white; }
         .popup-button.reject:hover { background-color: #c82333; }
     /* --- Estilos do Painel de Ajuda Flutuante --- */
@@ -593,6 +598,11 @@
     <div class="popup-overlay" id="loan-popup">
         <div class="popup-content">
             <h2>Conceder Empréstimo</h2>
+            <div id="pending-loan-navigation" class="pending-loan-navigation" aria-label="Navegação entre pedidos pendentes">
+                <button type="button" id="previous-pending-loan-btn" aria-label="Pedido anterior" title="Pedido anterior"><i class="fas fa-chevron-left"></i></button>
+                <span id="pending-loan-position" class="pending-loan-position" aria-live="polite"></span>
+                <button type="button" id="next-pending-loan-btn" aria-label="Pedido seguinte" title="Pedido seguinte"><i class="fas fa-chevron-right"></i></button>
+            </div>
             <div id="pending-loan-info" class="pending-loan-info"></div>
             <form id="loan-form">
                 <div class="form-group">
@@ -740,6 +750,10 @@
         const pendingLoansBtn = document.getElementById('pending-loans-btn');
         const pendingLoansCount = document.getElementById('pending-loans-count');
         const pendingLoanInfo = document.getElementById('pending-loan-info');
+        const pendingLoanNavigation = document.getElementById('pending-loan-navigation');
+        const previousPendingLoanBtn = document.getElementById('previous-pending-loan-btn');
+        const nextPendingLoanBtn = document.getElementById('next-pending-loan-btn');
+        const pendingLoanPosition = document.getElementById('pending-loan-position');
         const confirmLoanBtn = document.getElementById('confirm-loan-btn');
         const rejectLoanBtn = document.getElementById('reject-loan-btn');
         const openQueryPopupBtn = document.getElementById('open-query-popup-btn');
@@ -763,6 +777,7 @@
         let movimentosSum = 0; let currentSeason = null; let currentSeasonLabel = null;
         let pendingLoanRequests = [];
         let activeLoanRequest = null;
+        let isPendingLoanDecisionProcessing = false;
         const usersById = new Map();
 
         function updateSimulation() {
@@ -870,15 +885,39 @@
                 pendingLoansBtn.title = pendingLoanRequests.length === 1
                     ? 'Há 1 pedido de empréstimo por validar'
                     : `Há ${pendingLoanRequests.length} pedidos de empréstimo por validar`;
+                updatePendingLoanNavigation();
             } catch (error) {
                 console.error('Erro ao carregar pedidos de empréstimo:', error);
                 pendingLoanRequests = [];
                 pendingLoansBtn.style.display = 'none';
+                updatePendingLoanNavigation();
             }
+        }
+
+        function updatePendingLoanNavigation() {
+            const activeIndex = activeLoanRequest
+                ? pendingLoanRequests.findIndex(request => request.id === activeLoanRequest.id)
+                : -1;
+            const hasMultipleRequests = activeIndex >= 0 && pendingLoanRequests.length > 1;
+            pendingLoanNavigation.style.display = hasMultipleRequests ? 'flex' : 'none';
+            if (!hasMultipleRequests) return;
+
+            pendingLoanPosition.textContent = `Pedido ${activeIndex + 1} de ${pendingLoanRequests.length}`;
+            previousPendingLoanBtn.disabled = isPendingLoanDecisionProcessing || activeIndex === 0;
+            nextPendingLoanBtn.disabled = isPendingLoanDecisionProcessing || activeIndex === pendingLoanRequests.length - 1;
+        }
+
+        function navigatePendingLoanRequest(direction) {
+            if (!activeLoanRequest) return;
+            const activeIndex = pendingLoanRequests.findIndex(request => request.id === activeLoanRequest.id);
+            const nextIndex = activeIndex + direction;
+            if (nextIndex < 0 || nextIndex >= pendingLoanRequests.length) return;
+            openLoanPopupForRequest(pendingLoanRequests[nextIndex]);
         }
 
         function resetLoanPopup() {
             activeLoanRequest = null;
+            isPendingLoanDecisionProcessing = false;
             loanFeedback.textContent = '';
             loanForm.reset();
             userSelect.disabled = false;
@@ -888,10 +927,13 @@
             rejectLoanBtn.style.display = 'none';
             pendingLoanInfo.style.display = 'none';
             pendingLoanInfo.textContent = '';
+            pendingLoanNavigation.style.display = 'none';
+            pendingLoanPosition.textContent = '';
         }
 
         function openLoanPopupForRequest(request) {
             activeLoanRequest = request;
+            isPendingLoanDecisionProcessing = false;
             loanForm.reset();
             if (![...userSelect.options].some(option => option.value === request.userId)) {
                 const option = document.createElement('option');
@@ -909,6 +951,7 @@
             pendingLoanInfo.textContent = `Pedido de ${request.userName}: ${request.valor} gCoins`;
             pendingLoanInfo.style.display = 'block';
             loanFeedback.textContent = '';
+            updatePendingLoanNavigation();
             loanPopup.style.display = 'flex';
         }
 
@@ -917,7 +960,11 @@
             if (!uid || isNaN(amt) || amt <= 0) return;
             const requestBeingProcessed = activeLoanRequest;
             confirmLoanBtn.disabled = true;
-            if (requestBeingProcessed) rejectLoanBtn.disabled = true;
+            if (requestBeingProcessed) {
+                rejectLoanBtn.disabled = true;
+                isPendingLoanDecisionProcessing = true;
+                updatePendingLoanNavigation();
+            }
             loanFeedback.textContent = 'Processando...';
             try {
                 await callFinance('grantLoan', {userId: uid, amount: amt,
@@ -930,7 +977,11 @@
             } catch (e) {
                 console.error(e);
                 confirmLoanBtn.disabled = false;
-                if (requestBeingProcessed) rejectLoanBtn.disabled = false;
+                if (requestBeingProcessed) {
+                    rejectLoanBtn.disabled = false;
+                    isPendingLoanDecisionProcessing = false;
+                    updatePendingLoanNavigation();
+                }
                 loanFeedback.textContent = 'Erro.';
             }
         }
@@ -939,6 +990,8 @@
             if (!activeLoanRequest) return;
             rejectLoanBtn.disabled = true;
             confirmLoanBtn.disabled = true;
+            isPendingLoanDecisionProcessing = true;
+            updatePendingLoanNavigation();
             loanFeedback.textContent = 'A rejeitar pedido...';
             try {
                 await updateDoc(doc(db, 'pedidosEmprestimo', activeLoanRequest.id), {
@@ -952,6 +1005,8 @@
                 console.error('Erro ao rejeitar pedido de empréstimo:', e);
                 rejectLoanBtn.disabled = false;
                 confirmLoanBtn.disabled = false;
+                isPendingLoanDecisionProcessing = false;
+                updatePendingLoanNavigation();
                 loanFeedback.textContent = 'Não foi possível rejeitar o pedido.';
             }
         }
@@ -1033,6 +1088,8 @@
                  pendingLoansBtn.addEventListener('click', () => {
                      if (pendingLoanRequests.length) openLoanPopupForRequest(pendingLoanRequests[0]);
                  });
+                 previousPendingLoanBtn.addEventListener('click', () => navigatePendingLoanRequest(-1));
+                 nextPendingLoanBtn.addEventListener('click', () => navigatePendingLoanRequest(1));
                  rejectLoanBtn.addEventListener('click', rejectPendingLoanRequest);
                  cancelLoanBtn.addEventListener('click', () => { resetLoanPopup(); loanPopup.style.display = 'none'; });
                  loanPopup.addEventListener('click', (e) => { if (e.target === loanPopup) { resetLoanPopup(); loanPopup.style.display = 'none'; } });
