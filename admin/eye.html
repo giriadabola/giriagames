@@ -49,8 +49,20 @@
             transition: color 0.2s;
         }
         .close-button:hover { color: #fff; }
-        .popup-table-container { overflow-y: auto; }
+        .popup-table-container { overflow: auto; }
         #users-table-body tr { cursor: pointer; }
+
+        .movement-tabs { display: flex; gap: 8px; margin: 0 0 14px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .movement-tab-btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 13px; color: #8892b0; background: transparent; border: 0; border-bottom: 2px solid transparent; cursor: pointer; font-weight: 700; }
+        .movement-tab-btn:hover { color: #f0f2f5; }
+        .movement-tab-btn.active { color: #fff; border-bottom-color: #2176ff; }
+        .movement-tab-count { min-width: 22px; padding: 2px 6px; color: #c6d7f3; background: rgba(255,255,255,0.08); border-radius: 999px; font-size: 11px; text-align: center; }
+        .movement-currency-badge { display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+        .movement-currency-badge.gcoins { color: #ffe58a; background: rgba(255,215,0,0.12); }
+        .movement-currency-badge.mini-gcoins { color: #a7e8ca; background: rgba(46,204,113,0.13); }
+        .movement-empty-state { padding: 28px; color: #8892b0; text-align: center; }
+        .movement-totals-row { background: #1a2232; font-weight: 700; border-top: 2px solid rgba(255,255,255,0.12); }
+        .movement-totals-row td:first-child { text-align: right; }
 
         .popup-header-buttons { position: absolute; top: 25px; right: 50px; display: flex; gap: 10px; }
         .popup-header-buttons button {
@@ -63,6 +75,14 @@
         #recalculate-button:disabled { background-color: #333d52; color: #666; cursor: not-allowed; }
         #timeline-button { background-color: #4f5b66; }
         #timeline-button:hover { background-color: #3b444c; }
+
+        @media (max-width: 700px) {
+            .popup-header-buttons { position: static; justify-content: flex-end; margin-bottom: 18px; flex-wrap: wrap; }
+            #popup-title { padding-right: 0 !important; }
+            .movement-tabs { overflow-x: auto; }
+            .movement-tab-btn { white-space: nowrap; }
+            #movements-detail-table th, #movements-detail-table td { padding: 10px 12px; }
+        }
 
         #bulletin-button {
             position: fixed; bottom: 25px; right: 25px; width: 60px; height: 60px;
@@ -300,11 +320,19 @@
                 <button id="recalculate-button" title="Recalcula o saldo GCoins do utilizador com base em todos os seus movimentos da temporada.">Recalcular</button>
             </div>
             <h2 id="popup-title" style="margin-bottom: 20px; padding-right: 250px;">Movimentações</h2>
-            <div class="popup-table-container">
+            <div class="movement-tabs" role="tablist" aria-label="Filtrar movimentos por moeda">
+                <button type="button" id="movement-tab-gcoins" class="movement-tab-btn active" role="tab" aria-selected="true" aria-controls="movements-panel" data-movement-currency="gcoins">
+                    gCoins <span class="movement-tab-count" id="gcoins-movement-count">0</span>
+                </button>
+                <button type="button" id="movement-tab-mini-coins" class="movement-tab-btn" role="tab" aria-selected="false" aria-controls="movements-panel" data-movement-currency="mini-gcoins">
+                    Mini-Coins <span class="movement-tab-count" id="mini-coins-movement-count">0</span>
+                </button>
+            </div>
+            <div id="movements-panel" class="popup-table-container" role="tabpanel" aria-labelledby="movement-tab-gcoins">
                 <table id="movements-detail-table">
                     <thead>
                         <tr>
-                            <th>Data</th><th>Estado</th><th>Tipo</th><th>Preço</th>
+                            <th>Data</th><th>Estado</th><th>Tipo</th><th>Moeda</th><th>Preço</th>
                             <th>Valor Real</th><th>Descrição</th><th>Valor a Pagar</th>
                         </tr>
                     </thead>
@@ -427,12 +455,14 @@
     import { CADERNETA_PACK_DEFINITIONS, MINI_GAME_CURRENCY_OPTIONS, buildNormalizedCadernetaPackPricing } from '../core/mini-games-config.js';
     import { getLatestSeason, getSeasonData, mergeUserSeasonData } from '../core/user-season.js';
     import { callFinance } from '../core/finance-client.js';
+    import { createMovementCurrencyTabs } from './js/movement-currency-tabs.js';
 
     let allUsersData = [], playerCounts = {}, debtTotals = {};
     let currentSort = { column: 'pontos', direction: 'desc' };
     let currentFilter = 'active', currentSeason = null, currentSeasonLabel = null;
     let changesMap = new Map(), isInitialLoadComplete = false;
     let changeLog = [], newChangesCount = 0;
+    const movementTabs = createMovementCurrencyTabs();
     const fieldNames = { pontos: 'Pontos', gcoins: 'GCoins', whowins: 'WhoWins', divida: 'Dívida', jogadores: 'Jogadores' };
 
     async function fetchCurrentSeason() { if (currentSeason) return currentSeason; currentSeasonLabel = await getLatestSeason(db); currentSeason = currentSeasonLabel.replace(/\//g, ''); return currentSeason; }
@@ -452,7 +482,6 @@
         }
     }
     function formatFirebaseTimestamp(timestampObject) { if (!timestampObject || typeof timestampObject.toDate !== 'function') return 'Nunca'; try { const dateObj = timestampObject.toDate(); const day = String(dateObj.getDate()).padStart(2, '0'); const month = String(dateObj.getMonth() + 1).padStart(2, '0'); const year = dateObj.getFullYear(); const hours = String(dateObj.getHours()).padStart(2, '0'); const minutes = String(dateObj.getMinutes()).padStart(2, '0'); return `${day}/${month}/${year}, ${hours}h${minutes}`; } catch (error) { return 'Data Inválida'; } }
-    function formatMovementDate(timestampObject) { if (!timestampObject || typeof timestampObject.toDate !== 'function') return 'N/A'; const dateObj = timestampObject.toDate(); const day = dateObj.getDate(); const month = dateObj.toLocaleString('pt-PT', { month: 'long' }); const year = dateObj.getFullYear(); return `${day} ${month} ${year}`; }
     function renderTable(users) { const tableBody = document.getElementById('users-table-body'); tableBody.innerHTML = ''; users.forEach(user => { const row = document.createElement('tr'); row.setAttribute('data-userid', user.id); row.setAttribute('data-username', user.displayName); const userChanges = changesMap.get(user.id) || {}; row.innerHTML = `<td>${user.displayName}</td><td>${user.tatica}</td><td class="${userChanges.pontos ? 'highlight-update' : ''}">${user.pontos}</td><td class="${userChanges.gcoins ? 'highlight-update' : ''}">${user.gcoins}</td><td class="${userChanges.whowins ? 'highlight-update' : ''}">${user.whowins}</td><td class="${userChanges.divida ? 'highlight-update' : ''}">${user.divida}</td><td class="${userChanges.jogadores ? 'highlight-update' : ''}">${user.jogadores}</td><td>${user.ultimoacesso}</td>`; tableBody.appendChild(row); }); addEventListenersToRows(); document.querySelectorAll('.highlight-update').forEach(cell => { setTimeout(() => { cell.classList.remove('highlight-update'); }, 2500); }); changesMap.clear(); }
     // Versão sazonal: os campos de época são lidos dentro de users/{uid}/{época}.
     function processAndRenderUsers(usersSnapshot) {
@@ -642,11 +671,9 @@
     async function fetchAndShowMovements(userId, userName) {
         const popup = document.getElementById('movements-popup');
         const popupTitle = document.getElementById('popup-title');
-        const tableBody = document.getElementById('movements-table-body');
         const recalculateBtn = document.getElementById('recalculate-button');
         const timelineBtn = document.getElementById('timeline-button');
         const permissionsBtn = document.getElementById('permissions-button');
-        const movementsTable = document.getElementById('movements-detail-table');
 
         recalculateBtn.setAttribute('data-userid', userId);
         timelineBtn.setAttribute('data-userid', userId);
@@ -655,36 +682,27 @@
         permissionsBtn.setAttribute('data-username', userName);
 
         popupTitle.textContent = `Movimentações de ${userName}`;
-        tableBody.innerHTML = '<tr><td colspan="7" style="text-align: center;">A carregar...</td></tr>';
-        const oldTfoot = movementsTable.querySelector('tfoot');
-        if (oldTfoot) { oldTfoot.remove(); }
+        movementTabs.reset();
+        movementTabs.setLoading();
         popup.style.display = 'flex';
 
         try {
-            let totalPreco = 0, totalValorReal = 0, totalValorAPagar = 0;
             const season = await fetchCurrentSeason();
-            const q = query(collection(db, "movimentos"), where("userId", "==", userId), where("temporada", "==", season), orderBy("movimentoData", "desc"));
-            const querySnapshot = await getDocs(q);
-            if (querySnapshot.empty) {
-                tableBody.innerHTML = `<tr><td colspan="7" style="text-align: center;">Nenhuma movimentação para a temporada ${season}.</td></tr>`;
-                return;
-            }
-            tableBody.innerHTML = '';
-            querySnapshot.forEach(doc => {
-                const data = doc.data();
-                const row = document.createElement('tr');
-                row.innerHTML = `<td>${formatMovementDate(data.movimentoData)}</td><td>${data.estado || 'N/A'}</td><td>${data.tipo || 'N/A'}</td><td>${data.preco || 0}</td><td>${data.valorreal || 0}</td><td>${data.descricao || ''}</td><td>${data.valorTotalAPagar || 0}</td>`;
-                tableBody.appendChild(row);
-                totalPreco += parseFloat(data.preco) || 0;
-                if (data.estado !== 'WhoWins Paid') totalValorReal += parseFloat(data.valorreal) || 0;
-                totalValorAPagar += parseFloat(data.valorTotalAPagar) || 0;
-            });
-            const tfoot = document.createElement('tfoot');
-            tfoot.innerHTML = `<tr style="background-color: #f2f2f2; font-weight: bold; border-top: 2px solid #ccc;"><td colspan="3" style="text-align: right;">TOTAIS:</td><td>${totalPreco.toFixed(2)}</td><td>${totalValorReal.toFixed(2)}</td><td></td><td>${totalValorAPagar.toFixed(2)}</td></tr>`;
-            movementsTable.appendChild(tfoot);
+            const seasonVariants = [...new Set([season, currentSeasonLabel].filter(Boolean))];
+            const seasonSnapshots = await Promise.all(seasonVariants.map(seasonValue => getDocs(query(
+                collection(db, 'movimentos'),
+                where('userId', '==', userId),
+                where('temporada', '==', seasonValue),
+                orderBy('movimentoData', 'desc')
+            ))));
+            const entriesById = new Map();
+            seasonSnapshots.forEach(snapshot => snapshot.forEach(movementDoc => {
+                entriesById.set(movementDoc.id, {id: movementDoc.id, data: movementDoc.data()});
+            }));
+            movementTabs.setEntries([...entriesById.values()]);
         } catch (error) {
             console.error("Erro ao buscar movimentações:", error);
-            tableBody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: red;">Erro ao carregar.</td></tr>';
+            movementTabs.setError();
         }
     }
 
