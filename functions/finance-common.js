@@ -3,7 +3,7 @@ const {createHash} = require('node:crypto');
 const {finite, readWallet, bankData} = require('./finance-logic');
 
 const ORIGINS = ['https://giriagames.win', 'https://www.giriagames.win', 'https://g-games-8a8fc.web.app',
-    ...[5174, 5502, 5503].flatMap(port => [`http://localhost:${port}`, `http://127.0.0.1:${port}`])];
+    ...[5174, 5502, 5503, 5504].flatMap(port => [`http://localhost:${port}`, `http://127.0.0.1:${port}`])];
 
 function amount(value, {allowZero = false} = {}) {
     try { finite(value); } catch (error) { throw new HttpsError('invalid-argument', error.message); }
@@ -19,7 +19,7 @@ function id(value) {
 }
 
 function callable(handler) {
-    return onCall({cors: ORIGINS}, async request => {
+    return onCall({invoker: 'public', cors: ORIGINS}, async request => {
         if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'É necessário iniciar sessão.');
         return handler(request);
     });
