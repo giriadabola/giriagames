@@ -742,13 +742,25 @@
 
             // 1. Renderizar Permissões
             const currentPermissions = userData.permissoes || {};
-            const permissionsList = ['empire', 'whowins', 'myths', 'endless', 'mundial', 'vender'];
+            const permissionsList = ['empire', 'whowins', 'caderneta', 'myths', 'endless', 'mundial', 'vender'];
+            const modernCadernetaValue = Array.isArray(userData.miniGames)
+                ? null
+                : userData.miniGames?.caderneta;
+            const hasCadernetaAccess = currentPermissions.caderneta === 'yes'
+                || userData.minigames?.caderneta === 'on'
+                || userData.minigames?.caderneta === true
+                || modernCadernetaValue === true
+                || modernCadernetaValue?.estado === true
+                || (Array.isArray(userData.miniGames) && userData.miniGames.includes('caderneta'));
             let formHTML = '';
             permissionsList.forEach(perm => {
-                const isEnabled = currentPermissions[perm] === 'yes';
+                const isEnabled = perm === 'caderneta'
+                    ? hasCadernetaAccess
+                    : currentPermissions[perm] === 'yes';
+                const permissionLabel = perm === 'caderneta' ? 'Caderneta' : perm;
                 formHTML += `
                     <div class="permission-toggle">
-                        <label for="perm-${perm}">${perm}</label>
+                        <label for="perm-${perm}">${permissionLabel}</label>
                         <label class="switch">
                             <input type="checkbox" id="perm-${perm}" data-permission-key="${perm}" ${isEnabled ? 'checked' : ''}>
                             <span class="slider"></span>
@@ -824,14 +836,46 @@
             const outVal = document.getElementById('user-field-out')?.checked ? 'Yes' : 'No';
 
             const userRef = doc(db, "users", userId);
-            await updateDoc(userRef, {
+            const userSnap = await getDoc(userRef);
+            if (!userSnap.exists()) throw new Error('Utilizador não encontrado.');
+            const currentUserData = userSnap.data();
+            const cadernetaCheckbox = permContainer.querySelector('[data-permission-key="caderneta"]');
+            const cadernetaEnabled = cadernetaCheckbox?.checked === true;
+            const updateData = {
                 permissoes: newPermissionsMap,
                 aceite: aceiteVal,
                 nomeDeUsuario: nomeDeUsuarioVal,
                 nometabela: nometabelaVal,
                 email: emailVal,
                 out: outVal
-            });
+            };
+
+            // Sincronizar formatos antigos/novos para que desligar o interruptor
+            // também retire qualquer acesso Caderneta previamente guardado.
+            const legacyMiniGames = currentUserData.minigames;
+            const legacyMiniGamesMap = Array.isArray(legacyMiniGames)
+                ? Object.fromEntries(legacyMiniGames.filter(game => typeof game === 'string').map(game => [game, 'on']))
+                : legacyMiniGames && typeof legacyMiniGames === 'object'
+                    ? legacyMiniGames
+                    : {};
+            updateData.minigames = {
+                ...legacyMiniGamesMap,
+                caderneta: cadernetaEnabled ? 'on' : 'off'
+            };
+
+            const modernMiniGames = currentUserData.miniGames;
+            if (Array.isArray(modernMiniGames)) {
+                updateData.miniGames = cadernetaEnabled
+                    ? [...new Set([...modernMiniGames, 'caderneta'])]
+                    : modernMiniGames.filter(game => game !== 'caderneta');
+            } else if (modernMiniGames && typeof modernMiniGames === 'object') {
+                updateData.miniGames = {
+                    ...modernMiniGames,
+                    caderneta: cadernetaEnabled
+                };
+            }
+
+            await updateDoc(userRef, updateData);
 
             statusEl.textContent = 'Alterações guardadas com sucesso!';
             statusEl.style.color = '#28a745';
