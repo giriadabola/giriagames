@@ -1,6 +1,7 @@
 import { db } from './auth-guard.js';
 import { collection, query, getDocs, doc, getDoc, updateDoc, Timestamp, where, writeBatch } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { callFinance } from '../../core/finance-client.js';
+import { createClubLogoImage } from './club-logo.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     const temporadaSelect = document.getElementById('temporada-select');
@@ -226,7 +227,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const li = document.createElement('li');
                 li.className = 'game-item';
                 li.dataset.gameId = game.id;
-                li.innerHTML = `<div class="teams-container"><div class="team-info ${homeSelected}" data-result-id="${escapeHTML(game.equipaCasaId)}"><img src="${escapeHTML(homeTeamData.imagem)}" alt="${escapeHTML(homeTeamData.nome)}" class="team-logo"><span>${escapeHTML(game.equipaCasa)}</span></div><span class="versus ${drawSelected}" data-result-id="draw">EMPATE<div class="game-date-time">${formattedDateTime}</div></span><div class="team-info ${awaySelected}" data-result-id="${escapeHTML(game.equipaForaId)}"><img src="${escapeHTML(awayTeamData.imagem)}" alt="${escapeHTML(awayTeamData.nome)}" class="team-logo"><span>${escapeHTML(game.equipaFora)}</span></div></div><button class="no-result-btn">Sem Resultado</button>`;
+                li.innerHTML = `<div class="teams-container"><div class="team-info ${homeSelected}" data-result-id="${escapeHTML(game.equipaCasaId)}"><span>${escapeHTML(game.equipaCasa)}</span></div><span class="versus ${drawSelected}" data-result-id="draw">EMPATE<div class="game-date-time">${formattedDateTime}</div></span><div class="team-info ${awaySelected}" data-result-id="${escapeHTML(game.equipaForaId)}"><span>${escapeHTML(game.equipaFora)}</span></div></div><button class="no-result-btn">Sem Resultado</button>`;
+                const teamElements = li.querySelectorAll('.team-info');
+                teamElements[0].prepend(createClubLogoImage(homeTeamData, game.equipaCasa));
+                teamElements[1].prepend(createClubLogoImage(awayTeamData, game.equipaFora));
                 gamesList.appendChild(li);
             }
         }
